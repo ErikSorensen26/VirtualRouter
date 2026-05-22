@@ -1,8 +1,7 @@
 /**
  * @file ArpRegistry.h
- * @brief Arp configuration registry
- *
- * Defines the configuration schema for ARP including...
+ * @brief Per-interface ARP configuration schema (timeouts, probing, and authorization).
+ * @ingroup CONFIG_INTERFACE
  */
 
 #ifndef ARP_REGISTRY
@@ -13,6 +12,10 @@
 
 namespace config
 {
+/**
+ * @brief Per-interface ARP configuration fields.
+ * @ingroup CONFIG_INTERFACE
+ */
 enum class Arp
 {
     AUTHORIZED,
@@ -32,9 +35,15 @@ enum class Arp
     X(Arp, PROBE_COUNT, 2) \
     X(Arp, TIMEOUT, 14400)
 
+CONFIG_DEFAULT_TABLE(ARP_DEFAULTS);
+
+/**
+ * @brief Registry slot for per-interface ARP configuration.
+ * @ingroup CONFIG_INTERFACE
+ */
 struct ArpRegistry
 {
-    SubRegistry<Arp,
+    SubRegistry<Arp, nullptr,
         AtomicField<bool CONFIG_INDEX_ARG(Arp::AUTHORIZED)>,
         AtomicField<uint32_t CONFIG_INDEX_ARG(Arp::LOG_THRESHOLD_ENTRIES)>,
         AtomicField<bool CONFIG_INDEX_ARG(Arp::PACKET_PRIORITY)>,

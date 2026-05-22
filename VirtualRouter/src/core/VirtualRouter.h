@@ -19,7 +19,6 @@
 #include "routing/RoutingTable.hpp"
 #include "interface/InterfaceManager.h"
 #include "configs/registry/global/GlobalRegistry.h"
-#include "configs/Registry.hpp"
 
 namespace interface { class Interface; enum class InterfaceType : uint8_t; }
 
@@ -384,11 +383,6 @@ public:
      * The @ref config::GlobalRegistry holds all configs belonging to the global scope..
      */
     config::GlobalRegistry& getGlobalConfigs();
-
-    /**
-     * @brief Returns the per-VRF config registry for dynamic protocol config allocation.
-     */
-    config::Registry& getRegistry();
 
     std::string getName() { return instanceName; }
     uint32_t getInstanceId() { return instanceId; }

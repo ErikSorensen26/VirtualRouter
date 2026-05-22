@@ -25,7 +25,7 @@ namespace cli { struct CliModeParserFlag {}; }
 /// @brief Entry type tag: @ref SubCommand prefix dispatcher.
 #define SUBPRSR 1
 /// @brief Entry type tag: mode extension (external command list injection).
-#define INHERIT 2
+#define CMD_INHERIT 2
 
 /// @brief Silences unused-parameter warnings for command handler parameters.
 #define UNUSED(x) (void)(x)

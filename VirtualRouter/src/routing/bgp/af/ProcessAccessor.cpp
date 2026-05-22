@@ -39,9 +39,4 @@ core::ProcessQueueRef ProcessAccessor::getScheduler(BgpProcess& proc)
 {
     return proc.getScheduler();
 }
-
-void ProcessAccessor::emplaceAfBase(config::RegistryContainer<config::BgpAfBaseRegistry CONFIG_INDEX_PARAM>& base, BgpProcess& proc)
-{
-    proc.routingInstance->getRegistry().emplace(base);
-}
 } // namespace routing

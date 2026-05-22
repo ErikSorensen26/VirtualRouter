@@ -58,13 +58,13 @@ bool RouterEigrpAddressFamilyV6_AfInterface_Handler(EIGRP_PARAMS)
 
 bool RouterEigrpAddressFamily_EigrpDefaultRouteTag_Handler(EIGRP_PARAMS)
 {
-    auto& tag = ctx.configs().reg.get<config::Eigrp::DEFAULT_ROUTE_TAG>();
+    auto tag = ctx.configs().reg.get<config::Eigrp::DEFAULT_ROUTE_TAG>();
     return utils::setFieldValue(tag, ctx, segs >> 0 >> 1);
 }
 
 bool RouterEigrpAddressFamily_EigrpEventLogSize_Handler(EIGRP_PARAMS)
 {
-    auto& eventsiz = ctx.configs().reg.get<config::Eigrp::MAX_EVENT_LOG_SIZE>();
+    auto eventsiz = ctx.configs().reg.get<config::Eigrp::MAX_EVENT_LOG_SIZE>();
     return utils::setFieldValue(eventsiz, ctx, segs >> 0 >> 1);
 }
 
@@ -130,7 +130,7 @@ bool RouterEigrpAddressFamily_MaximumPrefix_Handler(EIGRP_PARAMS)
 
 bool RouterEigrpAddressFamily_MetricRibScale_Handler(EIGRP_PARAMS)
 {
-    auto& ribScale = ctx.configs().reg.get<config::Eigrp::RIB_SCALE>();
+    auto ribScale = ctx.configs().reg.get<config::Eigrp::RIB_SCALE>();
     return utils::setFieldValue(ribScale, ctx, segs[0] >> 1);
 }
 
@@ -191,7 +191,7 @@ bool RouterEigrpAddressFamily_NeighborMaximumPrefix_Handler(EIGRP_PARAMS)
 bool RouterEigrpAddressFamily_SoftSia_Handler(EIGRP_PARAMS)
 {
     UNUSED(segs);
-    auto& soft = ctx.configs().reg.get<config::Eigrp::NON_STOP_FORWARDING>();
+    auto soft = ctx.configs().reg.get<config::Eigrp::NON_STOP_FORWARDING>();
     utils::setToggleValue(soft, ctx);
     return true;
 }
@@ -217,8 +217,8 @@ DEFINE_CMD_MODE(RouterEigrpAddressFamily, config::EigrpRegistry, ROUTER_EIGRP_LI
 #define ROUTER_EIGRP_LIST_V4(X, Y) \
     X(Y, (COMMAND, AfInterface, "af-interface"_tok)) \
     X(Y, (COMMAND, Topology, "topology"_tok, "base"_tok)) \
-    X(Y, (INHERIT, RouterEigrpCommands)) \
-    X(Y, (INHERIT, RouterEigrpAddressFamilyCommands))
+    X(Y, (CMD_INHERIT, RouterEigrpCommands)) \
+    X(Y, (CMD_INHERIT, RouterEigrpAddressFamilyCommands))
 
 /**
  * @brief IPv4 address-family mode parser.
@@ -229,8 +229,8 @@ DEFINE_CMD_MODE(RouterEigrpAddressFamilyV4, config::EigrpRegistry, ROUTER_EIGRP_
 #define ROUTER_EIGRP_LIST_V6(X, Y) \
     X(Y, (COMMAND, AfInterface, "af-interface"_tok)) \
     X(Y, (COMMAND, Topology, "topology"_tok, "base"_tok)) \
-    X(Y, (INHERIT, RouterEigrpCommands)) \
-    X(Y, (INHERIT, RouterEigrpAddressFamilyCommands))
+    X(Y, (CMD_INHERIT, RouterEigrpCommands)) \
+    X(Y, (CMD_INHERIT, RouterEigrpAddressFamilyCommands))
 
 /**
  * @brief IPv6 address-family mode parser.

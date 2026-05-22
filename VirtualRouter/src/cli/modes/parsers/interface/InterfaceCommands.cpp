@@ -1,7 +1,5 @@
 // InterfaceCommands.cpp
 
-#include "InterfaceCommands.h"
-#include "cli/parser/CliModeParser.hpp"
 #include "cli/parser/CommandUtils.hpp"
 
 #include "cli/runtime/CliSession.h"
@@ -23,7 +21,8 @@ bool Interface_Exit_Handler(INTERFACE_PARAMS)
 bool Interface_Shutdown_Handler(INTERFACE_PARAMS)
 {
     UNUSED(segs);
-    auto& shut = ctx.configs().reg.get<config::Interface::SHUTDOWN>();
+    //auto shut = config::AtomicFieldAccessor<>I
+    auto shut = ctx.configs().reg.get<config::Interface::SHUTDOWN>();
     utils::setToggleValue(shut, ctx);
     return true;
 }

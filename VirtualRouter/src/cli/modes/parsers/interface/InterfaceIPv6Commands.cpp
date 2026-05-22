@@ -17,8 +17,8 @@ namespace cli
 {
 bool InterfaceIPv6_AddressSet_Handler(INTERFACE_PARAMS)
 {
-    auto& ips = ctx.configs().reg.get<config::Interface::IPV6_ADDRESS>();
-    config::DefType<decltype(ips)>::node tup;
+    auto ips = ctx.configs().reg.get<config::Interface::IPV6_ADDRESS>();
+    config::DefType<typename decltype(ips)::Field>::node tup;
     for (const auto& seg : segs)
     {
         switch (seg[0])
@@ -52,8 +52,8 @@ bool InterfaceIPv6_AddressSet_Handler(INTERFACE_PARAMS)
 
 bool InterfaceIPv6_AddressNamed_Handler(INTERFACE_PARAMS)
 {
-    auto& ips = ctx.configs().reg.get<config::Interface::IPV6_ADDRESS>();
-    config::DefType<decltype(ips)>::node tup;
+    auto ips = ctx.configs().reg.get<config::Interface::IPV6_ADDRESS>();
+    config::DefType<typename decltype(ips)::Field>::node tup;
     for (const auto& seg : segs)
     {
         switch (seg[0])
@@ -103,8 +103,8 @@ bool InterfaceIPv6_AddressLinkLocal_Handler(INTERFACE_PARAMS)
 
 bool InterfaceIPv6_AddressAuto_Handler(INTERFACE_PARAMS)
 {
-    auto& autocfg = ctx.configs().reg.get<config::Interface::IPV6_ADDRESS_AUTOCONFIG>();
-    auto& autodf = ctx.configs().reg.get<config::Interface::IPV6_ADDRESS_AUTOCONFIG_DEFAULT>();
+    auto autocfg = ctx.configs().reg.get<config::Interface::IPV6_ADDRESS_AUTOCONFIG>();
+    auto autodf = ctx.configs().reg.get<config::Interface::IPV6_ADDRESS_AUTOCONFIG_DEFAULT>();
     utils::setToggleValue(autocfg, ctx);
     utils::setFieldValueWithFallback(autodf, ctx, segs >> 0 >> 0);
     return true;
@@ -119,7 +119,7 @@ bool InterfaceIPv6_AuthenticationKeyChain_Handler(INTERFACE_PARAMS)
             uint16_t as;
             if (!utils::setValue(as, segs[0] >> 1))
                 return false;
-            auto& authKey = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>().emplaceBack(as).reg.get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>();
+            auto authKey = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>().emplaceBack(as).reg.get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>();
             return utils::setFieldValue(authKey, ctx, segs[0] >> 2);
         }
     }
@@ -135,7 +135,7 @@ bool InterfaceIPv6_AuthenticationMode_Handler(INTERFACE_PARAMS)
             uint16_t as;
             if (!utils::setValue(as, segs[0] >> 1))
                 return false;
-            auto& mode = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>()
+            auto mode = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>()
                 .emplaceBack(as).reg.get<config::EigrpInterface::AUTHENTICATION_MODE>();
 
             if (utils::handleValueReset(mode, ctx))
@@ -163,7 +163,7 @@ bool InterfaceIPv6_BandwidthPercent_Handler(INTERFACE_PARAMS)
             uint16_t as;
             if (!utils::setValue(as, segs[0] >> 1))
                 return false;
-            auto& eigrpBw = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>()
+            auto eigrpBw = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>()
                 .emplaceBack(as).reg.get<config::EigrpInterface::BANDWIDTH_PERCENTAGE>();
             return utils::setFieldValue(eigrpBw, ctx, segs[0] >> 2);
         }
@@ -181,8 +181,8 @@ bool InterfaceIPv6_DampeningChange_Handler(INTERFACE_PARAMS)
             if (!utils::setValue(as, segs[0] >> 1))
                 return false;
             auto& eigrp = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>().emplaceBack(as);
-            auto& dampChange = eigrp.reg.get<config::EigrpInterface::DAMPENING_CHANGE>();
-            auto& dampChangePercent = eigrp.reg.get<config::EigrpInterface::DAMPENING_CHANGE_PERCENT>();
+            auto dampChange = eigrp.reg.get<config::EigrpInterface::DAMPENING_CHANGE>();
+            auto dampChangePercent = eigrp.reg.get<config::EigrpInterface::DAMPENING_CHANGE_PERCENT>();
             utils::setToggleValue(dampChange, ctx);
             utils::setFieldValue(dampChangePercent, ctx, segs[0] >> 2);
             return true;
@@ -201,8 +201,8 @@ bool InterfaceIPv6_DampeningInterval_Handler(INTERFACE_PARAMS)
             if (!utils::setValue(as, segs[0] >> 1))
                 return false;
             auto& eigrp = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>().emplaceBack(as);
-            auto& dampInterval = eigrp.reg.get<config::EigrpInterface::DAMPENING_INTERVAL>();
-            auto& dampIntervalTime = eigrp.reg.get<config::EigrpInterface::DAMPENING_INTERVAL_TIME>();
+            auto dampInterval = eigrp.reg.get<config::EigrpInterface::DAMPENING_INTERVAL>();
+            auto dampIntervalTime = eigrp.reg.get<config::EigrpInterface::DAMPENING_INTERVAL_TIME>();
             utils::setToggleValue(dampInterval, ctx);
             utils::setFieldValue(dampIntervalTime, ctx, segs[0] >> 2);
             return true;
@@ -213,7 +213,7 @@ bool InterfaceIPv6_DampeningInterval_Handler(INTERFACE_PARAMS)
 
 bool InterfaceIPv6_Eigrp_Handler(INTERFACE_PARAMS)
 {
-    auto& eigrpList = ctx.configs().reg.get<config::Interface::IPV6_EIGRP_ENABLED>();
+    auto eigrpList = ctx.configs().reg.get<config::Interface::IPV6_EIGRP_ENABLED>();
     uint16_t as;
     if (!utils::setValue(as, segs[0] >> 1))
         return false;
@@ -229,7 +229,7 @@ bool InterfaceIPv6_HelloInterval_Handler(INTERFACE_PARAMS)
             uint16_t as;
             if (!utils::setValue(as, segs[0] >> 1))
                 return false;
-            auto& helloTime = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>()
+            auto helloTime = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>()
                 .emplaceBack(as).reg.get<config::EigrpInterface::HELLO_INTERVAL>();
             return utils::setFieldValue(helloTime, ctx, segs[0] >> 2);
         }
@@ -246,7 +246,7 @@ bool InterfaceIPv6_HoldTime_Handler(INTERFACE_PARAMS)
             uint16_t as;
             if (!utils::setValue(as, segs[0] >> 1))
                 return false;
-            auto& holdTime = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>()
+            auto holdTime = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>()
                 .emplaceBack(as).reg.get<config::EigrpInterface::HOLD_TIME>();
             return utils::setFieldValue(holdTime, ctx, segs[0] >> 2);
         }
@@ -256,7 +256,7 @@ bool InterfaceIPv6_HoldTime_Handler(INTERFACE_PARAMS)
 
 bool InterfaceIPv6_Mtu_Handler(INTERFACE_PARAMS)
 {
-    auto& mtu = ctx.configs().reg.get<config::Interface::IPV6_MTU>();
+    auto mtu = ctx.configs().reg.get<config::Interface::IPV6_MTU>();
     return utils::setFieldValue(mtu, ctx, segs[0] >> 1);
 }
 
@@ -269,7 +269,7 @@ bool InterfaceIPv6_NextHopSelf_Handler(INTERFACE_PARAMS)
             uint16_t as; 
             if (!utils::setValue(as, segs[0] >> 1))
                 return false;
-            auto& nhs = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>()
+            auto nhs = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>()
                 .emplaceBack(as).reg.get<config::EigrpInterface::NEXT_HOP_SELF>();
             utils::setToggleValue(nhs, ctx);
             return true;
@@ -281,7 +281,7 @@ bool InterfaceIPv6_NextHopSelf_Handler(INTERFACE_PARAMS)
 bool InterfaceIPv6_NdpRedirects_Handler(INTERFACE_PARAMS)
 {
     UNUSED(segs);
-    auto& redirects = ctx.configs().reg.get<config::Interface::IPV6_REDIRECTS>();
+    auto redirects = ctx.configs().reg.get<config::Interface::IPV6_REDIRECTS>();
     utils::setToggleValue(redirects, ctx);
     return true;
 }
@@ -295,7 +295,7 @@ bool InterfaceIPv6_SplitHorizon_Handler(INTERFACE_PARAMS)
             uint16_t as; 
             if (!utils::setValue(as, segs[0] >> 1))
                 return false;
-            auto& sh = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>()
+            auto sh = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>()
                 .emplaceBack(as).reg.get<config::EigrpInterface::SPLIT_HORIZON>();
             utils::setToggleValue(sh, ctx);
             return true;
@@ -313,9 +313,9 @@ bool InterfaceIPv6_SummaryAddress_Handler(INTERFACE_PARAMS)
             uint16_t as; 
             if (!utils::setValue(as, segs[0] >> 1))
                 return false;
-            auto& sum = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>()
+            auto sum = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>()
                 .emplaceBack(as).reg.get<config::EigrpInterface::SUMMARY_ADDRESS>();
-            config::DefType<decltype(sum)>::node tup;
+            config::DefType<typename decltype(sum)::Field>::node tup;
             if (!utils::setTupleElement(std::get<0>(tup), segs[0] >> 2))
                 return false;
             utils::setTupleElement(std::get<1>(tup), segs >> 1 >> 1);

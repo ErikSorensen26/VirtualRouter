@@ -57,8 +57,8 @@ struct NeighborConfigs
     decltype(auto) get() const
     {
         if (peerGroup && peerOwnedTable.test(config::toIndex<F>))
-            return std::as_const(peerGroup->getSessionConfigs().reg.get<F>());
-        return std::as_const(configs.reg.get<F>());
+            return peerGroup->getSessionConfigs().reg.get<F>();
+        return configs.reg.get<F>();
     }
 
     /**

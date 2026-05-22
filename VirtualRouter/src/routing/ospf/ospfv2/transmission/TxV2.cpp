@@ -64,7 +64,7 @@ void PacketDispatcherV2::finalizeHeader(packet::Ospfv2Header& hdr, OspfBuilder& 
 
         if (auth == config::ospf::AuthType::SIMPLE)
         {
-            auto& key = getConfigs().reg.get<config::OspfInterfaceBase::AUTHENTICATION_KEY>();
+            auto key = getConfigs().reg.get<config::OspfInterfaceBase::AUTHENTICATION_KEY>();
             if (key.hasValue()) buildOspfSimpleAuthentication(hdr, key.load());
         }
     }
@@ -84,7 +84,7 @@ void PacketDispatcherV2::sendHello()
 
     OspfBuilder builder{pkt, trail, 0, maxSize};
 
-    auto& ifaceLLS = getConfigs().reg.get<config::OspfInterfaceBase::LLS>();
+    auto ifaceLLS = getConfigs().reg.get<config::OspfInterfaceBase::LLS>();
     bool lls = ifaceLLS.hasValue() ? ifaceLLS.load() : iface.getProcess().getConfigs().reg.get<config::Ospf::LLS>().load();
     if (!buildHello(builder, lls)) return;
 
@@ -104,7 +104,7 @@ void PacketDispatcherV2::sendUnicastHello(Neighbor& nbr)
 
     OspfBuilder builder{pkt, trail, 0, maxSize};
 
-    auto& ifaceLLS = getConfigs().reg.get<config::OspfInterfaceBase::LLS>();
+    auto ifaceLLS = getConfigs().reg.get<config::OspfInterfaceBase::LLS>();
     bool lls = ifaceLLS.hasValue() ? ifaceLLS.load() : iface.getProcess().getConfigs().reg.get<config::Ospf::LLS>().load();
     if (!buildHello(builder, lls)) return;
 
@@ -124,7 +124,7 @@ void PacketDispatcherV2::sendInitDBD(Neighbor& nbr)
 
     OspfBuilder builder{pkt, trail, 0, maxSize};
 
-    auto& ifaceLLS = getConfigs().reg.get<config::OspfInterfaceBase::LLS>();
+    auto ifaceLLS = getConfigs().reg.get<config::OspfInterfaceBase::LLS>();
     bool lls = ifaceLLS.hasValue() ? ifaceLLS.load() : iface.getProcess().getConfigs().reg.get<config::Ospf::LLS>().load();
     auto dbd = buildDBD(builder, nbr, lls);
     if (!dbd.has_value()) return;
@@ -155,7 +155,7 @@ bool PacketDispatcherV2::sendDBD(Neighbor& nbr)
 
     OspfBuilder builder{pkt, trail, 0, maxSize};
 
-    auto& ifaceLLS = getConfigs().reg.get<config::OspfInterfaceBase::LLS>();
+    auto ifaceLLS = getConfigs().reg.get<config::OspfInterfaceBase::LLS>();
     bool lls = ifaceLLS.hasValue() ? ifaceLLS.load() : iface.getProcess().getConfigs().reg.get<config::Ospf::LLS>().load();
     auto db = buildDBD(builder, nbr, lls);
     if (!db.has_value()) return false;

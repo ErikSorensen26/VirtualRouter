@@ -135,8 +135,8 @@ bool translateDoubleValue(T& value, const Token& token1, const Token& token2)
  * @return True if the field was reset; false if normal token translation should proceed.
  */
 template <typename T>
-requires config::IsAtomicField<T> || config::IsOptionalAtomicField<T> || config::IsValueField<T>
-bool handleValueReset(T& field, cli::ContextBase& ctx)
+requires config::IsAtomicField<typename T::Field> || config::IsOptionalAtomicField<typename T::Field> || config::IsValueField<typename T::Field>
+bool handleValueReset(T field, cli::ContextBase& ctx)
 {
     if (ctx.negate)
     {
@@ -162,10 +162,11 @@ bool handleValueReset(T& field, cli::ContextBase& ctx)
  * @param ctx     Execution context.
  */
 template <typename T>
-requires ((config::IsAtomicField<T> || config::IsOptionalAtomicField<T> || config::IsValueField<T>)
-          && std::is_same_v<bool, typename config::DefType<T>::type>)
-void setToggleValue(T& toggle, cli::ContextBase& ctx)
+requires (config::IsAtomicField<typename T::Field> || config::IsOptionalAtomicField<typename T::Field> || config::IsValueField<typename T::Field>)
+void setToggleValue(T toggle, cli::ContextBase& ctx)
 {
+    static_assert(std::is_same_v<bool, typename config::DefType<typename T::Field>::type>,
+                  "Field given must hold a boolean type.");
     if (ctx.negate)
     {
         toggle.set(false);
@@ -194,13 +195,13 @@ void setToggleValue(T& toggle, cli::ContextBase& ctx)
  * @return True if the field was updated by any means.
  */
 template <typename T>
-requires config::IsAtomicField<T> || config::IsOptionalAtomicField<T> || config::IsValueField<T>
-bool setFieldValue(T& field, cli::ContextBase& ctx, const Token* t)
+requires config::IsAtomicField<typename T::Field> || config::IsOptionalAtomicField<typename T::Field> || config::IsValueField<typename T::Field>
+bool setFieldValue(T field, cli::ContextBase& ctx, const Token* t)
 {
     if (handleValueReset(field, ctx))
         return true;
 
-    using type = config::DefType<T>::type;
+    using type = config::DefType<typename T::Field>::type;
 
     if (!t) return false;
 
@@ -224,8 +225,8 @@ bool setFieldValue(T& field, cli::ContextBase& ctx, const Token* t)
  * @param t      Token pointer; may be null.
  */
 template <typename T>
-requires config::IsAtomicField<T> || config::IsOptionalAtomicField<T> || config::IsValueField<T>
-void setFieldValueWithFallback(T& field, cli::ContextBase& ctx, const Token* t)
+requires config::IsAtomicField<typename T::Field> || config::IsOptionalAtomicField<typename T::Field> || config::IsValueField<typename T::Field>
+void setFieldValueWithFallback(T field, cli::ContextBase& ctx, const Token* t)
 {
     if (!setFieldValue(field, ctx, t))
         field.setDefault();
@@ -263,13 +264,13 @@ inline bool setValue(T& value, const Token* t)
  * @return True if the field was updated.
  */
 template <typename T>
-requires config::IsAtomicField<T> || config::IsOptionalAtomicField<T> || config::IsValueField<T>
-bool setDoubleFieldValue(T& field, cli::ContextBase& ctx, const Token* t1, const Token* t2)
+requires config::IsAtomicField<typename T::Field> || config::IsOptionalAtomicField<typename T::Field> || config::IsValueField<typename T::Field>
+bool setDoubleFieldValue(T field, cli::ContextBase& ctx, const Token* t1, const Token* t2)
 {
     if (handleValueReset(field, ctx))
         return true;
     
-    using type = config::DefType<T>::type;
+    using type = config::DefType<typename T::Field>::type;
 
     if (!t1 || !t2) return false;
 
@@ -291,7 +292,7 @@ bool setDoubleFieldValue(T& field, cli::ContextBase& ctx, const Token* t1, const
  * @param t2     Second token pointer.
  */
 template <typename T>
-requires config::IsAtomicField<T> || config::IsOptionalAtomicField<T> || config::IsValueField<T>
+requires config::IsAtomicField<typename T::Field> || config::IsOptionalAtomicField<typename T::Field> || config::IsValueField<typename T::Field>
 void setDoubleFieldValueWithFallback(T& field, cli::ContextBase& ctx, const Token* t1, const Token* t2)
 {
     if (!setDoubleFieldValue(field, ctx, t1, t2))
@@ -398,10 +399,10 @@ struct IsTuple<std::tuple<Ts...>> : std::true_type {};
  * @return Always returns true.
  */
 template <typename T>
-requires config::IsListField<T>
-bool setListEntry(T& field, cli::ContextBase& ctx, typename config::DefType<T>::node& tup)
+requires config::IsListField<typename T::Field>
+bool setListEntry(T& field, cli::ContextBase& ctx, typename config::DefType<typename T::Field>::node& tup)
 {
-    using type = config::DefType<T>::node;
+    using type = config::DefType<typename T::Field>::node;
 
     if (ctx.negate || ctx.defaulted)
     {
@@ -447,8 +448,8 @@ bool setListEntry(T& field, cli::ContextBase& ctx, typename config::DefType<T>::
  * @param key    Key identifying the child entry.
  */
 template <typename T>
-requires config::IsOwnedListField<T>
-void setOwnedField(T& field, cli::ContextBase& ctx, typename config::DefType<T>::key& key)
+requires config::IsOwnedListField<typename T::Field>
+void setOwnedField(T& field, cli::ContextBase& ctx, typename config::DefType<typename T::Field>::key& key)
 {
     if (ctx.negate || ctx.defaulted)
     {

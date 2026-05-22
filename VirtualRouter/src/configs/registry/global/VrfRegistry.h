@@ -1,8 +1,7 @@
 /**
  * @file VrfRegistry.h
- * @brief Vrf configuration registry
- *
- * Defines the configuration schema for the global scope.
+ * @brief Per-VRF configuration registry: routing, multicast, and static route settings.
+ * @ingroup CONFIG_GLOBAL
  */
 
 #ifndef VRF_REGISTRY_HPP
@@ -23,10 +22,18 @@
 
 struct Incomplete {};
 enum class Empty { COUNT };
-using EmptyRegistry = config::SubRegistry<Empty>;
+using EmptyRegistry = config::SubRegistry<Empty, nullptr>;
 
 namespace config
 {
+/**
+ * @brief Configuration fields for a single VRF instance.
+ * @ingroup CONFIG_GLOBAL
+ *
+ * Covers static routes (IPv4 and IPv6), multicast settings, BFD tracking, EIGRP and
+ * OSPF protocol process containers, and ARP/NDP static entries. Fields marked `// TODO`
+ * are schema placeholders not yet fully implemented.
+ */
 enum class Vrf
 {
     ARP_STATIC_ENTRY,
@@ -36,7 +43,6 @@ enum class Vrf
     ROUTER_EIGRP_V6,
     ROUTER_OSPF, // TODO
     ROUTER_OSPFV3, // TODO
-    ROUTER_RIP, // TODO
     IP_DOMAIN_LIST, // TODO
     IP_DOMAIN_LOOKUP_SOURCE_INTERFACE, // TODO
     IP_DOMAIN_NAME, // TODO
@@ -69,8 +75,6 @@ enum class Vrf
     IPV6_ROUTE_STATIC_BFD, // TODO
     IPV6_ROUTE_STATIC_RESOLVE, // TODO
     IPV6_ROUTER_OSPF, // TODO uint16 reference
-    IPV6_ROUTER_RIP_NAME, // TODO string
-    IPV6_ROUTER_RIP, // TODO string reference
     COUNT
 };
 
@@ -128,17 +132,23 @@ DEFINE_TUPLE_SCHEMA(IPMRoute, IP_MROUTE_FIELDS)
 void VrfRouterEigrpV4(void*);
 void VrfRouterEigrpV6(void*);
 
+/**
+ * @brief Registry slot for one VRF instance.
+ * @ingroup CONFIG_GLOBAL
+ *
+ * Owns a `SubRegistry<Vrf, ...>` containing all per-VRF fields. Multiple VrfRegistry
+ * instances are stored in `GlobalRegistry::VRF_CONFIGS` keyed by VRF name.
+ */
 struct VrfRegistry
 {
-    SubRegistry<Vrf,
-        ListField<std::tuple<types::IPv4Address, IGNOR(types::Mac), std::optional<interface::InterfaceKey>> CONFIG_INDEX_ARG(ARP_STATIC_ENTRY)>,
+    SubRegistry<Vrf, nullptr,
+        ListField<std::tuple<types::IPv4Address, IGNOR(types::Mac), std::optional<interface::InterfaceKey>> CONFIG_INDEX_ARG(Vrf::ARP_STATIC_ENTRY)>,
         OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Vrf::ROUTER_BGP_AS)>,
         RegistryContainer<BgpRegistry CONFIG_INDEX_ARG(Vrf::ROUTER_BGP)>,
         OwnedListField<EigrpRegistry, uint16_t CONFIG_INDEX_ARG(Vrf::ROUTER_EIGRP_V4), VrfRouterEigrpV4>,
         OwnedListField<EigrpRegistry, uint16_t CONFIG_INDEX_ARG(Vrf::ROUTER_EIGRP_V6), VrfRouterEigrpV6>,
         OwnedListField<OspfRegistry, uint16_t CONFIG_INDEX_ARG(Vrf::ROUTER_OSPF)>,
-        OwnedListField<OspfRegistry, uint16_t CONFIG_INDEX_ARG(Vrf::ROUTER_OSPFV3)>,
-        RegistryContainer<EmptyRegistry CONFIG_INDEX_ARG(Vrf::ROUTER_RIP)>,
+        OwnedListField<Ospfv3AddressFamilyRegistry, uint16_t CONFIG_INDEX_ARG(Vrf::ROUTER_OSPFV3)>,
         OptionalAtomicField<Incomplete CONFIG_INDEX_ARG(Vrf::IP_DOMAIN_LIST)>,
         OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(Vrf::IP_DOMAIN_LOOKUP_SOURCE_INTERFACE)>,
         OptionalAtomicField<Incomplete CONFIG_INDEX_ARG(Vrf::IP_DOMAIN_NAME)>,
@@ -167,12 +177,10 @@ struct VrfRegistry
         OptionalAtomicField<Incomplete CONFIG_INDEX_ARG(Vrf::IPV6_MULTICAST)>,
         AtomicField<bool CONFIG_INDEX_ARG(Vrf::IPV6_MULTICAST_ROUTING)>,
         OptionalAtomicField<Incomplete CONFIG_INDEX_ARG(Vrf::IPV6_PIM)>,
-        ListField<std::vector<IPv6Route> CONFIG_INDEX_ARG(Vrf::IPV6_ROUTE)>,
-        ListField<std::vector<std::tuple<interface::InterfaceKey, types::IPv6Address, bool>> CONFIG_INDEX_ARG(Vrf::IPV6_ROUTE_STATIC_BFD)>,
+        ListField<IPv6Route CONFIG_INDEX_ARG(Vrf::IPV6_ROUTE)>,
+        ListField<std::tuple<interface::InterfaceKey, types::IPv6Address, bool> CONFIG_INDEX_ARG(Vrf::IPV6_ROUTE_STATIC_BFD)>,
         AtomicField<bool CONFIG_INDEX_ARG(Vrf::IPV6_ROUTE_STATIC_RESOLVE)>,
-        OwnedListField<OspfRegistry, uint16_t CONFIG_INDEX_ARG(Vrf::IPV6_ROUTER_OSPF)>,
-        ValueField<std::string CONFIG_INDEX_ARG(Vrf::IPV6_ROUTER_RIP_NAME)>,
-        RegistryContainer<EmptyRegistry CONFIG_INDEX_ARG(Vrf::ROUTER_RIP)>
+        OwnedListField<OspfRegistry, uint16_t CONFIG_INDEX_ARG(Vrf::IPV6_ROUTER_OSPF)>
     > reg;
 };
 }

@@ -27,7 +27,6 @@
 #include "ControlScheduler.h"
 #include "AddressFamily.hpp"
 #include "configs/registry/global/GlobalRegistry.h"
-#include "configs/Registry.hpp"
 
 namespace interface { class Interface; }
 namespace hardware { struct HwIfaceInfo; }
@@ -352,7 +351,6 @@ public:
     bool testingMode = false;    ///< Testing mode flag.
 
     config::GlobalRegistry configs; ///< Global ARP/NDP/NSF/etc configuration
-    config::Registry registry;     ///< Per-VRF and per-protocol config allocator.
 
     core::ThreadPool threadPool;       ///< Global thread pool for off-loading.
     core::TimeManager timeManager;     ///< Global time manager for time keeping.

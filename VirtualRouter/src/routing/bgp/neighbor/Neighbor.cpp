@@ -2,7 +2,6 @@
 
 #include <VirtualRouter.h>
 
-#include "configs/Registry.hpp"
 #include "Neighbor.h"
 #include "NeighborAf.h"
 #include "PeerTemplate.h"
@@ -16,22 +15,22 @@ Neighbor::Neighbor(const types::IPAddress& ipAddress, BgpProcess& proc)
       scheduler(proc.getScheduler()),
       configs([&proc, &ipAddress]() -> config::BgpNeighborSessionRegistry& {
           auto& procConfigs = proc.getConfigs();
-          auto& neighborConfigs = procConfigs.reg.get<config::Bgp::NEIGHBOR>();
-          return proc.routingInstance->getRegistry().emplaceBack(neighborConfigs, ipAddress);
+          auto neighborConfigs = procConfigs.reg.get<config::Bgp::NEIGHBOR>();
+          return neighborConfigs.emplaceBack(ipAddress);
       }())
 {
     configs.getConfigs().reg.context().set(this);
 
     // Resolve peer group
     {
-        auto& pgField = configs.get<config::BgpNeighborSession::PEER_GROUP>();
+        auto pgField = configs.get<config::BgpNeighborSession::PEER_GROUP>();
         if (pgField.hasValue())
             configs.setPeerGroup(proc.getNtable().lookupPeerGroup(pgField.load()));
     }
 
     // Resolve session-level peer template from INHERIT_PEER_SESSION.
     {
-        auto& inhSessField = configs.get<config::BgpNeighborSession::INHERIT_PEER_SESSION>();
+        auto inhSessField = configs.get<config::BgpNeighborSession::INHERIT_PEER_SESSION>();
         if (inhSessField.hasValue())
             configs.setPeerSessionTemplate(proc.getNtable().lookupPeerSessionTemplate(inhSessField.load()));
     }
@@ -68,7 +67,7 @@ const NeighborAf& Neighbor::getAfNeighbor(const AfiSafi& afi) const
 
 bool Neighbor::isEbgp() const noexcept
 {
-    auto& remAs = configs.get<config::BgpNeighborSession::REMOTE_AS>();
+    auto remAs = configs.get<config::BgpNeighborSession::REMOTE_AS>();
     if (!remAs.hasValue()) return false;
     uint32_t peerAs = remAs.load();
     if (peerAs == process.asNumber) return false;
@@ -76,8 +75,7 @@ bool Neighbor::isEbgp() const noexcept
     bool inConfed = false;
     process.getConfigs().reg.get<config::Bgp::BGP_CONFEDERATION_PEERS>().withRead(
         [&](const auto& peersList) {
-            for (const auto& peers : peersList)
-                for (uint32_t p : peers)
+            for (uint32_t p : peersList)
                     if (p == peerAs) { inConfed = true; return; }
         });
     return !inConfed;
@@ -85,7 +83,7 @@ bool Neighbor::isEbgp() const noexcept
 
 bool Neighbor::isConfedEbgp() const noexcept
 {
-    auto& remAs = configs.get<config::BgpNeighborSession::REMOTE_AS>();
+    auto remAs = configs.get<config::BgpNeighborSession::REMOTE_AS>();
     if (!remAs.hasValue()) return false;
     uint32_t peerAs = remAs.load();
     if (peerAs == process.asNumber) return false;
@@ -93,8 +91,7 @@ bool Neighbor::isConfedEbgp() const noexcept
     bool inConfed = false;
     process.getConfigs().reg.get<config::Bgp::BGP_CONFEDERATION_PEERS>().withRead(
         [&](const auto& peersList) {
-            for (const auto& peers : peersList)
-                for (uint32_t p : peers)
+            for (uint32_t p : peersList)
                     if (p == peerAs) { inConfed = true; return; }
         });
     return inConfed;
@@ -106,8 +103,7 @@ void Neighbor::buildAttributeRanges()
     attrRanges.withdraw.reset();
 
     configs.get<config::BgpNeighborSession::PATH_ATTRIBUTE>().withRead([this](const auto& rangesList) {
-        for (const auto& ranges : rangesList)
-        for (const auto& [disc, lo, hi] : ranges)
+        for (const auto& [disc, lo, hi] : rangesList)
         {
             if (disc)
             {
@@ -116,7 +112,7 @@ void Neighbor::buildAttributeRanges()
             }
             else
             {
-                for(uint16_t i = lo; i <= hi; ++i)
+                for (uint16_t i = lo; i <= hi; ++i)
                     attrRanges.withdraw.set(i);
             }
         }

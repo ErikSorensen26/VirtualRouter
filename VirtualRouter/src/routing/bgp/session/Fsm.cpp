@@ -302,7 +302,7 @@ void Fsm::handleOpenSent(FsmEvent event)
         // Peer open received. The session has already validated content
         {
             // Reject if peer's hold time is below our configured minimum
-            auto& minHtCfg = session.getBaseConfig().reg.get<config::BgpTransportBase::MINIMUM_HOLDTIME>();
+            auto minHtCfg = session.getBaseConfig().reg.get<config::BgpTransportBase::MINIMUM_HOLDTIME>();
             if (minHtCfg.hasValue() && session.holdTime != 0 && session.holdTime < minHtCfg.load())
             {
                 resetToIdle(true, BGP_NOTIFICATION_OPEN_UNACCEPTABLE_HOLD);

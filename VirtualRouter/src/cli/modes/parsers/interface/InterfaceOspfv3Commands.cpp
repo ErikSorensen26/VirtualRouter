@@ -7,6 +7,7 @@
 #include "InterfaceOspfCommands.h"
 #include "cli/runtime/CliSession.h"
 #include "cli/parser/CommandUtils.hpp"
+#include "configs/FieldAccessor.hpp"
 
 #define OSPF_PARAMS DEFINE_PARAMS(config::OspfInterfaceBaseRegistry)
 #define INTERFACE_SUB_PARAMS DEFINE_SUB_PARAMS(config::InterfaceRegistry)
@@ -19,10 +20,10 @@ bool InterfaceOspfv3_Area_Handler(OSPF_PARAMS)
     auto idTok = segs >> 0 >> 1;
     if (!utils::setValue(areaId, idTok) && !utils::setValue(areaId.addr, idTok))
 	return false;
-    auto& area = ctx.configs().reg.get<config::OspfInterfaceBase::AREA_ID>();
+    auto area = ctx.configs().reg.get<config::OspfInterfaceBase::AREA_ID>();
     if (!utils::handleValueReset(area, ctx))
 	area.set(areaId.addr);
-    auto& instance = ctx.configs().reg.get<config::OspfInterfaceBase::INSTANCE_ID>();
+    auto instance = ctx.configs().reg.get<config::OspfInterfaceBase::INSTANCE_ID>();
     utils::setFieldValue(instance, ctx, segs >> 1 >> 1);
     return true;
 }
@@ -30,8 +31,8 @@ bool InterfaceOspfv3_Area_Handler(OSPF_PARAMS)
 bool InterfaceOspfv3_Neighbor_Handler(OSPF_PARAMS)
 {
     auto& ospf = ctx.configs().reg.get<config::OspfInterfaceBase::BASE>().get();
-    auto& neighbor = ospf.reg.get<config::OspfInterface::NEIGHBOR>();
-    config::DefType<decltype(neighbor)>::node tup;
+    auto neighbor = ospf.reg.get<config::OspfInterface::NEIGHBOR>();
+    config::DefType<decltype(neighbor)::Field>::node tup;
 
     // Start after neighbor address
     for (const auto& seg : segs)
@@ -76,9 +77,9 @@ bool InterfaceOspfv3_Neighbor_Handler(OSPF_PARAMS)
 bool InterfaceDefaultOspfv3_Authentication_Handler(OSPF_PARAMS)
 {
     auto& configs = ctx.configs().reg.get<config::OspfInterfaceBase::IPSEC>().get();
-    auto& authType = configs.reg.get<config::OspfInterfaceIPSec::AUTHENTICATION_TYPE>();
-    auto& authSpi = configs.reg.get<config::OspfInterfaceIPSec::SPI>();
-    auto& authKey = configs.reg.get<config::OspfInterfaceIPSec::AUTHENTICATION_KEY>();
+    auto authType = configs.reg.get<config::OspfInterfaceIPSec::AUTHENTICATION_TYPE>();
+    auto authSpi = configs.reg.get<config::OspfInterfaceIPSec::SPI>();
+    auto authKey = configs.reg.get<config::OspfInterfaceIPSec::AUTHENTICATION_KEY>();
 
     if (utils::handleValueReset(authType, ctx) &&
 	utils::handleValueReset(authSpi, ctx) &&
@@ -134,7 +135,7 @@ bool InterfaceDefaultOspfv3_NullAuthentication_Handler(OSPF_PARAMS)
 {
     UNUSED(segs);
     auto& configs = ctx.configs().reg.get<config::OspfInterfaceBase::IPSEC>().get();
-    auto& authType = configs.reg.get<config::OspfInterfaceIPSec::AUTHENTICATION_TYPE>();
+    auto authType = configs.reg.get<config::OspfInterfaceIPSec::AUTHENTICATION_TYPE>();
     if (utils::handleValueReset(authType, ctx))
 	return true;
     authType.set(config::ospf::IPsecAuthType::NULL_AUTH);
@@ -144,11 +145,11 @@ bool InterfaceDefaultOspfv3_NullAuthentication_Handler(OSPF_PARAMS)
 bool InterfaceDefaultOspfv3_Encryption_Handler(OSPF_PARAMS)
 {
     auto& configs = ctx.configs().reg.get<config::OspfInterfaceBase::IPSEC>().get();
-    auto& espSpi = configs.reg.get<config::OspfInterfaceIPSec::SPI>();
-    auto& authType = configs.reg.get<config::OspfInterfaceIPSec::AUTHENTICATION_TYPE>();
-    auto& authKey = configs.reg.get<config::OspfInterfaceIPSec::AUTHENTICATION_KEY>();
-    auto& encryptType = configs.reg.get<config::OspfInterfaceIPSec::ENCRYPTION_TYPE>();
-    auto& encryptkey = configs.reg.get<config::OspfInterfaceIPSec::ENCRYPTION_KEY>();
+    auto espSpi = configs.reg.get<config::OspfInterfaceIPSec::SPI>();
+    auto authType = configs.reg.get<config::OspfInterfaceIPSec::AUTHENTICATION_TYPE>();
+    auto authKey = configs.reg.get<config::OspfInterfaceIPSec::AUTHENTICATION_KEY>();
+    auto encryptType = configs.reg.get<config::OspfInterfaceIPSec::ENCRYPTION_TYPE>();
+    auto encryptkey = configs.reg.get<config::OspfInterfaceIPSec::ENCRYPTION_KEY>();
 
     for (const auto& seg : segs)
     {
@@ -274,7 +275,7 @@ bool InterfaceDefaultOspfv3_NullEncryption_Handler(OSPF_PARAMS)
 {
     UNUSED(segs);
     auto& configs = ctx.configs().reg.get<config::OspfInterfaceBase::IPSEC>().get();
-    auto& type = configs.reg.get<config::OspfInterfaceIPSec::ENCRYPTION_TYPE>();
+    auto type = configs.reg.get<config::OspfInterfaceIPSec::ENCRYPTION_TYPE>();
     if (utils::handleValueReset(type, ctx))
 	return true;
     type.set(config::ospf::IPsecEncryptType::NULL_TYPE);
@@ -330,13 +331,13 @@ bool InterfaceOspfv3Base_Default_SubHandler(INTERFACE_SUB_PARAMS)
 }
 
 #define OSPFV3_LIST(X, Y) \
-    X(Y, (INHERIT, InterfaceOspfCommands)) \
+    X(Y, (CMD_INHERIT, InterfaceOspfCommands)) \
     X(Y, (COMMAND, Neighbor, "neighbor"_tok))
 
 DEFINE_CMD_MODE(InterfaceOspfv3, config::OspfInterfaceBaseRegistry, OSPFV3_LIST);
 
 #define DEFAULT_OSPFV3_LIST(X, Y) \
-    X(Y, (INHERIT, InterfaceOspfCommands)) \
+    X(Y, (CMD_INHERIT, InterfaceOspfCommands)) \
     X(Y, (COMMAND, Authentication, "authentication"_tok, "ipsec"_tok)) \
     X(Y, (COMMAND, NullAuthentication, "authentication"_tok, "null"_tok)) \
     X(Y, (COMMAND, Encryption, "encryption"_tok, "ipsec"_tok)) \

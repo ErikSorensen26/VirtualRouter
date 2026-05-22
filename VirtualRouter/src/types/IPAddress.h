@@ -604,22 +604,44 @@ struct alignas(16) IPv6Prefix
 };
 
 /**
- * @brief Returns true if @p T is one of the three prefix types.
- *
- * Evaluates to `true` for @ref IPPrefix, @ref IPv4Prefix, and @ref IPv6Prefix
- * (cv-qualifiers and references are stripped before the comparison).
- *
- * @tparam T The type to test.
- * @return `true` if T (stripped of cv-ref) is IPPrefix, IPv4Prefix, or IPv6Prefix.
+ * TODO finish doxy
  */
 template <typename T>
-constexpr bool isIpPrefix()
-{
-    using U = std::remove_cv_t<std::remove_reference_t<T>> ;
-    return std::is_same_v<U, IPPrefix> ||
-           std::is_same_v<U, IPv4Prefix> ||
-           std::is_same_v<U, IPv6Prefix>;
-}
+concept IsIPPrefix =
+    std::is_same_v<std::remove_cv_t<std::remove_reference_t<T>>, IPPrefix> ||
+    std::is_same_v<std::remove_cv_t<std::remove_reference_t<T>>, IPv4Prefix> ||
+    std::is_same_v<std::remove_cv_t<std::remove_reference_t<T>>, IPv6Prefix>;
+
+/**
+ * TODO finish doxy
+ */
+template <typename T>
+concept IsIPAddress =
+    std::is_same_v<std::remove_cv_t<std::remove_reference_t<T>>, IPAddress> ||
+    std::is_same_v<std::remove_cv_t<std::remove_reference_t<T>>, IPv4Address> ||
+    std::is_same_v<std::remove_cv_t<std::remove_reference_t<T>>, IPv6Address>;
+
+/**
+ * TODO finish doxy
+ */
+template <typename T>
+using PrefixToAddress =
+    std::conditional_t<std::is_same_v<T, IPPrefix>, IPAddress,
+        std::conditional_t<std::is_same_v<T, IPv4Prefix>, IPv4Address,
+            std::conditional_t<std::is_same_v<T, IPv6Prefix>, IPv6Address, T>
+        >
+    >;
+
+/**
+ * TODO finish doxy
+ */
+template <typename T>
+using AddressToPrefix =
+    std::conditional_t<std::is_same_v<T, IPAddress>, IPPrefix,
+        std::conditional_t<std::is_same_v<T, IPv4Address>, IPv4Prefix,
+            std::conditional_t<std::is_same_v<T, IPv6Address>, IPv6Prefix, T>
+        >
+    >;
 
 } // namespace types
 

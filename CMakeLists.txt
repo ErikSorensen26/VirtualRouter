@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_LIBRARIES "${CMAKE_CXX_STANDARD_LIBRARIES} -latomic")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build)
 
-add_compile_options(-Wall -Wno-unused-parameter)
+add_compile_options(-Wall -Wno-unused-parameter -fno-strict-aliasing)
 add_link_options(-fuse-ld=mold)
 
 option(BUILD_STATIC_ROUTER "Build only a full static VirtualRouterExec" OFF)

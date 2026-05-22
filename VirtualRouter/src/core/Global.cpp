@@ -66,7 +66,7 @@ void Global::interfaceRefresh()
 {
     {
         std::lock_guard<std::mutex> lock(interfaceMutex);
-        auto& interfaceCfgs = configs.reg.get<config::Global::INTERFACE>();
+        auto interfaceCfgs = configs.reg.get<config::Global::INTERFACE>();
         
         // Erase
         for (auto it = interfaceList.begin(); it != interfaceList.end();)
@@ -127,7 +127,7 @@ void Global::routingInstanceRefresh()
 {
     {
         std::lock_guard<std::mutex> lock(routingInstanceMutex);
-        auto& vrfConfigs = configs.reg.get<config::Global::VRF_CONFIGS>();
+        auto vrfConfigs = configs.reg.get<config::Global::VRF_CONFIGS>();
 
         // Erase
         for (auto it = routingInstances.begin(); it != routingInstances.end();)

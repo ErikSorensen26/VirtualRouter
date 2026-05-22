@@ -11,9 +11,17 @@
 
 namespace routing::eigrp
 {
+static config::EigrpRegistry& resolveEigrpRegistry(Eigrp& base)
+{
+    auto& vrf = *base.routingInstance;
+    if (base.getAF() == types::AddressFamily::IPv4)
+        return vrf.getConfigs().reg.get<config::Vrf::ROUTER_EIGRP_V4>().emplaceBack(static_cast<uint16_t>(base.getAS()));
+    return vrf.getConfigs().reg.get<config::Vrf::ROUTER_EIGRP_V6>().emplaceBack(static_cast<uint16_t>(base.getAS()));
+}
+
 EigrpConfig::EigrpConfig(Eigrp& base)
     : base(base),
-    configs(base.routingInstance->getRegistry().create<config::EigrpRegistry>())
+      configs(resolveEigrpRegistry(base))
 {
     configs.reg.context().set(&base);
 }
@@ -175,7 +183,7 @@ std::unordered_set<types::IPAddress> EigrpConfig::getUnicastNeighbors(interface:
 StubConfig EigrpConfig::getStubConfig() const
 {
     StubConfig s;
-    auto& stubField = configs.reg.get<config::Eigrp::STUB>();
+    auto stubField = configs.reg.get<config::Eigrp::STUB>();
     s.isStub = stubField.hasValue();
     if (s.isStub) {
         types::EnumBitMap<config::eigrp::Stub> bm(stubField.load());
@@ -185,7 +193,7 @@ StubConfig EigrpConfig::getStubConfig() const
         s.advertiseRedistributed = bm.test(config::eigrp::Stub::REDISTRIBUTED);
         s.receiveOnly            = bm.test(config::eigrp::Stub::RECEIVE_ONLY);
     }
-    auto& leakMap = configs.reg.get<config::Eigrp::STUB_LEAK_MAP>();
+    auto leakMap = configs.reg.get<config::Eigrp::STUB_LEAK_MAP>();
     s.advertiseLeakMap     = leakMap.hasValue();
     return s;
 }

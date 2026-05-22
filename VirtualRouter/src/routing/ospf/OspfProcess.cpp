@@ -8,33 +8,35 @@
 #include "OspfProcess.h"
 #include "area/Area.h"
 #include "topology/RouteManager.h"
+#include "configs/FieldAccessor.hpp"
 #include "OspfTypes.hpp"
 
 namespace routing::ospf
 {
 OspfProcess::OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, core::VirtualRouter* vrf)
     : isV3(isV3), routingInstance(vrf), rib(*this), scheduler(vrf->getControlScheduler().create()), procId(procId), af(af), ifaceMgr(*this),
-    configs([this, isV3]() -> config::OspfRegistry& {
-        auto& registry = routingInstance->getGlobal().registry;
+    configs([af, isV3, vrf, procId]() -> config::OspfRegistry& {
         if (isV3)
         {
-            if (routingInstance->isDefault())
-            {
-                // TODO: add address family v3 configs from elsewhere
-                auto& afCfgs = std::get<std::reference_wrapper<V3AfConfigs>>(afConfigs).get();
-                return registry.emplace(afCfgs.reg.get<config::OspfAddressFamilyV3::BASE>().get());
-            }
-            // OSPFv3 VRF mode does not support address families
-            return registry.create<config::OspfRegistry>();
+            auto& base = vrf->getGlobal().configs.reg.get<config::Global::ROUTER_OSPFV3_DEFAULT>().emplaceBack(procId);
+            auto& v3Reg = vrf->getConfigs().reg.get<config::Vrf::ROUTER_OSPFV3>().emplaceBack(procId);
+            config::OspfRegistry& afCfgs = [&]() -> config::OspfRegistry& {
+                if (af == types::AddressFamily::IPv4)
+                    return v3Reg.reg.get<config::Ospfv3AddressFamily::IPV4>().get();
+                else
+                    return v3Reg.reg.get<config::Ospfv3AddressFamily::IPV6>().get();
+            }();
+
+            afCfgs.reg.setMask(&base.reg);
+            return afCfgs;
         }
         else
         {
             // OSPFv2 types::AddressFamily
-            auto& v2Reg = registry.create<config::OspfAddressFamilyV2Registry>();
-            afConfigs.emplace<std::reference_wrapper<V2AfConfigs>>(std::ref(v2Reg));
-            auto& afCfgs = std::get<std::reference_wrapper<V2AfConfigs>>(afConfigs).get();
-            auto& v2Base = afCfgs.reg.get<config::OspfAddressFamilyV2::BASE>().get();
-            return registry.emplace(v2Base);
+            if (af == types::AddressFamily::IPv4)
+                return vrf->getConfigs().reg.get<config::Vrf::ROUTER_OSPF>().emplaceBack(procId);
+            else
+                return vrf->getConfigs().reg.get<config::Vrf::IPV6_ROUTER_OSPF>().emplaceBack(procId);
         }
     }())
 {
@@ -356,7 +358,7 @@ void OspfProcess::originateExternals(std::vector<std::pair<ExternalOriginateCont
 
 void OspfProcess::syncSummaryConfig()
 {
-    auto& cfg = configs.reg.get<config::Ospf::SUMMARY_ADDRESS>();
+    auto cfg = configs.reg.get<config::Ospf::SUMMARY_ADDRESS>();
 
     std::unordered_map<types::IPPrefix, OspfSummaryAddress> active = summaries;
 

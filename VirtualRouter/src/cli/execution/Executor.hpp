@@ -293,7 +293,7 @@ private:
 
     /// @brief Sentinel enum used only to compute the minimum `Context<>` size for the ping-pong storage slots.
     enum class Dummy { COUNT };
-    struct DummyConfig { config::SubRegistry<Dummy> reg; }; ///< Dummy config struct to satisfy `Context`'s registry requirement.
+    struct DummyConfig { config::SubRegistry<Dummy, nullptr> reg; }; ///< Dummy config struct to satisfy `Context`'s registry requirement.
     /// @brief Raw aligned storage for two `Context<>` instances; avoids heap allocation on mode switch.
     using Storage = std::aligned_storage_t<sizeof(Context<DummyConfig>), alignof(Context<DummyConfig>)>;
     Storage storage[2] = {};

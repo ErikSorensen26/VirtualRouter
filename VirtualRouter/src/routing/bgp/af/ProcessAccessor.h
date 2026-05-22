@@ -95,18 +95,6 @@ public:
      * @param proc  The `BgpProcess` to query.
      */
     static core::ProcessQueueRef getScheduler(BgpProcess& proc);
-
-    /**
-     * @brief Registers the per-AF base configuration container with `proc`.
-     *
-     * Called once during `AddressFamilyInstance` construction so that the
-     * process-level configuration registry gains a typed handle to the new
-     * address-family base settings.
-     *
-     * @param base  The AF-base config container to register.
-     * @param proc  The `BgpProcess` that owns the registry.
-     */
-    static void emplaceAfBase(config::RegistryContainer<config::BgpAfBaseRegistry CONFIG_INDEX_PARAM>& base, BgpProcess& proc);
 };
 } // namespace routing
 

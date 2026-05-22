@@ -20,10 +20,7 @@ namespace routing::ospf
 {
 Area::Area(OspfProcess& base, uint32_t id, std::pmr::memory_resource* mr)
     : mr(mr ? mr : std::pmr::get_default_resource()),
-      configs(base.routingInstance->getRegistry().emplaceBack(
-          base.getConfigs().reg.get<config::Ospf::AREA_CONFIGS>(),
-          id)
-      ),
+      configs(base.getConfigs().reg.get<config::Ospf::AREA_CONFIGS>().emplaceBack(id)),
       db(mr),
       base(base),
       spfMgr(*this),
@@ -227,7 +224,7 @@ bool Area::isValidForwardAddress(const types::IPAddress& addr) const
 
 void Area::syncRangeConfig()
 {
-    auto& cfgRanges = configs.reg.get<config::OspfArea::RANGE>();
+    auto cfgRanges = configs.reg.get<config::OspfArea::RANGE>();
     std::unordered_set<types::IPPrefix> activeRanges;
     rangePrefixes.clear();
 
@@ -619,7 +616,7 @@ bool Area::onNewLsa()
 {
     auto& processConfigs = base.getConfigs();
 
-    auto& maxLsa = processConfigs.reg.get<config::Ospf::MAX_LSA>();
+    auto maxLsa = processConfigs.reg.get<config::Ospf::MAX_LSA>();
     if (!maxLsa.hasValue())
         return true;
 

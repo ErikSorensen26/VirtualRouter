@@ -1,6 +1,7 @@
 /**
  * @file OspfRegistry.h
- * @brief OSPF configuration registry: process, area, and global settings.
+ * @brief OSPF configuration registry: process, area, virtual-link, and OSPFv3 AF settings.
+ * @ingroup OSPF
  *
  * Defines the configuration schema for OSPF including process parameters,
  * area configuration (types, authentication), router timers, default routes,
@@ -24,6 +25,10 @@ namespace config
 {
 namespace ospf
 {
+/**
+ * @brief OSPF area type controlling LSA flooding and default route origination.
+ * @ingroup OSPF
+ */
 enum class AreaType
 {
     NORMAL,
@@ -34,13 +39,21 @@ enum class AreaType
 };
 }
 
+/**
+ * @brief Configuration fields for an OSPF virtual link (placeholder — not yet implemented).
+ * @ingroup OSPF
+ */
 enum class OspfVirtualLink
 {
     COUNT
 };
 
-using OspfVirtualLinkRegistry = SubRegistry<OspfVirtualLink>;
+using OspfVirtualLinkRegistry = SubRegistry<OspfVirtualLink, nullptr>;
 
+/**
+ * @brief Per-area OSPF configuration fields (type, authentication, stub cost, NSSA).
+ * @ingroup OSPF
+ */
 enum class OspfArea
 {
     AUTHENTICATION_TYPE,
@@ -77,9 +90,13 @@ CONFIG_DEFAULT_TABLE(OSPF_AREA_DEFAULTS);
 void OspfAreaTypeChange(void* area);
 void OspfAreaSycnRanges(void* area);
 
+/**
+ * @brief Registry slot for one OSPF area configuration.
+ * @ingroup OSPF
+ */
 struct OspfAreaRegistry
 {
-    SubRegistry<OspfArea,
+    SubRegistry<OspfArea, nullptr,
         AtomicField<ospf::AuthType CONFIG_INDEX_ARG(OspfArea::AUTHENTICATION_TYPE)>,
         OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(OspfArea::DEFAULT_COST)>,
         OptionalAtomicField<std::nullptr_t CONFIG_INDEX_ARG(OspfArea::FILTER_LIST)>, // TODO:
@@ -99,6 +116,10 @@ struct OspfAreaRegistry
     > reg;
 };
 
+/**
+ * @brief OSPF process-level configuration fields (areas, timers, redistribution, SPF tuning).
+ * @ingroup OSPF
+ */
 enum class Ospf
 {
     AREA_CONFIGS,   
@@ -248,9 +269,13 @@ void OspfSyncNeighbors(void* base);
 void OspfSyncNetworks(void* base);
 void OspfSyncSummaries(void* base);
 
+/**
+ * @brief Registry slot for one OSPF process instance.
+ * @ingroup OSPF
+ */
 struct OspfRegistry
 {
-    SubRegistry<Ospf,
+    SubRegistry<Ospf, nullptr,
         OwnedListField<OspfAreaRegistry, uint32_t CONFIG_INDEX_ARG(Ospf::AREA_CONFIGS)>,
         AtomicField<uint32_t CONFIG_INDEX_ARG(Ospf::REFERENCE_BANDWIDTH)>,
         AtomicField<bool CONFIG_INDEX_ARG(Ospf::BFD)>, // TODO:
@@ -346,35 +371,29 @@ struct OspfRegistry
     > reg;
 };
 
-enum class OspfAddressFamilyV3
+/**
+ * @brief OSPFv3 address-family process container fields.
+ * @ingroup OSPF
+ */
+enum class Ospfv3AddressFamily
 {
-    BASE,
     IPV4,
     IPV6,
     COUNT
 };
 
-struct OspfAddressFamilyV3Registry
+/**
+ * @brief Registry slot for the OSPFv3 address-family process container.
+ * @ingroup OSPF
+ */
+struct Ospfv3AddressFamilyRegistry
 {
-    SubRegistry<OspfAddressFamilyV3,
-        RegistryContainer<OspfRegistry CONFIG_INDEX_ARG(OspfAddressFamilyV3::BASE)>,
-        RegistryContainer<OspfRegistry CONFIG_INDEX_ARG(OspfAddressFamilyV3::IPV4)>,
-        RegistryContainer<OspfRegistry CONFIG_INDEX_ARG(OspfAddressFamilyV3::IPV6)>
+    SubRegistry<Ospfv3AddressFamily, nullptr,
+        RegistryContainer<OspfRegistry CONFIG_INDEX_ARG(Ospfv3AddressFamily::IPV4)>,
+        RegistryContainer<OspfRegistry CONFIG_INDEX_ARG(Ospfv3AddressFamily::IPV6)>
     > reg;
 };
 
-enum class OspfAddressFamilyV2
-{
-    BASE,
-    COUNT
-};
-
-struct OspfAddressFamilyV2Registry
-{
-    SubRegistry<OspfAddressFamilyV2,
-        RegistryContainer<OspfRegistry CONFIG_INDEX_ARG(OspfAddressFamilyV2::BASE)>
-    > reg;
-};
 }
 
 #endif // OSPF_REGISTRY_H

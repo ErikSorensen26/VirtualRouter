@@ -24,10 +24,10 @@ bool InterfaceIPv6Ospf_Area_Handler(OSPF_PARAMS)
     auto idTok = segs >> 1 >> 1;
     if (!utils::setValue(areaId, idTok) && !utils::setValue(areaId.addr, idTok))
 	    return false;
-    auto& area = ospf->reg.get<config::OspfInterfaceBase::AREA_ID>();
+    auto area = ospf->reg.get<config::OspfInterfaceBase::AREA_ID>();
     if (!utils::handleValueReset(area, ctx))
 	area.set(areaId.addr);
-    auto& instance = ospf->reg.get<config::OspfInterfaceBase::INSTANCE_ID>();
+    auto instance = ospf->reg.get<config::OspfInterfaceBase::INSTANCE_ID>();
     utils::setFieldValueWithFallback(instance, ctx, segs >> 2 >> 1);
     return true;
 }
@@ -36,53 +36,53 @@ bool InterfaceIPv6Ospf_Authentication_Handler(OSPF_PARAMS)
 {
     auto& ospf = ctx.configs().reg.get<config::OspfInterfaceBase::IPSEC>().get();
 
-    if (auto& t = ospf.reg.get<config::OspfInterfaceIPSec::ENCRYPTION_TYPE>();
+    if (auto t = ospf.reg.get<config::OspfInterfaceIPSec::ENCRYPTION_TYPE>();
 	t.hasValue() || t.load() != config::ospf::IPsecEncryptType::NULL_TYPE)
     {
 	ctx.terminal.controller.print("\r\n% Ospfv3: Interface is already configured with Encryption.");
 	return false;
     }
 	
-    auto& authSpi = ospf.reg.get<config::OspfInterfaceIPSec::SPI>();
-    auto& authType = ospf.reg.get<config::OspfInterfaceIPSec::AUTHENTICATION_TYPE>();
-    auto& authKey = ospf.reg.get<config::OspfInterfaceIPSec::AUTHENTICATION_KEY>();
+    auto authSpi = ospf.reg.get<config::OspfInterfaceIPSec::SPI>();
+    auto authType = ospf.reg.get<config::OspfInterfaceIPSec::AUTHENTICATION_TYPE>();
+    auto authKey = ospf.reg.get<config::OspfInterfaceIPSec::AUTHENTICATION_KEY>();
 
     if (utils::handleValueReset(authType, ctx))
 	return true;
 
     for (const auto& seg : segs)
     {
-	switch (seg[0])
-	{
-	    case "spi"_tok:
-	    {
-		if (!utils::setFieldValue(authSpi, ctx, seg >> 1))
-		    return false;
-	    }
-	    case "md5"_tok:
-	    {
-		std::string keyStr = std::string(seg[1].value).append(std::min<size_t>(0, 32 - seg[1].value.size()), '\0');
-		std::array<uint8_t, 40> arr{0};
-		std::memcpy(arr.data(), keyStr.data(), 32);
-		authKey.set(arr);
-		authType.set(config::ospf::IPsecAuthType::MD5);
-		return true;	
-	    }
-	    case "sha1"_tok:
-	    {
-		std::string keyStr = std::string(seg[1].value).append(std::min<size_t>(0, 40 - seg[1].value.size()), '\0');
-		std::array<uint8_t, 40> arr{0};
-		std::memcpy(arr.data(), keyStr.data(), 40);
-		authKey.set(arr);
-		authType.set(config::ospf::IPsecAuthType::SHA1);
-		return true;	
-	    }
-	    case "null"_tok:
-	    {
-		authType.set(config::ospf::IPsecAuthType::NULL_AUTH);
-		return true;
-	    }
-	}
+		switch (seg[0])
+		{
+			case "spi"_tok:
+			{
+				if (!utils::setFieldValue(authSpi, ctx, seg >> 1))
+					return false;
+			}
+			case "md5"_tok:
+			{
+				std::string keyStr = std::string(seg[1].value).append(std::min<size_t>(0, 32 - seg[1].value.size()), '\0');
+				std::array<uint8_t, 40> arr{0};
+				std::memcpy(arr.data(), keyStr.data(), 32);
+				authKey.set(arr);
+				authType.set(config::ospf::IPsecAuthType::MD5);
+				return true;	
+			}
+			case "sha1"_tok:
+			{
+				std::string keyStr = std::string(seg[1].value).append(std::min<size_t>(0, 40 - seg[1].value.size()), '\0');
+				std::array<uint8_t, 40> arr{0};
+				std::memcpy(arr.data(), keyStr.data(), 40);
+				authKey.set(arr);
+				authType.set(config::ospf::IPsecAuthType::SHA1);
+				return true;	
+			}
+			case "null"_tok:
+			{
+				authType.set(config::ospf::IPsecAuthType::NULL_AUTH);
+				return true;
+			}
+		}
     }
     return false;
 }
@@ -91,11 +91,11 @@ bool InterfaceIPv6Ospf_Encryption_Handler(OSPF_PARAMS)
 {
     auto& ospf = ctx.configs().reg.get<config::OspfInterfaceBase::IPSEC>().get();
 	
-    auto& spi = ospf.reg.get<config::OspfInterfaceIPSec::SPI>();
-    auto& encryptType = ospf.reg.get<config::OspfInterfaceIPSec::ENCRYPTION_TYPE>();
-    auto& encryptKey = ospf.reg.get<config::OspfInterfaceIPSec::ENCRYPTION_KEY>();
-    auto& authType = ospf.reg.get<config::OspfInterfaceIPSec::AUTHENTICATION_TYPE>();
-    auto& authKey = ospf.reg.get<config::OspfInterfaceIPSec::AUTHENTICATION_KEY>();
+    auto spi = ospf.reg.get<config::OspfInterfaceIPSec::SPI>();
+    auto encryptType = ospf.reg.get<config::OspfInterfaceIPSec::ENCRYPTION_TYPE>();
+    auto encryptKey = ospf.reg.get<config::OspfInterfaceIPSec::ENCRYPTION_KEY>();
+    auto authType = ospf.reg.get<config::OspfInterfaceIPSec::AUTHENTICATION_TYPE>();
+    auto authKey = ospf.reg.get<config::OspfInterfaceIPSec::AUTHENTICATION_KEY>();
 
     if (utils::handleValueReset(authType, ctx))
 	    return true;
@@ -110,107 +110,107 @@ bool InterfaceIPv6Ospf_Encryption_Handler(OSPF_PARAMS)
 
     for (const auto& seg : segs)
     {
-	switch (seg[0])
-	{
-	    case "spi"_tok:
-	    {
-		if (!utils::setFieldValue(spi, ctx, seg >> 1))
-		    return false;
-	    }
-	    case "3des"_tok:
-	    {
-		handleEncryptKey(seg[1].value, 48);
-		break;
-	    }
-	    case "128"_tok:
-	    {
-		handleEncryptKey(seg[1].value, 32);
-		break;
-	    }
-	    case "192"_tok:
-	    {
-		handleEncryptKey(seg[1].value, 48);
-		break;
-	    }
-	    case "256"_tok:
-	    {
-		handleEncryptKey(seg[1].value, 64);
-		break;
-	    }
-	    case "md5"_tok:
-	    {
-		std::string keyStr = std::string(seg[1].value).append(std::min<size_t>(0, 32 - seg[1].value.size()), '\0');
-		std::array<uint8_t, 40> arr{0};
-		std::memcpy(arr.data(), keyStr.data(), 32);
-		authKey.set(arr);
-		authType.set(config::ospf::IPsecAuthType::MD5);
-		return true;	
-	    }
-	    case "sha1"_tok:
-	    {
-		std::string keyStr = std::string(seg[1].value).append(std::min<size_t>(0, 40 - seg[1].value.size()), '\0');
-		std::array<uint8_t, 40> arr{0};
-		std::memcpy(arr.data(), keyStr.data(), 40);
-		authKey.set(arr);
-		authType.set(config::ospf::IPsecAuthType::SHA1);
-		return true;	
-	    }
-	    case "null"_tok:
-	    {
-		encryptType.set(config::ospf::IPsecEncryptType::NULL_TYPE);
-		return true;
-	    }
-	}
+		switch (seg[0])
+		{
+			case "spi"_tok:
+			{
+				if (!utils::setFieldValue(spi, ctx, seg >> 1))
+					return false;
+			}
+			case "3des"_tok:
+			{
+				handleEncryptKey(seg[1].value, 48);
+				break;
+			}
+			case "128"_tok:
+			{
+				handleEncryptKey(seg[1].value, 32);
+				break;
+			}
+			case "192"_tok:
+			{
+				handleEncryptKey(seg[1].value, 48);
+				break;
+			}
+			case "256"_tok:
+			{
+				handleEncryptKey(seg[1].value, 64);
+				break;
+			}
+			case "md5"_tok:
+			{
+				std::string keyStr = std::string(seg[1].value).append(std::min<size_t>(0, 32 - seg[1].value.size()), '\0');
+				std::array<uint8_t, 40> arr{0};
+				std::memcpy(arr.data(), keyStr.data(), 32);
+				authKey.set(arr);
+				authType.set(config::ospf::IPsecAuthType::MD5);
+				return true;	
+			}
+			case "sha1"_tok:
+			{
+				std::string keyStr = std::string(seg[1].value).append(std::min<size_t>(0, 40 - seg[1].value.size()), '\0');
+				std::array<uint8_t, 40> arr{0};
+				std::memcpy(arr.data(), keyStr.data(), 40);
+				authKey.set(arr);
+				authType.set(config::ospf::IPsecAuthType::SHA1);
+				return true;	
+			}
+			case "null"_tok:
+			{
+				encryptType.set(config::ospf::IPsecEncryptType::NULL_TYPE);
+				return true;
+			}
+		}
     }
     return false;
 }
 
 bool InterfaceIPv6Ospf_Neighbor_Handler(OSPF_PARAMS)
 {
-    auto& neighbors = ctx.configs().reg.get<config::OspfInterfaceBase::BASE>().get().reg.get<config::OspfInterface::NEIGHBOR>();
-    config::DefType<decltype(neighbors)>::node tup;
+    auto neighbors = ctx.configs().reg.get<config::OspfInterfaceBase::BASE>().get().reg.get<config::OspfInterface::NEIGHBOR>();
+    config::DefType<typename decltype(neighbors)::Field>::node tup;
 
     for (const auto& seg : segs)
     {
-	switch (seg[0])
-	{
-	    case "neighbor"_tok:
-	    {
-		if (!utils::setTupleElement(std::get<0>(tup), seg >> 1))
-		    return false;
-		break;
-	    }
-	    case "cost"_tok:
-	    {
-		if (!utils::setTupleElement(std::get<1>(tup), seg >> 1))
-		    return false;
-		break;
-	    }
-	    case "database-filter"_tok:
-	    {
-		std::get<2>(tup) = true;
-		break;
-	    }
-	    case "poll-interval"_tok:
-	    {
-		if (!utils::setTupleElement(std::get<3>(tup), seg >> 1))
-		    return false;
-		break;
-	    }
-	    case "priority"_tok:
-	    {
-		if (!utils::setTupleElement(std::get<4>(tup), seg >> 1))
-		    return false;
-		break;
-	    }
-	}
+		switch (seg[0])
+		{
+			case "neighbor"_tok:
+			{
+				if (!utils::setTupleElement(std::get<0>(tup), seg >> 1))
+					return false;
+				break;
+			}
+			case "cost"_tok:
+			{
+				if (!utils::setTupleElement(std::get<1>(tup), seg >> 1))
+					return false;
+				break;
+			}
+			case "database-filter"_tok:
+			{
+				std::get<2>(tup) = true;
+				break;
+			}
+			case "poll-interval"_tok:
+			{
+				if (!utils::setTupleElement(std::get<3>(tup), seg >> 1))
+					return false;
+				break;
+			}
+			case "priority"_tok:
+			{
+				if (!utils::setTupleElement(std::get<4>(tup), seg >> 1))
+					return false;
+				break;
+			}
+		}
     }
 
     return utils::setListEntry(neighbors, ctx, tup);
 }
 
 #define INTERFACE_IPV6_OSPF_LIST(X, Y) \
-    X(Y, (INHERIT, InterfaceOspfCommands)) \
+    X(Y, (CMD_INHERIT, InterfaceOspfCommands)) \
     X(Y, (COMMAND, Area, P_ARG, "area"_tok)) \
     X(Y, (COMMAND, Authentication, "authentication"_tok)) \
     X(Y, (COMMAND, Encryption, "encryption"_tok)) \

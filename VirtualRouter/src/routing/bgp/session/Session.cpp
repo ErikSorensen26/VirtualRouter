@@ -87,7 +87,7 @@ void Session::buildLocalCapabilities()
 
     {
         auto& cfgs = neighbor.getConfigs();
-        auto& localAs = cfgs.get<config::BgpNeighborSession::LOCAL_AS_AS>();
+        auto localAs = cfgs.get<config::BgpNeighborSession::LOCAL_AS_AS>();
         localCaps.asn = (cfgs.get<config::BgpNeighborSession::LOCAL_AS>().load() && localAs.hasValue())
             ? localAs.load() : neighbor.getProcess().asNumber;
     }
@@ -253,7 +253,7 @@ void Session::onFsmTransition(FsmState from, FsmState to, FsmEvent /*trigger*/)
 
             if (negotiated.multiSess)
             {
-                auto& connectionMode = neighbor.getConfigs().get<config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
+                auto connectionMode = neighbor.getConfigs().get<config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
                 bool passive = connectionMode.hasValue() && !connectionMode.load();
                 for (const auto& fam : negotiated.multiSessionFamilies)
                 {

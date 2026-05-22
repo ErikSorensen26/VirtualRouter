@@ -69,11 +69,12 @@ struct NeighborAfConfigs
      * @tparam F Config field tag.
      * @return Const reference to the config field value.
      */
-    template <config::BgpNeighbor F> decltype(auto) get() const
+    template <config::BgpNeighbor F>
+    decltype(auto) get() const
     {
         if (peerGroup && peerOwnedTable.test(config::toIndex<F>))
-            return std::as_const(peerConfigs->reg.get<F>());
-        return std::as_const(configs.reg.get<F>());
+            return peerConfigs->reg.get<F>();
+        return configs.reg.get<F>();
     }
 
     /**
