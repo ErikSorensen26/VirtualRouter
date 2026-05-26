@@ -7,15 +7,22 @@
 
 #include <vector>
 #include <cstdint>
+#include <configs/registry/policy/RouteMapRegistry.h>
 
 namespace policy
 {
-struct RouteMapSet
+using Operator = bool (*)(uint8_t*, void*);
+
+template <auto F>
+struct FieldType
 {
-    std::vector<uint32_t> asPrepend;
+    using type = config::DefType<typename config::RouteMapSequence>
+}
 
-};
-
+template <auto Operator Func>
+struct RouteMapOperation
+{
+}
 
 class RouteMap
 {
