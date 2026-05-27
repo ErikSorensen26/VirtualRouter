@@ -5,9 +5,11 @@
 
 #include <gmock/gmock.h>
 #include <string>
-#include <Configs.h>
+#include <cli/runtime/Configs.h>
 
-class MockFileSystem : public IFileSystem {
+namespace cli
+{
+class MockFileSystem : public FileSystem {
 public:
     MOCK_METHOD(bool, writeFile, (const std::string& path, const std::string& content), (override));
     MOCK_METHOD(void, removeFile, (const std::string& path), (override));
@@ -46,5 +48,6 @@ public:
 private:
     std::map<std::string, std::string> fileContents;
 };
+}
 
 #endif // MOCK_FILE_SYSTEM_HPP

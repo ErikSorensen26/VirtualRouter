@@ -3,12 +3,13 @@
 #ifndef MOCK_CONSOLE_HPP
 #define MOCK_CONSOLE_HPP
 
-#include <Console.h>
+#include <cli/runtime/Console.h>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
-// Mock class for IConsole using Google Mock
-class MockConsole : public IConsole
+namespace cli
+{
+class MockConsole : public ConsoleController
 {
 public:
     MOCK_METHOD(void, clearScreen, (), (override));
@@ -69,7 +70,7 @@ private:
 };
 
 // Reduced Mock class for IConsole using Google Mock
-class ReducedMockConsole : public IConsole
+class ReducedMockConsole : public ConsoleController
 {
 public:
     MOCK_METHOD(void, print, (const std::string&, Color), (override));
@@ -79,10 +80,10 @@ public:
     void saveCursorPosition() override {}
     void restoreCursorPosition() override {}
     void moveCursorToStart() override {}
-    void moveCursorLeft(size_t count) override {}
-    void moveCursorRight(size_t count) override {}
-    void moveCursorUp(size_t count) override {}
-    void moveCursorDown(size_t count) override {}
+    void moveCursorLeft(size_t) override {}
+    void moveCursorRight(size_t) override {}
+    void moveCursorUp(size_t) override {}
+    void moveCursorDown(size_t) override {}
     CursorPosition getCursorPosition() override {return CursorPosition{};}
     void beep() override {}
     void flush() override {}
@@ -96,7 +97,6 @@ public:
     {
         terminalWidth = width;
     }
-
 
     // Constructor to set default behavior
     ReducedMockConsole()
@@ -128,5 +128,6 @@ private:
     // Default terminal width
     size_t terminalWidth = 80;
 };
+}
 
 #endif // MOCK_CONSOLE_HPP

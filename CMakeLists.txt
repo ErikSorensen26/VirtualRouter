@@ -133,6 +133,6 @@ else()
     enable_testing()
     add_subdirectory(VirtualRouter)
     #add_subdirectory(Utils)
-    #add_subdirectory(Tests)
+    add_subdirectory(Tests)
 endif()
 
