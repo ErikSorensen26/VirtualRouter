@@ -1,11 +1,13 @@
-#include <Console.h>
-#include <CliEngine.h>
+#include <cli/runtime/Console.h>
+#include <cli/runtime/CliEngine.h>
 #include <MockConsole.hpp>
 #include <gtest/gtest.h>
 #include <string>
 #include <vector>
 
 // Test Fixture for Console
+// NOTE: Must be in namespace cli to match the friend class declaration in Console.h
+namespace cli {
 class Internal_ConsoleTest : public ::testing::Test
 {
 protected:
@@ -18,7 +20,7 @@ protected:
     void SetUp() override
     {
         mockConsole = new MockConsole;
-        console = new Console(mockConsole); // Share ownership
+        console = new Console(*mockConsole); // Share ownership
     }
 
     void TearDown() override
@@ -52,6 +54,9 @@ protected:
     CursorPosition getCursorPosition() {return console->getCursorPosition();}
     size_t getTerminalWidth() {return console->getTerminalWidth();}
 };
+} // namespace cli
+
+using cli::Internal_ConsoleTest;
 
 #pragma region Initialization
 

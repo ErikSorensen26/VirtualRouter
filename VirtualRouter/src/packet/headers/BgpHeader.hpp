@@ -253,4 +253,3 @@ struct BgpHeader
 } // namespace packet
 
 #endif // BGP_HEADER_HPP
-

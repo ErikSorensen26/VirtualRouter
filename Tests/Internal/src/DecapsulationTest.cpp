@@ -1,6 +1,11 @@
 #include <gtest/gtest.h>
-#include "Decapsulation.h"      // Your Packet class
-#include "PacketStructure.h"    // All your protocol structs
+#include <processing/Decapsulation.h>
+#include <packet/PacketStructure.h>
+
+using packet::PacketInfo;
+using packet::HeaderType;
+using processing::inspect;
+using processing::decapsulate;
 
 //--------------------------------------------------------------------------------
 // Test Fixture

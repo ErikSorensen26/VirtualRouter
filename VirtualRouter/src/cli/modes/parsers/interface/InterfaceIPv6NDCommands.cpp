@@ -6,6 +6,7 @@
 #include "InterfaceIPv6NDCommands.h"
 #include "cli/parser/CliModeParser.hpp"
 #include "cli/parser/CommandUtils.hpp"
+#include "configs/FieldAccessor.hpp"
 
 #define NDP_PARAMS DEFINE_PARAMS(config::NdpRegistry)
 

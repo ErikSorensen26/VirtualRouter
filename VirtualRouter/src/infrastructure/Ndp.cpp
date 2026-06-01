@@ -13,11 +13,12 @@
 #include "Ethernet.h"
 #include "processing/PacketBuilder.hpp"
 #include "interface/Interface.h"
+#include "configs/FieldAccessor.hpp"
 
 namespace infrastructure
 {
 
-static uint8_t* calculateEui64(uint8_t* out, const uint8_t* prefix, const uint8_t* mac)
+uint8_t* calculateEui64(uint8_t* out, const uint8_t* prefix, const uint8_t* mac)
 {
     std::memcpy(out, prefix, 8);
     out[8]  = mac[0] ^ 0x02;

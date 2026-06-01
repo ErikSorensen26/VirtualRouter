@@ -124,7 +124,7 @@ struct ActiveRoute
 class DuelEngine
 {
 public:
-    friend class Internal_EigrpTest;
+    friend class ::Internal_EigrpTest;
 
     /**
      * @brief Constructs the DUAL engine for the given EIGRP process.

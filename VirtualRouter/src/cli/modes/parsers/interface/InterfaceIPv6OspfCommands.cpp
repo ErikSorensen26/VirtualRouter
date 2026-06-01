@@ -7,6 +7,7 @@
 #include "cli/runtime/CliSession.h"
 #include "cli/parser/CommandUtils.hpp"
 #include "InterfaceOspfCommands.h"
+#include "configs/FieldAccessor.hpp"
 
 #define OSPF_PARAMS DEFINE_PARAMS(config::OspfInterfaceBaseRegistry)
 

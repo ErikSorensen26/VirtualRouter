@@ -31,12 +31,11 @@ namespace core { class Global; class TimeManager; }
 namespace hardware { struct HwIfaceInfo; }
 namespace infrastructure { class Ndp; }
 namespace services::dhcp { struct InterfaceConfigs; struct DhcpNetwork; }
-class MockInterface;
 class Internal_NdpTest;
 
 namespace interface
 {
-
+class MockInterface;
 enum class InterfaceType : uint8_t;
 class Interface;
 
@@ -386,6 +385,8 @@ public:
      */
     struct IPv6State
     {
+        friend class ::Internal_NdpTest;
+
         /**
          * @brief Constructs IPv6 state bound to @p time for address lifetime management.
          * @ingroup INTERFACE_CONFIGS

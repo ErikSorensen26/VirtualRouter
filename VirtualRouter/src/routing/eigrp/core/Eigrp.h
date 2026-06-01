@@ -138,7 +138,7 @@ class Eigrp
 {
 public:
     using InterfaceKey = std::pair<interface::InterfaceType, float>;
-    friend class Internal_EigrpTest;
+    friend class ::Internal_EigrpTest;
 
     /**
      * @brief Constructs an EIGRP process for the given AS number and address family.

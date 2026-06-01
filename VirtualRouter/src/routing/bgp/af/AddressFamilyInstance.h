@@ -21,6 +21,7 @@
 #include <VirtualRouter.h>
 
 #include "ProcessAccessor.h"
+#include "configs/FieldAccessor.hpp"
 #include "bgp/BgpTypes.hpp"
 #include "bgp/session/Session.h"
 #include "bgp/rib/RibTypes.hpp"

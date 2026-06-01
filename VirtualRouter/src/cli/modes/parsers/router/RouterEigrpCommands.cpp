@@ -3,6 +3,7 @@
 #include "RouterEigrpCommands.h"
 #include "cli/parser/CliModeParser.hpp"
 #include "cli/parser/CommandUtils.hpp"
+#include "configs/FieldAccessor.hpp"
 
 #define EIGRP_PARAMS DEFINE_PARAMS(config::EigrpRegistry)
 

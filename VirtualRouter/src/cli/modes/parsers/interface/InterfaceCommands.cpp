@@ -6,6 +6,7 @@
 #include "InterfaceIPCommands.h"
 #include "InterfaceIPv6Commands.h"
 #include "InterfaceOspfv3Commands.h"
+#include "configs/FieldAccessor.hpp"
 
 #define INTERFACE_PARAMS DEFINE_PARAMS(config::InterfaceRegistry)
 #define INTERFACE_SUB_PARAMS DEFINE_SUB_PARAMS(config::InterfaceRegistry)

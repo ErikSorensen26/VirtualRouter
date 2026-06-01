@@ -7,6 +7,7 @@
 #include "cli/parser/CommandUtils.hpp"
 #include "configs/registry/router/EigrpRegistry.h"
 #include "cli/runtime/CliSession.h"
+#include "configs/FieldAccessor.hpp"
 
 #define EIGRP_PARAMS DEFINE_PARAMS(config::EigrpRegistry)
 

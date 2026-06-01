@@ -8,6 +8,7 @@
 #include "Eigrp.h"
 #include "eigrp/interface/EigrpInterface.h"
 #include "interface/configs/InterfaceType.hpp"
+#include "configs/FieldAccessor.hpp"
 
 namespace routing::eigrp
 {
@@ -86,6 +87,13 @@ bool EigrpConfig::isInNetworkRange(types::IPv4Address testIp) const
         }
     });
     return found;
+}
+
+size_t EigrpConfig::getNetworkSize() const
+{
+    size_t size{};
+    configs.reg.get<config::Eigrp::NETWORK>().withRead([&size](auto& v) { size = v.size(); });
+    return size;
 }
 
 void EigrpConfig::clearNetworks()

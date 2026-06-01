@@ -79,7 +79,7 @@ struct RouteInfo;
 class ReliableTransport
 {
 public:
-    friend class Internal_EigrpTest;
+    friend class ::Internal_EigrpTest;
 
     /**
      * @brief Aggregates the received EIGRP packet header, source IP, parsed TLV

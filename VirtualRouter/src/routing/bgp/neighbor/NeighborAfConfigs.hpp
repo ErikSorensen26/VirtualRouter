@@ -10,6 +10,7 @@
 
 #include "configs/registry/router/BgpRegistry.h"
 #include "bgp/neighbor/PeerTemplate.h"
+#include "configs/FieldAccessor.hpp"
 
 namespace routing::bgp
 {

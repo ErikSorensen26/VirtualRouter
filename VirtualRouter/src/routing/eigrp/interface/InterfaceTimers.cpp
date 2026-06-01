@@ -7,6 +7,7 @@
 #include "EigrpInterface.h"
 #include "eigrp/core/Eigrp.h"
 #include "eigrp/rtp/ReliableTransport.h"
+#include "configs/FieldAccessor.hpp"
 
 namespace routing::eigrp
 {

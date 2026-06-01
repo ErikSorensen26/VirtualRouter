@@ -99,7 +99,7 @@ TEST_F(EgressTest, TxBenchmark)
     core::Global global(fs, {}, /*enableRouting=*/false, /*test=*/true);
 
     interface::Interface* iface = global.addInterface(
-        interface::InterfaceType::GIGABIT_ETHERNET, hwInfo, /*id=*/0.0f, /*debug=*/false);
+        interface::InterfaceKey(interface::InterfaceType::GIGABIT_ETHERNET, /*id=*/0.0f), hwInfo, /*debug=*/false);
     ASSERT_NE(iface, nullptr) << "addInterface failed";
 
     iface->startThreads();

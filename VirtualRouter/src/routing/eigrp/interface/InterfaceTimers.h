@@ -172,6 +172,8 @@ public:
 
 private:
 
+    friend class ::Internal_EigrpTest;
+
     // HELLO TIMER
     std::atomic<uint32_t> helloTimerId = 0;                    ///< Timer ID for the Hello timer.
     std::chrono::steady_clock::time_point helloStartTime;      ///< Start time for the Hello timer.

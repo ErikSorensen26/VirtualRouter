@@ -22,12 +22,6 @@ namespace ndp
  * @ingroup CONFIG_INTERFACE
  */
 enum class Preference { HIGH, MEDIUM, LOW };
-
-/**
- * @brief RA Guard protection level against unauthorized router announcements.
- * @ingroup CONFIG_INTERFACE
- */
-enum class RaGuardMode : uint8_t { BLOCK_ALL, TRUSTED, MAC_WHITELIST };
 }
 
 /**

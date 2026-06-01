@@ -9,6 +9,7 @@
 #include "cli/runtime/CliSession.h"
 #include "cli/parser/CommandUtils.hpp"
 #include "interface/configs/InterfaceType.hpp"
+#include "configs/FieldAccessor.hpp"
 
 #define EIGRP_PARAMS DEFINE_PARAMS(config::EigrpRegistry)
 

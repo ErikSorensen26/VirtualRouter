@@ -5,6 +5,7 @@
 #include "cli/parser/CommandUtils.hpp"
 #include "InterfaceIPOspfCommands.h"
 #include "configs/registry/interface/InterfaceRegistry.h"
+#include "configs/FieldAccessor.hpp"
 
 #define INTERFACE_PARAMS DEFINE_PARAMS(config::InterfaceRegistry)
 #define INTERFACE_SUB_PARAMS DEFINE_SUB_PARAMS(config::InterfaceRegistry)

@@ -48,7 +48,7 @@ class Eigrp;
 class EigrpTopology
 {
 public:
-    friend class Internal_EigrpTest;
+    friend class ::Internal_EigrpTest;
     friend class EigrpInterface;
 
     /**

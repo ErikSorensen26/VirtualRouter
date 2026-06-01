@@ -1,7 +1,10 @@
 #include <gtest/gtest.h>
-#include <HeaderHelpers.hpp>
-#include <Checksums.h>
+#include <packet/HeaderHelpers.hpp>
+#include <security/Checksums.h>
 #include <cstring>
+
+using namespace utils;
+namespace Checksum = security::checksum;
 
 class Internal_ChecksumTest : public ::testing::Test {};
 

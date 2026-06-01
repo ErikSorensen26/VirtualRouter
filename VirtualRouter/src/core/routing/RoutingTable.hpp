@@ -275,6 +275,20 @@ public:
     }
 
     /**
+     * @brief Returns the amount of active routes within the selected RIB address family
+     */
+    template <typename AddrType>
+    size_t size() const
+    {
+        if constexpr (std::is_same_v<AddrType, uint32_t>)
+            return rib4.size();
+        else if constexpr (std::is_same_v<AddrType, __uint128_t>)
+            return rib6.size();
+        else
+            static_assert(always_false<AddrType>, "Unsupported Address Type");
+    }
+
+    /**
      * @brief Remove all routes from both RIBs, synchronise RCU, and reclaim memory.
      *
      * @warning Blocks until RCU quiesces.  Must not be called from a thread

@@ -186,13 +186,6 @@ public:
      */
     void unsubscribe(IPv6EventMgr::Id id);
 
-private:
-    friend class Interface;
-
-    mutable std::mutex mutex; ///< Guards `interfaces`.
-    std::unordered_map<interface::InterfaceKey, Interface*> interfaces; ///< All interfaces in this VRF.
-
-
     /**
      * @brief Deliver an event to all matching subscribers.
      *
@@ -213,6 +206,12 @@ private:
      * Called by Interface when its state changes. Safe to call from any thread.
      */
     void notify(IPv6Event event, Interface& iface, types::IPv6Prefix addr);
+
+private:
+    friend class Interface;
+
+    mutable std::mutex mutex; ///< Guards `interfaces`.
+    std::unordered_map<interface::InterfaceKey, Interface*> interfaces; ///< All interfaces in this VRF.
 
     StateEventMgr stateEventMgr;
     IPv4EventMgr ipv4EventMgr;

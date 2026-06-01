@@ -13,6 +13,7 @@
 #include "eigrp/EigrpTypes.hpp"
 #include "configs/registry/router/EigrpRegistry.h"
 #include "interface/configs/InterfaceType.hpp"
+#include "configs/FieldAccessor.hpp"
 
 namespace routing::eigrp
 {
@@ -87,8 +88,12 @@ public:
     bool isInNetworkRange(types::IPv4Address testIp) const;
 
     /**
-     * @brief Removes all configured network ranges and deactivates all
-     *        interfaces.
+     * @brief Returns the amount of active networks configured on this instance.
+     */
+    size_t getNetworkSize() const;
+
+    /**
+     * @brief Removes all configured network ranges and deactivates all interfaces.
      */
     void clearNetworks();
 

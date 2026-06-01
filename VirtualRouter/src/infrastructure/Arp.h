@@ -46,7 +46,7 @@ namespace infrastructure
 class Arp
 {
 public:
-    friend class Internal_ArpTest;
+    friend class ::Internal_ArpTest;
 
     /**
     * @ingroup INFRASTRUCTURE
@@ -92,6 +92,14 @@ public:
      * Ensures a clean shutdown of threads and resources.
      */
     ~Arp();
+
+    /**
+     * @brief Adds an arp entry to the arp cache table
+     *
+     * @params targetIp Target IPv4 address.
+     * @params targetMac Target MAC address.
+     */
+    void addArpEntry(types::IPv4Address targetIp, types::Mac targetMac);
 
     /**
      * @brief Adds a static arp entry to the arp cache table

@@ -471,6 +471,4 @@ private:
 };
 }
 
-#include "FieldAccessor.hpp"
-
 #endif // SUB_REGISTRY_HPP

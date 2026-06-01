@@ -27,6 +27,7 @@
 #include "eigrp/rtp/NeighborTable.h"
 #include "configs/registry/router/EigrpInterfaceRegistry.h"
 #include "interface/configs/InterfaceType.hpp"
+#include "configs/FieldAccessor.hpp"
 
 namespace interface { class Interface; class InterfaceConfigs; }
 
@@ -55,7 +56,7 @@ class Eigrp;
 class EigrpInterface
 {
 public:
-    friend class Internal_EigrpTest;
+    friend class ::Internal_EigrpTest;
 
     /**
      * @brief Constructs an EigrpInterface and initialises all subsystems.

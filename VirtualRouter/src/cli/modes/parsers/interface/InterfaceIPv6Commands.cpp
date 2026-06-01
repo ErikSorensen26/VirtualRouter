@@ -9,6 +9,7 @@
 #include "cli/runtime/CliSession.h"
 #include "InterfaceIPv6NDCommands.h"
 #include "cli/modes/parsers/interface/InterfaceIPv6OspfCommands.h"
+#include "configs/FieldAccessor.hpp"
 
 #define INTERFACE_PARAMS DEFINE_PARAMS(config::InterfaceRegistry)
 #define INTERFACE_SUB_PARAMS DEFINE_SUB_PARAMS(config::InterfaceRegistry)

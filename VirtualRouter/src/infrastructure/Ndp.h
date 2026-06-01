@@ -30,6 +30,8 @@ class Internal_NdpTest;
 
 namespace infrastructure
 {
+uint8_t* calculateEui64(uint8_t* out, const uint8_t* prefix, const uint8_t* mac);
+
 
 /**
  * @class Ndp
@@ -306,6 +308,8 @@ public:
     uint8_t* getMac(uint8_t* out, types::IPv6Address ip);
 
 private:
+    friend class ::Internal_NdpTest;
+
     interface::Interface& iface;                                          ///< Owning interface.
     config::NdpRegistry& configs;                       ///< Per-interface NDP configuration.
 

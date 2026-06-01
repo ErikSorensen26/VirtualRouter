@@ -80,6 +80,7 @@ class Rib
         return p & (~AddrType(0) << (W - l));
     }
 
+    std::atomic<size_t> siz{};
     std::unordered_map<PrefixKey<AddrType>, RibBucket<AddrType>*, PrefixHash<AddrType>> table; ///< Prefix-to-bucket map.
     Fib<AddrType>           fib;          ///< Forwarding table updated after each best-path run.
     ProcessQueue            scheduler;    ///< Serialises all RIB mutations.
@@ -125,6 +126,8 @@ public:
         scheduler.post([this, routes = std::move(es)]() {
             for (const auto* rt : routes)
                 installRoute(rt);
+            if (siz.load(std::memory_order_relaxed) != table.size())
+                siz.store(table.size(), std::memory_order_release);
         });
     }
 
@@ -139,6 +142,8 @@ public:
     {
         scheduler.post([this, e]() {
             installRoute(e);
+            if (siz.load(std::memory_order_relaxed) != table.size())
+                siz.store(table.size(), std::memory_order_release);
         });
     }
 
@@ -257,6 +262,14 @@ public:
 
             routeWatcher.announceAllGone();
         });
+    }
+
+    /**
+     * @brief Returns the amount of active routes in the RIB
+     */
+    size_t size() const
+    {
+        return siz.load(std::memory_order_relaxed);
     }
 
     /**

@@ -8,6 +8,7 @@
 #include "VirtualRouter.h"
 #include "interface/Interface.h"
 #include "hardware/HardwareManager.h"
+#include "configs/FieldAccessor.hpp"
 
 namespace core
 {

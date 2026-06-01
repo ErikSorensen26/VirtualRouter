@@ -34,10 +34,10 @@ namespace routing::ospf { struct OspfInterfaceInstance; struct InterfaceConfigs;
 namespace services::dhcp { class DhcpClient; class Dhcpv6Client; }
 
 class EigrpTest;
-class MockInterface;
 
 namespace interface
 {
+class MockInterface;
 enum class StateChange : uint8_t;
 enum class IPv4Event : uint8_t;
 enum class IPv6Event : uint8_t;

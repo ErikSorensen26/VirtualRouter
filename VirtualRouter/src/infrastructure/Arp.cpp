@@ -9,6 +9,7 @@
 #include "packet/headers/ArpHeader.hpp"
 #include "processing/PacketBuilder.hpp"
 #include "Ethernet.h"
+#include "configs/FieldAccessor.hpp"
 
 // TODO: Have the ability to insert entries when shutdown
 
@@ -94,6 +95,13 @@ void Arp::clear()
 bool Arp::isShutdown()
 {
     return !running.load(std::memory_order_relaxed);
+}
+
+void Arp::addArpEntry(types::IPv4Address targetIp, types::Mac targetMac)
+{
+    ArpCacheEntry entry;
+    entry.macAddress = targetMac;
+    arpCache[targetIp] = std::move(entry);
 }
 
 void Arp::addStaticArpEntry(types::IPv4Address targetIp, types::Mac targetMac)

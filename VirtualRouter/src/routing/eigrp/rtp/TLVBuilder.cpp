@@ -3,6 +3,7 @@
 #include "TLVBuilder.h"
 #include "eigrp/interface/EigrpInterface.h"
 #include "eigrp/topology/TopologyTable.h"
+#include "configs/FieldAccessor.hpp"
 
 namespace routing::eigrp
 {

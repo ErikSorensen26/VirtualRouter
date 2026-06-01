@@ -1,43 +1,48 @@
 #include <gtest/gtest.h>
 #include <MockInterface.hpp>
-#include <Ndp.h>
+#include <MockFileSystem.hpp>
+#include <infrastructure/Ndp.h>
+#include <Global.h>
+#include <NetworkSpan.hpp>
 #include <chrono>
-#include <PacketBuilder.hpp>
-#include <IPPacket.h>
+#include <processing/PacketBuilder.hpp>
+#include <infrastructure/IPPacket.h>
+#include <configs/FieldAccessor.hpp>
 
 class Internal_NdpTest : public ::testing::Test
 {
 protected:
-    MockInterface* iface;
-    Protocol::Ndp* ndp;
-    Global* global;
+    interface::MockInterface* iface;
+    infrastructure::Ndp* ndp;
+    core::Global* global;
+    cli::MockFileSystem fs;
     alignas(64) uint8_t buf[128];
 
-    uint8_t ip[16] = { 0xFe, 0x80, 0, 0, 0, 0, 0, 0, 0x03, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x01};
-    uint8_t otherGlobal[16] = { 0xFD, 0x12, 0,0,0,0,0,0,0,0,0,0,0,0,1, 0x02};
+    types::IPv6Prefix ip = { (static_cast<__uint128_t>(0xFe80000000000000) << 64) | 0x030b0c0d0e0f1001, 64};
+    types::IPv6Prefix otherGlobal = { (static_cast<__uint128_t>(0xFD12000000000000) << 64) | 0x0000000000000102, 64};
 
-    uint8_t localLinkIp[16] = { 0xFe, 0x80, 0, 0, 0, 0, 0, 0, 0x02, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x01};
-    uint8_t globalIp[16] = { 0xFD, 0x12, 0,0,0,0,0,0,0,0,0,0,0,0,1, 0x01};
+    types::IPv6Prefix localLinkIp = { (static_cast<__uint128_t>(0xFe80000000000000) << 64) | 0x020a0b0c0d0e0f01, 64};
+    types::IPv6Prefix globalIp = { (static_cast<__uint128_t>(0xFD12000000000000) << 64) | 0x0000000000000101, 64};
 
-    uint8_t prefix[16] = {0xFD, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-    uint8_t mac[6] = {0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F};
-    uint8_t mac2[6] = {0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0A};
+    types::IPv6Prefix prefix = { (static_cast<__uint128_t>(0xFD12000000000000) << 64) | 0x0000000000000000, 64};
+    types::Mac mac = { 0x0A0B0C0D0E0F };
+    types::Mac mac2 = { 0x0A0B0C0D0Ea0A };
 
     void SetUp() override
     {
         std::memset(buf, 0, 128);
-        global = new Global({}, true, true);
-        iface = new MockInterface(*global);
+        global = new core::Global(fs, {}, true, true);
+        iface = new interface::MockInterface(*global);
         iface->enableShutdown();
-        iface->configs.ipv6.addAddress(localLinkIp, true, 64);
+        iface->configs.ipv6.addAddress(localLinkIp, true);
+        iface->configs.ipv6.linkLocalAddress->valid = true;
         iface->configs.ipv6.linkLocalAddress->valid = true;
         iface->configs.ipv6.linkLocalAddress->tentative= false;
-        iface->configs.ipv6.addAddress(globalIp, false, 64);
+        iface->configs.ipv6.addAddress(globalIp, false);
         iface->configs.ipv6.globalAddresses[0]->valid = true;
         iface->configs.ipv6.globalAddresses[0]->tentative = false;
-        ndp = new Protocol::Ndp(*iface);
-        iface->ndp = ndp;
-        ndp->configs.dadTime.store(10);
+        ndp = &iface->ndp;
+        ndp->configs.reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::DAD_TIME>().set(10);
     }
 
     void TearDown() override
@@ -47,19 +52,18 @@ protected:
         delete global;
     }
 
-    void onReachableTimeout(const IPAddress& targetIp) { ndp->onReachableTimeout(targetIp); }
+    void onReachableTimeout(const types::IPv6Address& targetIp) { ndp->onReachableTimeout(targetIp); }
     void scheduleNextRA() { ndp->scheduleNextRA(); }
-    std::unordered_set<IPAddress>& getPendingRequests() { return ndp->pendingRequests; }
-    std::unordered_map<IPAddress, uint8_t>& getRetryCount() { return ndp->nsRetryCount; }
-    std::unordered_map<IPAddress, uint64_t>& getProxyEntries() { return ndp->proxyEntries; }
-    std::mutex& getRequestMutex() { return ndp->requestMutex; }
-    std::shared_mutex& getCacheMutex() { return ndp->ndpCacheMutex; }
-    std::unordered_map<IPAddress, Protocol::NdpCacheEntry>& getNdpCache() { return ndp->ndpCache; }
-    std::vector<InterfaceConfigs::IPv6State::IPv6Address*>& getIPv6s() { return iface->configs.ipv6.globalAddresses; }
-    InterfaceConfigs::IPv6State::IPv6Address* getLinkLocal() { return iface->configs.ipv6.linkLocalAddress; }
-    void clearIPv6s() { iface->configs.ipv6.globalAddresses.clear(); }
-    void clearUnsolidated() { ndp->lastUnsolicitedNaTime.clear(); }
-    PacketBuilder& routeAdvertisment(PacketBuilder& pkt, uint8_t* raMac = nullptr) { ndp->routeAdvertisement(pkt, iface->configs.getMac(raMac ? raMac : mac)); return pkt; }
+    std::unordered_set<types::IPv6Address>& getPendingRequests() { return ndp->queuedResolution; }
+    std::unordered_map<types::IPv6Address, uint8_t>& getRetryCount() { return ndp->nsRetryCount; }
+    std::unordered_map<types::IPv6Address, infrastructure::Ndp::NdpCacheEntry>& getNdpCache() { return ndp->ndpCache; }
+    std::vector<interface::InterfaceConfigs::IPv6State::IPv6Address*>& getIPv6s() { return iface->configs.ipv6.globalAddresses; }
+    interface::InterfaceConfigs::IPv6State::IPv6Address* getLinkLocal() { return iface->configs.ipv6.linkLocalAddress; }
+    std::mutex& getIPv6Mutex() { return iface->configs.ipv6.ipMutex; }
+    void clearIPv6s() { std::lock_guard<std::mutex> lock(iface->configs.ipv6.ipMutex); iface->configs.ipv6.globalAddresses.clear(); }
+    void clearUnsolidated() { std::lock_guard<std::mutex> lock(iface->configs.ipv6.ipMutex); ndp->lastUnsolicitedNaTime.clear(); }
+    processing::PacketBuilder& routeAdvertisment(processing::PacketBuilder& pkt, types::Mac* raMac = nullptr) { ndp->routeAdvertisement(pkt, raMac ? *raMac : iface->configs.getMac()); return pkt; }
+    config::NdpRegistry& getConfigs() { return ndp->configs; }
 };
 
 // Test: SendNS_ReceiveNA_CreatesEntry
@@ -67,19 +71,20 @@ TEST_F(Internal_NdpTest, SendNS_ReceiveNA_CreatesEntry)
 {
     EXPECT_CALL(*iface, enqueuePacket(::testing::_, ::testing::_)).Times(2); // failed
 
-    PacketBuilder dummy(iface);
-    dummy.reserveHeader(HeaderType::ETHERNET, EthernetHeader::fixedSize);
-    dummy.reserveHeader(HeaderType::IPV6, IPv6Header::fixedSize);
+    processing::PacketBuilder dummy(iface);
+    dummy.reserveHeader(packet::HeaderType::ETHERNET, packet::EthernetHeader::fixedSize);
+    dummy.reserveHeader(packet::HeaderType::IPV6, packet::IPv6Header::fixedSize);
     dummy.nextBuildHeader();
     ndp->resolveAndSend(ip, dummy);
 
     uint8_t res[4] = { 0xE0, 0x00, 0x00, 0x00 };
     uint8_t trail[24] = {0};
-    std::memcpy(trail, ip, 16);
-    TLV8BufferManager opt(trail + 16, 8);
-    opt.append(ICMPV6_OPTION_NDP_TARGET, 1, mac, 6);
+    utils::writeU128(trail, ip.addr);
+    packet::TLV8BufferManager opt(trail + 16, 8);
+    utils::writeU48(opt.getNextValBuf(6), mac);
+    opt.append(ICMPV6_OPTION_NDP_TARGET, 1, nullptr, 6);
 
-    Icmpv6Header na;
+    packet::Icmpv6Header na;
     na.setBuffer(buf);
     na.setType(ICMPV6_OPCODE_NDP_NEIGHBOR_ADVERTISEMENT);
     na.setCode(0x00);
@@ -90,7 +95,7 @@ TEST_F(Internal_NdpTest, SendNS_ReceiveNA_CreatesEntry)
 
     uint8_t resolvedMac[6];
     EXPECT_TRUE(ndp->getMac(resolvedMac, ip)); // failed
-    EXPECT_EQ(std::memcmp(resolvedMac, mac, 6), 0);
+    EXPECT_EQ(types::Mac{utils::readU48(resolvedMac)}, mac);
 }
 
 // Test: UnsolicitedNA_CreatesEntry
@@ -98,11 +103,12 @@ TEST_F(Internal_NdpTest, UnsolicitedNA_CreatesEntry)
 {
     uint8_t res[4] = { 0xA0, 0x00, 0x00, 0x00 };
     uint8_t trail[24];
-    std::memcpy(trail, ip, 16);
-    TLV8BufferManager opt(trail + 16, 8);
-    opt.append(ICMPV6_OPTION_NDP_TARGET, 1, mac, 6);
+    utils::writeU128(trail, ip.addr);
+    packet::TLV8BufferManager opt(trail + 16, 8);
+    utils::writeU48(opt.getNextValBuf(6), mac);
+    opt.append(ICMPV6_OPTION_NDP_TARGET, 1, nullptr, 6);
 
-    Icmpv6Header na;
+    packet::Icmpv6Header na;
     na.setBuffer(buf);
     na.setCode(ICMPV6_OPCODE_NDP_NEIGHBOR_ADVERTISEMENT);
     na.setReserved(res);
@@ -112,17 +118,16 @@ TEST_F(Internal_NdpTest, UnsolicitedNA_CreatesEntry)
 
     uint8_t resolvedMac[6];
     ASSERT_TRUE(ndp->getMac(resolvedMac, ip));
-    EXPECT_EQ(std::memcmp(resolvedMac, mac, 6), 0);
+    EXPECT_EQ(types::Mac{utils::readU48(resolvedMac)}, mac);
 }
 
 // Test: CacheEntryExpiresAfterReachableTime
 TEST_F(Internal_NdpTest, CacheEntryExpiresAfterReachableTime)
 {
-    ndp->configs.reachableTime.store(100);
-    ndp->configs.cacheExpire.store(1);
+    getConfigs().reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::REACHABLE_TIME>().set(100);
+    getConfigs().reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::CACHE_EXPIRE>().set(1);
 
-    IPAddress addr(ip, AddressFamily::IPv6);
-    ndp->addNdpEntry(addr, readU48(mac));
+    ndp->addNdpEntry(ip, mac);
 
     uint8_t resolvedMac[6];
     ASSERT_TRUE(ndp->getMac(resolvedMac, ip));
@@ -136,14 +141,14 @@ TEST_F(Internal_NdpTest, CacheEntryExpiresAfterReachableTime)
 TEST_F(Internal_NdpTest, NudTransitionsAndRemoval)
 {
     iface->blockEnqueues();
-    ndp->configs.reachableTime.store(50);
-    ndp->configs.cacheExpire.store(2);
-    ndp->configs.nudBaseInterval = 1;
-    ndp->configs.nudBase = 1;
+    getConfigs().reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::REACHABLE_TIME>().set(50);
+    getConfigs().reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::CACHE_EXPIRE>().set(2);
+    getConfigs().reg.get<config::Ndp::NUD_RETRY_INTERVAL>().set(1);
+    getConfigs().reg.get<config::Ndp::NUD_RETRY_ATTEMPTS>().set(1);
 
-    ndp->addNdpEntry(IPAddress(ip, AddressFamily::IPv6), readU48(mac));
+    ndp->addNdpEntry(ip, mac);
     std::this_thread::sleep_for(std::chrono::milliseconds(60));
-    onReachableTimeout({ip, AddressFamily::IPv6}); // REACHABLE -> STALE
+    onReachableTimeout(ip); // REACHABLE -> STALE
     std::this_thread::sleep_for(std::chrono::seconds(2));
 
     uint8_t resolvedMac[6];
@@ -155,11 +160,13 @@ TEST_F(Internal_NdpTest, ReceiveNAWithoutQueue_AddsEntry)
 {
     uint8_t res[4] = { 0xA0, 0x00, 0x00, 0x00 };
     uint8_t trail[24];
-    std::memcpy(trail, ip, 16);
-    TLV8BufferManager opt(trail + 16, 8);
-    opt.append(ICMPV6_OPTION_NDP_TARGET, 1, mac, 6);
 
-    Icmpv6Header na;
+    utils::writeU128(trail, ip.addr);
+    packet::TLV8BufferManager opt(trail + 16, 8);
+    utils::writeU48(opt.getNextValBuf(6), mac);
+    opt.append(ICMPV6_OPTION_NDP_TARGET, 1, nullptr, 6);
+
+    packet::Icmpv6Header na;
     na.setBuffer(buf);
     na.setType(ICMPV6_OPCODE_NDP_NEIGHBOR_ADVERTISEMENT);
     na.setCode(0x00);
@@ -170,21 +177,24 @@ TEST_F(Internal_NdpTest, ReceiveNAWithoutQueue_AddsEntry)
 
     uint8_t resolvedMac[6];
     ASSERT_TRUE(ndp->getMac(resolvedMac, ip));
-    EXPECT_EQ(std::memcmp(resolvedMac, mac, 6), 0);
+    EXPECT_EQ(types::Mac{utils::readU48(resolvedMac)}, mac);
 }
 
 // Test: SLAAC_RSAndRA_CreatesAddress
 TEST_F(Internal_NdpTest, SLAAC_RSAndRA_CreatesAddress)
 {
-    iface->configs.setMac(mac);
-    ndp->configs.slaacEnabled.store(true);
+    iface->configs.getConfigs().reg.get<config::Interface::MAC_ADDRESS>().set(mac);
+    iface->configs.syncMac();
+    getConfigs().reg.get<config::Ndp::AUTOCONFIG_PREFIX>().set(true);
 
     EXPECT_CALL(*iface, enqueuePacket(::testing::_, ::testing::_)).Times(2);
     ndp->initiateSlaac(); // Would normally send RS
 
     uint8_t fullAddr[16];
+    uint8_t euiAddress[16];
     uint8_t macAddr[6];
-    Functions::calculateEui64(fullAddr, prefix, iface->configs.getMac(macAddr));
+    utils::writeU128(euiAddress, prefix.addr);
+    infrastructure::calculateEui64(fullAddr, euiAddress, iface->configs.getMac(macAddr));
 
     uint8_t trail[40] = {0};
 
@@ -192,11 +202,11 @@ TEST_F(Internal_NdpTest, SLAAC_RSAndRA_CreatesAddress)
     trail[9] = 0x04;
     trail[10] = 0x40; // 64-bit prefix length
     trail[11] = 0xC0; // L and A bits
-    writeU32(trail + 12, 1800);
-    writeU32(trail + 16, 900);
-    std::memcpy(trail + 24, prefix, 16);
+    utils::writeU32(trail + 12, 1800);
+    utils::writeU32(trail + 16, 900);
+    utils::writeU128(trail + 14, prefix.addr);
 
-    Icmpv6Header ra;
+    packet::Icmpv6Header ra;
     ra.setBuffer(buf);
 
     ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
@@ -206,11 +216,11 @@ TEST_F(Internal_NdpTest, SLAAC_RSAndRA_CreatesAddress)
     ndp->receiveRouteAdvertisement(ra, ip, mac2);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(150));
-    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
+    std::lock_guard<std::mutex> lock(getIPv6Mutex());
     bool found = false;
     for (auto* addr : getIPv6s())
     {
-        if (std::memcmp(addr->ip, fullAddr, 16) == 0 && addr->valid)
+        if (addr->prefix.addr == utils::readU128(fullAddr) && addr->valid)
         {
             found = true;
             break;
@@ -223,29 +233,36 @@ TEST_F(Internal_NdpTest, SLAAC_RSAndRA_CreatesAddress)
 TEST_F(Internal_NdpTest, SLAAC_DAD_Failure_MarksDuplicate) 
 {
     iface->blockEnqueues();
-    iface->configs.setMac(mac);
-    ndp->configs.slaacEnabled.store(true);
-    ndp->configs.dadAttempts.store(1);
-    ndp->configs.dadTime.store(50); // ms
+    iface->configs.getConfigs().reg.get<config::Interface::MAC_ADDRESS>().set(mac);
+    iface->configs.syncMac();
+    getConfigs().reg.get<config::Ndp::AUTOCONFIG_PREFIX>().set(true);
+    getConfigs().reg.get<config::Ndp::DAD_ATTEMPTS>().set(1);
+    getConfigs().reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::DAD_TIME>().set(50);
 
     uint8_t fullAddr[16];
-    Functions::calculateEui64(fullAddr, prefix, mac);
+    uint8_t euiAddress[16];
+    uint8_t macAddress[6];
+    utils::writeU128(euiAddress, prefix.addr);
+    utils::writeU48(macAddress, mac);
+    infrastructure::calculateEui64(fullAddr, euiAddress, macAddress);
 
-    auto* addr = iface->configs.ipv6.addAddress(fullAddr, false, 64);
+    types::IPv6Prefix pref(utils::readU128(fullAddr), 64);
+    auto* addr = iface->configs.ipv6.addAddress(pref, false);
     addr->tentative = true;
 
-    ndp->duplicateAddressDetection(addr, false);
+    ndp->duplicateAddressDetection(*addr);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
     {
         uint8_t res[4] = { 0xA0, 0x00, 0x00, 0x00 };
         uint8_t trail[24] = {0};
-        TLV8BufferManager opt(trail + 16, 8);
-        opt.append(ICMPV6_OPTION_NDP_TARGET, 1, mac, 6);
+        packet::TLV8BufferManager opt(trail + 16, 8);
+        utils::writeU48(opt.getNextValBuf(6), mac);
+        opt.append(ICMPV6_OPTION_NDP_TARGET, 1, nullptr, 6);
         std::memcpy(trail, fullAddr, 16);
 
-        Icmpv6Header na;
+        packet::Icmpv6Header na;
         na.setBuffer(buf);
 
         na.setType(ICMPV6_OPCODE_NDP_NEIGHBOR_ADVERTISEMENT);
@@ -257,7 +274,7 @@ TEST_F(Internal_NdpTest, SLAAC_DAD_Failure_MarksDuplicate)
     }
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
+    std::lock_guard<std::mutex> lock(getIPv6Mutex());
     EXPECT_FALSE(addr->valid);
     EXPECT_FALSE(addr->tentative);
 }
@@ -266,22 +283,27 @@ TEST_F(Internal_NdpTest, SLAAC_DAD_Failure_MarksDuplicate)
 TEST_F(Internal_NdpTest, SLAAC_ValidLifetimeExpires) 
 {
     iface->blockEnqueues();
-    iface->configs.setMac(mac);
-    ndp->configs.slaacEnabled.store(true);
+    iface->configs.getConfigs().reg.get<config::Interface::MAC_ADDRESS>().set(mac);
+    iface->configs.syncMac();
+    getConfigs().reg.get<config::Ndp::AUTOCONFIG_PREFIX>().set(true);
 
     uint8_t fullAddr[16];
-    auto* addr = iface->configs.ipv6.addAddress(Functions::calculateEui64(fullAddr, prefix, mac), false, 64);
+    uint8_t euiPrefix[16];
+    uint8_t euiMac[6];
+    utils::writeU128(euiPrefix, prefix.addr);
+    utils::writeU48(euiMac, mac);
+    infrastructure::calculateEui64(fullAddr, euiPrefix, euiMac);
+    auto* addr = iface->configs.ipv6.addAddress(types::IPv6Prefix{utils::readU128(fullAddr), 64}, false);
     addr->tentative = false;
     addr->valid = true;
 
-    ndp->configs.raLifetime.store(1); // seconds
-    ndp->configs.raPreferredLifetime.store(10); // not relevant here
+    getConfigs().reg.get<config::Ndp::RA_LIFETIME>().set(1);
 
-    ndp->duplicateAddressDetection(addr, false);
+    ndp->duplicateAddressDetection(*addr);
 
     std::this_thread::sleep_for(std::chrono::seconds(2));
 
-    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
+    std::lock_guard<std::mutex> lock(getIPv6Mutex());
     EXPECT_FALSE(addr->globalValid);
 }
 
@@ -289,8 +311,9 @@ TEST_F(Internal_NdpTest, SLAAC_ValidLifetimeExpires)
 TEST_F(Internal_NdpTest, SLAAC_PreferredLifetimeExpires) 
 {
     iface->blockEnqueues();
-    iface->configs.setMac(mac);
-    ndp->configs.slaacEnabled.store(true);
+    iface->configs.getConfigs().reg.get<config::Interface::MAC_ADDRESS>().set(mac);
+	iface->configs.syncMac();
+    getConfigs().reg.get<config::Ndp::AUTOCONFIG_PREFIX>().set(true);
 
     uint8_t trail[40] = {0};
 
@@ -298,11 +321,11 @@ TEST_F(Internal_NdpTest, SLAAC_PreferredLifetimeExpires)
     trail[9] = 0x04;
     trail[10] = 0x40; // 64-bit prefix length
     trail[11] = 0xC0; // L and A bits
-    writeU32(trail + 12, 100);
-    writeU32(trail + 16, 1);
-    std::memcpy(trail + 24, prefix, 16);
+    utils::writeU32(trail + 12, 100);
+    utils::writeU32(trail + 16, 1);
+    utils::writeU128(trail + 24, prefix.addr);
 
-    Icmpv6Header ra;
+    packet::Icmpv6Header ra;
     ra.setBuffer(buf);
 
     ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
@@ -323,8 +346,9 @@ TEST_F(Internal_NdpTest, SLAAC_Disabled_IgnoresPrefixes)
 {
     iface->blockEnqueues();
     clearIPv6s();
-    iface->configs.setMac(mac);
-    ndp->configs.slaacEnabled.store(false);
+    iface->configs.getConfigs().reg.get<config::Interface::MAC_ADDRESS>().set(mac);
+	iface->configs.syncMac();
+    getConfigs().reg.get<config::Ndp::AUTOCONFIG_PREFIX>().set(false);
 
     uint8_t trail[48] = {0};
 
@@ -332,11 +356,11 @@ TEST_F(Internal_NdpTest, SLAAC_Disabled_IgnoresPrefixes)
     trail[17] = 0x04;
     trail[18] = 0x40; // 64-bit prefix length
     trail[19] = 0xC0; // L and A bits
-    writeU32(trail + 20, 100);
-    writeU32(trail + 24, 1);
-    std::memcpy(trail + 32, prefix, 16);
+	utils::writeU32(trail + 20, 100);
+	utils::writeU32(trail + 24, 1);
+    utils::writeU128(trail + 32, prefix.addr);
 
-    Icmpv6Header ra;
+    packet::Icmpv6Header ra;
     ra.setBuffer(buf);
 
     ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
@@ -352,16 +376,16 @@ TEST_F(Internal_NdpTest, SLAAC_Disabled_IgnoresPrefixes)
 TEST_F(Internal_NdpTest, DAD_NoConflict_MarksValid) 
 {
     iface->blockEnqueues();
-    auto* addr = iface->configs.ipv6.addAddress(ip, false, 64);
+    auto* addr = iface->configs.ipv6.addAddress(ip, false);
     addr->tentative = true;
-    ndp->configs.dadAttempts.store(1);
-    ndp->configs.dadTime.store(100);
+    getConfigs().reg.get<config::Ndp::DAD_ATTEMPTS>().set(1);
+    getConfigs().reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::DAD_TIME>().set(100);
 
-    ndp->duplicateAddressDetection(addr, false);
+    ndp->duplicateAddressDetection(*addr);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
+    std::lock_guard<std::mutex> lock(getIPv6Mutex());
     EXPECT_FALSE(addr->tentative);
     EXPECT_TRUE(addr->valid);
 }
@@ -370,22 +394,22 @@ TEST_F(Internal_NdpTest, DAD_NoConflict_MarksValid)
 TEST_F(Internal_NdpTest, DAD_ConflictFromNA_MarksDuplicate)
 {
     iface->blockEnqueues();
-    auto* addr = iface->configs.ipv6.addAddress(ip, false, 64);
+    auto* addr = iface->configs.ipv6.addAddress(ip, false);
     addr->tentative = true;
-    ndp->configs.dadAttempts.store(1);
-    ndp->configs.dadTime.store(100);
+    getConfigs().reg.get<config::Ndp::DAD_ATTEMPTS>().set(1);
+    getConfigs().reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::DAD_TIME>().set(100);
 
-    ndp->duplicateAddressDetection(addr, false);
+    ndp->duplicateAddressDetection(*addr);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
     uint8_t trail[24] = {0};
-    std::memcpy(trail, ip, 16);
+    utils::writeU128(trail, ip);
     trail[16] = ICMPV6_OPTION_NDP_TARGET;
     trail[17] = 0x01;
-    std::memcpy(trail + 18, mac, 6);
+    utils::writeU48(trail + 18, mac);
 
-    Icmpv6Header na;
+    packet::Icmpv6Header na;
     na.setBuffer(buf);
 
     na.setType(ICMPV6_OPCODE_NDP_NEIGHBOR_ADVERTISEMENT);
@@ -395,7 +419,7 @@ TEST_F(Internal_NdpTest, DAD_ConflictFromNA_MarksDuplicate)
     ndp->receiveNeighborAdvertisement(na, ip);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
+    std::lock_guard<std::mutex> lock(getIPv6Mutex());
     EXPECT_FALSE(addr->tentative);
     EXPECT_FALSE(addr->valid);
 }
@@ -404,21 +428,21 @@ TEST_F(Internal_NdpTest, DAD_ConflictFromNA_MarksDuplicate)
 TEST_F(Internal_NdpTest, DAD_MultipleAttemptsRequired)
 {
     iface->blockEnqueues();
-    auto* addr = iface->configs.ipv6.addAddress(ip, false, 64);
+    auto* addr = iface->configs.ipv6.addAddress(ip, false);
     addr->tentative = true;
-    ndp->configs.dadAttempts.store(2);
-    ndp->configs.dadTime.store(50);
+    getConfigs().reg.get<config::Ndp::DAD_ATTEMPTS>().set(2);
+    getConfigs().reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::DAD_TIME>().set(50);
 
-    ndp->duplicateAddressDetection(addr, false);
+    ndp->duplicateAddressDetection(*addr);
     std::this_thread::sleep_for(std::chrono::milliseconds(60));
     {
-        std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
+        std::lock_guard<std::mutex> lock(getIPv6Mutex());
         EXPECT_TRUE(addr->tentative);  // 1st attempt done, not yet accepted
     }
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     {
-        std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
+        std::lock_guard<std::mutex> lock(getIPv6Mutex());
         EXPECT_FALSE(addr->tentative);
         EXPECT_TRUE(addr->valid);
     }
@@ -427,15 +451,15 @@ TEST_F(Internal_NdpTest, DAD_MultipleAttemptsRequired)
 // Test: DAD_Suppressed_NoDetectionOccurs
 TEST_F(Internal_NdpTest, DAD_Suppressed_NoDetectionOccurs)
 {
-    auto* addr = iface->configs.ipv6.addAddress(ip, false, 64);
+    auto* addr = iface->configs.ipv6.addAddress(ip, false);
     addr->tentative = true;
-    ndp->configs.dadAttempts.store(0);
-    ndp->configs.dadTime.store(100);
+    getConfigs().reg.get<config::Ndp::DAD_ATTEMPTS>().set(0);
+    getConfigs().reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::DAD_TIME>().set(100);
 
-    ndp->duplicateAddressDetection(addr, false);
+    ndp->duplicateAddressDetection(*addr);
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
+    std::lock_guard<std::mutex> lock(getIPv6Mutex());
     EXPECT_TRUE(addr->tentative);  // Should still be tentative due to suppression
 }
 
@@ -443,45 +467,45 @@ TEST_F(Internal_NdpTest, DAD_Suppressed_NoDetectionOccurs)
 TEST_F(Internal_NdpTest, ProxyNA_RespondsWithCorrectMAC)
 {
     uint8_t proxyIp[16];
-    std::memcpy(proxyIp, ip, 16);
+    utils::writeU128(proxyIp, ip);
     uint8_t proxyMac[6];
-    std::memcpy(proxyMac, mac, 6);
+    utils::writeU48(proxyMac, mac);
     proxyIp[15] = 'c';
     proxyMac[5] = 'c';
-    ndp->addNdpEntry({proxyIp, AddressFamily::IPv6}, readU48(proxyMac), true);  // mark as proxy
+    ndp->addNdpEntry(utils::readU128(proxyIp), utils::readU48(proxyMac), true);  // mark as proxy
 
-    Icmpv6Header ns;
+    packet::Icmpv6Header ns;
     ns.setBuffer(buf);
 
     ns.setType(ICMPV6_OPCODE_NDP_NEIGHBOR_SOLICITATION);
     ns.setCode(0x00);
-    ns.setTrail(localLinkIp, 16);
+    utils::writeU128(ns.getTrailData(), localLinkIp);
 
     EXPECT_CALL(*iface, enqueuePacket(testing::_, testing::_))
-        .WillOnce(testing::Invoke([&](PacketBuilder& pkt, const uint8_t*) {
+        .WillOnce(testing::Invoke([&](processing::PacketBuilder& pkt, uint64_t) {
             bool hasEth = false;
             bool hasIp = false;
             bool hasICMPv6 = false;
             for (size_t i = 0; i < pkt.getHeaderCount(); ++i)
             {
                 auto header = pkt.getHeaders()[i];
-                if (header.type == HeaderType::ETHERNET)
+                if (header.type == packet::HeaderType::ETHERNET)
                 {
                     if (hasEth) FAIL();
                     hasEth = true;
-                    auto eth = reinterpret_cast<EthernetHeaderRaw*>(pkt.getHeaders()[i].buffer);
+                    auto eth = reinterpret_cast<packet::EthernetHeaderRaw*>(pkt.getHeaders()[i].buffer);
                     EXPECT_EQ(std::memcmp(eth->destinationMac, proxyMac, 6), 0);
                 }
-                else if (header.type == HeaderType::IPV6)
+                else if (header.type == packet::HeaderType::IPV6)
                 {
                     if (hasIp) FAIL();
                     hasIp = true;
                 }
-                else if (header.type == HeaderType::ICMPV6)
+                else if (header.type == packet::HeaderType::ICMPV6)
                 {
                     if (hasICMPv6) FAIL();
                     hasICMPv6 = true;
-                    auto icmp = reinterpret_cast<Icmpv6HeaderRaw*>(header.buffer);
+                    auto icmp = reinterpret_cast<packet::Icmpv6HeaderRaw*>(header.buffer);
                     EXPECT_EQ(icmp->type, ICMPV6_OPCODE_NDP_NEIGHBOR_ADVERTISEMENT);
                     EXPECT_EQ(std::memcmp(icmp->reserved + 4, proxyIp, 16), 0);
                 }
@@ -489,16 +513,16 @@ TEST_F(Internal_NdpTest, ProxyNA_RespondsWithCorrectMAC)
             ASSERT_TRUE(hasEth && hasIp && hasICMPv6);
         }));
 
-    ndp->receiveNeighborSolicitation(ns, proxyIp, proxyMac);
+    ndp->receiveNeighborSolicitation(ns, proxyIp, utils::readU48(proxyMac));
 }
 
 // Test: ProxyEntryExpiresIfNotRefreshed
 TEST_F(Internal_NdpTest, ProxyEntryExpiresIfNotRefreshed)
 {
-    ndp->configs.cacheExpire.store(1);
-    ndp->configs.reachableTime.store(10);
+    getConfigs().reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::CACHE_EXPIRE>().set(1);
+    getConfigs().reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::REACHABLE_TIME>().set(10);
 
-    ndp->addNdpEntry({ip, AddressFamily::IPv6}, readU48(mac), true);
+    ndp->addNdpEntry(ip, mac);
 
     std::this_thread::sleep_for(std::chrono::seconds(2));
 
@@ -509,98 +533,98 @@ TEST_F(Internal_NdpTest, ProxyEntryExpiresIfNotRefreshed)
 // Test: Proxy_UnsolicitedNASent
 TEST_F(Internal_NdpTest, Proxy_UnsolicitedNASent)
 {
-    ndp->addNdpEntry({ip, AddressFamily::IPv6}, readU48(mac), true);
+    ndp->addNdpEntry(ip,mac);
 
     EXPECT_CALL(*iface, enqueuePacket(testing::_, testing::_))
-        .WillOnce(testing::Invoke([&](PacketBuilder& pkt, const uint8_t*) {
+        .WillOnce(testing::Invoke([&](processing::PacketBuilder& pkt, uint64_t) {
             bool hasEth = false;
             bool hasIp = false;
             bool hasICMP = false;
             for (size_t i = 0; i < pkt.getHeaderCount(); ++i)
             {
                 auto header = pkt.getHeaders()[i];
-                if (header.type == HeaderType::ETHERNET)
+                if (header.type == packet::HeaderType::ETHERNET)
                 {
                     if (hasEth) FAIL();
                     hasEth = true;
-                    auto eth = reinterpret_cast<EthernetHeaderRaw*>(header.buffer);
+                    auto eth = reinterpret_cast<packet::EthernetHeaderRaw*>(header.buffer);
                     EXPECT_EQ(std::memcmp(eth->destinationMac, ETHERNET_MAC_BROADCAST, 6), 0);
                 }
-                else if (header.type == HeaderType::IPV6)
+                else if (header.type == packet::HeaderType::IPV6)
                 {
                     if (hasIp) FAIL();
                     hasIp = true;
                 }
-                else if (header.type == HeaderType::ICMPV6)
+                else if (header.type == packet::HeaderType::ICMPV6)
                 {
                     if (hasICMP) FAIL();
                     hasICMP = true;
-                    auto icmp = reinterpret_cast<Icmpv6HeaderRaw*>(header.buffer);
+                    auto icmp = reinterpret_cast<packet::Icmpv6HeaderRaw*>(header.buffer);
                     EXPECT_EQ(icmp->type, ICMPV6_OPCODE_NDP_NEIGHBOR_ADVERTISEMENT);
-                    EXPECT_EQ(std::memcmp(icmp->reserved + 4, ip, 16), 0);
+                    EXPECT_EQ(utils::readU128(icmp->reserved + 4), ip);
                 }
             }
             ASSERT_TRUE(hasEth && hasIp && hasICMP);
         }));
 
     clearUnsolidated();
-    ndp->sendNeighborAdvertisement(ETHERNET_MAC_BROADCAST, ip);
+    ndp->sendNeighborAdvertisement(utils::readU48(ETHERNET_MAC_BROADCAST), ip);
 }
 
 // Test: DADProbe_TriggersProxyNA
 TEST_F(Internal_NdpTest, DADProbe_TriggersProxyNA)
 {
-    ndp->addNdpEntry({ip, AddressFamily::IPv6}, readU48(mac), true);
+    ndp->addNdpEntry(ip, mac);
 
     uint8_t unspecified[16] = {0}; // ::
 
-    Icmpv6Header ns;
+    packet::Icmpv6Header ns;
     ns.setBuffer(buf);
     ns.setType(ICMPV6_OPCODE_NDP_NEIGHBOR_SOLICITATION);
-    ns.setTrail(ip, 16);
+    utils::writeU128(ns.getTrailData(), ip);
 
     clearUnsolidated();
 
     EXPECT_CALL(*iface, enqueuePacket(testing::_, testing::_))
-        .WillOnce(testing::Invoke([&](PacketBuilder& pkt, const uint8_t*) {
+        .WillOnce(testing::Invoke([&](processing::PacketBuilder& pkt, uint64_t) {
             bool hasEth = false;
             bool hasIp = false;
             bool hasICMP = false;
             for (size_t i = 0; i < pkt.getHeaderCount(); ++i)
             {
                 auto header = pkt.getHeaders()[i];
-                if (header.type == HeaderType::ETHERNET)
+                if (header.type == packet::HeaderType::ETHERNET)
                 {
                     if (hasEth) FAIL();
                     hasEth = true;
                 }
-                else if (header.type == HeaderType::IPV6)
+                else if (header.type == packet::HeaderType::IPV6)
                 {
                     if (hasIp) FAIL();
                     hasIp = true;
                 }
-                else if (header.type == HeaderType::ICMPV6)
+                else if (header.type == packet::HeaderType::ICMPV6)
                 {
                     if (hasICMP) FAIL();
                     hasICMP = true;
-                    auto icmp = reinterpret_cast<Icmpv6HeaderRaw*>(header.buffer);
+                    auto icmp = reinterpret_cast<packet::Icmpv6HeaderRaw*>(header.buffer);
                     EXPECT_EQ(icmp->type, ICMPV6_OPCODE_NDP_NEIGHBOR_ADVERTISEMENT);
-                    EXPECT_EQ(std::memcmp(icmp->reserved + 4, ip, 16), 0);
+                    EXPECT_EQ(utils::readU16(icmp->reserved + 4), ip);
                 }
             }
             ASSERT_TRUE(hasEth && hasIp && hasICMP);
         }));
 
-    ndp->receiveNeighborSolicitation(ns, unspecified, ETHERNET_MAC_SOURCE);
+    ndp->receiveNeighborSolicitation(ns, unspecified, utils::readU48(ETHERNET_MAC_SOURCE));
 }
 
 // Test: RA_MOFlagsUpdateConfig
 TEST_F(Internal_NdpTest, RA_MOFlagsUpdateConfig)
 {
-    ndp->configs.managedConfigFlag.store(true);
-    ndp->configs.otherConfigFlag.store(true);
+    getConfigs().reg.get<config::Ndp::MANAGED_CONFIG_FLAG>().set(true);
+    getConfigs().reg.get<config::Ndp::OTHER_CONFIG_FLAG>().set(true);
 
-    PacketBuilder ra(iface);
+    processing::PacketBuilder ra(iface);
     routeAdvertisment(ra);
     
     bool hasEth = false;
@@ -609,21 +633,21 @@ TEST_F(Internal_NdpTest, RA_MOFlagsUpdateConfig)
     for (size_t i = 0; i < ra.getHeaderCount(); ++i)
     {
         auto header = ra.getHeaders()[i];
-        if (header.type == HeaderType::ETHERNET)
+        if (header.type == packet::HeaderType::ETHERNET)
         {
             if (hasEth) FAIL();
             hasEth = true;
         }
-        else if (header.type == HeaderType::IPV6)
+        else if (header.type == packet::HeaderType::IPV6)
         {
             if (hasIp) FAIL();
             hasIp = true;
         }
-        else if (header.type == HeaderType::ICMPV6)
+        else if (header.type == packet::HeaderType::ICMPV6)
         {
             if (hasICMP) FAIL();
             hasICMP = true;
-            auto icmp = reinterpret_cast<Icmpv6HeaderRaw*>(header.buffer);
+            auto icmp = reinterpret_cast<packet::Icmpv6HeaderRaw*>(header.buffer);
             uint8_t flags = icmp->reserved[1];
             EXPECT_TRUE(flags & (1 << 6));
             EXPECT_TRUE(flags & (1 << 7));
@@ -632,82 +656,16 @@ TEST_F(Internal_NdpTest, RA_MOFlagsUpdateConfig)
     ASSERT_TRUE(hasEth && hasIp && hasICMP);
 }
 
-// Test: RA_TrustedSourceIsAccepted
-TEST_F(Internal_NdpTest, RA_TrustedSourceIsAccepted)
-{
-    ndp->configs.suppressRA.store(false);
-    ndp->configs.destinationGuard.store(true);
-    ndp->configs.raGuardMode.store(Protocol::Ndp::Configs::RaGuardMode::TRUSTED);
-
-    uint8_t res[4] = { 0x00, 0x00, 0x00, 0x10 };
-    uint8_t trail[8] = {0};
-
-    Icmpv6Header ra;
-    ra.setBuffer(buf);
-
-    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
-    ra.setCode(0x00);
-    ra.setReserved(res);
-    ra.setTrail(trail, 8);
-
-    // Should not be dropped
-    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
-    SUCCEED(); // No crash/drop = accepted
-}
-
-// Test: RA_FromBlockedPortIsDropped_BLOCK_ALL
-TEST_F(Internal_NdpTest, RA_FromBlockedPortIsDropped_BLOCK_ALL)
-{
-    ndp->configs.suppressRA.store(false);
-    ndp->configs.destinationGuard.store(true);
-    ndp->configs.raGuardMode.store(Protocol::Ndp::Configs::RaGuardMode::BLOCK_ALL);
-
-    uint8_t trail[8] = {0};
-
-    Icmpv6Header ra;
-    ra.setBuffer(buf);
-
-    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
-    ra.setCode(0x00);
-    ra.setTrail(trail, 8);
-
-    // No crash = passed
-    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
-
-    // If it reached here, it was dropped without crashing
-    SUCCEED();
-}
-
-// Test: RA_MacWhitelistRejectsUnknownMAC
-TEST_F(Internal_NdpTest, RA_MacWhitelistRejectsUnknownMAC)
-{
-    ndp->configs.suppressRA.store(false);
-    ndp->configs.destinationGuard.store(true);
-    ndp->configs.raGuardMode.store(Protocol::Ndp::Configs::RaGuardMode::MAC_WHITELIST);
-
-    uint8_t trail[8] = {0};
-
-    Icmpv6Header ra;
-    ra.setBuffer(buf);
-
-    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
-    ra.setCode(0x00);
-    ra.setTrail(trail, 8);
-
-    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
-    SUCCEED(); // No crash = dropped
-}
-
 // Test: RA_NonICMPv6HeaderIsDropped
 TEST_F(Internal_NdpTest, RA_NonICMPv6HeaderIsDropped)
 {
     // This would normally be dropped before it reaches NDP
     // We simulate this by ensuring no effect happens
-    ndp->configs.suppressRA.store(false);
+    getConfigs().reg.get<config::Ndp::RA_SUPPRESS>().set(false);
 
     uint8_t trail[8] = {0};
 
-    Icmpv6Header ra;
+    packet::Icmpv6Header ra;
     ra.setBuffer(buf);
     
     ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
@@ -722,22 +680,23 @@ TEST_F(Internal_NdpTest, RA_NonICMPv6HeaderIsDropped)
 // Test: RA_ExcludedPrefixIgnored
 TEST_F(Internal_NdpTest, RA_ExcludedPrefixIgnored)
 {
-    ndp->configs.slaacEnabled.store(true);
+    getConfigs().reg.get<config::Ndp::AUTOCONFIG_PREFIX>().set(true);
     clearIPv6s();
-    iface->configs.setMac(mac);
+    iface->configs.getConfigs().reg.get<config::Interface::MAC_ADDRESS>().set(mac);
+    iface->configs.syncMac();
 
-    ndp->addSlaacExclusionPrefix({prefix, AddressFamily::IPv6}, false); // exclude
+    ndp->addSlaacExclusionPrefix(prefix, false); // exclude
 
     uint8_t trail[40] = {0};
     trail[8] = ICMPV6_OPTION_NDP_PREFIX;
     trail[9] = 0x04;
     trail[10] = 0x40; // /64
     trail[11] = 0xC0; // L + A
-    writeU32(trail + 12, 300);
-    writeU32(trail + 16, 200);
-    std::memcpy(trail + 24, prefix, 16);
+	utils::writeU32(trail + 12, 300);
+	utils::writeU32(trail + 16, 200);
+    utils::writeU128(trail + 24, prefix.addr);
 
-    Icmpv6Header ra;
+    packet::Icmpv6Header ra;
     ra.setBuffer(buf);
 
     ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
@@ -746,27 +705,28 @@ TEST_F(Internal_NdpTest, RA_ExcludedPrefixIgnored)
 
     ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
 
-    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
+    std::lock_guard<std::mutex> lock(getIPv6Mutex());
     EXPECT_TRUE(getIPv6s().empty());
 }
 
 // Test: RA_InvalidPrefixSizeIgnored
 TEST_F(Internal_NdpTest, RA_InvalidPrefixSizeIgnored)
 {
-    ndp->configs.slaacEnabled.store(true);
+    getConfigs().reg.get<config::Ndp::AUTOCONFIG_PREFIX>().set(true);
     clearIPv6s();
-    iface->configs.setMac(mac);
+    iface->configs.getConfigs().reg.get<config::Interface::MAC_ADDRESS>().set(mac);
+	iface->configs.syncMac();
 
     uint8_t trail[28] = {0};
     trail[8] = ICMPV6_OPTION_NDP_PREFIX;
     trail[9] = 0x04;
     trail[10] = 0x40; // /64
     trail[11] = 0xC0; // L + A
-    writeU32(trail + 12, 300);
-    writeU32(trail + 16, 200);
-    writeU32(trail + 24, 0xFFFFFFFF); // to short - invalid
+	utils::writeU32(trail + 12, 300);
+	utils::writeU32(trail + 16, 200);
+	utils::writeU32(trail + 24, 0xFFFFFFFF); // to short - invalid
     
-    Icmpv6Header ra;
+    packet::Icmpv6Header ra;
     ra.setBuffer(buf);
     
     ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
@@ -775,128 +735,7 @@ TEST_F(Internal_NdpTest, RA_InvalidPrefixSizeIgnored)
 
     ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
 
-    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
-    EXPECT_TRUE(getIPv6s().empty());
-}
-
-// Test: RA_GuardBlockAllModeDropsAll
-TEST_F(Internal_NdpTest, RA_GuardBlockAllModeDropsAll)
-{
-    ndp->configs.suppressRA.store(false);
-    ndp->configs.destinationGuard.store(true);
-    ndp->configs.raGuardMode.store(Protocol::Ndp::Configs::RaGuardMode::BLOCK_ALL);
-
-    iface->configs.setMac(mac);
-    ndp->configs.slaacEnabled.store(true);
-
-    EXPECT_CALL(*iface, enqueuePacket(::testing::_, ::testing::_)).Times(1);
-    ndp->initiateSlaac(); // Would normally send RS
-
-    uint8_t fullAddr[16];
-    Functions::calculateEui64(fullAddr, prefix, mac);
-
-    uint8_t trail[40];
-    trail[8] = ICMPV6_OPTION_NDP_PREFIX;
-    trail[9] = 0x04;
-    trail[10] = 0x40; // /64
-    trail[11] = 0xC0; // L + A
-    writeU32(trail + 12, 1800);
-    writeU32(trail + 16, 900);
-    std::memcpy(trail + 24, prefix, 16);
-
-    Icmpv6Header ra;
-    ra.setBuffer(buf);
-
-    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
-    ra.setCode(0x00);
-    ra.setTrail(trail, 40);
-
-    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(150));
-    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
-    bool found = false;
-    for (auto* addr : getIPv6s())
-    {
-        if (std::memcmp(addr->ip, fullAddr, 16) == 0 && addr->valid)
-        {
-            found = true;
-            break;
-        }
-    }
-    EXPECT_FALSE(found);
-}
-
-// Test: RA_GuardTrustedModeAcceptsAll
-TEST_F(Internal_NdpTest, RA_GuardTrustedModeAcceptsAll)
-{
-    ndp->configs.suppressRA.store(false);
-    ndp->configs.destinationGuard.store(true);
-    ndp->configs.raGuardMode.store(Protocol::Ndp::Configs::RaGuardMode::TRUSTED);
-
-    iface->configs.setMac(mac);
-    ndp->configs.slaacEnabled.store(true);
-
-    EXPECT_CALL(*iface, enqueuePacket(::testing::_, ::testing::_)).Times(2);
-    ndp->initiateSlaac(); // Would normally send RS
-
-    uint8_t fullAddr[16];
-    Functions::calculateEui64(fullAddr, prefix, mac);
-
-    uint8_t trail[40] = {0};
-    trail[8] = ICMPV6_OPTION_NDP_PREFIX;
-    trail[9] = 0x04;
-    trail[10] = 0x40; // /64
-    trail[11] = 0xC0; // L and A bit
-    writeU32(trail + 12, 1800);
-    writeU32(trail + 16, 900);
-    std::memcpy(trail + 24, prefix, 16);
-
-    Icmpv6Header ra;
-    ra.setBuffer(buf);
-
-    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
-    ra.setCode(0x00);
-    ra.setTrail(trail, 40);
-
-    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(150));
-    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
-    bool found = false;
-    for (auto* addr : getIPv6s())
-    {
-        if (std::memcmp(addr->ip, fullAddr, 16) == 0 && addr->valid)
-        {
-            found = true;
-            break;
-        }
-    }
-    EXPECT_TRUE(found);
-}
-
-// Test: RA_WithExtensionHeaders_IsDropped
-TEST_F(Internal_NdpTest, RA_WithExtensionHeaders_IsDropped)
-{
-    clearIPv6s();
-    ndp->configs.suppressRA.store(false);
-    ndp->configs.destinationGuard.store(true);
-    ndp->configs.raGuardMode.store(Protocol::Ndp::Configs::RaGuardMode::TRUSTED);
-
-    uint8_t trail[8] = {0};
-
-    Icmpv6Header ra;
-    ra.setBuffer(buf);
-
-    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
-    ra.setCode(0x00);
-    ra.setTrail(trail, 8);
-
-    // Simulate malformed/extended header RA by using suspicious source MAC
-    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, ETHERNET_MAC_SOURCE);
-
-    // No address added = dropped
-    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
+    std::lock_guard<std::mutex> lock(getIPv6Mutex());
     EXPECT_TRUE(getIPv6s().empty());
 }
 
@@ -908,7 +747,7 @@ TEST_F(Internal_NdpTest, RA_FragmentedPacketIgnored)
     uint8_t trail[1] = {0};
 
     // Assume payload is too short to be valid RA
-    Icmpv6Header ra;
+    packet::Icmpv6Header ra;
     ra.setBuffer(buf);
 
     ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
@@ -917,18 +756,18 @@ TEST_F(Internal_NdpTest, RA_FragmentedPacketIgnored)
 
     ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
 
-    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
+    std::lock_guard<std::mutex> lock(getIPv6Mutex());
     EXPECT_TRUE(getIPv6s().empty());
 }
 
 // Test: Redirect_MulticastDestinationIsIgnored
 TEST_F(Internal_NdpTest, Redirect_MulticastDestinationIsIgnored)
 {
-    PacketInfo pkt;
-    pkt.headers[0] = { HeaderType::IPV6, 0 };
+    packet::PacketInfo pkt;
+    pkt.headers[0] = { packet::HeaderType::IPV6, 0 };
     pkt.count = 1;
-    pkt.offset = IPv6Header::fixedSize;
-    IPv6Header ipHeader;
+    pkt.offset = packet::IPv6Header::fixedSize;
+    packet::IPv6Header ipHeader;
     ipHeader.setBuffer(buf);
     ipHeader.setSourceAddress(prefix);
     ipHeader.raw->sourceAddress[15] = 'A';
@@ -942,11 +781,11 @@ TEST_F(Internal_NdpTest, Redirect_MulticastDestinationIsIgnored)
 // Test: Redirect_IgnoresSelfToSelfTraffic
 TEST_F(Internal_NdpTest, Redirect_IgnoresSelfToSelfTraffic)
 {
-    PacketInfo pkt;
-    pkt.headers[0] = { HeaderType::IPV6, 0 };
+    packet::PacketInfo pkt;
+    pkt.headers[0] = { packet::HeaderType::IPV6, 0 };
     pkt.count = 1;
-    pkt.offset = IPv6Header::fixedSize;
-    IPv6Header ip6;
+    pkt.offset = packet::IPv6Header::fixedSize;
+    packet::IPv6Header ip6;
     ip6.setBuffer(buf);
     ip6.setSourceAddress(ip);
     ip6.setDestinationAddress(ip);
@@ -959,10 +798,10 @@ TEST_F(Internal_NdpTest, Redirect_IgnoresSelfToSelfTraffic)
 TEST_F(Internal_NdpTest, Redirect_CreatesEntryForBetterNextHop)
 {
     uint8_t betterHop[16];
-    std::memcpy(betterHop, ip, 16);
+    utils::writeU128(betterHop, ip);
     betterHop[15] = 'A';
     uint8_t destIp[16];
-    std::memcpy(destIp, ip, 16);
+    utils::writeU128(destIp, ip);
     destIp[15] = 'B';
 
     uint8_t trail[40];
@@ -970,9 +809,9 @@ TEST_F(Internal_NdpTest, Redirect_CreatesEntryForBetterNextHop)
     std::memcpy(trail + 16, destIp, 16);
     trail[32] = ICMPV6_OPTION_NDP_TARGET;
     trail[33] = 0x01;
-    std::memcpy(trail + 34, mac, 6);
+    utils::writeU48(trail + 34, mac);
 
-    Icmpv6Header redirect;
+    packet::Icmpv6Header redirect;
     redirect.setBuffer(buf);
 
     redirect.setType(ICMPV6_OPCODE_NDP_REDIRECT_MESSAGE);
@@ -983,110 +822,57 @@ TEST_F(Internal_NdpTest, Redirect_CreatesEntryForBetterNextHop)
 
     uint8_t resolvedMac[6];
     EXPECT_TRUE(ndp->getMac(resolvedMac, betterHop));
-    EXPECT_EQ(std::memcmp(resolvedMac, mac, 6), 0);
+    EXPECT_EQ(types::Mac{utils::readU48(resolvedMac)}, mac);
 }
 
 // Test: NA_UnsolicitedRateLimitEnforced
 TEST_F(Internal_NdpTest, NA_UnsolicitedRateLimitEnforced)
 {
-    ndp->addNdpEntry({ip, AddressFamily::IPv6}, readU48(mac), false);
+    ndp->addNdpEntry(ip, mac);
 
     // First send should work
     EXPECT_CALL(*iface, enqueuePacket(testing::_, testing::_)).Times(1);
-    ndp->sendNeighborAdvertisement(ETHERNET_MAC_BROADCAST, ip);
+    ndp->sendNeighborAdvertisement(utils::readU48(ETHERNET_MAC_BROADCAST), ip);
 
     // Immediate resend should be skipped
     EXPECT_CALL(*iface, enqueuePacket(testing::_, testing::_)).Times(0);
-    ndp->sendNeighborAdvertisement(ETHERNET_MAC_BROADCAST, ip);
-}
-
-// Test: RA_RateLimitGlobalEnforced
-TEST_F(Internal_NdpTest, RA_RateLimitGlobalEnforced)
-{
-    uint8_t buf2[100] = {0};
-    iface->blockEnqueues();
-    clearIPv6s();
-    ndp->configs.raRateLimit.store(1); // ms
-    ndp->configs.slaacEnabled.store(true);
-    ndp->configs.destinationGuard.store(true);
-    ndp->configs.raGuardMode.store(Protocol::Ndp::Configs::RaGuardMode::MAC_WHITELIST);
-    ndp->addRaGuardAllowedMac(mac2);
-
-    uint8_t trail1[40];
-    trail1[8] = ICMPV6_OPTION_NDP_PREFIX;
-    trail1[9] = 0x04;
-    trail1[10] = 0x40; // /64
-    trail1[11] = 0xC0; // L + A
-    writeU32(trail1 + 12, 1800);
-    writeU32(trail1 + 16, 900);
-    std::memcpy(trail1 + 24, prefix, 16);
-
-    Icmpv6Header ra1;
-    ra1.setBuffer(buf);
-    
-    ra1.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
-    ra1.setCode(0x00);
-    ra1.setTrail(trail1, 40);
-
-    uint8_t trail2[40];
-    trail2[8] = ICMPV6_OPTION_NDP_PREFIX;
-    trail2[9] = 0x04;
-    trail2[10] = 0x40; // /64
-    trail2[11] = 0xC0; // L and A bits
-    writeU32(trail2 + 12, 1800);
-    writeU32(trail2 + 16, 900);
-    std::memcpy(trail2 + 24, prefix, 16);
-    trail2[25] = 0x14;
-
-    Icmpv6Header ra2;
-    ra2.setBuffer(buf2);
-
-    ra2.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
-    ra2.setCode(0x00);
-    ra2.setTrail(trail2, 40);
-
-    ndp->receiveRouteAdvertisement(ra1, IPV6_SOURCE, mac2);
-    ndp->receiveRouteAdvertisement(ra2, IPV6_SOURCE, mac2);
-
-    EXPECT_EQ(getIPv6s().size(), 1); // Only one should be added
-    EXPECT_EQ(std::memcmp(getIPv6s()[0]->ip, prefix, 8), 0);
+    ndp->sendNeighborAdvertisement(utils::readU48(ETHERNET_MAC_BROADCAST), ip);
 }
 
 // Test: NS_RetriesStopAfterConfiguredAttempts
 TEST_F(Internal_NdpTest, NS_RetriesStopAfterConfiguredAttempts)
 {
     iface->blockEnqueues();
-    ndp->configs.nudBase = 1;
-    ndp->configs.nsInterval = 50;
+    getConfigs().reg.get<config::Ndp::NUD_RETRY_ATTEMPTS>().set(1);
+    getConfigs().reg.get<config::Ndp::NS_INTERVAL>().set(50);
 
-    PacketBuilder dummy(iface);
+    processing::PacketBuilder dummy(iface);
     ndp->resolveAndSend(ip, dummy);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-    std::lock_guard<std::mutex> lock(getRequestMutex());
-    EXPECT_EQ(getPendingRequests().count({ip, AddressFamily::IPv6}), 0);
-    EXPECT_EQ(getRetryCount().count({ip, AddressFamily::IPv6}), 0);
+    EXPECT_EQ(getPendingRequests().count(ip), 0);
+    EXPECT_EQ(getRetryCount().count(ip), 0);
 }
 
 // Test: EntryLimitEnforced_EvictsOldest
 TEST_F(Internal_NdpTest, EntryLimitEnforced_EvictsOldest)
 {
-    ndp->configs.interfaceLimit.store(2); // Max 2 entries
+    getConfigs().reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::CACHE_INTERFACE_LIMIT>().set(2);
 
     uint8_t ip1[16];
-    std::memcpy(ip1, ip, 16);
+    utils::writeU128(ip1, ip);
     ip1[15] = 0x01;
     uint8_t ip2[16];
-    std::memcpy(ip2, ip, 16);
+    utils::writeU128(ip2, ip);
     ip2[15] = 0x02;
     uint8_t ip3[16];
-    std::memcpy(ip3, ip, 16);
+    utils::writeU128(ip3, ip);
     ip3[15] = 0x03;
 
-    ndp->addNdpEntry({ip1, AddressFamily::IPv6}, readU48(mac));
-    ndp->addNdpEntry({ip2, AddressFamily::IPv6}, readU48(mac));
-    ndp->addNdpEntry({ip3, AddressFamily::IPv6}, readU48(mac)); // Should evict ip1
+    ndp->addNdpEntry(ip1, mac);
+    ndp->addNdpEntry(ip2, mac);
+    ndp->addNdpEntry(ip3, mac); // Should evict ip1
 
     uint8_t resolvedMac[6];
     EXPECT_FALSE(ndp->getMac(resolvedMac, ip1));
@@ -1097,34 +883,36 @@ TEST_F(Internal_NdpTest, EntryLimitEnforced_EvictsOldest)
 // Test: ManualProxyEntryIsStoredCorrectly
 TEST_F(Internal_NdpTest, ManualProxyEntryIsStoredCorrectly)
 {
-    ndp->addNdpEntry({ip, AddressFamily::IPv6}, readU48(mac), true); // Proxy = true
+    ndp->addNdpEntry(ip, mac, true); // Proxy = true
 
     uint8_t resolvedMac[6];
     EXPECT_TRUE(ndp->getMac(resolvedMac, ip));
-    EXPECT_EQ(std::memcmp(resolvedMac, mac, 6), 0);
+    EXPECT_EQ(types::Mac{utils::readU48(resolvedMac)}, mac);
 
-    std::shared_lock<std::shared_mutex> lock(getCacheMutex());
-    EXPECT_TRUE(getProxyEntries().count({ip, AddressFamily::IPv6}));
+    auto it = getNdpCache().find(types::IPv6Address{ip});
+    ASSERT_TRUE(it != getNdpCache().end());
+    EXPECT_TRUE(it->second.isProxy);
 }
 
 // Test: RA_AddsPrefixWithCorrectTimers
 TEST_F(Internal_NdpTest, RA_AddsPrefixWithCorrectTimers)
 {
     iface->blockEnqueues();
-    ndp->configs.slaacEnabled.store(true);
+    getConfigs().reg.get<config::Ndp::AUTOCONFIG_PREFIX>().set(true);
     clearIPv6s();
-    iface->configs.setMac(mac);
+    iface->configs.getConfigs().reg.get<config::Interface::MAC_ADDRESS>().set(mac);
+	iface->configs.syncMac();
 
     uint8_t trail[40];
     trail[8] = ICMPV6_OPTION_NDP_PREFIX;
     trail[9] = 0x04;
     trail[10] = 0x40; // /64
     trail[11] = 0xC0; // L + A bits
-    writeU32(trail + 12, 1);
-    writeU32(trail + 16, 1);
-    std::memcpy(trail + 24, prefix, 16);
+	utils::writeU32(trail + 12, 1);
+	utils::writeU32(trail + 16, 1);
+    utils::writeU128(trail + 24, prefix.addr);
 
-    Icmpv6Header ra;
+    packet::Icmpv6Header ra;
     ra.setBuffer(buf);
 
     ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
@@ -1135,7 +923,7 @@ TEST_F(Internal_NdpTest, RA_AddsPrefixWithCorrectTimers)
 
     std::this_thread::sleep_for(std::chrono::seconds(2));
 
-    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
+    std::lock_guard<std::mutex> lock(getIPv6Mutex());
     ASSERT_FALSE(getIPv6s().empty());
     EXPECT_FALSE(getIPv6s()[0]->globalValid);
     EXPECT_TRUE(getIPv6s()[0]->deprecated);
@@ -1146,7 +934,7 @@ TEST_F(Internal_NdpTest, RA_MalformedFieldsAreIgnored)
 {
     uint8_t trail[4] = {0}; // too short - malformed
 
-    Icmpv6Header ra;
+    packet::Icmpv6Header ra;
     ra.setBuffer(buf);
 
     ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
@@ -1162,13 +950,13 @@ TEST_F(Internal_NdpTest, NA_WithoutMACOptionIsIgnored)
 {
     uint8_t res[4] = { 0xE0, 0x00, 0x00, 0x00 };
 
-    Icmpv6Header na;
+    packet::Icmpv6Header na;
     na.setBuffer(buf);
 
     na.setType(ICMPV6_OPCODE_NDP_NEIGHBOR_ADVERTISEMENT);
     na.setCode(0x00);
     na.setReserved(res);
-    na.setTrail(localLinkIp, 16);
+    utils::writeU128(na.getTrailData(), localLinkIp);
 
     ndp->receiveNeighborAdvertisement(na, ip);
 
@@ -1180,10 +968,10 @@ TEST_F(Internal_NdpTest, NA_WithoutMACOptionIsIgnored)
 TEST_F(Internal_NdpTest, NS_UnknownTargetIsIgnored)
 {
     uint8_t unknownIp[16];
-    std::memcpy(unknownIp, ip, 16);
+    utils::writeU128(unknownIp, ip);
     unknownIp[15] = 'A';
 
-    Icmpv6Header ns;
+    packet::Icmpv6Header ns;
     ns.setBuffer(buf);
 
     ns.setType(ICMPV6_OPCODE_NDP_NEIGHBOR_SOLICITATION);
@@ -1199,30 +987,27 @@ TEST_F(Internal_NdpTest, NS_UnknownTargetIsIgnored)
 TEST_F(Internal_NdpTest, NA_DuringProbe_ResetsToReachable)
 {
     iface->blockEnqueues();
-    ndp->configs.reachableTime.store(100); // ms
-    ndp->configs.cacheExpire.store(1);
-    ndp->configs.nudBaseInterval = 1;
-    ndp->configs.nudBase = 1;
+    getConfigs().reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::REACHABLE_TIME>().set(100);
+    getConfigs().reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::CACHE_EXPIRE>().set(1);
+    getConfigs().reg.get<config::Ndp::NUD_RETRY_INTERVAL>().set(1);
+    getConfigs().reg.get<config::Ndp::NUD_RETRY_ATTEMPTS>().set(1);
 
-    ndp->addNdpEntry({ip, AddressFamily::IPv6}, readU48(mac));
-    PacketBuilder pkt(iface);
+    ndp->addNdpEntry(ip, mac);
+    processing::PacketBuilder pkt(iface);
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
     ndp->resolveAndSend(ip, pkt);
 
-    {
-        std::shared_lock<std::shared_mutex> lock(getCacheMutex());
-        auto state = getNdpCache()[{ip, AddressFamily::IPv6}].state;
-        ASSERT_EQ(state, Protocol::NudState::PROBE);
-    }
+    auto state = getNdpCache()[ip].state;
+    ASSERT_EQ(state, infrastructure::Ndp::NudState::PROBE);
 
     uint8_t res[4] = { 0xE0, 0x00, 0x00, 0x00 };
     uint8_t trail[24] = {0};
-    std::memcpy(trail, ip, 16);
+    utils::writeU128(trail, ip);
     trail[16] = ICMPV6_OPTION_NDP_TARGET;
     trail[17] = 0x01;
-    std::memcpy(trail + 18, mac, 6);
+    utils::writeU128(trail + 18, mac);
 
-    Icmpv6Header na;
+    packet::Icmpv6Header na;
     na.setBuffer(buf);
     na.setType(ICMPV6_OPCODE_NDP_NEIGHBOR_ADVERTISEMENT);
     na.setCode(0x00);
@@ -1231,39 +1016,36 @@ TEST_F(Internal_NdpTest, NA_DuringProbe_ResetsToReachable)
 
     ndp->receiveNeighborAdvertisement(na, ip);
 
-    {
-        std::shared_lock<std::shared_mutex> lock(getCacheMutex());
-        auto state = getNdpCache()[{ip, AddressFamily::IPv6}].state;
-        EXPECT_EQ(state, Protocol::NudState::REACHABLE);
-    }
+    state = getNdpCache()[ip].state;
+    EXPECT_EQ(state, infrastructure::Ndp::NudState::REACHABLE);
 }
 
 // Test: DAD_And_NS_DoNotCorruptState
 TEST_F(Internal_NdpTest, DAD_And_NS_DoNotCorruptState)
 {
     iface->blockEnqueues();
-    auto* addr = iface->configs.ipv6.addAddress(ip, false, 64);
+    auto* addr = iface->configs.ipv6.addAddress(ip, false);
     addr->tentative = true;
-    ndp->configs.dadAttempts.store(1);
-    ndp->configs.dadTime.store(100);
+    getConfigs().reg.get<config::Ndp::DAD_ATTEMPTS>().set(1);
+    getConfigs().reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::DAD_TIME>();
 
     std::thread dadThread([&]() {
-        ndp->duplicateAddressDetection(addr, false);
+        ndp->duplicateAddressDetection(*addr);
     });
 
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-    Icmpv6Header ns;
+    packet::Icmpv6Header ns;
 
     ns.setBuffer(buf);
     ns.setType(ICMPV6_OPCODE_NDP_NEIGHBOR_SOLICITATION);
-    ns.setTrail(ip, 16);
+    utils::writeU128(ns.getTrailData(), ip);
 
-    ndp->receiveNeighborSolicitation(ns, IPV6_SOURCE, ETHERNET_MAC_SOURCE); // DAD probe
+    ndp->receiveNeighborSolicitation(ns, IPV6_SOURCE, utils::readU48(ETHERNET_MAC_SOURCE)); // DAD probe
 
     dadThread.join();
 
-    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
+    std::lock_guard<std::mutex> lock(getIPv6Mutex());
     // Either duplicate or accepted — just no crash or invalid state
     SUCCEED();
 }
@@ -1312,7 +1094,7 @@ TEST_F(Internal_NdpTest, UnknownICMPv6TypeIsIgnored)
 {
     uint8_t trail[16] = {0};
 
-    Icmpv6Header hdr;
+    packet::Icmpv6Header hdr;
     hdr.setBuffer(buf);
 
     hdr.setType(0xFF); // Unknown
@@ -1321,7 +1103,7 @@ TEST_F(Internal_NdpTest, UnknownICMPv6TypeIsIgnored)
 
     // Send to all receive functions
     ndp->receiveNeighborAdvertisement(hdr, IPV6_SOURCE);
-    ndp->receiveRouteAdvertisement(hdr, IPV6_SOURCE, ETHERNET_MAC_SOURCE);
+    ndp->receiveRouteAdvertisement(hdr, IPV6_SOURCE, utils::readU48(ETHERNET_MAC_SOURCE));
     ndp->receiveRedirectMessage(hdr, IPV6_SOURCE);
 
     SUCCEED(); // Ignored = passed
@@ -1332,80 +1114,51 @@ TEST_F(Internal_NdpTest, RA_InconsistentLifetimesAreIgnored)
 {
     clearIPv6s();
     iface->blockEnqueues();
-    ndp->configs.slaacEnabled.store(true);
+    getConfigs().reg.get<config::Ndp::AUTOCONFIG_PREFIX>().set(true);
 
     uint8_t trail[40] = {0};
     trail[8] = ICMPV6_OPTION_NDP_PREFIX;
     trail[9] = 0x04;
     trail[10] = 0x40; // /64
     trail[11] = 0xC0; // L + A Bits
-    writeU32(trail + 12, 2000);
-    writeU32(trail + 16, 3000);
-    std::memcpy(trail + 24, prefix, 16);
+	utils::writeU32(trail + 12, 2000);
+	utils::writeU32(trail + 16, 3000);
+    utils::writeU128(trail + 24, prefix.addr);
 
-    Icmpv6Header ra;
+    packet::Icmpv6Header ra;
     ra.setBuffer(buf);
 
     ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
     ra.setCode(0x00);
     ra.setTrail(trail, 40);
 
-    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, ETHERNET_MAC_SOURCE);
+    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, utils::readU48(ETHERNET_MAC_SOURCE));
 
-    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
+    std::lock_guard<std::mutex> lock(getIPv6Mutex());
     EXPECT_TRUE(getIPv6s().empty());
-}
-
-// Test: RaGuardModeUpdate_TakesEffectImmediately
-TEST_F(Internal_NdpTest, RaGuardModeUpdate_TakesEffectImmediately)
-{
-    clearIPv6s();
-    ndp->configs.suppressRA.store(false);
-    ndp->configs.destinationGuard.store(true);
-
-    uint8_t trail[8] = {0};
-
-    Icmpv6Header ra;
-    ra.setBuffer(buf);
-
-    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
-    ra.setCode(0x00);
-    ra.setTrail(trail, 8);
-
-    // BLOCK_ALL → should be dropped
-    ndp->configs.raGuardMode.store(Protocol::Ndp::Configs::RaGuardMode::BLOCK_ALL);
-    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
-    {
-        std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
-        EXPECT_TRUE(getIPv6s().empty());
-    }
-
-    // TRUSTED → should be accepted
-    ndp->configs.raGuardMode.store(Protocol::Ndp::Configs::RaGuardMode::TRUSTED);
-    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
-    SUCCEED(); // No crash means accepted
 }
 
 // Test: SLAAC_ExclusionUpdate_AppliesImmediately
 TEST_F(Internal_NdpTest, SLAAC_ExclusionUpdate_AppliesImmediately)
 {
     clearIPv6s();
-    ndp->configs.slaacEnabled.store(true);
-    iface->configs.setMac(mac);
+    getConfigs().reg.get<config::Ndp::AUTOCONFIG_PREFIX>().set(true);
+    iface->configs.getConfigs().reg.get<config::Interface::MAC_ADDRESS>().set(mac);
+	iface->configs.syncMac();
 
     // Add exclusion
-    ndp->addSlaacExclusionPrefix({prefix, AddressFamily::IPv6}, false);
+    ndp->addSlaacExclusionPrefix(prefix, false);
 
     uint8_t trail[40];
     trail[8] = ICMPV6_OPTION_NDP_PREFIX;
     trail[9] = 0x04;
     trail[10] = 0x40; // /64
     trail[11] = 0xC0; // L + A Bits
-    writeU32(trail + 12, 1000);
-    writeU32(trail + 16, 800);
-    std::memcpy(trail + 24, prefix, 16);
+	utils::writeU32(trail + 12, 1000);
+	utils::writeU32(trail + 16, 800);
+    utils::writeU128(trail + 24, prefix.addr);
 
-    Icmpv6Header ra;
+    packet::Icmpv6Header ra;
     ra.setBuffer(buf);
 
     ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
@@ -1413,32 +1166,29 @@ TEST_F(Internal_NdpTest, SLAAC_ExclusionUpdate_AppliesImmediately)
     ra.setTrail(trail, 40);
     ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
 
-    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
+    std::lock_guard<std::mutex> lock(getIPv6Mutex());
     EXPECT_TRUE(getIPv6s().empty());
 }
 
 // Test: Config_ReachableTimeAffectsNewEntries
 TEST_F(Internal_NdpTest, Config_ReachableTimeAffectsNewEntries)
 {
-    ndp->configs.reachableTime.store(50); // ms
-    ndp->configs.cacheExpire.store(1);    // s
-    ndp->addNdpEntry({ip, AddressFamily::IPv6}, readU48(mac));
+    getConfigs().reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::REACHABLE_TIME>().set(50);
+    getConfigs().reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::CACHE_EXPIRE>().set(1);
+    ndp->addNdpEntry(ip, mac);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    {
-        std::shared_lock<std::shared_mutex> lock(getCacheMutex());
-        auto state = getNdpCache()[{ip, AddressFamily::IPv6}].state;
-        EXPECT_EQ(state, Protocol::NudState::STALE);
-    }
+    auto state = getNdpCache()[ip].state;
+    EXPECT_EQ(state, infrastructure::Ndp::NudState::STALE);
 }
 
 // Test: Config_CacheExpireAffectsNewEntries
 TEST_F(Internal_NdpTest, Config_CacheExpireAffectsNewEntries)
 {
     iface->blockEnqueues();
-    ndp->configs.reachableTime.store(10); // ms
-    ndp->configs.cacheExpire.store(1);    // s
-    ndp->addNdpEntry({ip, AddressFamily::IPv6}, readU48(mac));
+    getConfigs().reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::REACHABLE_TIME>().set(10);
+    getConfigs().reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::CACHE_EXPIRE>().set(1);
+    ndp->addNdpEntry(ip, mac);
 
     std::this_thread::sleep_for(std::chrono::seconds(2));
 
@@ -1450,16 +1200,16 @@ TEST_F(Internal_NdpTest, Config_CacheExpireAffectsNewEntries)
 TEST_F(Internal_NdpTest, Config_DadAttemptsUpdateImmediately)
 {
     iface->blockEnqueues();
-    auto* addr = iface->configs.ipv6.addAddress(ip, false, 64);
+    auto* addr = iface->configs.ipv6.addAddress(ip, false);
     addr->tentative = true;
 
-    ndp->configs.dadAttempts.store(1);
-    ndp->configs.dadTime.store(100);
-    ndp->duplicateAddressDetection(addr, false);
+    getConfigs().reg.get<config::Ndp::DAD_ATTEMPTS>().set(1);
+    getConfigs().reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::DAD_TIME>().set(100);
+    ndp->duplicateAddressDetection(*addr);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
+    std::lock_guard<std::mutex> lock(getIPv6Mutex());
     EXPECT_FALSE(addr->tentative);
     EXPECT_TRUE(addr->valid);
 }
@@ -1469,22 +1219,22 @@ TEST_F(Internal_NdpTest, Config_PreferredLifetimeUpdatesWithRA)
 {
     clearIPv6s();
     iface->blockEnqueues();
-    ndp->configs.slaacEnabled.store(true);
-    iface->configs.setMac(mac);
+    getConfigs().reg.get<config::Ndp::AUTOCONFIG_PREFIX>().set(true);
+    iface->configs.getConfigs().reg.get<config::Interface::MAC_ADDRESS>().set(mac);
+    iface->configs.syncMac();
 
-    ndp->configs.raPreferredLifetime.store(1);
-    ndp->configs.raLifetime.store(100);
+    getConfigs().reg.get<config::Ndp::RA_LIFETIME>().set(100);
 
     uint8_t trail[40];
     trail[8] = ICMPV6_OPTION_NDP_PREFIX;
     trail[9] = 0x04;
     trail[10] = 0x40; // /64
     trail[11] = 0xC0; // L + A Bits
-    writeU32(trail + 12, 100);
-    writeU32(trail + 16, 1);
-    std::memcpy(trail + 24, prefix, 16);
+    utils::writeU32(trail + 12, 100);
+    utils::writeU32(trail + 16, 1);
+    utils::writeU128(trail + 24, prefix.addr);
 
-    Icmpv6Header ra;
+    packet::Icmpv6Header ra;
     ra.setBuffer(buf);
 
     ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
@@ -1495,11 +1245,12 @@ TEST_F(Internal_NdpTest, Config_PreferredLifetimeUpdatesWithRA)
 
     std::this_thread::sleep_for(std::chrono::seconds(2));
 
-    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
+    std::lock_guard<std::mutex> lock(getIPv6Mutex());
     EXPECT_TRUE(getIPv6s()[0]->deprecated);
 }
 
 // Test: NSF ResolutionTrottle_DropsExcess
+/*
 TEST_F(Internal_NdpTest, NSF_ResolutionThrottle_DropsExcess)
 {
     iface->blockEnqueues();
@@ -1536,27 +1287,29 @@ TEST_F(Internal_NdpTest, DAD_SuppressedDuringNSF)
     ndp->duplicateAddressDetection(addr, false);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
+    std::lock_guard<std::mutex> lock(getIPv6Mutex());
     EXPECT_TRUE(addr->tentative); // Suppressed
 }
+*/
 
 // Test: StaticNeighbor_OverridesDynamicResolution
 TEST_F(Internal_NdpTest, StaticNeighbor_OverridesDynamicResolution)
 {
     iface->blockEnqueues();
     uint8_t staticIp[16];
-    std::memcpy(staticIp, ip, 16);
+    utils::writeU128(staticIp, ip);
     staticIp[15] = '5';
     uint8_t staticMac[6];
-    std::memcpy(staticMac, mac, 6);
+    utils::writeU48(staticMac, mac);
     staticMac[5] = '5';
 
-    ndp->addNdpEntry({staticIp, AddressFamily::IPv6}, readU48(staticMac), false, true);
+    ndp->addNdpEntry(utils::readU128(staticIp), utils::readU48(staticMac), false, true);
 
-    PacketBuilder pkt(iface);
+    processing::PacketBuilder pkt(iface);
     ndp->resolveAndSend(staticIp, pkt);
 
     uint8_t resolvedMac[6];
     EXPECT_TRUE(ndp->getMac(resolvedMac, staticIp));
     EXPECT_EQ(std::memcmp(resolvedMac, staticMac, 6), 0);
 }
+

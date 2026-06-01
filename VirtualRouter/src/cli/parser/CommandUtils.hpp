@@ -16,6 +16,7 @@
 #include "configs/RegistryDefaultTable.hpp"
 #include "cli/modes/contexts/Context.hpp"
 #include "cli/runtime/Token.hpp"
+#include "configs/FieldAccessor.hpp"
 
 /**
  * @namespace cli::utils
