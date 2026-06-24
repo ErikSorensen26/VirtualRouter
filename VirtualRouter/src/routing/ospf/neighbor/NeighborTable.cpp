@@ -12,7 +12,7 @@ NeighborTable::NeighborTable(OspfInterface& iface)
 void NeighborTable::syncUnicast()
 {
     auto& ifaceConfigs = iface.getConfigs();
-    auto ntype = ifaceConfigs.reg.get<config::OspfInterface::NETWORK>().load();
+    auto ntype = ifaceConfigs.get<config::OspfInterface::NETWORK>().load();
 
     if (ntype == config::ospf::NetworkType::POINT_TO_MULTIPOINT || ntype == config::ospf::NetworkType::NON_BROADCAST)
     {
@@ -23,7 +23,7 @@ void NeighborTable::syncUnicast()
             unicastNbrs.insert(ip);
 
         // Update configs of all unicast neighbors (OspfInterface::NEIGHBOR has IgnoreCompare wrappers)
-        ifaceConfigs.reg.get<config::OspfInterface::NEIGHBOR>().withRead([&](const auto& nbrs)
+        ifaceConfigs.get<config::OspfInterface::NEIGHBOR>().withRead([&](const auto& nbrs)
         {
             for (const auto& entry : nbrs)
             {
@@ -46,7 +46,7 @@ void NeighborTable::syncUnicast()
         });
 
         // Ospf::NEIGHBORS uses double-nesting (ListField<vector<tuple<...>>>)
-        iface.getArea().process().getConfigs().reg.get<config::Ospf::NEIGHBORS>().withRead([&](const auto& nbrsList)
+        iface.getArea().process().getConfigs().get<config::Ospf::NEIGHBORS>().withRead([&](const auto& nbrsList)
         {
             for (const auto& nbrs : nbrsList)
                 for (const auto& [ip, cost, dbfilter, pollIntv, priority] : nbrs)

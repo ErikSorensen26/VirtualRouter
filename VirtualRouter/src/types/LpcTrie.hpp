@@ -90,7 +90,7 @@ public:
     using SpanT  = NetworkSpan<AddrT>;
  
     static constexpr uint16_t W      = static_cast<uint16_t>(N) * 8; ///< Total bits.
-    static constexpr uint8_t  FANOUT = static_cast<uint8_t>(1u << S); ///< Children per node.
+    static constexpr uint16_t FANOUT = static_cast<uint16_t>(1u << S); ///< Children per node.
     static constexpr AddrT    SMASK  = static_cast<AddrT>(FANOUT - 1u); ///< Stride mask.
  
  
@@ -293,7 +293,7 @@ public:
         {
             if (nPrefixes) return false;
             if (!children)  return true;
-            for (uint8_t i = 0; i < FANOUT; ++i)
+            for (uint16_t i = 0; i < FANOUT; ++i)
                 if (children->slots[i].load(std::memory_order_relaxed))
                     return false;
             return true;
@@ -740,7 +740,7 @@ private:
             fn(p->addr, p->len, p->ptr);
  
         if (!n->children) return;
-        for (uint8_t i = 0; i < FANOUT; ++i)
+        for (uint16_t i = 0; i < FANOUT; ++i)
         {
             const Node* child = n->children->slots[i].load(std::memory_order_relaxed);
             if (child) forEachNode(child, fn);
@@ -755,7 +755,7 @@ private:
         if (!n) return;
         if (n->children)
         {
-            for (uint8_t i = 0; i < FANOUT; ++i)
+            for (uint16_t i = 0; i < FANOUT; ++i)
             {
                 Node* child = n->children->slots[i].load(std::memory_order_relaxed);
                 if (child) destroyAll(child);
@@ -780,7 +780,7 @@ private:
             // Schedule child retirements first.
             if (n->children)
             {
-                for (uint8_t i = 0; i < FANOUT; ++i)
+                for (uint16_t i = 0; i < FANOUT; ++i)
                 {
                     Node* c = n->children->slots[i].load(std::memory_order_relaxed);
                     if (c) retireNode(c);

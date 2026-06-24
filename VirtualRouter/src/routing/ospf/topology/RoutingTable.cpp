@@ -583,8 +583,8 @@ bool OspfRib::recomputeLocked(const types::IPPrefix& prefix, types::AddressFamil
         auto merged = mergeEcmpNextHops(next.paths);
         addTrafficShare(
             merged,
-            process.getConfigs().reg.get<config::Ospf::MAXIMUM_PATHS>().load(),
-            process.getConfigs().reg.get<config::Ospf::TRAFFIC_SHARE_MIN>().load()
+            process.getConfigs().get<config::Ospf::MAXIMUM_PATHS>().load(),
+            process.getConfigs().get<config::Ospf::TRAFFIC_SHARE_MIN>().load()
         );
 
         if (af == types::AddressFamily::IPv4)
@@ -675,7 +675,7 @@ bool OspfRib::globalRibContains(const types::IPPrefix& prefix) const
 
 bool OspfRib::validateInterAreaSummaryEligibility(const types::IPPrefix& prefix) const
 {
-    const bool useLocal = process.getConfigs().reg.get<config::Ospf::LRC_INTER_AREA_SUMMARY>().load();
+    const bool useLocal = process.getConfigs().get<config::Ospf::LRC_INTER_AREA_SUMMARY>().load();
 
     if (useLocal)
     {

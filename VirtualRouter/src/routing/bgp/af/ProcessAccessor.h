@@ -12,7 +12,7 @@
 
 #include "configs/registry/router/BgpRegistry.h"
 
-namespace core { class VirtualRouter; class ProcessQueueRef; }
+namespace core { class VirtualRouter; class ProcessQueue; class ProcessQueueRef; }
 
 namespace routing::bgp
 {
@@ -87,14 +87,23 @@ public:
     static AttributeManager& getAttrMgr(BgpProcess& proc);
 
     /**
-     * @brief Returns a `ProcessQueueRef` pointing to the BGP scheduler of `proc`.
+     * @brief Returns the lifetime-safe self-ref of `proc`'s scheduler.
      *
      * The returned reference may be used to post and cancel timer callbacks that
-     * run on the BGP process thread.
+     * run on the BGP process thread. It is released first in `~BgpProcess()`.
      *
      * @param proc  The `BgpProcess` to query.
      */
-    static core::ProcessQueueRef getScheduler(BgpProcess& proc);
+    static core::ProcessQueueRef& getScheduler(BgpProcess& proc);
+
+    /**
+     * @brief Returns the underlying scheduler queue of `proc`, for minting
+     *        independent `ProcessQueueRef`s (e.g. for `Neighbor`, NHT/network
+     *        watch contexts).
+     *
+     * @param proc  The `BgpProcess` to query.
+     */
+    static core::ProcessQueue& getSchedulerQueue(BgpProcess& proc);
 };
 } // namespace routing
 

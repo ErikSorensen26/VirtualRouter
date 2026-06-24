@@ -156,7 +156,7 @@ public:
      */
     bool isAuthEnabled() const
     {
-        return configs.reg.get<config::EigrpInterface::AUTHENTICATION_MODE>().load() != config::eigrp::AuthType::NONE;
+        return configs.get<config::EigrpInterface::AUTHENTICATION_MODE>().load() != config::eigrp::AuthType::NONE;
     }
 
     config::EigrpInterfaceRegistry& configs; ///< Registry-backed configuration for this interface.

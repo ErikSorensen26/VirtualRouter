@@ -151,7 +151,10 @@ public:
         buffer[offset++] = length;
 
         // Write the value field
-        std::memcpy(&buffer[offset], value, valueSize);
+        if (value)
+        {
+            std::memcpy(&buffer[offset], value, valueSize);
+        }
         offset += valueSize;
         return true;
     }

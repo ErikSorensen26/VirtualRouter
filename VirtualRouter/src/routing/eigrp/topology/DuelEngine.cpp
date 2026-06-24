@@ -10,7 +10,7 @@
 
 namespace routing::eigrp
 {
-DuelEngine::DuelEngine(Eigrp& process) : base(process), topologyTable(process), tmgr(process, process.getScheduler()) {}
+DuelEngine::DuelEngine(Eigrp& process) : base(process), topologyTable(process), tmgr(process, process.getSchedulerQueue()) {}
 
 bool DuelEngine::isRouteAdvertised(const uint8_t* network, uint8_t mask)
 {
@@ -266,28 +266,21 @@ void DuelEngine::setActive(std::vector<TopologyEntry*>& entries, const uint32_t*
     {
         for (auto& entry : entries)
         {
-            if (entry->routesBySource.count(entry->bestNeighbor) == 0 ||
+            types::IPAddress failedNeighbor = entry->bestNeighbor;
+
+            if (!entry->routesBySource.contains(failedNeighbor) ||
                 entry->state == TopologyEntry::State::ACTIVE)
                 continue;
 
             base.routeManager.withdrawRoute(entry->prefix);
-
-            types::IPAddress failedNeighbor = entry->bestNeighbor;
 
             // Create new active route
             ActiveRoute& ar = activeRoutes[entry->prefix];
             ar.originNeighbor = failedNeighbor;
             ar.activePrefix = entry->prefix;
 
-            if (entry->routesBySource.count(failedNeighbor))
-            {
-                ar.originRoute = &entry->routesBySource.at(failedNeighbor);
-                topologyTable.markRouteUnreachable(*ar.originRoute, failedNeighbor, *entry);
-            }
-            else
-            {
-                ar.originRoute = nullptr;
-            }
+            ar.originRoute = &entry->routesBySource.at(failedNeighbor);
+            topologyTable.markRouteUnreachable(*ar.originRoute, failedNeighbor, *entry);
 
             entry->state = TopologyEntry::State::ACTIVE;
 

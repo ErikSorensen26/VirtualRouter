@@ -17,7 +17,7 @@ Tcp::Tcp(core::VirtualRouter& vrf, Config cfg)
 
     // Subscribe to interface managers to close tcp connections when interfaces go down or addresses are removed.
     tcpIfDownId = ifaceMgr.subscribe(interface::StateChange::IF_DOWN,
-        this,
+        engine,
         [](void* ctx, interface::Interface& iface) {
             auto* engine = static_cast<TcpEngine*>(ctx);
             // Primary IPv4
@@ -35,21 +35,21 @@ Tcp::Tcp(core::VirtualRouter& vrf, Config cfg)
 
     // When a specific IP is explicitly removed, tear down only the
     tcpIPv4DelId = ifaceMgr.subscribe(interface::IPv4Event::IPV4_DEL,
-        this,
+        engine,
         [](void* ctx, interface::Interface&, types::IPv4Prefix& prefix) {
             static_cast<TcpEngine*>(ctx)->dropLocalConnections(
                 types::IPAddress(prefix.addr));
         });
 
     tcpIPv6DelId = ifaceMgr.subscribe(interface::IPv6Event::IPV6_DEL,
-        this,
+        engine,
         [](void* ctx, interface::Interface&, types::IPv6Prefix& prefix) {
             static_cast<TcpEngine*>(ctx)->dropLocalConnections(
                 types::IPAddress(prefix.addr));
         });
 
     tcpIPv6LlDelId = ifaceMgr.subscribe(interface::IPv6Event::IPV6_LL_DEL,
-        this,
+        engine,
         [](void* ctx, interface::Interface&, types::IPv6Prefix& prefix) {
             static_cast<TcpEngine*>(ctx)->dropLocalConnections(
                 types::IPAddress(prefix.addr));

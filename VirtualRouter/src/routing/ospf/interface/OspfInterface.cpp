@@ -46,10 +46,10 @@ OspfInterface::OspfInterface(OspfProcess& proc, interface::Interface& iface, con
       tmgr(*this),
       iface(iface),
       baseConfigs(dispatcher->getConfigs()),
-      configs(baseConfigs.reg.get<config::OspfInterfaceBase::BASE>().get())
+      configs(baseConfigs.get<config::OspfInterfaceBase::BASE>().get())
 {
-    configs.reg.context().set(this);
-    baseConfigs.reg.context().set(this);
+    configs.context().set(this);
+    baseConfigs.context().set(this);
 
     syncConfigs();
     calculateCost();
@@ -77,14 +77,14 @@ void OspfInterface::calculateCost()
     uint16_t oldCost = cost;
     uint16_t newCost{0};
 
-    auto configuredCost = configs.reg.get<config::OspfInterface::COST>();
+    auto configuredCost = configs.get<config::OspfInterface::COST>();
     if (configuredCost.hasValue())
     {
         newCost = configuredCost.load();
     }
     else
     {
-        uint32_t referenceBw = process.getConfigs().reg.get<config::Ospf::REFERENCE_BANDWIDTH>().load();
+        uint32_t referenceBw = process.getConfigs().get<config::Ospf::REFERENCE_BANDWIDTH>().load();
         uint32_t interfaceBw = iface.configs.getBandwidth();
         newCost = static_cast<uint16_t>(referenceBw / interfaceBw);
     }
@@ -123,7 +123,7 @@ void OspfInterface::election()
     struct Candidate { uint32_t rid; uint8_t priority; uint32_t claimedDr; uint32_t claimedBdr; };
 
     uint32_t selfRid  = getArea().process().getRouterId();
-    uint8_t  selfPrio = configs.reg.get<config::OspfInterface::PRIORITY>().load();
+    uint8_t  selfPrio = configs.get<config::OspfInterface::PRIORITY>().load();
 
     // Build candidate list: self + all >= 2-way neighbors with priority > 0
     std::vector<Candidate> eligible;
@@ -257,9 +257,9 @@ void OspfInterface::syncConfigs()
 
 void OspfInterface::syncTimers()
 {
-    auto helloTimer = configs.reg.get<config::OspfInterface::HELLO_INTERVAL>();
-    auto helloMultiplier = configs.reg.get<config::OspfInterface::HELLO_MULTIPLIER>();
-    auto deadTimer = configs.reg.get<config::OspfInterface::DEAD_INTERVAL>();
+    auto helloTimer = configs.get<config::OspfInterface::HELLO_INTERVAL>();
+    auto helloMultiplier = configs.get<config::OspfInterface::HELLO_MULTIPLIER>();
+    auto deadTimer = configs.get<config::OspfInterface::DEAD_INTERVAL>();
 
     if (helloMultiplier.hasValue())
     {
@@ -278,7 +278,7 @@ void OspfInterface::syncTimers()
         }
         else
         {
-            auto net = configs.reg.get<config::OspfInterface::NETWORK>().load();
+            auto net = configs.get<config::OspfInterface::NETWORK>().load();
             if (net == config::ospf::NetworkType::NON_BROADCAST || net == config::ospf::NetworkType::POINT_TO_MULTIPOINT_BROADCAST || net == config::ospf::NetworkType::POINT_TO_MULTIPOINT)
                 ht = OSPF_MU_HELLO_TIME;
             else
@@ -297,7 +297,7 @@ void OspfInterface::syncTimers()
 
 void OspfInterface::syncNetworkType()
 {
-    auto ntype = getConfigs().reg.get<config::OspfInterface::NETWORK>().load();
+    auto ntype = getConfigs().get<config::OspfInterface::NETWORK>().load();
 
     syncTimers();
     isMulticast.store(
@@ -311,7 +311,7 @@ void OspfInterface::syncNetworkType()
 
 void OspfInterface::syncDigestKey()
 {
-    baseConfigs.reg.get<config::OspfInterfaceBase::MESSAGE_DIGEST_KEYS>().withRead([this](const auto& keys)
+    baseConfigs.get<config::OspfInterfaceBase::MESSAGE_DIGEST_KEYS>().withRead([this](const auto& keys)
     {
         if (!keys.empty())
         {
@@ -329,7 +329,7 @@ void OspfInterface::syncDigestKey()
 
 void OspfInterface::setPassiveMode(bool passive)
 {
-    configs.reg.get<config::OspfInterface::PASSIVE>().load();
+    configs.get<config::OspfInterface::PASSIVE>().load();
     if (passive)
     {
         for (auto it = ntable.neighbors.begin(); it != ntable.neighbors.end();)

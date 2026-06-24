@@ -24,7 +24,7 @@ NeighborAf::NeighborAf(const AfiSafi& fam, Neighbor& p)
           return neighborConfigs.emplaceBack(id);
       }())
 {
-    configs.getConfigs().reg.context().set(this);
+    configs.getConfigs().context().set(this);
 
     // Resolve peer group
     {

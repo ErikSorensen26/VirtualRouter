@@ -250,12 +250,27 @@ public:
     config::OspfRegistry& getConfigs() { return configs; }
     const config::OspfRegistry& getConfigs() const noexcept { return configs; }
     OspfRib& getRib() { return rib; }
-    core::ProcessQueueRef getScheduler() { return scheduler.ref(); }
+
+    /**
+     * @brief Returns a lifetime-safe ref for posting self-referencing tasks
+     *        (e.g. interface-list refreshes, area resets that capture `this`).
+     *
+     * Released first in `~OspfProcess()`, before `ifaceMgr`/`areas` are torn
+     * down, so that no posted task can run against a partially-destroyed
+     * `OspfProcess`.
+     */
+    core::ProcessQueueRef& getScheduler() { return selfRef; }
+
+    /**
+     * @brief Returns the underlying scheduler queue, for subsystems (e.g.
+     *        @ref Area) that mint their own `ProcessQueueRef`.
+     */
+    core::ProcessQueue& getSchedulerQueue() { return scheduler; }
     const OspfRib& getRib() const { return rib; }
     uint16_t getProcId() const { return procId; }
     uint32_t getRouterId() const
     {
-        const auto id = configs.reg.get<config::Ospf::ROUTER_ID>();
+        const auto id = configs.get<config::Ospf::ROUTER_ID>();
         if (id.hasValue()) return id.load();
         return rid;
     }
@@ -402,6 +417,7 @@ private:
 
     OspfRib rib;              ///< SPF-computed routes awaiting installation into the global RIB.
     core::ProcessQueue scheduler; ///< Serialization queue for all LSA/SPF/origination work.
+    core::ProcessQueueRef selfRef; ///< Lifetime-safe ref for self-referencing posts; released first in ~OspfProcess().
 
     // ROUTER ROLE FLAGS
     bool abr = false;  ///< True when this router is an ABR (connects backbone to non-backbone area).

@@ -3,6 +3,7 @@
 #include <chrono>
 #include <VirtualRouter.h>
 #include <RCU.hpp>
+#include "configs/registry/global/VrfRegistry.h"
 
 #include "BgpProcess.h"
 #include "bgp/neighbor/Neighbor.h"
@@ -13,15 +14,16 @@ BgpProcess::BgpProcess(uint32_t as, core::VirtualRouter* vrf)
     : routingInstance(vrf),
       asNumber(as),
       scheduler(vrf->getControlScheduler().create()),
-      ntable(*this)
+      selfRef(scheduler.ref()),
+      ntable(*this),
+      configs(vrf->getConfigs().get<config::Vrf::ROUTER_BGP>().get())
 {
-    configs.reg.get<config::Bgp::BGP_BASE>().bind(baseConfigs);
-    vrf->getConfigs().reg.get<config::Vrf::ROUTER_BGP>().bind(configs);
+    configs.get<config::Bgp::AUTONOMOUS_SYSTEM>().set(as);
     scheduleScan();
 
     transport::tcp::ListenOptions opts;
-    opts.policy.pathMtuDiscovery = configs.reg.get<config::Bgp::BGP_BASE>().get()
-        .reg.get<config::BgpTransportBase::TRANSPORT_PATH_MTU_DISCOVERY>().load();
+    opts.policy.pathMtuDiscovery = configs.get<config::Bgp::BGP_BASE>().get()
+        .get<config::BgpTransportBase::TRANSPORT_PATH_MTU_DISCOVERY>().load();
     opts.onAccept = BgpProcess::onAcceptCallback;
     opts.onAcceptUser = this;
     opts.recvCallback = BgpProcess::onReceiveCallback;
@@ -36,7 +38,14 @@ BgpProcess::BgpProcess(uint32_t as, core::VirtualRouter* vrf)
     );
 }
 
-BgpProcess::~BgpProcess() = default;
+BgpProcess::~BgpProcess()
+{
+    // Release selfRef first: this blocks until any in-flight self-posted task
+    // (e.g. doEstablish() from onSessionEstablished, or scheduleScan()'s
+    // re-arming scan timer) finishes, and rejects any further posts, before
+    // ntable/attrMgr/addressFamilies/sessions are torn down below.
+    selfRef.release();
+}
 
 Session* BgpProcess::findSession(const types::IPAddress& addr)
 {
@@ -111,12 +120,12 @@ void BgpProcess::onSessionEstablished(Session& session)
         }
     };
 
-    auto delayField = getConfigs().reg.get<config::Bgp::BGP_UPDATE_DELAY>();
+    auto delayField = getConfigs().get<config::Bgp::BGP_UPDATE_DELAY>();
     if (delayField.hasValue())
     {
         const types::IPAddress peerAddr = nbr.neighborAddress;
         const uint16_t delaySecs = delayField.load();
-        scheduler.ref().postAfter(
+        selfRef.postAfter(
             std::chrono::steady_clock::now() + std::chrono::seconds(delaySecs),
             [doEstablish, peerAddr](uint32_t) mutable { doEstablish(peerAddr); });
     }
@@ -169,10 +178,10 @@ void BgpProcess::onAcceptCallback(transport::tcp::AcceptCallbackCtx& ctx) noexce
     const types::IPAddress& nbrIp = ctx.key.remote.address;
     Neighbor* nbr = bgp->ntable.lookup(nbrIp);
 
-    if (!nbr && bgp->configs.reg.get<config::Bgp::BGP_LISTEN>().load() && nbrIp.isIPv4())
+    if (!nbr && bgp->configs.get<config::Bgp::BGP_LISTEN>().load() && nbrIp.isIPv4())
     {
         std::string matchedGroup;
-        bgp->configs.reg.get<config::Bgp::BGP_LISTEN_RANGE>().withRead(
+        bgp->configs.get<config::Bgp::BGP_LISTEN_RANGE>().withRead(
             [&](const auto& rangesList)
             {
                 uint32_t remoteV4 = nbrIp.v4();
@@ -225,7 +234,7 @@ void BgpProcess::onAcceptCallback(transport::tcp::AcceptCallbackCtx& ctx) noexce
 
     // BGP_LISTEN_LIMIT caps the total number of concurrently accepted sessions.
     auto overLimit = [&]() {
-        auto limitField = bgp->configs.reg.get<config::Bgp::BGP_LISTEN_LIMIT>();
+        auto limitField = bgp->configs.get<config::Bgp::BGP_LISTEN_LIMIT>();
         return limitField.hasValue() && bgp->sessions.size() >= limitField.load();
     };
 
@@ -288,8 +297,8 @@ void BgpProcess::onReceiveCallback(transport::tcp::RecvCallbackCtx& ctx) noexcep
 
 void BgpProcess::scheduleScan()
 {
-    uint8_t secs = configs.reg.get<config::Bgp::BGP_SCAN_TIME>().load();
-    scheduler.ref().postAfter(
+    uint8_t secs = configs.get<config::Bgp::BGP_SCAN_TIME>().load();
+    selfRef.postAfter(
         std::chrono::steady_clock::now() + std::chrono::seconds(secs),
         [this](uint32_t) {
             for (auto& [afi, af] : addressFamilies)

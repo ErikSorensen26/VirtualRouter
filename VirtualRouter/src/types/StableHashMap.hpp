@@ -100,6 +100,8 @@ private:
     using nodeAlloc = typename std::allocator_traits<Allocator>::template rebind_alloc<Node>;
     using nodeTraits = std::allocator_traits<nodeAlloc>;
 
+    void syncMirror() { std::memcpy(control.data() + capacity, control.data(), 32); }
+
     struct NodePool
     {
         nodeAlloc& alloc;
@@ -221,7 +223,7 @@ private:
             while (match)
             {
                 int idx = __builtin_ctz(match);
-                size_t slot = (pos + idx) & mask;
+                size_t slot = (pos + static_cast<size_t>(idx)) % capacity;
                 Node* e = slots[slot];
                 if (e && e->fullHash == hash && keyEq(e->kv.first, key))
                     return {e, slot, size_t(-1)};
@@ -230,11 +232,11 @@ private:
 
             uint32_t delMask = static_cast<uint32_t>(_mm256_movemask_epi8(_mm256_cmpeq_epi8(group, delVec)));
             if (firstTombstone == size_t(-1) && delMask)
-                firstTombstone = (pos + __builtin_ctz(delMask)) & mask;
+                firstTombstone = (pos + static_cast<size_t>(__builtin_ctz(delMask))) % capacity;
 
             uint32_t emptyMask = static_cast<uint32_t>(_mm256_movemask_epi8(_mm256_cmpeq_epi8(group, emptyVec)));
             if (emptyMask) {
-                size_t emptySlot = (pos + __builtin_ctz(emptyMask)) & mask;
+                size_t emptySlot = (pos + static_cast<size_t>(__builtin_ctz(emptyMask))) % capacity;
                 return {nullptr, size_t(-1), (firstTombstone != size_t(-1)) ? firstTombstone : emptySlot};
             }
 
@@ -247,7 +249,7 @@ private:
     {
         const size_t mask = cap - 1;
         size_t hash = node->fullHash;
-        uint8_t fp = ((hash >> 57) ^ (hash >> 40)) & 0x7F;
+        uint8_t fp = (hash >> 57) & 0x7F;
         size_t pos = hash & mask;
 
         while (true)
@@ -272,7 +274,7 @@ private:
             return;
 
         // allocate new control (with padding) and slots
-        size_t controlSize = newCap + 31;
+        size_t controlSize = newCap + 32;
         std::vector<uint8_t, AlignedAllocator<uint8_t, 32>> newCtrl(controlSize, EMPTY);
         std::vector<Node*> newSlots(newCap, nullptr);
 
@@ -282,10 +284,7 @@ private:
             if (control[i] != EMPTY && control[i] != DELETED)
             {
                 Node* node = slots[i];
-                if (node)
-                {
-                    insertIntoTable(node, newCap, newCtrl.data(), newSlots.data());
-                }
+                if (node) insertIntoTable(node, newCap, newCtrl.data(), newSlots.data());
             }
         }
 
@@ -295,6 +294,7 @@ private:
         capacity = newCap;
         // num_live unchanged, num_filled becomes num_live (no tombstones)
         numFilled = numLive;
+        syncMirror();
     }
 
     void rehashIfNeeded()
@@ -325,12 +325,13 @@ public:
         : hashFn(hash), keyEq(equal), nodeAllocator(alloc)
     {
         // initial capacity must be power of two, at least 8
-        if (initialCapacity < 8) initialCapacity = 8;
+        if (initialCapacity < 64) initialCapacity = 64;
         capacity = 1;
         while (capacity < initialCapacity) capacity <<= 1;
         // allocate control with padding
-        control.assign(capacity + 31, EMPTY);
+        control.assign(capacity + 32, EMPTY);
         slots.assign(capacity, nullptr);
+        syncMirror();
     }
 
     /**
@@ -403,7 +404,7 @@ public:
 
     class ConstIterator
     {
-        friend class pointer_stable_unordered_map;
+        friend class StableHashMap;
         Node* const* slotsPtr = nullptr;
         size_t idx = 0;
         size_t cap = 0;
@@ -426,8 +427,8 @@ public:
             advance_to_next_live();
         }
 
-        std::pair<const Key, Value>& operator*() const { return slotsPtr[idx]->kv; }
-        std::pair<const Key, Value>* operator->() const { return &slotsPtr[idx]->kv; }
+        const std::pair<const Key, Value>& operator*() const { return slotsPtr[idx]->kv; }
+        const std::pair<const Key, Value>* operator->() const { return &slotsPtr[idx]->kv; }
 
         ConstIterator& operator++()
         {
@@ -504,6 +505,7 @@ public:
         }
         numLive = 0;
         numFilled = 0;
+        syncMirror();
     }
 
     Node* preAllocateNode()
@@ -546,6 +548,8 @@ public:
     template<typename K, typename V>
     std::pair<Iterator, bool> emplace(K&& key, V&& value)
     {
+        rehashIfNeeded();
+
         size_t hash = hashFn(key);
         uint8_t fp = (hash >> 57) & 0x7F;
 
@@ -558,14 +562,13 @@ public:
             return {Iterator(slots.data(), res.foundSlot, capacity), false};
         }
 
-        // allocate new node
-        rehashIfNeeded();
-
         Node* node = construct_node(std::forward<K>(key), std::forward<V>(value), hash);
         slots[res.insertSlot] = node;
         control[res.insertSlot] = fp;
         ++numLive;
         ++numFilled;
+
+        if (res.insertSlot < 32) syncMirror();
 
         return {Iterator(slots.data(), res.insertSlot, capacity), true};
     }
@@ -588,6 +591,7 @@ public:
             slots[pos.idx] = nullptr;
             control[pos.idx] = DELETED;
             --numLive;
+            if (pos.idx < 32) syncMirror();
         }
     }
 
@@ -609,6 +613,7 @@ public:
             slots[res.foundSlot] = nullptr;
             control[res.foundSlot] = DELETED;
             --numLive;
+            if (res.foundSlot < 32) syncMirror();
             return 1;
         }
         return 0;
@@ -723,4 +728,57 @@ public:
 };
 }
 
+/*
+#include <cassert>
+#include <cstdio>
+int main()
+{
+    types::StableHashMap<int, int> m;
+
+    // basic insert and find
+    m.emplace(1, 10);
+    m.emplace(2, 20);
+    m.emplace(3, 30);
+
+    assert(m.find(1) != m.end());
+    assert(m.find(1)->second == 10);
+    assert(m.find(2)->second == 20);
+    assert(m.find(3)->second == 30);
+    assert(m.find(99) == m.end());
+
+    // update existing key
+    m.emplace(1, 99);
+    assert(m.find(1)->second == 99);
+
+    // erase
+    m.erase(2);
+    assert(m.find(2) == m.end());
+    assert(m.size() == 2);
+
+    // find after erase (tombstone probe)
+    assert(m.find(3)->second == 30);
+
+    // force rehash by inserting many keys
+    for (int i = 100; i < 200; ++i)
+        m.emplace(i, i * 2);
+    for (int i = 100; i < 200; ++i)
+    {
+        auto it = m.find(i);
+        assert(it != m.end());
+        assert(it->second == i * 2);
+    }
+
+    // operator[]
+    m[500] = 42;
+    assert(m[500] == 42);
+
+    // iteration covers all live entries
+    size_t count = 0;
+    for (auto& kv : m) { (void)kv; ++count; }
+    assert(count == m.size());
+
+    std::puts("ALL TESTS PASSED");
+    return 0;
+}
+*/
 #endif // STABLE_HASH_MAP_HPP

@@ -12,14 +12,14 @@ namespace routing::bgp
 Neighbor::Neighbor(const types::IPAddress& ipAddress, BgpProcess& proc)
     : neighborAddress(ipAddress),
       process(proc),
-      scheduler(proc.getScheduler()),
+      scheduler(proc.getSchedulerQueue().ref()),
       configs([&proc, &ipAddress]() -> config::BgpNeighborSessionRegistry& {
           auto& procConfigs = proc.getConfigs();
-          auto neighborConfigs = procConfigs.reg.get<config::Bgp::NEIGHBOR>();
+          auto neighborConfigs = procConfigs.get<config::Bgp::NEIGHBOR>();
           return neighborConfigs.emplaceBack(ipAddress);
       }())
 {
-    configs.getConfigs().reg.context().set(this);
+    configs.getConfigs().context().set(this);
 
     // Resolve peer group
     {
@@ -38,7 +38,7 @@ Neighbor::Neighbor(const types::IPAddress& ipAddress, BgpProcess& proc)
 
 Neighbor::~Neighbor()
 {
-    process.getConfigs().reg.get<config::Bgp::NEIGHBOR>().erase(neighborAddress);
+    process.getConfigs().get<config::Bgp::NEIGHBOR>().erase(neighborAddress);
 }
 
 void Neighbor::addAfNeighbor(AfiSafi& afi)
@@ -73,7 +73,7 @@ bool Neighbor::isEbgp() const noexcept
     if (peerAs == process.asNumber) return false;
 
     bool inConfed = false;
-    process.getConfigs().reg.get<config::Bgp::BGP_CONFEDERATION_PEERS>().withRead(
+    process.getConfigs().get<config::Bgp::BGP_CONFEDERATION_PEERS>().withRead(
         [&](const auto& peersList) {
             for (uint32_t p : peersList)
                     if (p == peerAs) { inConfed = true; return; }
@@ -89,7 +89,7 @@ bool Neighbor::isConfedEbgp() const noexcept
     if (peerAs == process.asNumber) return false;
 
     bool inConfed = false;
-    process.getConfigs().reg.get<config::Bgp::BGP_CONFEDERATION_PEERS>().withRead(
+    process.getConfigs().get<config::Bgp::BGP_CONFEDERATION_PEERS>().withRead(
         [&](const auto& peersList) {
             for (uint32_t p : peersList)
                     if (p == peerAs) { inConfed = true; return; }

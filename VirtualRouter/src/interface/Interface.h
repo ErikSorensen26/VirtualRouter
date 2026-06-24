@@ -181,6 +181,8 @@ public:
      */
     void cleanupInterface();
 
+    // IP MANAGEMENT
+
     /**
      * @brief Assign an IPv4 address to the interface.
      *
@@ -194,7 +196,6 @@ public:
      * @param secondary Set the IP as a secondary address.
      */
     MOCK bool setIPv4(types::IPv4Prefix prefix, bool secondary = false);
-
     /**
      * @brief Assign an IPv6 address to the interface.
      *
@@ -217,8 +218,6 @@ public:
      */
     void setIPv6Ready(const types::IPv6Prefix& addr);
 
-    // IP MANAGEMENT
-
     /**
      * @brief Remove the interface's IPv4 configuration.
      */
@@ -238,8 +237,10 @@ public:
 
     /**
      * @brief Remove all IPv6 addresses from this interface.
+     *
+     * @param ll Will also remove the link local address.
      */
-    void removeAllIPv6();
+    void removeAllIPv6(bool local = false);
 
     /**
      * @brief Retrieve all tentative IPv6 addresses currently undergoing DAD.
@@ -413,6 +414,36 @@ public:
     std::atomic<uint64_t> rxFrames{0}; ///< Total frames delivered by the ingress ring.
 
 private:
+    // ROUTE MANAGEMENT
+
+    /**
+     * TODO doxy comment
+     */
+    template <types::IsIPPrefix Prefix>
+    void applyConnectedRoute(Prefix network);
+
+    /**
+     * TODO doxy comment
+     */
+    template <types::IsIPPrefix Prefix>
+    void applyAllConnectedRoutes();
+    void applyAllConnectedRoutes();
+
+
+    /**
+     * TODO doxy comment
+     */
+    template <types::IsIPPrefix Prefix>
+    void removeConnectedRoute(Prefix network);
+
+    /**
+     * TODO doxy comment
+     */
+    template <types::IsIPPrefix AddrType>
+    void removeAllConnectedRoutes();
+    void removeAllConnectedRoutes();
+
+    // STATE MANAGEMENT
 
     /**
      * @brief Internal state machine transition for IPv4.
@@ -428,6 +459,16 @@ private:
 
     std::atomic<bool> threadsRunning; ///< True when Rx/Tx threads and protocol modules are active.
 };
+
+template <>
+void Interface::removeAllConnectedRoutes<types::IPv4Prefix>();
+template <>
+void Interface::removeAllConnectedRoutes<types::IPv6Prefix>();
+
+template <>
+void Interface::applyAllConnectedRoutes<types::IPv4Prefix>();
+template <>
+void Interface::applyAllConnectedRoutes<types::IPv6Prefix>();
 
 } // namespace interface
 

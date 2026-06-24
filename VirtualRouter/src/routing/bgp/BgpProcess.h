@@ -16,7 +16,6 @@
 #include <ControlScheduler.h>
 
 #include "tcp/Listener.h"
-#include "configs/registry/router/BgpRegistry.h"
 #include "bgp/af/NlriPolicy.hpp"
 #include "bgp/neighbor/NeighborTable.h"
 #include "bgp/session/Session.h"
@@ -26,6 +25,7 @@
 #include "bgp/af/AddressFamilyInstance.h" // IWYU pragma: keep
 
 namespace core { class VirtualRouter; }
+namespace config { struct BgpBaseRegistry; struct BgpRegistry; }
 
 /**
  * @namespace routing::bgp
@@ -132,7 +132,7 @@ public:
      */
     uint32_t getRouterId() const noexcept
     {
-        auto rid = getConfigs().reg.get<config::Bgp::BGP_ROUTER_ID>();
+        auto rid = getConfigs().get<config::Bgp::BGP_ROUTER_ID>();
         if (rid.hasValue()) return rid.load();
         return asNumber;
     }
@@ -275,8 +275,21 @@ public:
     static void onReceiveCallback(transport::tcp::RecvCallbackCtx& ctx) noexcept;
     ///@}
 
-    /// Returns a reference to the process-wide serialisation scheduler.
-    core::ProcessQueueRef getScheduler() { return scheduler.ref(); }
+    /**
+     * @brief Returns a lifetime-safe ref for posting self-referencing tasks
+     *        (e.g. delayed peer-establishment, periodic scan-time timers).
+     *
+     * Released first in `~BgpProcess()`, before `addressFamilies`/`ntable`/
+     * `sessions` are torn down, so that no posted task can run against a
+     * partially-destroyed `BgpProcess`.
+     */
+    core::ProcessQueueRef& getScheduler() { return selfRef; }
+
+    /**
+     * @brief Returns the underlying scheduler queue, for subsystems (e.g.
+     *        @ref Neighbor) that mint their own `ProcessQueueRef`.
+     */
+    core::ProcessQueue& getSchedulerQueue() { return scheduler; }
 
 private:
 
@@ -288,11 +301,11 @@ private:
     std::unordered_map<AfiSafi, AddressFamilyVariant> addressFamilies;   ///< Enabled AFI/SAFI instances.
 
     core::ProcessQueue scheduler; ///< Single-threaded event queue; all BGP FSM work runs here.
+    core::ProcessQueueRef selfRef; ///< Lifetime-safe ref for self-referencing posts; released first in ~BgpProcess().
     AttributeManager attrMgr;     ///< Flyweight store for path attributes shared across all sessions.
     NeighborTable ntable;         ///< Configured and dynamic neighbor registry.
 
-    config::BgpBaseRegistry baseConfigs; ///< Process-level BGP base (transport/timer) configuration.
-    config::BgpRegistry configs;         ///< Process-level BGP configuration.
+    config::BgpRegistry& configs;         ///< Process-level BGP configuration.
 };
 } // namespace routing
 

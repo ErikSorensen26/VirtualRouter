@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/erik/VirtualRouter/VirtualRouter/**)",
+      "Bash(cmake --build . --target TestSelection)",
+      "Bash(./Tests/TestSelection --gtest_filter=\"*Arp*\")",
+      "Bash(./build/TestSelection --gtest_filter=\"*Arp*\")",
+      "Read(//home/erik/VirtualRouter/**)",
+      "Bash(cmake --build build --target Internal_Tests)",
+      "Bash(sudo cmake --build build)",
+      "Bash(cmake --build)",
+      "Bash(read *)",
+      "Bash(wait *)",
+      "Bash(sudo ctest --test-dir build -R DynamicEntry_ExpiresAfterTimeout -V)"
+    ]
+  }
+}

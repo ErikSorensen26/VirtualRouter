@@ -9,7 +9,9 @@
 #include <atomic>
 #include <cstddef>
 #include <functional>
-#include <xmmintrin.h>
+#include <mutex>
+#include <new>
+#include <utility>
 #include <RCU.hpp>
 #include <cstring>
 #include <ByteUtils.hpp>
@@ -92,12 +94,6 @@ class AtomicHashMap
         Value value;
     };
 
-    struct TableEntry
-    {
-        Slot slot;
-        uint8_t crtl;
-    };
-
     struct Table
     {
         size_t   cap;      // slot count, always a power of two
@@ -119,7 +115,13 @@ class AtomicHashMap
             t->slots   = static_cast<Slot*>(
                              std::aligned_alloc(alignof(Slot),
                                                 capacity * sizeof(Slot)));
-            if (!t->ctrl || !t->slots) throw std::bad_alloc();
+            if (!t->ctrl || !t->slots)
+            {
+                std::free(t->ctrl);
+                std::free(t->slots);
+                delete t;
+                throw std::bad_alloc();
+            }
             std::memset(t->ctrl, kEmpty, capacity);
             return t;
         }
@@ -135,7 +137,13 @@ class AtomicHashMap
             t->slots   = static_cast<Slot*>(
                              std::aligned_alloc(alignof(Slot),
                                                 src->cap * sizeof(Slot)));
-            if (!t->ctrl || !t->slots) throw std::bad_alloc();
+            if (!t->ctrl || !t->slots)
+            {
+                std::free(t->ctrl);
+                std::free(t->slots);
+                delete t;
+                throw std::bad_alloc();
+            }
             std::memcpy(t->ctrl,  src->ctrl,  src->cap);
             std::memcpy(t->slots, src->slots, src->cap * sizeof(Slot));
             return t;
@@ -164,8 +172,7 @@ class AtomicHashMap
                 if (c == h && eq(slots[idx].key, key))
                     return &slots[idx].value;
 
-                // use a bigger step if desired
-                idx = (idx + 4) & mask;      // SwissMap-style
+                idx = (idx + 1) & mask;
             }
             return nullptr;
         }
@@ -256,21 +263,23 @@ public:
     {
     public:
         using iterator_category = std::forward_iterator_tag;
-        using value_type        = std::pair<const Key, const Value>;
+        using value_type        = std::pair<Key, Value>;
         using difference_type   = std::ptrdiff_t;
         using pointer           = const value_type*;
-        using reference         = const value_type&;
+        using reference         = value_type;
 
         const_iterator() noexcept : tbl(nullptr), idx(0) {}
 
-        reference operator*() const noexcept
+        value_type operator*() const noexcept
         {
-            // Slot is {Key, Value}; pair<const Key, const Value> has the same
-            // layout for trivially copyable types.
-            return *reinterpret_cast<const value_type*>(&tbl->slots[idx]);
+            return {tbl->slots[idx].key, tbl->slots[idx].value};
         }
 
-        pointer operator->() const noexcept { return &**this; }
+        pointer operator->() const noexcept
+        {
+            cache_ = {tbl->slots[idx].key, tbl->slots[idx].value};
+            return &cache_;
+        }
 
         const_iterator& operator++() noexcept { advance(); return *this; }
         const_iterator  operator++(int) noexcept
@@ -305,8 +314,9 @@ public:
             if (tbl && idx >= tbl->cap) { tbl = nullptr; idx = 0; }
         }
 
-        const Table* tbl;
-        size_t       idx;
+        const Table*         tbl;
+        size_t               idx;
+        mutable value_type   cache_{};
     };
 
     class Snapshot {

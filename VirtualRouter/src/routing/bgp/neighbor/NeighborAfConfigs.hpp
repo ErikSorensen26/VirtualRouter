@@ -48,8 +48,8 @@ struct NeighborAfConfigs
     decltype(auto) get()
     {
         if (peerGroup && peerOwnedTable.test(config::toIndex<F>))
-            return (*peerConfigs).reg.get<F>();
-        return configs.reg.get<F>();
+            return (*peerConfigs).get<F>();
+        return configs.get<F>();
     }
 
     /**
@@ -61,8 +61,8 @@ struct NeighborAfConfigs
     decltype(auto) get()
     {
         if (peerGroup && peerOwnedBaseTable.test(config::toIndex<F>))
-            return peerConfigs->reg.get<config::BgpNeighbor::AF_BASE>().get().reg.get<F>();
-        return peerConfigs->reg.get<config::BgpNeighbor::AF_BASE>().get().reg.get<F>();
+            return peerConfigs->get<config::BgpNeighbor::AF_BASE>().get().get<F>();
+        return peerConfigs->get<config::BgpNeighbor::AF_BASE>().get().get<F>();
     }
 
     /**
@@ -74,15 +74,15 @@ struct NeighborAfConfigs
     decltype(auto) get() const
     {
         if (peerGroup && peerOwnedTable.test(config::toIndex<F>))
-            return peerConfigs->reg.get<F>();
-        return configs.reg.get<F>();
+            return peerConfigs->get<F>();
+        return configs.get<F>();
     }
 
     /**
      * @brief Compile-time bitmask of BgpAfBase fields that are inherited from the peer-group
      *        rather than stored per-neighbor.
      */
-    static constexpr std::bitset<config::toIndex<config::BgpAfBase::COUNT>> peerOwnedBaseTable = []{
+    static constexpr std::bitset<config::toIndex<config::BgpAfBase::COUNT>> peerOwnedBaseTable = [] constexpr {
         std::bitset<config::toIndex<config::BgpAfBase::COUNT>> b;
 
         b.set(config::toIndex<config::BgpAfBase::ADDITIONAL_PATHS_RECEIVE>);
@@ -99,7 +99,7 @@ struct NeighborAfConfigs
      * @brief Compile-time bitmask of BgpNeighbor fields that are inherited from the peer-group
      *        rather than stored per-neighbor.
      */
-    static constexpr std::bitset<config::toIndex<config::BgpNeighbor::COUNT>> peerOwnedTable = []{
+    static constexpr std::bitset<config::toIndex<config::BgpNeighbor::COUNT>> peerOwnedTable = [] constexpr {
         std::bitset<config::toIndex<config::BgpNeighbor::COUNT>> b;
 
         b.set(config::toIndex<config::BgpNeighbor::ADVERTISE_DIVERSE_PATH_BACKUP>);
@@ -148,7 +148,7 @@ struct NeighborAfConfigs
         peerGroup = group;
         peerConfigs = group ? group->getAfConfigs(family) : nullptr;
         if (peerGroup) assert(peerConfigs);
-        configs.reg.setMask(group ? &group->getAfConfigs(family)->reg : nullptr);
+        configs.setMask(group ? group->getAfConfigs(family) : nullptr);
         return true;
     }
 
@@ -166,7 +166,7 @@ struct NeighborAfConfigs
         if (peerGroup)
             return false;
         peerPolicy = pp;
-        configs.reg.setMask(peerPolicy ? &pp->getConfigs().reg : nullptr);
+        configs.setMask(peerPolicy ? &pp->getConfigs() : nullptr);
         return true;
     }
 

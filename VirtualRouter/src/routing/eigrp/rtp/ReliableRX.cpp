@@ -12,7 +12,7 @@ namespace routing::eigrp
 void ReliableTransport::handleIncoming(const uint8_t* ipStart, const packet::EigrpHeader& eigrpPacket, const types::IPAddress& neighborIp, bool multicast)
 {
     // Check if passive
-    if (iface.configs.reg.get<config::EigrpInterface::PASSIVE_INTERFACE>().load())
+    if (iface.configs.get<config::EigrpInterface::PASSIVE_INTERFACE>().load())
         return;
 
     // Validate packet version

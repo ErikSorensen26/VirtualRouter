@@ -34,7 +34,7 @@ uint8_t TLVBuilder::encodeRouteOption(EigrpInterface& iface, uint8_t* out, size_
 
     if (!wide)
     {
-        if (iface.configs.reg.get<config::EigrpInterface::NEXT_HOP_SELF>().load())
+        if (iface.configs.get<config::EigrpInterface::NEXT_HOP_SELF>().load())
             writeIpAddr(out, iface.ifaceAddress);
         else
             writeIpAddr(out, route->routeInfo.nextHop);
@@ -55,7 +55,7 @@ uint8_t TLVBuilder::encodeRouteOption(EigrpInterface& iface, uint8_t* out, size_
         }
         if (!encodeWideMetric(data, delay, bw)) return 0;
 
-        if (iface.configs.reg.get<config::EigrpInterface::NEXT_HOP_SELF>().load())
+        if (iface.configs.get<config::EigrpInterface::NEXT_HOP_SELF>().load())
             writeIpAddr(out, iface.ifaceAddress);
         else
             writeIpAddr(out, route->routeInfo.nextHop);
@@ -134,7 +134,6 @@ bool TLVBuilder::decodeClassicMetric(RouteData& data)
     data.r.load = data.value[data.offset++];
     data.r.tag = data.value[data.offset++];
     data.r.flags = data.value[data.offset++];
-    data.offset++;
 
     if (data.r.delay > 0xFFFFFFull)
         data.r.delay = std::numeric_limits<uint64_t>::max();
@@ -241,7 +240,7 @@ bool TLVBuilder::decodeDestination(RouteData& data)
     uint8_t prefSize = (plen + 7) / 8;
     if (data.offset + prefSize > data.valueSize) return false;
     types::AddressFamily af = data.v6 ? types::AddressFamily::IPv6 : types::AddressFamily::IPv4;
-    data.r.prefix = types::IPPrefix(data.value + data.offset, plen, af, true);
+    data.r.prefix = types::IPPrefix(data.value + data.offset, plen, af, false);
     data.offset += prefSize;
     return true;
 }

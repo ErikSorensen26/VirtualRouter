@@ -66,6 +66,11 @@ private:
                   "mixed-endian systems not supported");
 
 public:
+    NetworkSpan(const NetworkSpan&) = delete;
+    NetworkSpan(NetworkSpan&) noexcept = delete;
+    NetworkSpan(const NetworkSpan&&) = delete;
+    NetworkSpan(NetworkSpan&&) noexcept = delete;
+
     /**
      * @brief Random-access iterator that yields bytes in network (big-endian) order.
      * @ingroup TYPES

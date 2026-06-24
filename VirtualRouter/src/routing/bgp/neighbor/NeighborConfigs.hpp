@@ -44,8 +44,8 @@ struct NeighborConfigs
     decltype(auto) get()
     {
         if (peerGroup && peerOwnedTable.test(config::toIndex<F>))
-            return peerGroup->getSessionConfigs().reg.get<F>();
-        return configs.reg.get<F>();
+            return peerGroup->getSessionConfigs().get<F>();
+        return configs.get<F>();
     }
 
     /**
@@ -57,8 +57,8 @@ struct NeighborConfigs
     decltype(auto) get() const
     {
         if (peerGroup && peerOwnedTable.test(config::toIndex<F>))
-            return peerGroup->getSessionConfigs().reg.get<F>();
-        return configs.reg.get<F>();
+            return peerGroup->getSessionConfigs().get<F>();
+        return configs.get<F>();
     }
 
     /**
@@ -67,7 +67,7 @@ struct NeighborConfigs
      *
      * Currently covers LOCAL_AS and its sub-options.
      */
-    static constexpr std::bitset<config::toIndex<config::BgpNeighborSession::COUNT>> peerOwnedTable = []{
+    static constexpr std::bitset<config::toIndex<config::BgpNeighborSession::COUNT>> peerOwnedTable = [] constexpr {
         std::bitset<config::toIndex<config::BgpNeighborSession::COUNT>> b;
 
         b.set(config::toIndex<config::BgpNeighborSession::LOCAL_AS>);
@@ -92,7 +92,7 @@ struct NeighborConfigs
         if (peerSession)
             return false;
         peerGroup = group;
-        configs.reg.setMask(group ? &group->getSessionConfigs().reg : nullptr);
+        configs.setMask(group ? &group->getSessionConfigs() : nullptr);
         return true;
     }
 
@@ -109,7 +109,7 @@ struct NeighborConfigs
         if (peerGroup)
             return false;
         peerSession = ps;
-        configs.reg.setMask(ps ? &ps->getConfigs().reg : nullptr);
+        configs.setMask(ps ? &ps->getConfigs() : nullptr);
         return true;
     }
 

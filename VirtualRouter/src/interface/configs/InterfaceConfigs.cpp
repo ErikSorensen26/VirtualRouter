@@ -2,6 +2,7 @@
 
 #include <Global.h>
 #include <VirtualRouter.h>
+#include "configs/registry/global/GlobalRegistry.h"
 #include <ControlScheduler.h>
 
 #include "InterfaceConfigs.h"
@@ -23,7 +24,7 @@ InterfaceConfigs::InterfaceConfigs(interface::Interface& iface, InterfaceType ty
     configs([&iface, type, id]() -> config::InterfaceRegistry& {
         interface::InterfaceKey key(type, id);
         auto* vrf = iface.getVRF();
-        auto interfaceList = vrf->getGlobalConfigs().reg.get<config::Global::INTERFACE>();
+        auto interfaceList = vrf->getGlobalConfigs().get<config::Global::INTERFACE>();
         return interfaceList.emplaceBack(key);
     }()),
     macAddress(hwInfo.mac)
@@ -42,7 +43,7 @@ InterfaceConfigs::~InterfaceConfigs()
 
 void InterfaceConfigs::syncMac()
 {
-    auto macField = configs.reg.get<config::Interface::MAC_ADDRESS>();
+    auto macField = configs.get<config::Interface::MAC_ADDRESS>();
     if (macField.hasValue())
         macAddress.store(macField.load(), std::memory_order_release);
     else
@@ -89,20 +90,20 @@ uint32_t InterfaceConfigs::getBandwidth()
 {
     if (id != std::floor(id)) // Child interface
     {
-        auto bw = configs.reg.get<config::Interface::BANDWIDTH_INHERITANCE>();
+        auto bw = configs.get<config::Interface::BANDWIDTH_INHERITANCE>();
         if (bw.hasValue()) return bw.load();
     }
-    return configs.reg.get<config::Interface::BANDWIDTH>().load();
+    return configs.get<config::Interface::BANDWIDTH>().load();
 }
 
 uint32_t InterfaceConfigs::getReceiveBandwidth()
 {
     if (id != std::floor(id)) // Child interface
     {
-        auto bw = configs.reg.get<config::Interface::BANDWIDTH_RECEIVE_INHERITANCE>();
+        auto bw = configs.get<config::Interface::BANDWIDTH_RECEIVE_INHERITANCE>();
         if (bw.hasValue()) return bw.load();
     }
-    return configs.reg.get<config::Interface::BANDWIDTH_RECEIVE>().load();
+    return configs.get<config::Interface::BANDWIDTH_RECEIVE>().load();
 }
 
 //IPV4
@@ -134,16 +135,25 @@ void InterfaceConfigs::IPv4State::removeSecondaryAddress(types::IPv4Prefix prefi
     secondary.erase(std::remove_if(secondary.begin(), secondary.end(), [&](const types::IPv4Prefix& p) { return p == prefix; }), secondary.end());
 }
 
-types::IPv4Prefix InterfaceConfigs::IPv4State::getPrimaryPrefix() const
+void InterfaceConfigs::IPv4State::clearSecondaryAddresses()
 {
-    return types::IPv4Prefix{address.load(std::memory_order_relaxed), mask.load(std::memory_order_relaxed)};
+    std::lock_guard<std::mutex> lock(ipMutex);
+    secondary.clear();
 }
 
-std::optional<types::IPv4Prefix> InterfaceConfigs::IPv4State::getSecondaryPrefix()
+types::IPv4Prefix InterfaceConfigs::IPv4State::getPrimaryPrefix(bool maintainAddress) const
+{
+    return types::IPv4Prefix{address.load(std::memory_order_relaxed), mask.load(std::memory_order_relaxed), maintainAddress};
+}
+
+std::optional<types::IPv4Prefix> InterfaceConfigs::IPv4State::getSecondaryPrefix(bool maintainAddress)
 {
     std::lock_guard<std::mutex> lock(ipMutex);
     if (secondary.empty()) return std::nullopt;
-    return secondary.front();
+    types::IPv4Prefix prefix = secondary.front();
+    if (!maintainAddress)
+        prefix.addPrefixLen(prefix.prefixLength);
+    return prefix;
 }
 
 uint8_t* InterfaceConfigs::IPv4State::getPrimaryAddress(uint8_t* out) const
@@ -174,7 +184,7 @@ std::optional<types::IPv4Address> InterfaceConfigs::IPv4State::getSecondaryAddre
 
 bool InterfaceConfigs::IPv4State::hasPrimaryAddress() const
 {
-    return address.load(std::memory_order_relaxed) == 0;
+    return address.load(std::memory_order_relaxed) != 0;
 }
 
 bool InterfaceConfigs::IPv4State::hasPrimaryAddress(types::IPv4Prefix prefix) const
@@ -391,14 +401,14 @@ void InterfaceConfigs::IPv6State::removeAddress(const types::IPv6Prefix& prefix)
     });
 }
 
-void InterfaceConfigs::IPv6State::removeAllAddresses()
+void InterfaceConfigs::IPv6State::removeAllAddresses(bool local)
 {
     std::lock_guard lock(ipMutex);
     for (auto& addr : globalAddresses)
         delete addr;
     for (auto& addr : uniqueLocalAddresses)
         delete addr;
-    if (linkLocalAddress)
+    if (linkLocalAddress && local)
     {
         delete linkLocalAddress;
         linkLocalAddress = nullptr;

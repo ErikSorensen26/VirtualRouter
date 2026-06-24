@@ -126,6 +126,10 @@ public:
 
     void cancel() noexcept { cancelFrame(); }
 
+    bool empty() noexcept { return headerCount == 0; }
+
+    size_t hdrsize() noexcept { return headerCount; }
+
     // HEADER BUILDING
 
     BuildEntry* reserveHeader(packet::HeaderType type, size_t size)

@@ -13,7 +13,7 @@ AuthHandler::AuthHandler(config::EigrpInterfaceRegistry& configs, security::auth
 
 uint16_t AuthHandler::buildAuthTLV(uint8_t* out)
 {
-    config::eigrp::AuthType authType = configs.reg.get<config::EigrpInterface::AUTHENTICATION_MODE>().load();
+    config::eigrp::AuthType authType = configs.get<config::EigrpInterface::AUTHENTICATION_MODE>().load();
     if (authType == config::eigrp::AuthType::NONE)
         return 0;
 
@@ -29,9 +29,9 @@ uint16_t AuthHandler::buildAuthTLV(uint8_t* out)
     utils::writeU16(out + 2, digestLen);
     std::memset(out + 4, 0, 16 + digestLen);
 
-    if (authType == config::eigrp::AuthType::SHA256 && configs.reg.get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().hasValue())
+    if (authType == config::eigrp::AuthType::SHA256 && configs.get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().hasValue())
     {
-        std::string keyPayload = configs.reg.get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().load();
+        std::string keyPayload = configs.get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().load();
         if (keyPayload.empty() || keyPayload.size() > 32)
             return 0;
         std::memcpy(out + 20, keyPayload.data(), keyPayload.size());
@@ -42,7 +42,7 @@ uint16_t AuthHandler::buildAuthTLV(uint8_t* out)
 
 bool AuthHandler::validateAuth(const uint8_t* packetStart, size_t size, const packet::TLV16Option* authOpt)
 {
-    if (configs.reg.get<config::EigrpInterface::AUTHENTICATION_MODE>().load() == config::eigrp::AuthType::NONE)
+    if (configs.get<config::EigrpInterface::AUTHENTICATION_MODE>().load() == config::eigrp::AuthType::NONE)
         return true;
     if (!authOpt)
         return false;
@@ -50,7 +50,7 @@ bool AuthHandler::validateAuth(const uint8_t* packetStart, size_t size, const pa
     config::eigrp::AuthType authType = static_cast<config::eigrp::AuthType>(utils::readU16(authOpt->value));
     uint16_t digestLen = utils::readU16(authOpt->value + 2);
 
-    if (authType != configs.reg.get<config::EigrpInterface::AUTHENTICATION_MODE>().load())
+    if (authType != configs.get<config::EigrpInterface::AUTHENTICATION_MODE>().load())
         return false;
     if (authType == config::eigrp::AuthType::MD5 && (authOpt->valueSize != 36 || digestLen != 16))
         return false;
@@ -62,11 +62,11 @@ bool AuthHandler::validateAuth(const uint8_t* packetStart, size_t size, const pa
     std::memcpy(digest, digestIdx, digestLen);
     std::memset(digestIdx, 0, digestLen);
 
-    bool hasKeychain = configs.reg.get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().hasValue();
+    bool hasKeychain = configs.get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().hasValue();
 
     if (authType == config::eigrp::AuthType::MD5 && hasKeychain)
     {
-        std::string chainName = configs.reg.get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().load();
+        std::string chainName = configs.get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().load();
         const auto* key = keyMgr.lookup(chainName);
         if (!key) return false;
         uint8_t computed[MD5_DIGEST_LENGTH];
@@ -76,7 +76,7 @@ bool AuthHandler::validateAuth(const uint8_t* packetStart, size_t size, const pa
     else if (authType == config::eigrp::AuthType::SHA256 && hasKeychain)
     {
         uint8_t computed[SHA256_DIGEST_LENGTH];
-        std::string key = configs.reg.get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().load();
+        std::string key = configs.get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().load();
         security::authentication::generateHMAC(
             computed,
             packetStart,

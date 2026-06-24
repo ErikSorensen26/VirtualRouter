@@ -77,7 +77,7 @@ bool Neighbor::setState(Neighbor::State s)
         {
             state = s;
             
-            auto ntype = iface.getConfigs().reg.get<config::OspfInterface::NETWORK>().load();
+            auto ntype = iface.getConfigs().get<config::OspfInterface::NETWORK>().load();
             if (ntype == config::ospf::NetworkType::BROADCAST ||
                 ntype == config::ospf::NetworkType::NON_BROADCAST)
             {
@@ -115,14 +115,14 @@ bool Neighbor::setState(Neighbor::State s)
         {
             if (oldState == State::EXCHANGE)
             {
+                state = s;
                 if (!rtr.lsrs().getActive())
                 {
-                    // Go straight to LOADING
-                    setState(Neighbor::State::LOADING);
+                    // Nothing to request; go straight to FULL.
+                    setState(Neighbor::State::FULL);
                 }
                 else
                 {
-                    state = s;
                     iface.getDispatcher().sendReliableLSRequest(*this, rtr.lsrs().getAll());
                 }
             }

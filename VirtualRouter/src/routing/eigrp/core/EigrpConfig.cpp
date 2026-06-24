@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <AddressFamily.hpp>
 #include <VirtualRouter.h>
+#include "configs/registry/global/VrfRegistry.h"
 #include <EnumBitMap.hpp>
 
 #include "Eigrp.h"
@@ -16,15 +17,15 @@ static config::EigrpRegistry& resolveEigrpRegistry(Eigrp& base)
 {
     auto& vrf = *base.routingInstance;
     if (base.getAF() == types::AddressFamily::IPv4)
-        return vrf.getConfigs().reg.get<config::Vrf::ROUTER_EIGRP_V4>().emplaceBack(static_cast<uint16_t>(base.getAS()));
-    return vrf.getConfigs().reg.get<config::Vrf::ROUTER_EIGRP_V6>().emplaceBack(static_cast<uint16_t>(base.getAS()));
+        return vrf.getConfigs().get<config::Vrf::ROUTER_EIGRP_V4>().emplaceBack(static_cast<uint16_t>(base.getAS()));
+    return vrf.getConfigs().get<config::Vrf::ROUTER_EIGRP_V6>().emplaceBack(static_cast<uint16_t>(base.getAS()));
 }
 
 EigrpConfig::EigrpConfig(Eigrp& base)
     : base(base),
       configs(resolveEigrpRegistry(base))
 {
-    configs.reg.context().set(&base);
+    configs.context().set(&base);
 }
 
 void EigrpConfig::addNetworkRange(const types::IPv4Prefix& newNetwork)
@@ -35,16 +36,13 @@ void EigrpConfig::addNetworkRange(const types::IPv4Prefix& newNetwork)
     uint8_t prefLen = newNetwork.prefixLength;
 
     bool added = false;
-    configs.reg.get<config::Eigrp::NETWORK>().withWrite([&](auto& v) -> bool {
+    configs.get<config::Eigrp::NETWORK>().withWrite([&](auto& v) -> bool {
         for (const auto& [a, p] : v)
             if (a == ip && p.value == prefLen) return false;
         v.emplace_back(ip, config::IgnoreCompare<uint8_t>{prefLen});
         added = true;
         return true;
     });
-
-    if (added)
-        base.getIfaceMgr().refreshInterfaceList();
 }
 
 void EigrpConfig::delNetworkRange(const types::IPv4Prefix& delNetwork)
@@ -55,7 +53,7 @@ void EigrpConfig::delNetworkRange(const types::IPv4Prefix& delNetwork)
     uint8_t prefLen = delNetwork.prefixLength;
 
     bool removed = false;
-    configs.reg.get<config::Eigrp::NETWORK>().withWrite([&](auto& v) -> bool {
+    configs.get<config::Eigrp::NETWORK>().withWrite([&](auto& v) -> bool {
         auto it = std::find_if(v.begin(), v.end(), [&](const auto& t) {
             return std::get<0>(t) == ip && std::get<1>(t).value == prefLen;
         });
@@ -74,7 +72,7 @@ void EigrpConfig::delNetworkRange(const types::IPv4Prefix& delNetwork)
 bool EigrpConfig::isInNetworkRange(types::IPv4Address testIp) const
 {
     bool found = false;
-    configs.reg.get<config::Eigrp::NETWORK>().withRead([&](const auto& v) {
+    configs.get<config::Eigrp::NETWORK>().withRead([&](const auto& v) {
         for (const auto& [ipAddr, prefLenW] : v) {
             if (!ipAddr.isIPv4()) continue;
             uint32_t addr = ipAddr.v4();
@@ -92,13 +90,13 @@ bool EigrpConfig::isInNetworkRange(types::IPv4Address testIp) const
 size_t EigrpConfig::getNetworkSize() const
 {
     size_t size{};
-    configs.reg.get<config::Eigrp::NETWORK>().withRead([&size](auto& v) { size = v.size(); });
+    configs.get<config::Eigrp::NETWORK>().withRead([&size](auto& v) { size = v.size(); });
     return size;
 }
 
 void EigrpConfig::clearNetworks()
 {
-    configs.reg.get<config::Eigrp::NETWORK>().withWrite([](auto& v) -> bool {
+    configs.get<config::Eigrp::NETWORK>().withWrite([](auto& v) -> bool {
         v.clear();
         return true;
     });
@@ -108,7 +106,7 @@ void EigrpConfig::clearNetworks()
 void EigrpConfig::enableStub(bool isStub, bool advertiseConnected, bool advertiseStatic, bool advertiseSummary, bool advertiseRedistributed)
 {
     if (!isStub) {
-        configs.reg.get<config::Eigrp::STUB>().unset();
+        configs.get<config::Eigrp::STUB>().unset();
         return;
     }
     types::EnumBitMap<config::eigrp::Stub> bm;
@@ -117,12 +115,12 @@ void EigrpConfig::enableStub(bool isStub, bool advertiseConnected, bool advertis
     if (advertiseStatic)        bm.set(config::eigrp::Stub::STATIC);
     if (advertiseSummary)       bm.set(config::eigrp::Stub::SUMMARY);
     if (advertiseRedistributed) bm.set(config::eigrp::Stub::REDISTRIBUTED);
-    configs.reg.get<config::Eigrp::STUB>().set(bm.raw());
+    configs.get<config::Eigrp::STUB>().set(bm.raw());
 }
 
 void EigrpConfig::setPassiveInterface(interface::InterfaceKey key, bool add)
 {
-    configs.reg.get<config::Eigrp::PASSIVE_INTERFACES>().withWrite([&](std::vector<interface::InterfaceKey>& v) -> bool {
+    configs.get<config::Eigrp::PASSIVE_INTERFACES>().withWrite([&](std::vector<interface::InterfaceKey>& v) -> bool {
         if (add) {
             if (std::find(v.begin(), v.end(), key) == v.end()) {
                 v.push_back(key);
@@ -142,7 +140,7 @@ void EigrpConfig::setPassiveInterface(interface::InterfaceKey key, bool add)
 
 void EigrpConfig::enableUnicastPeer(const types::IPAddress& neighborIp, interface::InterfaceKey key)
 {
-    configs.reg.get<config::Eigrp::NEIGHBOR>().withWrite([&](std::vector<std::tuple<types::IPAddress, interface::InterfaceKey>>& v) -> bool {
+    configs.get<config::Eigrp::NEIGHBOR>().withWrite([&](std::vector<std::tuple<types::IPAddress, interface::InterfaceKey>>& v) -> bool {
         for (const auto& [ip, k] : v)
             if (ip == neighborIp && k == key) return false;
         v.emplace_back(neighborIp, key);
@@ -156,7 +154,7 @@ void EigrpConfig::enableUnicastPeer(const types::IPAddress& neighborIp, interfac
 
 void EigrpConfig::disableUnicastPeer(const types::IPAddress& neighborIp, interface::InterfaceKey key)
 {
-    configs.reg.get<config::Eigrp::NEIGHBOR>().withWrite([&](std::vector<std::tuple<types::IPAddress, interface::InterfaceKey>>& v) -> bool {
+    configs.get<config::Eigrp::NEIGHBOR>().withWrite([&](std::vector<std::tuple<types::IPAddress, interface::InterfaceKey>>& v) -> bool {
         v.erase(std::remove_if(v.begin(), v.end(), [&](const auto& t) {
             return std::get<0>(t) == neighborIp && std::get<1>(t) == key;
         }), v.end());
@@ -171,7 +169,7 @@ void EigrpConfig::disableUnicastPeer(const types::IPAddress& neighborIp, interfa
 bool EigrpConfig::isPassive(interface::InterfaceKey key) const
 {
     bool found = false;
-    configs.reg.get<config::Eigrp::PASSIVE_INTERFACES>().withRead([&](const std::vector<interface::InterfaceKey>& v) {
+    configs.get<config::Eigrp::PASSIVE_INTERFACES>().withRead([&](const std::vector<interface::InterfaceKey>& v) {
         found = std::find(v.begin(), v.end(), key) != v.end();
     });
     return found;
@@ -180,7 +178,7 @@ bool EigrpConfig::isPassive(interface::InterfaceKey key) const
 std::unordered_set<types::IPAddress> EigrpConfig::getUnicastNeighbors(interface::InterfaceKey key) const
 {
     std::unordered_set<types::IPAddress> result;
-    configs.reg.get<config::Eigrp::NEIGHBOR>().withRead([&](const std::vector<std::tuple<types::IPAddress, interface::InterfaceKey>>& v) {
+    configs.get<config::Eigrp::NEIGHBOR>().withRead([&](const std::vector<std::tuple<types::IPAddress, interface::InterfaceKey>>& v) {
         for (const auto& [ip, ifaceKey] : v)
             if (ifaceKey == key)
                 result.insert(ip);
@@ -191,7 +189,7 @@ std::unordered_set<types::IPAddress> EigrpConfig::getUnicastNeighbors(interface:
 StubConfig EigrpConfig::getStubConfig() const
 {
     StubConfig s;
-    auto stubField = configs.reg.get<config::Eigrp::STUB>();
+    auto stubField = configs.get<config::Eigrp::STUB>();
     s.isStub = stubField.hasValue();
     if (s.isStub) {
         types::EnumBitMap<config::eigrp::Stub> bm(stubField.load());
@@ -201,7 +199,7 @@ StubConfig EigrpConfig::getStubConfig() const
         s.advertiseRedistributed = bm.test(config::eigrp::Stub::REDISTRIBUTED);
         s.receiveOnly            = bm.test(config::eigrp::Stub::RECEIVE_ONLY);
     }
-    auto leakMap = configs.reg.get<config::Eigrp::STUB_LEAK_MAP>();
+    auto leakMap = configs.get<config::Eigrp::STUB_LEAK_MAP>();
     s.advertiseLeakMap     = leakMap.hasValue();
     return s;
 }
@@ -210,11 +208,11 @@ KValue EigrpConfig::getKValues() const
 {
     auto& reg = configs;
     return KValue(
-        reg.reg.get<config::Eigrp::WEIGHT_K1>().load(),
-        reg.reg.get<config::Eigrp::WEIGHT_K2>().load(),
-        reg.reg.get<config::Eigrp::WEIGHT_K3>().load(),
-        reg.reg.get<config::Eigrp::WEIGHT_K4>().load(),
-        reg.reg.get<config::Eigrp::WEIGHT_K5>().load()
+        reg.get<config::Eigrp::WEIGHT_K1>().load(),
+        reg.get<config::Eigrp::WEIGHT_K2>().load(),
+        reg.get<config::Eigrp::WEIGHT_K3>().load(),
+        reg.get<config::Eigrp::WEIGHT_K4>().load(),
+        reg.get<config::Eigrp::WEIGHT_K5>().load()
     );
 }
 } // namespace routing

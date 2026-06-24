@@ -88,6 +88,7 @@ bool Interface::setIPv4(types::IPv4Prefix prefix, bool secondary)
         sendGratuitous();
         getVRF()->getInterfaceManager().notify(IPv4Event::IPV4_SECONDARY_READY, *this, prefix);
     }
+    applyConnectedRoute(prefix);
     return true;
 }
 
@@ -110,11 +111,15 @@ bool Interface::setIPv6(const types::IPv6Prefix& addr, bool eui64)
     {
         ndp.duplicateAddressDetection(*ipv6);
     }
-    else 
+    else
     {
         //TODO duplicate address error
         return false;
     }
+
+    if (!ip.isLocalLink())
+        applyConnectedRoute(addr);
+
     return true;
 }
 
@@ -128,22 +133,38 @@ void Interface::setIPv6Ready(const types::IPv6Prefix& addr)
 
 void Interface::removeIPv4(const types::IPv4Prefix* prefix)
 {
+    types::IPv4Prefix removed;
+
     if (!prefix)
     {
-        types::IPv4Prefix primary = configs.ipv4.getPrimaryPrefix();
+        removed = configs.ipv4.getPrimaryPrefix();
         configs.ipv4.removePrimaryAddress();
-        stateChangeV4(IPv4Event::IPV4_DEL, primary);
+        stateChangeV4(IPv4Event::IPV4_DEL, removed);
     }
     else
     {
+        removed = *prefix;
         configs.ipv4.removeSecondaryAddress(*prefix);
         stateChangeV4(IPv4Event::IPV4_DEL, *prefix);
     }
+
+    removeConnectedRoute(removed);
 }
 
 void Interface::removeAllIPv4()
 {
-    // TODO
+    // Primary
+    types::IPv4Prefix removed = configs.ipv4.getPrimaryPrefix();
+    configs.ipv4.removePrimaryAddress();
+    stateChangeV4(IPv4Event::IPV4_DEL, removed);
+
+    // Secondary
+    std::vector<types::IPv4Prefix> secondary = configs.ipv4.getSecondaryPrefixList(true);
+    configs.ipv4.clearSecondaryAddresses();
+    for (const auto& ip : secondary)
+        stateChangeV4(IPv4Event::IPV4_DEL, ip);
+
+    removeAllConnectedRoutes<types::IPv4Prefix>();
 }
 
 void Interface::removeIPv6(const types::IPv6Prefix* prefix)
@@ -151,7 +172,14 @@ void Interface::removeIPv6(const types::IPv6Prefix* prefix)
     if (prefix)
     {
         configs.ipv6.removeAddress(*prefix);
+        removeConnectedRoute(*prefix);
         stateChangeV6(IPv6Event::IPV6_DEL, *prefix);
+
+        if (!types::IPv6Address(*prefix).isLocalLink())
+        {
+            types::IPv6Prefix network(prefix->addr, prefix->prefixLength);
+            getVRF()->getRib().removeRoute<__uint128_t>(network.addr, network.prefixLength, core::RouteSource::CONNECTED, 0);
+        }
     }
     else
     {
@@ -161,10 +189,21 @@ void Interface::removeIPv6(const types::IPv6Prefix* prefix)
     }
 }
 
-void Interface::removeAllIPv6()
+void Interface::removeAllIPv6(bool local)
 {
-    // TODO
-    //stateChangeV6(StateChange::IPREMOVAL);
+    if (local) // Local Link
+    {
+        types::IPv6Prefix llAddr = configs.ipv6.getLocalPrefix();
+        configs.ipv6.removeLocalAddress();
+        stateChangeV6(IPv6Event::IPV6_LL_DEL, llAddr);
+    }
+
+    // Routable
+    std::vector<types::IPv6Prefix> routable = configs.ipv6.getRoutablePrefixList(true);
+    for (const auto& addr : routable)
+        stateChangeV6(IPv6Event::IPV6_DEL, addr);
+
+    removeAllConnectedRoutes<types::IPv6Prefix>();
 }
 
 std::vector<std::array<uint8_t, 16>> Interface::getTentativeAddress()
@@ -226,6 +265,122 @@ void Interface::markAddressDuplicate(types::IPv6Prefix address)
     }
 }
 
+template <types::IsIPPrefix Prefix>
+void Interface::applyConnectedRoute(Prefix network)
+{
+    network.addPrefixLen(network.prefixLength);
+
+    auto* entry = new core::RibEntry<decltype(network.addr)>();
+    entry->prefix = network.addr;
+    entry->length = network.prefixLength;
+    entry->source = core::RouteSource::CONNECTED;
+    entry->processId = 0;
+    entry->adminDistance = 0;
+    entry->metric = 0;
+    entry->addNextHopInterface(configs.key.getId());
+    getVRF()->getRib().addRoute(entry);
+}
+
+void Interface::applyAllConnectedRoutes()
+{
+    applyAllConnectedRoutes<types::IPv4Prefix>();
+    applyAllConnectedRoutes<types::IPv6Prefix>();
+}
+
+template <>
+void Interface::applyAllConnectedRoutes<types::IPv4Prefix>()
+{
+    auto& rib = getVRF()->getRib();
+
+    std::vector<core::RibEntry<uint32_t>*> connected;
+
+    if (configs.getConfigs().get<config::Interface::IP_ADDRESS>().hasValue())
+    {
+        auto primaryAddr = configs.ipv4.getPrimaryPrefix(false);
+
+        auto* entry = new core::RibEntry<uint32_t>();
+        entry->prefix = primaryAddr.addr;
+        entry->length = primaryAddr.prefixLength;
+        entry->source = core::RouteSource::CONNECTED;
+        entry->processId = 0;
+        entry->adminDistance = 0;
+        entry->metric = 0;
+        entry->addNextHopInterface(configs.key.getId());
+        connected.push_back(entry);
+    }
+
+    for (const auto& network : configs.ipv4.getSecondaryPrefixList(false))
+    {
+        auto* entry = new core::RibEntry<decltype(network.addr)>();
+        entry->prefix = network.addr;
+        entry->length = network.prefixLength;
+        entry->source = core::RouteSource::CONNECTED;
+        entry->processId = 0;
+        entry->adminDistance = 0;
+        entry->metric = 0;
+        entry->addNextHopInterface(configs.key.getId());
+        connected.push_back(entry);
+    }
+
+    rib.addRoutes(connected);
+}
+
+template <>
+void Interface::applyAllConnectedRoutes<types::IPv6Prefix>()
+{
+    auto& rib = getVRF()->getRib();
+
+    std::vector<core::RibEntry<__uint128_t>*> connected;
+    for (const auto& network : configs.ipv6.getRoutablePrefixList(false))
+    {
+        auto* entry = new core::RibEntry<decltype(network.addr)>();
+        entry->prefix = network.addr;
+        entry->length = network.prefixLength;
+        entry->source = core::RouteSource::CONNECTED;
+        entry->processId = 0;
+        entry->adminDistance = 0;
+        entry->metric = 0;
+        entry->addNextHopInterface(configs.key.getId());
+        connected.push_back(entry);
+    }
+
+    rib.addRoutes(connected);
+}
+
+template <types::IsIPPrefix Prefix>
+void Interface::removeConnectedRoute(Prefix network)
+{
+    network.addPrefixLen(network.prefixLength);
+
+    getVRF()->getRib().removeRoute(network.addr, network.prefixLength, core::RouteSource::CONNECTED, 0);
+}
+
+void Interface::removeAllConnectedRoutes()
+{
+    removeAllConnectedRoutes<types::IPv4Prefix>();
+    removeAllConnectedRoutes<types::IPv6Prefix>();
+}
+
+template <> 
+void Interface::removeAllConnectedRoutes<types::IPv4Prefix>()
+{
+    auto& rib = getVRF()->getRib();
+
+    // Remove primary
+    auto primaryAddr = configs.ipv4.getPrimaryPrefix(false);
+    rib.removeRoute(primaryAddr.addr, primaryAddr.prefixLength, core::RouteSource::CONNECTED, 0);
+    // Remove secondary
+    rib.removeRoutes(configs.ipv4.getSecondaryPrefixList(false), core::RouteSource::CONNECTED, 0);
+}
+
+template <>
+void Interface::removeAllConnectedRoutes<types::IPv6Prefix>()
+{
+    auto& rib = getVRF()->getRib();
+    // Remove routable
+    rib.removeRoutes(configs.ipv6.getRoutablePrefixList(false), core::RouteSource::CONNECTED, 0);
+}
+
 void Interface::shutdown(bool shut) 
 {
     if (shutdownFlag.load(std::memory_order_relaxed) == shut)
@@ -241,6 +396,7 @@ void Interface::shutdown(bool shut)
             ndp.shutdown();
         }
 
+        removeAllConnectedRoutes();
         getVRF()->getInterfaceManager().notify(StateChange::IF_DOWN, *this);
     }
     else if (!shut) 
@@ -253,13 +409,14 @@ void Interface::shutdown(bool shut)
             ndp.refresh();
         }
 
+        applyAllConnectedRoutes();
         getVRF()->getInterfaceManager().notify(StateChange::IF_READY, *this);
     }
 }
 
 void Interface::syncShutdown()
 {
-    bool shut = configs.configs.reg.get<config::Interface::SHUTDOWN>().load();
+    bool shut = configs.configs.get<config::Interface::SHUTDOWN>().load();
     shutdown(shut);
 }
 
@@ -380,4 +537,9 @@ bool Interface::setVRF(core::VirtualRouter* vrf)
 
     return true;
 }
+
+template void Interface::applyConnectedRoute<types::IPv4Prefix>(types::IPv4Prefix);
+template void Interface::applyConnectedRoute<types::IPv6Prefix>(types::IPv6Prefix);
+template void Interface::removeConnectedRoute<types::IPv4Prefix>(types::IPv4Prefix);
+template void Interface::removeConnectedRoute<types::IPv6Prefix>(types::IPv6Prefix);
 } // namespace interface

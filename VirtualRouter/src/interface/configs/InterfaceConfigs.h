@@ -259,6 +259,11 @@ public:
         void removeSecondaryAddress(types::IPv4Prefix prefix);
 
         /**
+         * @brief Removes all secondary address.
+         */
+        void clearSecondaryAddresses();
+
+        /**
          * @brief Writes the primary IPv4 address into @p out and returns @p out.
          *
          * @param out  4-byte output buffer in network order.
@@ -312,10 +317,10 @@ public:
         std::optional<uint8_t> getSecondaryPrefix(uint8_t* out) const;
 
         /// Returns the primary address as a prefix (address + length).
-        types::IPv4Prefix getPrimaryPrefix() const;
+        types::IPv4Prefix getPrimaryPrefix(bool maintainAddress = false) const;
 
         /// Returns the first secondary prefix, or `std::nullopt` if none is configured.
-        std::optional<types::IPv4Prefix> getSecondaryPrefix();
+        std::optional<types::IPv4Prefix> getSecondaryPrefix(bool maintainAddress);
 
         /// Returns the primary address prefix length in bits.
         uint8_t getPrimaryMask() const;
@@ -478,7 +483,7 @@ public:
         void removeAddress(const types::IPv6Prefix& prefix);
 
         /// Removes all link-local, global unicast, and ULA addresses, cancelling their timers.
-        void removeAllAddresses();
+        void removeAllAddresses(bool local = false);
 
         /**
          * @brief Calls @ref IPv6Address::validateAddress on all global unicast entries.

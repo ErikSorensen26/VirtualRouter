@@ -76,6 +76,8 @@ struct Ospfv2Header
         { utils::writeU32(raw->routerID, val); }
     void setAreaID(uint32_t val)
         { utils::writeU32(raw->areaID, val); }
+    void setChecksum(uint16_t val)
+        { utils::writeU16(raw->checksum, val); }
     void setAuthType(uint16_t val)
         { utils::writeU16(raw->authType, val); }
     void setAuthentication(const uint8_t* val)

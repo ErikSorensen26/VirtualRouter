@@ -26,7 +26,7 @@ void NeighborTable::syncNeighbors()
     for (const auto& [addr, _] : neighbors)
         unseen.insert(addr);
 
-    auto& neighborList = configs.reg.get<config::Bgp::NEIGHBOR>().get();
+    auto& neighborList = configs.get<config::Bgp::NEIGHBOR>().get();
     for (const auto& [ip, _] : neighborList)
     {
         if (unseen.contains(ip))

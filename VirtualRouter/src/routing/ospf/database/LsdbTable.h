@@ -268,13 +268,11 @@ private:
 
 #if OSPF_LSDB_USE_PMR
     PoolResource pool;  ///< Pool sub-allocator; sub-allocates from the upstream resource passed at construction.
+#endif
     U_LSDB db;          ///< Unordered primary index for O(1) key lookups; points into dbStorage.
     T_LSDB typeDb;      ///< Type-keyed secondary index; points into dbStorage.
     A_LSDB advDb;       ///< Advertiser-keyed secondary index; points into dbStorage.
     O_LSDB dbStorage;   ///< Ordered primary store; owns all LsaRecord objects.
-#else
-    LSDB db
-#endif
 
 private:
     using Iterator = decltype(db.begin());

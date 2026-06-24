@@ -101,6 +101,9 @@ void TopologyTable::pruneNeighbor(const types::IPAddress& neighborIp)
 {
     for (auto& [_, entry] : topologyEntries)
     {
+        if (entry.state == TopologyEntry::State::ACTIVE)
+            continue;
+
         if (auto it = entry.routesBySource.find(neighborIp); it != entry.routesBySource.end())
         {
             entry.feasibleSuccessors.erase(
@@ -113,6 +116,6 @@ void TopologyTable::pruneNeighbor(const types::IPAddress& neighborIp)
         }
     }
 
-    pruneExpired(); // Remove any empty destinations
+    pruneExpired();
 }
 } // namespace routing

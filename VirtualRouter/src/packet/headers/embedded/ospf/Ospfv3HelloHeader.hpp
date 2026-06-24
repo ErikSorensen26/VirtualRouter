@@ -53,7 +53,7 @@ struct Ospfv3HelloHeader
     void setHelloInterval(uint16_t val)
         { utils::writeU16(raw->helloInterval, val); }
     void setDeadInterval(uint16_t val)
-        { utils::writeU32(raw->deadInterval, val); }
+        { utils::writeU16(raw->deadInterval, val); }
     void setDrID(uint32_t val)
         { utils::writeU32(raw->designatedRouterID, val); }
     void setBdrID(uint32_t val)

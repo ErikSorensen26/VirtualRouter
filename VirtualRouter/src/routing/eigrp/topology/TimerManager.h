@@ -7,6 +7,7 @@
 #define EIGRP_TIMER_MANAGER_H
 
 #include <IPAddress.h>
+#include <ControlScheduler.h>
 
 namespace core
 {
@@ -88,8 +89,8 @@ public:
 
 private:
 
-    Eigrp& base;                    ///< Owning process; provides SIA timeout configuration.
-    core::ProcessQueue& scheduler;  ///< Serialized work queue for timer callback delivery.
+    Eigrp& base;                       ///< Owning process; provides SIA timeout configuration.
+    core::ProcessQueueRef scheduler;   ///< Lifetime-safe ref used for timer callback delivery.
 };
 } // namespace routing::eigrp
 

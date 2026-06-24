@@ -35,8 +35,13 @@ AttributeManager& ProcessAccessor::getAttrMgr(BgpProcess& proc)
     return proc.getAttrMgr();
 }
 
-core::ProcessQueueRef ProcessAccessor::getScheduler(BgpProcess& proc)
+core::ProcessQueueRef& ProcessAccessor::getScheduler(BgpProcess& proc)
 {
     return proc.getScheduler();
+}
+
+core::ProcessQueue& ProcessAccessor::getSchedulerQueue(BgpProcess& proc)
+{
+    return proc.getSchedulerQueue();
 }
 } // namespace routing

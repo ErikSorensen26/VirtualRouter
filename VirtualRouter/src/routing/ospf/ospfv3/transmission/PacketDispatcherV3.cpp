@@ -22,12 +22,12 @@ config::OspfInterfaceBaseRegistry& PacketDispatcherV3::getConfigs()
     auto& ifCfgs = iface.getIface().configs.getConfigs();
     if (iface.getProcess().isV3)
     {
-        auto& afReg = ifCfgs.reg.get<config::Interface::OSPFV3>().emplaceBack(iface.getProcess().getProcId());
-        return afReg.reg.get<config::OspfInterfaceAf::IPV6>().get();
+        auto& afReg = ifCfgs.get<config::Interface::OSPFV3>().emplaceBack(iface.getProcess().getProcId());
+        return afReg.get<config::OspfInterfaceAf::IPV6>().get();
     }
     else
     {
-        return ifCfgs.reg.get<config::Interface::IPV6_OSPF>().get();
+        return ifCfgs.get<config::Interface::IPV6_OSPF>().get();
     }
 }
 

@@ -20,7 +20,7 @@ namespace routing::ospf
 {
 Area::Area(OspfProcess& base, uint32_t id, std::pmr::memory_resource* mr)
     : mr(mr ? mr : std::pmr::get_default_resource()),
-      configs(base.getConfigs().reg.get<config::Ospf::AREA_CONFIGS>().emplaceBack(id)),
+      configs(base.getConfigs().get<config::Ospf::AREA_CONFIGS>().emplaceBack(id)),
       db(mr),
       base(base),
       spfMgr(*this),
@@ -30,23 +30,24 @@ Area::Area(OspfProcess& base, uint32_t id, std::pmr::memory_resource* mr)
           ? *static_cast<Originator*>(new OriginatorV3(*this))
           : *static_cast<Originator*>(new OriginatorV2(*this))
       ),
-      scheduler(base.getScheduler()),
-      type(configs.reg.get<config::OspfArea::AREA_TYPE>().load()),
+      scheduler(base.getSchedulerQueue().ref()),
+      type(configs.get<config::OspfArea::AREA_TYPE>().load()),
       areaId(id)
 {
-    configs.reg.context().set(this);
+    configs.context().set(this);
     startAgingTimer();
 }
 
 Area::~Area()
 {
     if (ignoreTid != 0)
-        base.getScheduler().cancel(ignoreTid);
+        scheduler.cancel(ignoreTid);
     if (resetTid != 0)
-        base.getScheduler().cancel(resetTid);
+        scheduler.cancel(resetTid);
     if (agingTimerId != 0)
-        base.getScheduler().cancel(agingTimerId);
-    base.getConfigs().reg.get<config::Ospf::AREA_CONFIGS>().erase(areaId);
+        scheduler.cancel(agingTimerId);
+    base.getConfigs().get<config::Ospf::AREA_CONFIGS>().erase(areaId);
+    delete &originator;
 }
 
 void Area::initializeReset()
@@ -171,8 +172,8 @@ void Area::runDCIntegrityScan()
         for (auto& [id, iface] : ifaceMgr.ospfInterfaceList)
         {
             auto& ifaceConfigs = iface.getConfigs();
-            if ((ifaceConfigs.reg.get<config::OspfInterface::DEMAND_CIRCUIT>().load() ||
-                ifaceConfigs.reg.get<config::OspfInterface::FLOOD_REDUCTION>().load()) &&
+            if ((ifaceConfigs.get<config::OspfInterface::DEMAND_CIRCUIT>().load() ||
+                ifaceConfigs.get<config::OspfInterface::FLOOD_REDUCTION>().load()) &&
                 iface.floodReduction != enabled)
             {
                 iface.floodReduction = enabled;
@@ -191,8 +192,8 @@ void Area::setFloodReduction(OspfInterface& iface)
     auto& ifaceConfigs = iface.getConfigs();
     const bool enableFloodReduction =
         dcCompatible.load(std::memory_order_relaxed) && (
-            ifaceConfigs.reg.get<config::OspfInterface::FLOOD_REDUCTION>().load() ||
-            ifaceConfigs.reg.get<config::OspfInterface::DEMAND_CIRCUIT>().load()
+            ifaceConfigs.get<config::OspfInterface::FLOOD_REDUCTION>().load() ||
+            ifaceConfigs.get<config::OspfInterface::DEMAND_CIRCUIT>().load()
         );
 
     if (iface.floodReduction != enableFloodReduction)
@@ -206,10 +207,10 @@ void Area::setFloodReduction(OspfInterface& iface)
 bool Area::isValidForwardAddress(const types::IPAddress& addr) const
 {
     if ((type == config::ospf::AreaType::NSSA || type == config::ospf::AreaType::TOTALLY_NSSA) &&
-        configs.reg.get<config::OspfArea::NSSA_SUPPRESS_FA>().load())
+        configs.get<config::OspfArea::NSSA_SUPPRESS_FA>().load())
         return false;
 
-    if (base.getConfigs().reg.get<config::Ospf::LRC_FORWARDING_ADDRESS>().load())
+    if (base.getConfigs().get<config::Ospf::LRC_FORWARDING_ADDRESS>().load())
     {
         utils::RCU::Guard g;
         return addr.isIPv6()
@@ -224,22 +225,21 @@ bool Area::isValidForwardAddress(const types::IPAddress& addr) const
 
 void Area::syncRangeConfig()
 {
-    auto cfgRanges = configs.reg.get<config::OspfArea::RANGE>();
+    auto cfgRanges = configs.get<config::OspfArea::RANGE>();
     std::unordered_set<types::IPPrefix> activeRanges;
     rangePrefixes.clear();
 
     cfgRanges.withRead([&](const auto& tsList)
     {
-        for (const auto& ts : tsList)
-            for (const auto& t : ts)
-            {
-                const auto& [pfx, noAdv, cost] = t;
-                rangePrefixes.insert(pfx);
+        for (const auto& t : tsList)
+        {
+            const auto& [pfx, noAdv, cost] = t;
+            rangePrefixes.insert(pfx);
 
-                auto& r = ranges[pfx];
-                r.notAdvertise = noAdv;
-                r.costOverride = cost;
-            }
+            auto& r = ranges[pfx];
+            r.notAdvertise = noAdv;
+            r.costOverride = cost;
+        }
     });
 
     for (auto it = ranges.begin(); it != ranges.end();)
@@ -316,7 +316,10 @@ void Area::syncRangeRuntime(const std::vector<std::pair<types::IPPrefix, OspfPat
             }
 
             if (r.discardPresent)
+            {
                 discardActions.push_back({ pfx, 0, false });
+                r.discardPresent = false;
+            }
 
             r.contributorCount = 0;
             r.computedMetric = 0;
@@ -365,10 +368,20 @@ void Area::syncRangeRuntime(const std::vector<std::pair<types::IPPrefix, OspfPat
             }
 
             // Discard (must follow shouldDiscard, not shouldAdvertise)
-            if (r.discardPresent && shouldDiscard)
+            if (!r.discardPresent && shouldDiscard)
+            {
                 discardActions.push_back({ pfx, metric, true });
+                r.discardPresent = true;
+            }
             else if (r.discardPresent && !shouldDiscard)
+            {
                 discardActions.push_back({ pfx, 0, false });
+                r.discardPresent = false;
+            }
+            else if (r.discardPresent && shouldDiscard && r.computedMetric != metric)
+            {
+                discardActions.push_back({ pfx, metric, true });
+            }
 
             r.contributorCount = count;
             r.computedMetric = active ? metric : 0;
@@ -380,13 +393,13 @@ void Area::syncRangeRuntime(const std::vector<std::pair<types::IPPrefix, OspfPat
         originator.originateSummary(a.lsid, a.pfx, a.metric, a.flush);
 
     auto& rib = base.getRib();
-    if (base.getConfigs().reg.get<config::Ospf::DISCARD_INTERNAL>().load())
+    if (base.getConfigs().get<config::Ospf::DISCARD_INTERNAL>().load())
     {
         for (const auto& d : discardActions)
         {
             if (d.install)
             {
-                const uint8_t ad = base.getConfigs().reg.get<config::Ospf::DISCARD_INTERNAL_DISTANCE>().load();
+                const uint8_t ad = base.getConfigs().get<config::Ospf::DISCARD_INTERNAL_DISTANCE>().load();
                 rib.installDiscardRoute({ d.pfx, areaId }, d.metric, ad);
             }
             else
@@ -431,7 +444,7 @@ void Area::send(OspfInterface& iface, std::vector<std::pair<FloodInfo, LsaRecord
     auto& ntable = iface.getNTable();
     auto& dispatcher = iface.getDispatcher();
 
-    if (iface.getConfigs().reg.get<config::OspfInterface::NETWORK>().load() == config::ospf::NetworkType::BROADCAST)
+    if (iface.getConfigs().get<config::OspfInterface::NETWORK>().load() == config::ospf::NetworkType::BROADCAST)
     {
         dispatcher.sendReliableLSUpdate(nullptr, records);
     }
@@ -616,11 +629,11 @@ bool Area::onNewLsa()
 {
     auto& processConfigs = base.getConfigs();
 
-    auto maxLsa = processConfigs.reg.get<config::Ospf::MAX_LSA>();
+    auto maxLsa = processConfigs.get<config::Ospf::MAX_LSA>();
     if (!maxLsa.hasValue())
         return true;
 
-    float maxThresholdPercent = static_cast<float>(processConfigs.reg.get<config::Ospf::MAX_LSA_THRESHOLD>().load() / 100.0f) ;
+    float maxThresholdPercent = static_cast<float>(processConfigs.get<config::Ospf::MAX_LSA_THRESHOLD>().load() / 100.0f) ;
     uint32_t maxThreshold = static_cast<uint32_t>(maxThresholdPercent * static_cast<float>(maxLsa.load()));
     if (maxThreshold <= db.size())
     {
@@ -641,7 +654,7 @@ void Area::ignoreLsa()
     ignoreSize++;
 
     // Ignore count
-    uint32_t maxSize = processConfigs.reg.get<config::Ospf::MAX_LSA_IGNORE_COUNT>().load();
+    uint32_t maxSize = processConfigs.get<config::Ospf::MAX_LSA_IGNORE_COUNT>().load();
     if (ignoreSize >= maxSize)
         base.initiateReset();
 
@@ -652,7 +665,7 @@ void Area::ignoreLsa()
 void Area::startIgnoreTimer()
 {
     if (ignoreTid != 0) return;
-    uint16_t timeout = base.getConfigs().reg.get<config::Ospf::MAX_LSA_IGNORE_TIME>().load();
+    uint16_t timeout = base.getConfigs().get<config::Ospf::MAX_LSA_IGNORE_TIME>().load();
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::minutes(timeout);
     ignoreTid = scheduler.postAfter(expirationTime, [this](uint32_t)
     {
@@ -663,7 +676,7 @@ void Area::startIgnoreTimer()
 void Area::startResetTimer()
 {
     if (resetTid != 0) return;
-    uint16_t timeout = base.getConfigs().reg.get<config::Ospf::MAX_LSA_RESET_TIME>().load();
+    uint16_t timeout = base.getConfigs().get<config::Ospf::MAX_LSA_RESET_TIME>().load();
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::minutes(timeout);
     resetTid = scheduler.postAfter(expirationTime, [this](uint32_t)
     {
@@ -809,7 +822,7 @@ InstallResult Area::evaluateIncomingLsa(const LsaRecord* existing, IncomingLsaCo
         case LsaCompareResult::NEWER:
         {
             // MinLSArrival check (RFC 2328 §13 step 5b) — rate-limit acceptance
-            auto minArrivalMs = base.getConfigs().reg.get<config::Ospf::LSA_ARRIVAL>().load();
+            auto minArrivalMs = base.getConfigs().get<config::Ospf::LSA_ARRIVAL>().load();
             auto minArrival = existing->lastRefreshTime + std::chrono::milliseconds(minArrivalMs);
             if (std::chrono::steady_clock::now() < minArrival)
             {

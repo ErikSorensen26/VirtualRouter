@@ -47,8 +47,6 @@ Neighbor::~Neighbor()
 
     iface.getTimers().cancelNeighborTimers(*this);
     iface.getBase().delGlobalNeighbor(ipAddress);
-    iface.getTopController().onNeighborDown(*this);
-    
 }
 
 void Neighbor::clear()

@@ -365,6 +365,8 @@ struct alignas(16) IPPrefix
     __uint128_t addr = 0;   ///< Network address bits; encoding matches @ref IPAddress.
     uint8_t prefixLength{}; ///< Number of significant network bits [0, 128].
 
+    using Addr = __uint128_t; ///< Underlying address type.
+
     IPPrefix() = default;
     IPPrefix(const IPPrefix&) = default;
     IPPrefix& operator=(const IPPrefix&) = default;
@@ -455,6 +457,8 @@ struct alignas(4) IPv4Prefix
     uint32_t addr{};        ///< Network address in host byte order; host bits are zeroed unless maintainAddress was set.
     uint8_t prefixLength{}; ///< Number of significant network bits [0, 32].
 
+    using Addr = uint32_t; ///< Underlying address type.
+
     IPv4Prefix() = default;
     IPv4Prefix(const IPv4Prefix&) = default;
     IPv4Prefix& operator=(const IPv4Prefix&) = default;
@@ -536,6 +540,8 @@ struct alignas(16) IPv6Prefix
 {
     __uint128_t addr = 0;   ///< Network address in host byte order; host bits are zeroed unless maintainAddress was set.
     uint8_t prefixLength{}; ///< Number of significant network bits [0, 128].
+
+    using Addr = __uint128_t;  ///< Underlying address type.
 
     IPv6Prefix() = default;
     IPv6Prefix(const IPv6Prefix&) = default;

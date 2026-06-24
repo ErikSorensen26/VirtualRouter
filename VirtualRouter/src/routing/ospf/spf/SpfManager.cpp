@@ -105,9 +105,9 @@ void SpfManager::runSpf()
 uint32_t SpfManager::computeNextDelay()
 {
     auto& cfgs = area.process().getConfigs();
-    uint32_t initDelayMs = cfgs.reg.get<config::Ospf::SPF_THROTTLE_DELAY>().load();
-    uint32_t holdTimeMs = cfgs.reg.get<config::Ospf::SPF_THROTTLE_HOLD>().load();
-    uint32_t maxHoldTimeMs = cfgs.reg.get<config::Ospf::SPF_THROTTLE_MAX>().load();
+    uint32_t initDelayMs = cfgs.get<config::Ospf::SPF_THROTTLE_DELAY>().load();
+    uint32_t holdTimeMs = cfgs.get<config::Ospf::SPF_THROTTLE_HOLD>().load();
+    uint32_t maxHoldTimeMs = cfgs.get<config::Ospf::SPF_THROTTLE_MAX>().load();
 
     uint32_t prev = currentDelayMs.load(std::memory_order_relaxed);
     uint32_t backoff;

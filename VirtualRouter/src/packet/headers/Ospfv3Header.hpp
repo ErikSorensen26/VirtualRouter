@@ -71,6 +71,8 @@ struct Ospfv3Header
         { utils::writeU32(raw->routerID, val); }
     void setAreaID(uint32_t val)
         { utils::writeU32(raw->areaID, val); }
+    void setChecksum(uint16_t val)
+        { utils::writeU16(raw->checksum, val); }
     void setInstanceID(uint8_t val)
         { raw->instanceID = val; }
 };

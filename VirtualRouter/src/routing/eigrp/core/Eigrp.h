@@ -35,6 +35,7 @@
 
 namespace core { class VirtualRouter; }
 namespace interface { enum class InterfaceType : uint8_t; }
+namespace config { void EigrpShutdown(void* e); }
 class Internal_EigrpTest;
 
 /**
@@ -139,6 +140,7 @@ class Eigrp
 public:
     using InterfaceKey = std::pair<interface::InterfaceType, float>;
     friend class ::Internal_EigrpTest;
+    friend void ::config::EigrpShutdown(void* e);
 
     /**
      * @brief Constructs an EIGRP process for the given AS number and address family.
@@ -175,6 +177,12 @@ public:
      * Sends poison-reverse updates to all neighbors, cancels all timers,
      * brings down all neighbors, and unsubscribes from interface events.
      * Must be called before destruction.
+     *
+     * Posts the actual teardown onto this process's @ref ProcessQueue and
+     * blocks until it completes, so it is serialized against any in-flight
+     * or pending work posted via @ref getScheduler() (e.g.
+     * `refreshInterfaceList()` triggered by interface events). Safe to call
+     * from any thread that is not itself running on this process's queue.
      */
     virtual void shutdown();
 
@@ -284,7 +292,28 @@ public:
      */
     inline void routerID(uint32_t id) { rid.id = id; rid.isStatic = true; }
 
-    core::ProcessQueue& getScheduler() { return scheduler; }
+    /**
+     * @brief Returns a lifetime-safe ref for posting self-referencing tasks
+     *        (e.g. config-change appliers that capture `this`).
+     *
+     * Released first in `~Eigrp()`, before any members are torn down, so that
+     * no posted task can run against a partially-destroyed `Eigrp`.
+     */
+    core::ProcessQueueRef& getScheduler() { return selfRef; }
+
+    /**
+     * @brief Returns the underlying scheduler queue, for subsystems that mint
+     *        their own `ProcessQueueRef` (e.g. per-interface timers).
+     */
+    core::ProcessQueue& getSchedulerQueue() { return scheduler; }
+
+    /**
+     * @brief Blocks until the underlying scheduler queue has drained all
+     *        pending and in-flight tasks.
+     *
+     * Intended for tests; see `core::ProcessQueue::waitIdle()`.
+     */
+    void waitIdle() const noexcept { scheduler.waitIdle(); }
 
     bool isNamed() const { return namedMode; }
     uint32_t getAS() const { return asNumber; }
@@ -301,6 +330,9 @@ private:
     const uint32_t asNumber;             ///< Autonomous System number.
     const types::AddressFamily addressFamily; ///< Address family (IPv4 or IPv6).
 
+    core::ProcessQueue scheduler; ///< Serializes all EIGRP protocol work for this process.
+    core::ProcessQueueRef selfRef; ///< Lifetime-safe ref for self-referencing posts; released first in ~Eigrp().
+
     EigrpTopology topology;     ///< Topology table + DUAL engine.
     InterfaceManager ifaceMgr;  ///< Manages per-interface EIGRP state.
     EigrpConfig configMgr;      ///< Process-level configuration facade.
@@ -310,7 +342,17 @@ private:
     RouterID rid;                        ///< Current Router ID and its origin.
     uint16_t virtualRouterID = 0x0000;  ///< Virtual Router ID carried in EIGRP packets.
 
-    core::ProcessQueue scheduler; ///< Serializes all EIGRP protocol work for this process.
+    /**
+     * @brief Performs the actual shutdown teardown (deactivates all
+     *        interfaces).
+     *
+     * Must only be called from within a task already running on
+     * @ref scheduler's queue (i.e. posted via @ref selfRef), or after
+     * @ref selfRef has been released and no other queue work can be
+     * in-flight (e.g. from `~Eigrp()`). Calling this directly from an
+     * arbitrary thread races with `refreshInterfaceList()`.
+     */
+    void shutdownInternal();
 
     uint32_t ifUpId, ifDownId, ipReadyId, ipDelId; ///< Interface event subscription IDs.
 public:

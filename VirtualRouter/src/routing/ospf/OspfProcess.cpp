@@ -2,6 +2,7 @@
 
 #include <Global.h>
 #include <VirtualRouter.h>
+#include "configs/registry/global/GlobalRegistry.h"
 #include <ControlScheduler.h>
 #include <RCU.hpp>
 
@@ -14,33 +15,33 @@
 namespace routing::ospf
 {
 OspfProcess::OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, core::VirtualRouter* vrf)
-    : isV3(isV3), routingInstance(vrf), rib(*this), scheduler(vrf->getControlScheduler().create()), procId(procId), af(af), ifaceMgr(*this),
+    : isV3(isV3), routingInstance(vrf), rib(*this), scheduler(vrf->getControlScheduler().create()), selfRef(scheduler.ref()), procId(procId), af(af), ifaceMgr(*this),
     configs([af, isV3, vrf, procId]() -> config::OspfRegistry& {
         if (isV3)
         {
-            auto& base = vrf->getGlobal().configs.reg.get<config::Global::ROUTER_OSPFV3_DEFAULT>().emplaceBack(procId);
-            auto& v3Reg = vrf->getConfigs().reg.get<config::Vrf::ROUTER_OSPFV3>().emplaceBack(procId);
+            auto& base = vrf->getGlobal().getConfigs().get<config::Global::ROUTER_OSPFV3_DEFAULT>().emplaceBack(procId);
+            auto& v3Reg = vrf->getConfigs().get<config::Vrf::ROUTER_OSPFV3>().emplaceBack(procId);
             config::OspfRegistry& afCfgs = [&]() -> config::OspfRegistry& {
                 if (af == types::AddressFamily::IPv4)
-                    return v3Reg.reg.get<config::Ospfv3AddressFamily::IPV4>().get();
+                    return v3Reg.get<config::Ospfv3AddressFamily::IPV4>().get();
                 else
-                    return v3Reg.reg.get<config::Ospfv3AddressFamily::IPV6>().get();
+                    return v3Reg.get<config::Ospfv3AddressFamily::IPV6>().get();
             }();
 
-            afCfgs.reg.setMask(&base.reg);
+            afCfgs.setMask(&base);
             return afCfgs;
         }
         else
         {
             // OSPFv2 types::AddressFamily
             if (af == types::AddressFamily::IPv4)
-                return vrf->getConfigs().reg.get<config::Vrf::ROUTER_OSPF>().emplaceBack(procId);
+                return vrf->getConfigs().get<config::Vrf::ROUTER_OSPF>().emplaceBack(procId);
             else
-                return vrf->getConfigs().reg.get<config::Vrf::IPV6_ROUTER_OSPF>().emplaceBack(procId);
+                return vrf->getConfigs().get<config::Vrf::IPV6_ROUTER_OSPF>().emplaceBack(procId);
         }
     }())
 {
-    configs.reg.context().set(this);
+    configs.context().set(this);
     calculateRID();
 
     // Subscribe to interface lifecycle events so the interface list stays
@@ -48,7 +49,7 @@ OspfProcess::OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, co
 
     auto postRefresh = [](void* ctx, interface::Interface&) {
         auto* p = static_cast<OspfProcess*>(ctx);
-        p->scheduler.post([p]{ p->ifaceMgr.refreshInterfaceList(); });
+        p->selfRef.post([p]{ p->ifaceMgr.refreshInterfaceList(); });
     };
 
     ifUpId   = ifMgr.subscribe(interface::StateChange::IF_READY, this, postRefresh);
@@ -58,7 +59,7 @@ OspfProcess::OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, co
     {
         auto postRefreshV4 = [](void* ctx, interface::Interface&, types::IPv4Prefix&) {
             auto* p = static_cast<OspfProcess*>(ctx);
-            p->scheduler.post([p]{ p->ifaceMgr.refreshInterfaceList(); });
+            p->selfRef.post([p]{ p->ifaceMgr.refreshInterfaceList(); });
         };
         ipReadyId = ifMgr.subscribe(interface::IPv4Event::IPV4_READY, this, postRefreshV4);
         ipDelId   = ifMgr.subscribe(interface::IPv4Event::IPV4_DEL,   this, postRefreshV4);
@@ -67,7 +68,7 @@ OspfProcess::OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, co
     {
         auto postRefreshV6 = [](void* ctx, interface::Interface&, types::IPv6Prefix&) {
             auto* p = static_cast<OspfProcess*>(ctx);
-            p->scheduler.post([p]{ p->ifaceMgr.refreshInterfaceList(); });
+            p->selfRef.post([p]{ p->ifaceMgr.refreshInterfaceList(); });
         };
         ipReadyId = ifMgr.subscribe(interface::IPv6Event::IPV6_LL_READY, this, postRefreshV6);
         ipDelId   = ifMgr.subscribe(interface::IPv6Event::IPV6_LL_DEL,   this, postRefreshV6);
@@ -90,6 +91,12 @@ OspfProcess::~OspfProcess()
         ifMgr.unsubscribe(interface::InterfaceManager::IPv6EventMgr::Id{ipReadyId});
         ifMgr.unsubscribe(interface::InterfaceManager::IPv6EventMgr::Id{ipDelId});
     }
+
+    // Release selfRef first: this blocks until any in-flight self-posted task
+    // (e.g. refreshInterfaceList() or initiateReset()'s area.reset()) finishes,
+    // and rejects any further posts, before ifaceMgr/areas are torn down below.
+    selfRef.release();
+
     ifaceMgr.deactivateAll();
 }
 
@@ -139,13 +146,11 @@ void OspfProcess::setABR(bool val)
     bool current = abr;
     if (current == val) return;
 
+    abr = val;
+
     // Refresh ranges
     for (auto& [id, area] : areas)
-    {
-        // Ranges only need to be specified when they are in use.
-        std::unordered_set<types::IPPrefix> ranges = val ? area.getRanges() : std::unordered_set<types::IPPrefix>{};
         area.syncRangeSuppression(area.getRanges(), true);
-    }
 }
 
 bool OspfProcess::isASBR()
@@ -160,7 +165,7 @@ bool OspfProcess::isABR()
 
 void OspfProcess::initiateReset()
 {
-    scheduler.post([this] {
+    selfRef.post([this] {
         for (auto& [id, area] : areas)
             area.reset();
     });
@@ -168,7 +173,7 @@ void OspfProcess::initiateReset()
 
 void OspfProcess::addDefaultRoute(bool add)
 {
-    bool always = configs.reg.get<config::Ospf::DEFAULT_ORIGINATE_ALWAYS>().load();
+    bool always = configs.get<config::Ospf::DEFAULT_ORIGINATE_ALWAYS>().load();
 
     if (!always)
     {
@@ -190,10 +195,10 @@ void OspfProcess::addDefaultRoute(bool add)
     ExternalOriginateContext ctx = {
         .lsId = defaultRoute.value(),
         .prefix = types::IPPrefix(af),
-        .metric = configs.reg.get<config::Ospf::DEFAULT_ORIGINATE_METRIC>().load(),
+        .metric = configs.get<config::Ospf::DEFAULT_ORIGINATE_METRIC>().load(),
         .tag = 0,
         .nextHop = std::nullopt,
-        .metricIsE2 = configs.reg.get<config::Ospf::DEFAULT_ORIGINATE_METRIC_TYPE>().load()
+        .metricIsE2 = configs.get<config::Ospf::DEFAULT_ORIGINATE_METRIC_TYPE>().load()
     };
 
     isV3 ? originateExternal<PolicyV3>(ctx, !add)
@@ -358,7 +363,7 @@ void OspfProcess::originateExternals(std::vector<std::pair<ExternalOriginateCont
 
 void OspfProcess::syncSummaryConfig()
 {
-    auto cfg = configs.reg.get<config::Ospf::SUMMARY_ADDRESS>();
+    auto cfg = configs.get<config::Ospf::SUMMARY_ADDRESS>();
 
     std::unordered_map<types::IPPrefix, OspfSummaryAddress> active = summaries;
 
@@ -582,9 +587,9 @@ void OspfProcess::syncSummarySuppression(std::unordered_map<types::IPPrefix, Osp
         }
     }
 
-    if (configs.reg.get<config::Ospf::DISCARD_EXTERNAL>().load())
+    if (configs.get<config::Ospf::DISCARD_EXTERNAL>().load())
     {
-        const uint8_t ad = configs.reg.get<config::Ospf::DISCARD_EXTERNAL_DISTANCE>().load();
+        const uint8_t ad = configs.get<config::Ospf::DISCARD_EXTERNAL_DISTANCE>().load();
 
         for (const auto& [sumPfx, s] : activeSummaries)
         {
@@ -677,7 +682,7 @@ void OspfProcess::reoriginateSummaries(Area& sourceArea, std::vector<OspfRouteCh
                 processLsas(area);
             }
         }
-        else if (auto* area = getArea(1); area) // Normal areas reoriginate to Transit area.
+        else if (auto* area = getArea(0); area) // Normal areas reoriginate to Transit area.
         {
             processLsas(*area);
         }

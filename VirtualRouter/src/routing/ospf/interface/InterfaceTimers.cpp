@@ -9,14 +9,14 @@
 namespace routing::ospf
 {
 InterfaceTimers::InterfaceTimers(OspfInterface& iface)
-    : scheduler(iface.getProcess().getScheduler()), iface(iface)
+    : scheduler(iface.getProcess().getSchedulerQueue().ref()), iface(iface)
 {
     stopHello();
 }
 
 void InterfaceTimers::scheduleHello()
 {
-    if (iface.getConfigs().reg.get<config::OspfInterface::PASSIVE>().load()) return;
+    if (iface.getConfigs().get<config::OspfInterface::PASSIVE>().load()) return;
     // Mark hello as active
     if (helloTimerId.load(std::memory_order_relaxed) != 0)
         return; // Timer already active
@@ -94,7 +94,7 @@ void InterfaceTimers::handleInactiveTimeExpire(Neighbor& neighbor)
 
 void InterfaceTimers::startDbdRetransmissionTimer(Neighbor& nbr)
 {
-    uint16_t timeout = iface.getConfigs().reg.get<config::OspfInterface::RETRANSMIT_INTERVAL>().load();
+    uint16_t timeout = iface.getConfigs().get<config::OspfInterface::RETRANSMIT_INTERVAL>().load();
 
     uint32_t& tid = nbr.getRtr().dbdTimerId;
     if (tid != 0) scheduler.cancel(tid);
@@ -108,7 +108,7 @@ void InterfaceTimers::startDbdRetransmissionTimer(Neighbor& nbr)
 
 void InterfaceTimers::startLsrRetransmissionTimer(Neighbor& nbr)
 {
-    uint16_t timeout = iface.getConfigs().reg.get<config::OspfInterface::RETRANSMIT_INTERVAL>().load();
+    uint16_t timeout = iface.getConfigs().get<config::OspfInterface::RETRANSMIT_INTERVAL>().load();
 
     uint32_t& tid = nbr.getRtr().lsrs().retransmitTimerId;
     if (tid != 0) scheduler.cancel(tid);
@@ -122,7 +122,7 @@ void InterfaceTimers::startLsrRetransmissionTimer(Neighbor& nbr)
 
 void InterfaceTimers::startLsuRetransmissionTimer(Neighbor& nbr)
 {
-    uint16_t timeout = iface.getConfigs().reg.get<config::OspfInterface::RETRANSMIT_INTERVAL>().load();
+    uint16_t timeout = iface.getConfigs().get<config::OspfInterface::RETRANSMIT_INTERVAL>().load();
 
     uint32_t& tid = nbr.getRtr().lsus().retransmitTimerId;
     if (tid != 0) scheduler.cancel(tid);
@@ -136,7 +136,7 @@ void InterfaceTimers::startLsuRetransmissionTimer(Neighbor& nbr)
 
 void InterfaceTimers::startLsrPacingTimer(Neighbor& nbr)
 {
-    uint8_t timeout = iface.getProcess().getConfigs().reg.get<config::Ospf::RETRANSMISSION_PACING>().load();
+    uint8_t timeout = iface.getProcess().getConfigs().get<config::Ospf::RETRANSMISSION_PACING>().load();
 
     uint32_t& tid = nbr.getRtr().lsrs().pacingTimerId;
     if (tid != 0) scheduler.cancel(tid);
@@ -150,7 +150,7 @@ void InterfaceTimers::startLsrPacingTimer(Neighbor& nbr)
 
 void InterfaceTimers::startLsuPacingTimer(Neighbor* nbr)
 {
-    uint8_t timeout = iface.getProcess().getConfigs().reg.get<config::Ospf::RETRANSMISSION_PACING>().load();
+    uint8_t timeout = iface.getProcess().getConfigs().get<config::Ospf::RETRANSMISSION_PACING>().load();
 
     uint32_t& tid = nbr ? nbr->getRtr().lsrs().pacingTimerId : iface.getDispatcher().getMulticastLsu().pacingTimerId;
     if (tid != 0) scheduler.cancel(tid);

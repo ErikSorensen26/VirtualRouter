@@ -89,8 +89,9 @@ void NeighborTable::deleteNeighbor(const types::IPAddress& neighborIp, bool isUn
     if (neighborIt != neighbors.end())
     {
         if (isUnicast != neighborIt->second.unicast) return;
+        iface.getTopController().onNeighborDown(neighborIt->second);
         iface.getBase().delGlobalNeighbor(neighborIp);
-        neighbors.erase(neighborIt->second.ipAddress);
+        neighbors.erase(neighborIp);
         if (isUnicast)
         {
             unicast.erase(neighborIp);
@@ -139,9 +140,11 @@ void NeighborTable::cancelAllHoldTimers()
 
 void NeighborTable::onDown(Neighbor& neighbor)
 {
-    iface.getBase().delGlobalNeighbor(neighbor.ipAddress);
-    unicast.erase(neighbor.ipAddress);
-    neighbors.erase(neighbor.ipAddress);
+    const types::IPAddress neighborIp = neighbor.ipAddress;
+    iface.getTopController().onNeighborDown(neighbor);
+    iface.getBase().delGlobalNeighbor(neighborIp);
+    unicast.erase(neighborIp);
+    neighbors.erase(neighborIp);
     if (neighbors.empty())
     {
         enableMulticast();

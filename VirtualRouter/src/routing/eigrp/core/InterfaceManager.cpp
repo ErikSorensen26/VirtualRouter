@@ -24,7 +24,7 @@ EigrpInterface* InterfaceManager::getInterface(interface::InterfaceKey key)
 
 config::EigrpInterfaceRegistry& InterfaceManager::getRegistryByKey(interface::InterfaceKey key)
 {
-    auto configList = base.getGlobalConfigMgr().getConfigs().reg.get<config::Eigrp::AF_INTERFACE>();
+    auto configList = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::AF_INTERFACE>();
     return configList.emplaceBack(key);
 }
 
@@ -32,7 +32,7 @@ config::EigrpInterfaceRegistry& InterfaceManager::getRegistry(interface::Interfa
 {
     interface::InterfaceKey key = iface.configs.key;
 
-    auto configList = base.getGlobalConfigMgr().getConfigs().reg.get<config::Eigrp::AF_INTERFACE>();
+    auto configList = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::AF_INTERFACE>();
     return configList.emplaceBack(key);
 }
 
@@ -110,10 +110,10 @@ void InterfaceManager::refreshInterfaceList()
                 // even without a matching network statement.
                 if (!inRange && isNamed)
                 {
-                    auto afIfaces = base.getGlobalConfigMgr().getConfigs().reg.get<config::Eigrp::AF_INTERFACE>();
+                    auto afIfaces = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::AF_INTERFACE>();
                     auto regIt = afIfaces.find(ipInfo.key);
                     inRange = (regIt != afIfaces.end()) &&
-                              !regIt->second.reg.get<config::EigrpInterface::SHUTDOWN>().load();
+                              !regIt->second->get<config::EigrpInterface::SHUTDOWN>().load();
                 }
                 // Compare known addresses
                 if (it != eigrpInterfaceList.end())
@@ -124,9 +124,9 @@ void InterfaceManager::refreshInterfaceList()
                 bool ipv6Contained = false;
                 if (isNamed)
                 {
-                    auto afIfaces = base.getGlobalConfigMgr().getConfigs().reg.get<config::Eigrp::AF_INTERFACE>();
+                    auto afIfaces = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::AF_INTERFACE>();
                     auto regIt = afIfaces.find(ipInfo.key);
-                    ipv6Contained = (regIt != afIfaces.end()) && !regIt->second.reg.get<config::EigrpInterface::SHUTDOWN>().load();
+                    ipv6Contained = (regIt != afIfaces.end()) && !regIt->second->get<config::EigrpInterface::SHUTDOWN>().load();
                 }
                 (void)as;
                 inRange = ipv6Contained;

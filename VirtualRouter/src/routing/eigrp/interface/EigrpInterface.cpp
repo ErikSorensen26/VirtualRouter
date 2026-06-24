@@ -21,18 +21,20 @@ EigrpInterface::EigrpInterface(Eigrp& eigrpSystem, config::EigrpInterfaceRegistr
     auth(ifaceReg, eigrpSystem.routingInstance->getGlobal().keyChainManager),
     metrics(*this),
     aggregator(*this),
-    tmgr(*this, eigrpSystem.getScheduler())
+    tmgr(*this, eigrpSystem.getSchedulerQueue())
 {
-    configs.reg.context().set(this);
+    configs.context().set(this);
 
     // Set local ip
     if (base.getAF() == types::AddressFamily::IPv4)
     {
         ifaceAddress.setV4(interface.configs.ipv4.getPrimaryAddress().addr);
+        base.getTopology().synchronizeConnected(*this);
     }
     else
     {
         ifaceAddress.setV6(interface.configs.ipv6.getLocalAddress().addr);
+        base.getTopology().synchronizeConnected(*this);
     }
 
     // Add pending summary routes if needed
@@ -92,7 +94,7 @@ void EigrpInterface::notifyRoutingChange(const std::vector<const RouteInfo*>& ch
 
 void EigrpInterface::setPassiveMode(bool passive)
 {
-    configs.reg.get<config::EigrpInterface::PASSIVE_INTERFACE>().set(passive);
+    configs.get<config::EigrpInterface::PASSIVE_INTERFACE>().set(passive);
     if (passive)
     {
         for (auto it = ntable.neighbors.begin(); it != ntable.neighbors.end();)
@@ -148,7 +150,7 @@ bool EigrpInterface::recordDampeningEvent()
     routeChangeTimes.push_back(now);
 
     // Drop old changes outside of interval
-    const auto intervalSec = std::chrono::seconds(configs.reg.get<config::EigrpInterface::DAMPENING_INTERVAL_TIME>().load());
+    const auto intervalSec = std::chrono::seconds(configs.get<config::EigrpInterface::DAMPENING_INTERVAL_TIME>().load());
     while (!routeChangeTimes.empty() && now - routeChangeTimes.front() > intervalSec)
         routeChangeTimes.pop_front();
 
@@ -164,7 +166,7 @@ void EigrpInterface::triggerDampeningOnRouteChange()
     prefixCount.fetch_add(1, std::memory_order_relaxed);
 
     double changePercent = (static_cast<double>(routeChangeTimes.size()) / maxPrefix) * 100.0;
-    double triggerPercent = configs.reg.get<config::EigrpInterface::DAMPENING_CHANGE_PERCENT>().load();
+    double triggerPercent = configs.get<config::EigrpInterface::DAMPENING_CHANGE_PERCENT>().load();
 
     if (changePercent >= triggerPercent && !isSupressed.load(std::memory_order_relaxed))
     {
@@ -213,7 +215,7 @@ void EigrpInterface::onDampeningIntervalExpire()
     if (maxPrefixes == 0) return;
 
     double changePercent = (static_cast<double>(routeChangeTimes.size()) / maxPrefixes) * 100.0;
-    double triggerPercent = configs.reg.get<config::EigrpInterface::DAMPENING_CHANGE_PERCENT>().load();
+    double triggerPercent = configs.get<config::EigrpInterface::DAMPENING_CHANGE_PERCENT>().load();
 
     if (changePercent >= triggerPercent && !isSupressed.load(std::memory_order_relaxed))
     {

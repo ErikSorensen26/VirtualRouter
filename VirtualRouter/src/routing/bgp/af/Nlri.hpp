@@ -118,11 +118,7 @@ public:
      */
     void withdrawRoutes(const std::vector<Nlri>& nlri) override
     {
-        std::vector<std::pair<uint32_t, uint8_t>> withdraws;
-        withdraws.reserve(nlri.size());
-        for (const auto& n : nlri)
-            withdraws.push_back({n.addr, n.prefixLength});
-        rib.removeRoutes(withdraws, core::RouteSource::BGP, bgp::ProcessAccessor::getAsNum(process));
+        rib.removeRoutes(nlri, core::RouteSource::BGP, bgp::ProcessAccessor::getAsNum(process));
     }
 
     /**
