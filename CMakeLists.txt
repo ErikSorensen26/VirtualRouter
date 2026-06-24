@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
+
 project(VirtualRouter LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -6,9 +7,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_CXX_STANDARD_LIBRARIES "${CMAKE_CXX_STANDARD_LIBRARIES} -latomic")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build)
+set(CMAKE_BUILD_PARALLEL_LEVEL 8)
 
 add_compile_options(-Wall -Wno-unused-parameter -fno-strict-aliasing)
-add_link_options(-fuse-ld=mold)
+add_link_options(-fuse-ld=mold -Wl,--thread-count=8)
 
 option(BUILD_STATIC_ROUTER "Build only a full static VirtualRouterExec" OFF)
 option(ENABLE_DEBUG_SYMBOLS "Include -g and -rdynamic for crash backtrace" ON)
@@ -84,8 +86,8 @@ if (BUILD_STATIC_ROUTER)
     list(REMOVE_DUPLICATES VR_INCLUDE_DIRS)
 
     if (ENABLE_DEBUG_SYMBOLS)
-        message(STATUS "Including debug symbols (-g -rdynamic)")
-        add_compile_options(-g -rdynamic)
+        message(STATUS "Including debug symbols (-g -gsplit-dwarf -rdynamic)")
+        #add_compile_options(-g -gsplit-dwarf -rdynamic)
     else()
         message(STATUS "Debug symbols disabled (release / stripped build)")
     endif()
@@ -113,14 +115,22 @@ else()
     # keep your debug-ish flags as-is
     add_compile_options(
         -O0
-        -g1
+        -g2
+        -ffunction-sections
+        -fdata-sections
+        -fno-inline-functions
+        -fno-inline-small-functions
+        #-fsanitize=address
+        #-gz
         -gdwarf-4
+        #-gsplit-dwarf
         -fno-omit-frame-pointer
-        -fno-inline
-        -fno-optimize-sibling-calls
+        -fno-ident
         -Wall -Wextra -Wpedantic -Wshadow -Wcast-align -Wconversion -Wsign-conversion
+
     )
     add_compile_definitions(DEBUG)
+    add_link_options(-Wl,--compress-debug-sections=zlib -fsanitize=address)
 
     # External Dependencies (visible to subdirs)
     find_package(PkgConfig REQUIRED)

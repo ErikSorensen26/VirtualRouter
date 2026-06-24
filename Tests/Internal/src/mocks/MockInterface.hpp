@@ -28,7 +28,12 @@ public:
                   core::VirtualRouter* vrf = nullptr,
                   bool debug = false)
         : Interface({interfaceType, interfaceId, vrf ? *vrf : *global.getRoutingInstance("default"), hwInfo, debug})
-    {}
+    {
+        shutdownFlag = false;
+        arp.refresh();
+        getVRF()->getInterfaceManager().add(this, configs.key);
+        getVRF()->getInterfaceManager().notify(StateChange::IF_READY, *this);
+    }
 
     // Destructor
     ~MockInterface() override 
@@ -42,6 +47,7 @@ public:
     MOCK_METHOD(bool, setIPv6, (const types::IPv6Prefix& addr, bool eui64), (override));
     MOCK_METHOD(void, shutdown, (bool shut), (override));
     MOCK_METHOD(void, enqueuePacket, (processing::PacketBuilder& packetInfo, uint64_t mac), (override));
+    MOCK_METHOD(void, enqueuePacket, (processing::PacketBuilder&), (override));
 
     void enableIPs() {
         EXPECT_CALL(*this, setIPv4).Times(::testing::AnyNumber()).WillRepeatedly(::testing::Invoke([this](types::IPv4Prefix ip, bool secondary) -> bool {
@@ -50,6 +56,7 @@ public:
                 configs.ipv4.addSecondaryAddress(ip);
             else
                 configs.ipv4.setPrimaryAddress(ip);
+            return true;
         }));
         EXPECT_CALL(*this, setIPv6).Times(::testing::AnyNumber()).WillRepeatedly(::testing::Invoke([this](const types::IPv6Prefix& addr, bool eui64) -> bool {
             if (shutdownFlag.load(std::memory_order_relaxed)) return false;
@@ -103,7 +110,10 @@ public:
     {
         if (blocked) return;
         blocked = true;
-        EXPECT_CALL(*this, enqueuePacket).Times(::testing::AnyNumber()).WillRepeatedly(::testing::Invoke([](processing::PacketBuilder&, uint64_t) {
+        EXPECT_CALL(*this, enqueuePacket(::testing::_, ::testing::_)).Times(::testing::AnyNumber()).WillRepeatedly(::testing::Invoke([](processing::PacketBuilder&, types::Mac) {
+            return;
+        }));
+        EXPECT_CALL(*this, enqueuePacket(::testing::_)).Times(::testing::AnyNumber()).WillRepeatedly(::testing::Invoke([](processing::PacketBuilder&) {
             return;
         }));
     }
