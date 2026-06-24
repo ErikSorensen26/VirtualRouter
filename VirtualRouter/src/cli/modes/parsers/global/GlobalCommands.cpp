@@ -2,6 +2,7 @@
 
 #include <VirtualRouter.h>
 #include <Global.h>
+#include "configs/registry/global/GlobalRegistry.h"
 #include <vector>
 
 #include "GlobalCommands.h"
@@ -23,7 +24,7 @@ bool Global_Arp_Handler(GLOBAL_PARAMS)
     config::VrfRegistry* vrf = nullptr;
     if (!getVrfConfigs(vrf, ctx))
         return false;
-    config::DefType<decltype(vrf->reg)::FieldTypeAt<config::Vrf::ARP_STATIC_ENTRY>>::node tup;
+    config::DefType<config::VrfRegistry::FieldTypeAt<config::Vrf::ARP_STATIC_ENTRY>>::node tup;
 
     for (const auto& seg : segs)
     {
@@ -51,7 +52,7 @@ bool Global_Arp_Handler(GLOBAL_PARAMS)
         }
     }
 
-    auto entries = vrf->reg.get<config::Vrf::ARP_STATIC_ENTRY>();
+    auto entries = vrf->get<config::Vrf::ARP_STATIC_ENTRY>();
     return utils::setListEntry(entries, ctx, tup);
 }
 
@@ -63,24 +64,24 @@ bool Global_Exit_Handler(GLOBAL_PARAMS)
 
 bool Global_SetHostname_Handler(GLOBAL_PARAMS)
 {
-    auto host = ctx.configs().reg.get<config::Global::HOSTNAME>();
+    auto host = ctx.configs().get<config::Global::HOSTNAME>();
     return utils::setFieldValue(host, ctx, segs[0] >> 1);
 }
 
 bool Global_End_Handler(GLOBAL_PARAMS)
 {
     UNUSED(segs);
-    return ctx.terminal.resetAndChangeMode<CliMode::PrivilegedExec>(ctx.terminal.engine.global.configs);
+    return ctx.terminal.resetAndChangeMode<CliMode::PrivilegedExec>(ctx.terminal.engine.global.getConfigs());
 }
 
 bool Global_Interface_Handler(GLOBAL_PARAMS)
 {
-    auto interfaceCfgs = ctx.configs().reg.get<config::Global::INTERFACE>();
+    auto interfaceCfgs = ctx.configs().get<config::Global::INTERFACE>();
     interface::InterfaceKey ifaceKey;
     if (!utils::extractInterfaceId(segs[0][0], segs[0][1], ifaceKey)) 
         return false;
     utils::setOwnedField(interfaceCfgs, ctx, ifaceKey);
-    ctx.terminal.changeMode<CliMode::Interface>(interfaceCfgs.get().at(ifaceKey));
+    ctx.terminal.changeMode<CliMode::Interface>(*interfaceCfgs.get().at(ifaceKey));
     return true;
 }
 
@@ -93,7 +94,7 @@ bool Global_RouterEIGRP_Handler(GLOBAL_PARAMS)
     uint16_t id;
     if (utils::stouint(id, name))
     {
-        auto eigrpList = vrf->reg.get<config::Vrf::ROUTER_EIGRP_V4>();
+        auto eigrpList = vrf->get<config::Vrf::ROUTER_EIGRP_V4>();
         if (ctx.negate || ctx.defaulted)
         {
             eigrpList.erase(id);
@@ -104,7 +105,7 @@ bool Global_RouterEIGRP_Handler(GLOBAL_PARAMS)
     }
     else
     {
-        auto namedList = ctx.configs().reg.get<config::Global::ROUTER_EIGRP_NAMED>();
+        auto namedList = ctx.configs().get<config::Global::ROUTER_EIGRP_NAMED>();
         std::string nameStr(name);
         if (ctx.negate || ctx.defaulted)
         {

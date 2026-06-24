@@ -162,7 +162,7 @@ void buildIpv6(
     else
     {
         // Pick best IP to use - extract first two bytes of dest IPv6 address
-        auto destBuf = ipv6Build.destIp.v6raw();
+        auto& destBuf = ipv6Build.destIp.v6raw();
         uint8_t firstByte = destBuf[0];
         uint8_t secondByte = destBuf[1];
 

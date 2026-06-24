@@ -12,15 +12,15 @@ namespace cli
 bool RouterEigrp_EigrpLogNeighborChanges_Handler(EIGRP_PARAMS)
 {
     UNUSED(segs);
-    auto lc = ctx.configs().reg.get<config::Eigrp::LOG_NEIGHBOR_CHANGES>();
+    auto lc = ctx.configs().get<config::Eigrp::LOG_NEIGHBOR_CHANGES>();
     utils::setToggleValue(lc, ctx);
     return true;
 }
 
 bool RouterEigrp_EigrpLogNeighborWarnings_Handler(EIGRP_PARAMS)
 {
-    auto lw = ctx.configs().reg.get<config::Eigrp::LOG_NEIGHBOR_WARNINGS>();
-    auto lwinterval = ctx.configs().reg.get<config::Eigrp::LOG_NEIGHBOR_WARNINGS_INTERVAL>();
+    auto lw = ctx.configs().get<config::Eigrp::LOG_NEIGHBOR_WARNINGS>();
+    auto lwinterval = ctx.configs().get<config::Eigrp::LOG_NEIGHBOR_WARNINGS_INTERVAL>();
 
     if (!utils::setFieldValue(lw, ctx, segs >> 0 >> 1))
         return false;
@@ -30,13 +30,13 @@ bool RouterEigrp_EigrpLogNeighborWarnings_Handler(EIGRP_PARAMS)
 
 bool RouterEigrp_EigrpRouterId_Handler(EIGRP_PARAMS)
 {
-    auto rid = ctx.configs().reg.get<config::Eigrp::ROUTER_ID>();
+    auto rid = ctx.configs().get<config::Eigrp::ROUTER_ID>();
     return utils::setFieldValue(rid, ctx, segs >> 0 >> 1);
 }
 
 bool RouterEigrp_EigrpStub_Handler(EIGRP_PARAMS)
 {
-    auto stubField = ctx.configs().reg.get<config::Eigrp::STUB>();
+    auto stubField = ctx.configs().get<config::Eigrp::STUB>();
     if (utils::handleValueReset(stubField, ctx))
         return true;
     types::EnumBitMap<config::eigrp::Stub> stub;
@@ -52,7 +52,7 @@ bool RouterEigrp_EigrpStub_Handler(EIGRP_PARAMS)
             }
             case "leak-map"_tok:
             {
-                auto leak = ctx.configs().reg.get<config::Eigrp::STUB_LEAK_MAP>();
+                auto leak = ctx.configs().get<config::Eigrp::STUB_LEAK_MAP>();
                 return utils::setFieldValue(leak, ctx, seg >> 1);
             }
             case "receive-only"_tok:
@@ -84,18 +84,18 @@ bool RouterEigrp_EigrpStub_Handler(EIGRP_PARAMS)
 bool RouterEigrp_MetricWeights_Handler(EIGRP_PARAMS)
 {
     auto& eigrp = ctx.configs();
-    utils::setFieldValue(eigrp.reg.get<config::Eigrp::WEIGHT_K1>(), ctx, segs[0] >> 1);
-    utils::setFieldValue(eigrp.reg.get<config::Eigrp::WEIGHT_K2>(), ctx, segs[0] >> 2);
-    utils::setFieldValue(eigrp.reg.get<config::Eigrp::WEIGHT_K3>(), ctx, segs[0] >> 3);
-    utils::setFieldValue(eigrp.reg.get<config::Eigrp::WEIGHT_K4>(), ctx, segs[0] >> 4);
-    utils::setFieldValue(eigrp.reg.get<config::Eigrp::WEIGHT_K5>(), ctx, segs[0] >> 5);
-    utils::setFieldValue(eigrp.reg.get<config::Eigrp::WEIGHT_K6>(), ctx, segs[0] >> 6);
+    utils::setFieldValue(eigrp.get<config::Eigrp::WEIGHT_K1>(), ctx, segs[0] >> 1);
+    utils::setFieldValue(eigrp.get<config::Eigrp::WEIGHT_K2>(), ctx, segs[0] >> 2);
+    utils::setFieldValue(eigrp.get<config::Eigrp::WEIGHT_K3>(), ctx, segs[0] >> 3);
+    utils::setFieldValue(eigrp.get<config::Eigrp::WEIGHT_K4>(), ctx, segs[0] >> 4);
+    utils::setFieldValue(eigrp.get<config::Eigrp::WEIGHT_K5>(), ctx, segs[0] >> 5);
+    utils::setFieldValue(eigrp.get<config::Eigrp::WEIGHT_K6>(), ctx, segs[0] >> 6);
     return true;
 }
 
 bool RouterEigrp_Neighbor_Handler(EIGRP_PARAMS)
 {
-    auto neighbor = ctx.configs().reg.get<config::Eigrp::NEIGHBOR>();
+    auto neighbor = ctx.configs().get<config::Eigrp::NEIGHBOR>();
     config::DefType<typename decltype(neighbor)::Field>::node tup;
 
     if (!utils::setTupleElement(std::get<0>(tup), segs >> 0 >> 1))
@@ -107,7 +107,7 @@ bool RouterEigrp_Neighbor_Handler(EIGRP_PARAMS)
 
 bool RouterEigrp_Network_Handler(EIGRP_PARAMS)
 {
-    auto networks = ctx.configs().reg.get<config::Eigrp::NETWORK>();
+    auto networks = ctx.configs().get<config::Eigrp::NETWORK>();
     config::DefType<typename decltype(networks)::Field>::node tup;
     if (!utils::setTupleElement(std::get<0>(tup), segs >> 0 >> 1))
         return false;
@@ -126,7 +126,7 @@ bool RouterEigrp_Network_Handler(EIGRP_PARAMS)
 
 bool RouterEigrp_TimersGracefulRestart_Handler(EIGRP_PARAMS)
 {
-    auto purgeTime = ctx.configs().reg.get<config::Eigrp::GRACEFUL_PURGE_TIME>();
+    auto purgeTime = ctx.configs().get<config::Eigrp::GRACEFUL_PURGE_TIME>();
     return utils::setFieldValue(purgeTime, ctx, segs[0] >> 1);
 }
 

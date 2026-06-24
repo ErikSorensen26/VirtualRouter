@@ -1,6 +1,8 @@
 // ControlScheduler.cpp
 
 #include <array>
+#include <atomic>
+#include <cstdint>
 
 #include "ControlScheduler.h"
 
@@ -453,8 +455,19 @@ void ControlScheduler::onTimerFired(uint32_t delayedIdx, uint32_t delayedGen) no
     if (ds.completed.exchange(true, std::memory_order_acq_rel))
         return;
 
+    // Mark the timer node inactive and detach it from `ds` *now*, while
+    // `timerInFlight` (incremented by the Guard above) still excludes
+    // destroyRefState() from reaping it. Once this function returns and
+    // timerInFlight may drop to zero, destroyRefState() can see
+    // `active == false` and `delete` this node at any time. If we left
+    // `ds.refNode` pointing at it, the later runDelayedByIndex()/
+    // discardFiredDelayed() call (posted below, runs asynchronously) would
+    // dereference/store through a dangling pointer -- a heap-use-after-free.
     if (ds.refNode)
+    {
         ds.refNode->active.store(false, std::memory_order_release);
+        ds.refNode = nullptr;
+    }
 
     const ProcessQueueId qid = ds.qid;
     const uint32_t qgen = ds.qgen;
@@ -564,6 +577,14 @@ void ControlScheduler::destroyRefState(ProcessQueueRefState* state) noexcept
     if (!state)
         return;
 
+    uint32_t v = timerInFlight.load(std::memory_order_acquire);
+
+    while (v != 0)
+    {
+        timerInFlight.wait(v, std::memory_order_relaxed);
+        v = timerInFlight.load(std::memory_order_relaxed);
+    }
+
     RefTimerNode* head = state->timerHead.exchange(nullptr, std::memory_order_acq_rel);
 
     while (head)
@@ -601,10 +622,9 @@ void ControlScheduler::drainProcessQueue(ProcessQueueId id, uint32_t gen) noexce
 
     while (true)
     {
-        const bool run = !st.closed.load(std::memory_order_acquire);
-
         while (true)
         {
+            const bool run = !st.closed.load(std::memory_order_acquire);
             const uint16_t n = st.subCount;
             bool consumed = false;
 
@@ -656,11 +676,49 @@ void ControlScheduler::drainProcessQueue(ProcessQueueId id, uint32_t gen) noexce
     }
 
     st.drainThreadMarker.store(nullptr, std::memory_order_release);
-    st.draining.store(false, std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> lk(st.waitMtx);
+        st.draining.store(false, std::memory_order_release);
+    }
     st.waitCv.notify_all();
 
     if (st.deferDestroy.load(std::memory_order_acquire))
         finalizeDestroy(id, gen);
+}
+
+void ControlScheduler::waitIdle(ProcessQueueId id, uint32_t gen) noexcept
+{
+    if (id >= maxProcessQueues)
+        return;
+
+    ProcessQueueSlot& slot = pqSlots[id];
+
+    if (!slot.active.load(std::memory_order_acquire))
+        return;
+
+    if (slot.generation.load(std::memory_order_acquire) != gen)
+        return;
+
+    ProcessQueueState& st = slot.state;
+
+    while (true)
+    {
+        {
+            std::unique_lock<std::mutex> lk(st.waitMtx);
+            st.waitCv.wait(lk, [&] {
+                return !st.draining.load(std::memory_order_acquire) &&
+                       !st.scheduled.load(std::memory_order_acquire);
+            });
+        }
+
+        if (slot.generation.load(std::memory_order_acquire) != gen)
+            return;
+
+        if (!st.hasAnyPending())
+            return;
+
+        std::this_thread::yield();
+    }
 }
 
 void ControlScheduler::destroyProcessQueue(ProcessQueueId id, uint32_t gen) noexcept

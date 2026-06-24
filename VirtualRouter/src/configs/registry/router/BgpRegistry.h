@@ -59,19 +59,18 @@ enum class BgpTransportBase
 
 CONFIG_DEFAULT_TABLE(BGP_TRANSPORT_BASE_DEFAULTS);
 
+struct BgpBaseFields : FieldTuple<
+    AtomicField<uint16_t CONFIG_INDEX_ARG(BgpTransportBase::KEEPALIVE_INTERVAL)>,
+    AtomicField<uint16_t CONFIG_INDEX_ARG(BgpTransportBase::HOLDTIME)>,
+    OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(BgpTransportBase::MINIMUM_HOLDTIME)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpTransportBase::TRANSPORT_PATH_MTU_DISCOVERY)>
+> {};
+
 /**
  * @brief Registry slot for BGP transport base parameters.
  * @ingroup BGP
  */
-struct BgpBaseRegistry
-{
-    SubRegistry<BgpTransportBase, nullptr,
-        AtomicField<uint16_t CONFIG_INDEX_ARG(BgpTransportBase::KEEPALIVE_INTERVAL)>,
-        AtomicField<uint16_t CONFIG_INDEX_ARG(BgpTransportBase::HOLDTIME)>,
-        OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(BgpTransportBase::MINIMUM_HOLDTIME)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpTransportBase::TRANSPORT_PATH_MTU_DISCOVERY)>
-    > reg;
-};
+struct BgpBaseRegistry : SubRegistry<BgpBaseRegistry, BgpTransportBase, nullptr, BgpBaseFields> {};
 
 /**
  * @brief Shared address-family parameters inherited by BGP process and neighbor AF configs.
@@ -104,25 +103,24 @@ enum class BgpAfBase
 
 CONFIG_DEFAULT_TABLE(BGP_AF_BASE_DEFAULTS);
 
+struct BgpAfBaseFields : FieldTuple<
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::ADDITIONAL_PATHS_RECEIVE)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::ADDITIONAL_PATHS_SEND)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_ALL)>,
+    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_BEST)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::ADVERTISE_ADDITIONAL_GROUP_BEST)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::ADVERTISE_BEST_EXTERNAL)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::DEFAULT_ORIGINATE)>,
+    OptionalAtomicField<config::bgp::SlowPeerMode CONFIG_INDEX_ARG(BgpAfBase::SLOW_PEER_MODE)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::SLOW_PEER_DETECTION)>,
+    AtomicField<uint16_t CONFIG_INDEX_ARG(BgpAfBase::SLOW_PEER_DETECTION_THRESHOLD)>
+> {};
+
 /**
  * @brief Registry slot for BGP address-family base parameters.
  * @ingroup BGP
  */
-struct BgpAfBaseRegistry
-{
-    SubRegistry<BgpAfBase, nullptr,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::ADDITIONAL_PATHS_RECEIVE)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::ADDITIONAL_PATHS_SEND)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_ALL)>,
-        OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_BEST)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::ADVERTISE_ADDITIONAL_GROUP_BEST)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::ADVERTISE_BEST_EXTERNAL)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::DEFAULT_ORIGINATE)>,
-        OptionalAtomicField<config::bgp::SlowPeerMode CONFIG_INDEX_ARG(BgpAfBase::SLOW_PEER_MODE)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::SLOW_PEER_DETECTION)>,
-        AtomicField<uint16_t CONFIG_INDEX_ARG(BgpAfBase::SLOW_PEER_DETECTION_THRESHOLD)>
-    > reg;
-};
+struct BgpAfBaseRegistry : SubRegistry<BgpAfBaseRegistry, BgpAfBase, nullptr, BgpAfBaseFields> {};
 
 /**
  * @brief Per-neighbor, per-address-family BGP configuration fields.
@@ -210,62 +208,61 @@ CONFIG_DEFAULT_TABLE(BGP_NEIGHBOR_DEFAULTS);
 
 void BgpNeighborDefaultOriginate(void*);
 
+struct BgpNeighborFields : FieldTuple<
+    RegistryContainer<BgpAfBaseRegistry CONFIG_INDEX_ARG(BgpNeighbor::AF_BASE)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ACTIVATE)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ADVERTISE_DIVERSE_PATH_BACKUP)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ADVERTISE_DIVERSE_PATH_MPATH)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::ADVERTISE_MAP)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::ADVERTISE_MAP_EXIST_CONDITION)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::ADVERTISE_MAP_NON_EXIST_CONDITION)>,
+    AtomicField<uint16_t CONFIG_INDEX_ARG(BgpNeighbor::ADVERTISE_INTERVAL)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ALLOWAS_IN)>,
+    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(BgpNeighbor::ALLOWAS_IN_OCCURANCES)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ANNOUNCE_RPKI_STATE)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ORF_BOTH)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ORF_RECEIVE)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ORF_SEND)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::ORIGINATE_ROUTE_MAP)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::DISTRIBUTE_LIST_IN)>,
+    OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(BgpNeighbor::DISTRIBUTE_LIST_IN_INTERFACE)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::DISTRIBUTE_LIST_OUT)>,
+    OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(BgpNeighbor::DISTRIBUTE_LIST_OUT_INTERFACE)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::DMZLINK_BW)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::FILTER_LIST_IN)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::FILTER_LIST_OUT)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::INHERIT_PEER_POLICY)>,
+    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(BgpNeighbor::MAXIMUM_PREFIX)>,
+    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(BgpNeighbor::MAXIMUM_PREFIX_THRESHOLD)>,
+    OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(BgpNeighbor::MAXIMUM_PREFIX_RESTART)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::MAXIMUM_PREFIX_WARNING_ONLY)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::NEXT_HOP_SELF)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::NEXT_HOP_SELF_ALL)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::NEXT_HOP_UNCHANGED)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::PREFIX_LIST_IN)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::PREFIX_LIST_OUT)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::REMOVE_PRIVATE_AS)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::REMOVE_PRIVATE_AS_ALL)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::ROUTE_MAP_IN)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::ROUTE_MAP_OUT)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ROUTE_REFLECTOR_CLIENT)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ROUTE_SERVER_CLIENT)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::ROUTE_SERVER_CLIENT_CONTEXT)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::SEND_COMMUNITY)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::SEND_COMMUNITY_BOTH)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::SEND_COMMUNITY_EXTENDED)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::SEND_COMMUNITY_STANDARD)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::SOFT_RECONFIGURATION)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::TRANSLATE_UPDATE)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::UNSUPPRESS_MAP)>,
+    ValueField<uint16_t CONFIG_INDEX_ARG(BgpNeighbor::WEIGHT)>
+> {};
+
 /**
  * @brief Registry slot for per-neighbor, per-AF BGP configuration.
  * @ingroup BGP
  */
-struct BgpNeighborRegistry
-{
-    SubRegistry<BgpNeighbor, nullptr,
-        RegistryContainer<BgpAfBaseRegistry CONFIG_INDEX_ARG(BgpNeighbor::AF_BASE)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ACTIVATE)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ADVERTISE_DIVERSE_PATH_BACKUP)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ADVERTISE_DIVERSE_PATH_MPATH)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::ADVERTISE_MAP)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::ADVERTISE_MAP_EXIST_CONDITION)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::ADVERTISE_MAP_NON_EXIST_CONDITION)>,
-        AtomicField<uint16_t CONFIG_INDEX_ARG(BgpNeighbor::ADVERTISE_INTERVAL)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ALLOWAS_IN)>,
-        OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(BgpNeighbor::ALLOWAS_IN_OCCURANCES)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ANNOUNCE_RPKI_STATE)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ORF_BOTH)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ORF_RECEIVE)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ORF_SEND)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::ORIGINATE_ROUTE_MAP)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::DISTRIBUTE_LIST_IN)>,
-        OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(BgpNeighbor::DISTRIBUTE_LIST_IN_INTERFACE)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::DISTRIBUTE_LIST_OUT)>,
-        OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(BgpNeighbor::DISTRIBUTE_LIST_OUT_INTERFACE)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::DMZLINK_BW)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::FILTER_LIST_IN)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::FILTER_LIST_OUT)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::INHERIT_PEER_POLICY)>,
-        OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(BgpNeighbor::MAXIMUM_PREFIX)>,
-        OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(BgpNeighbor::MAXIMUM_PREFIX_THRESHOLD)>,
-        OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(BgpNeighbor::MAXIMUM_PREFIX_RESTART)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::MAXIMUM_PREFIX_WARNING_ONLY)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::NEXT_HOP_SELF)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::NEXT_HOP_SELF_ALL)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::NEXT_HOP_UNCHANGED)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::PREFIX_LIST_IN)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::PREFIX_LIST_OUT)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::REMOVE_PRIVATE_AS)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::REMOVE_PRIVATE_AS_ALL)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::ROUTE_MAP_IN)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::ROUTE_MAP_OUT)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ROUTE_REFLECTOR_CLIENT)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ROUTE_SERVER_CLIENT)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::ROUTE_SERVER_CLIENT_CONTEXT)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::SEND_COMMUNITY)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::SEND_COMMUNITY_BOTH)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::SEND_COMMUNITY_EXTENDED)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::SEND_COMMUNITY_STANDARD)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::SOFT_RECONFIGURATION)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::TRANSLATE_UPDATE)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::UNSUPPRESS_MAP)>,
-        ValueField<uint16_t CONFIG_INDEX_ARG(BgpNeighbor::WEIGHT)>
-    > reg;
-};
+struct BgpNeighborRegistry : SubRegistry<BgpNeighborRegistry, BgpNeighbor, nullptr, BgpNeighborFields> {};
 
 /**
  * @brief Session-level BGP neighbor configuration fields (transport, timers, auth, path attributes).
@@ -325,46 +322,45 @@ CONFIG_DEFAULT_TABLE(BGP_NEIGHBOR_SESSION_DEFAULTS);
 void BgpNeighborSessionShutdown(void*);
 void BgpNeighborSessionPathAttribute(void*);
 
+struct BgpNeighborSessionFields : FieldTuple<
+    RegistryContainer<BgpBaseRegistry CONFIG_INDEX_ARG(BgpNeighborSession::BGP_BASE)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpNeighborSession::DESCRIPTION)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::DISABLE_CONNECTION_CHECK)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::EBGP_MULTIHOP)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(BgpNeighborSession::EBGP_MAX_HOP_COUNT)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::FALL_OVER)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::FALL_OVER_BFD_CHECK_CONTROL_PLANE_FAILURE)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::FALL_OVER_BFD_MULTI_HOP)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::FALL_OVER_BFD_SINGLE_HOP)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpNeighborSession::FALL_OVER_ROUTE_MAP)>,
+    OptionalAtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::HAMODE_GRACEFUL_RESTART)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpNeighborSession::INHERIT_PEER_SESSION)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::LOCAL_AS)>,
+    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(BgpNeighborSession::LOCAL_AS_AS)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::LOCAL_AS_NO_PREPEND)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::LOCAL_AS_REPLACE_AS)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::LOCAL_AS_DUAL_AS)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpNeighborSession::PASSWORD)>,
+    ListField<std::tuple<
+        bool,    // true = discard, false = treat-as-withdraw
+        uint8_t, // start
+        uint8_t  // end
+    > CONFIG_INDEX_ARG(BgpNeighborSession::PATH_ATTRIBUTE), BgpNeighborSessionPathAttribute>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpNeighborSession::PEER_GROUP)>,
+    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(BgpNeighborSession::REMOTE_AS)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::SHUTDOWN), BgpNeighborSessionShutdown>, // ad graceful
+    OptionalAtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::TRANSPORT_CONNECTION_MODE)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::TRANSPORT_MULTI_SESSION)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::TTL_SEC)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(BgpNeighborSession::TTL_SEC_HOP)>,
+    OwnedListField<BgpNeighborRegistry, uint32_t CONFIG_INDEX_ARG(BgpNeighborSession::AF_NEIGHBOR)>
+> {};
+
 /**
  * @brief Registry slot for BGP session-level neighbor configuration.
  * @ingroup BGP
  */
-struct BgpNeighborSessionRegistry
-{
-    SubRegistry<BgpNeighborSession, nullptr,
-        RegistryContainer<BgpBaseRegistry CONFIG_INDEX_ARG(BgpNeighborSession::BGP_BASE)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpNeighborSession::DESCRIPTION)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::DISABLE_CONNECTION_CHECK)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::EBGP_MULTIHOP)>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(BgpNeighborSession::EBGP_MAX_HOP_COUNT)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::FALL_OVER)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::FALL_OVER_BFD_CHECK_CONTROL_PLANE_FAILURE)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::FALL_OVER_BFD_MULTI_HOP)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::FALL_OVER_BFD_SINGLE_HOP)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpNeighborSession::FALL_OVER_ROUTE_MAP)>,
-        OptionalAtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::HAMODE_GRACEFUL_RESTART)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpNeighborSession::INHERIT_PEER_SESSION)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::LOCAL_AS)>,
-        OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(BgpNeighborSession::LOCAL_AS_AS)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::LOCAL_AS_NO_PREPEND)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::LOCAL_AS_REPLACE_AS)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::LOCAL_AS_DUAL_AS)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpNeighborSession::PASSWORD)>,
-        ListField<std::tuple<
-            bool,    // true = discard, false = treat-as-withdraw
-            uint8_t, // start
-            uint8_t  // end
-        > CONFIG_INDEX_ARG(BgpNeighborSession::PATH_ATTRIBUTE), BgpNeighborSessionPathAttribute>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpNeighborSession::PEER_GROUP)>,
-        OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(BgpNeighborSession::REMOTE_AS)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::SHUTDOWN), BgpNeighborSessionShutdown>, // ad graceful
-        OptionalAtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::TRANSPORT_CONNECTION_MODE)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::TRANSPORT_MULTI_SESSION)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::TTL_SEC)>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(BgpNeighborSession::TTL_SEC_HOP)>,
-        OwnedListField<BgpNeighborRegistry, uint32_t CONFIG_INDEX_ARG(BgpNeighborSession::AF_NEIGHBOR)>
-    > reg;
-};
+struct BgpNeighborSessionRegistry : SubRegistry<BgpNeighborSessionRegistry, BgpNeighborSession, nullptr, BgpNeighborSessionFields> {};
 
 /**
  * @brief Process-level BGP address-family configuration fields (network statements, redistribution, best-path).
@@ -473,65 +469,64 @@ CONFIG_DEFAULT_TABLE(BGP_ADDRESS_FAMILY_DEFAULTS);
 
 DEFINE_TUPLE_SCHEMA(BgpAggregateAddress, BGP_AGGREGATE_ADDRESS_FIELDS)
 
+struct BgpAddressFamilyFields : FieldTuple<
+    RegistryContainer<BgpAfBaseRegistry CONFIG_INDEX_ARG(BgpAddressFamily::AF_BASE)>,
+    ListField<BgpAggregateAddress::Tuple CONFIG_INDEX_ARG(BgpAddressFamily::AGGREGATE_ADDRESS)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_ADDITIONAL_PATHS_INSTALL)>,
+    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BACKUP)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BEST_EXTERNAL)>,
+    AtomicField<uint16_t CONFIG_INDEX_ARG(BgpAddressFamily::BGP_AGGREGATE_TIMER)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_BEST_PATH_COMPARE_ROUTER_ID)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_BEST_PATH_COST_COMMUNITY_IGNORE)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_BEST_PATH_IGP_METRIC_IGNORE)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_BEST_PATH_MED_CONFED)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_BEST_PATH_MED_MISSING_AS_WORST)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_BEST_PATH_PREFIX_VALIDATE_ALLOW_INVALID)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_DAMPENING)> ,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::BGP_DAMPENING_HALF_LIFE)>,
+    AtomicField<uint16_t CONFIG_INDEX_ARG(BgpAddressFamily::BGP_DAMPENING_REUSE_THRESHOLD)>,
+    AtomicField<uint16_t CONFIG_INDEX_ARG(BgpAddressFamily::BGP_DAMPENING_SUPPRESS_THRESHOLD)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::BGP_DAMPENING_MAXIMUM_SUPPRESS_TIME)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpAddressFamily::BGP_DAMPENING_ROUTE_MAP)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_DMZLINK_BW)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpAddressFamily::BGP_INJECT_MAP)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpAddressFamily::BGP_INJECT_MAP_EXIST_MAP)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_INJECT_MAP_COPY_ATTRIBUTES)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpAddressFamily::BGP_NEXT_HOP_ROUTE_MAP)>,
+    OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(BgpAddressFamily::BGP_NEXT_HOP_TRIGGER_DELAY)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_NEXT_HOP_TRACKING)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_RECURSIVE_HOST)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_REDISTRIBUTE_INTERNAL)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_ROUTE_MAP_PRIORITY)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_SOFT_RECONFIG_BACKUP)>,
+    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(BgpAddressFamily::DEFAULT_METRIC)>,
+    ListField<std::tuple<uint8_t, std::vector<std::tuple<types::IPPrefix, std::string>>> CONFIG_INDEX_ARG(BgpAddressFamily::DISTANCE_RANGE)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::DISTANCE_BGP_EXTERNAL)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::DISTANCE_BGP_INTERNAL)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::DISTANCE_BGP_LOCAL)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::DISTANCE_MBGP_EXTERNAL)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::DISTANCE_MBGP_INTERNAL)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::DISTANCE_MBGP_LOCAL)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_IN)>,
+    OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_IN_INTERFACE)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_IN_PREFIX)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_OUT)>,
+    OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_OUT_INTERFACE)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_OUT_PREFIX)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_GATEWAY)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::MAXIMUM_PATHS_EBGP)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::MAXIMUM_PATHS_IBGP)>,
+    ListField<std::tuple<types::IPPrefix, bool, std::string> CONFIG_INDEX_ARG(BgpAddressFamily::NETWORK)>,
+    ValueField<std::string CONFIG_INDEX_ARG(BgpAddressFamily::TABLE_MAP)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::TABLE_MAP_FILTER)>
+> {};
+
 /**
  * @brief Registry slot for process-level BGP address-family configuration.
  * @ingroup BGP
  */
-struct BgpAddressFamilyRegistry
-{
-    SubRegistry<BgpAddressFamily, nullptr,
-        RegistryContainer<BgpAfBaseRegistry CONFIG_INDEX_ARG(BgpAddressFamily::AF_BASE)>,
-        ListField<BgpAggregateAddress::Tuple CONFIG_INDEX_ARG(BgpAddressFamily::AGGREGATE_ADDRESS)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_ADDITIONAL_PATHS_INSTALL)>,
-        OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BACKUP)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BEST_EXTERNAL)>,
-        AtomicField<uint16_t CONFIG_INDEX_ARG(BgpAddressFamily::BGP_AGGREGATE_TIMER)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_BEST_PATH_COMPARE_ROUTER_ID)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_BEST_PATH_COST_COMMUNITY_IGNORE)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_BEST_PATH_IGP_METRIC_IGNORE)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_BEST_PATH_MED_CONFED)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_BEST_PATH_MED_MISSING_AS_WORST)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_BEST_PATH_PREFIX_VALIDATE_ALLOW_INVALID)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_DAMPENING)> ,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::BGP_DAMPENING_HALF_LIFE)>,
-        AtomicField<uint16_t CONFIG_INDEX_ARG(BgpAddressFamily::BGP_DAMPENING_REUSE_THRESHOLD)>,
-        AtomicField<uint16_t CONFIG_INDEX_ARG(BgpAddressFamily::BGP_DAMPENING_SUPPRESS_THRESHOLD)>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::BGP_DAMPENING_MAXIMUM_SUPPRESS_TIME)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpAddressFamily::BGP_DAMPENING_ROUTE_MAP)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_DMZLINK_BW)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpAddressFamily::BGP_INJECT_MAP)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpAddressFamily::BGP_INJECT_MAP_EXIST_MAP)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_INJECT_MAP_COPY_ATTRIBUTES)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpAddressFamily::BGP_NEXT_HOP_ROUTE_MAP)>,
-        OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(BgpAddressFamily::BGP_NEXT_HOP_TRIGGER_DELAY)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_NEXT_HOP_TRACKING)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_RECURSIVE_HOST)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_REDISTRIBUTE_INTERNAL)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_ROUTE_MAP_PRIORITY)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_SOFT_RECONFIG_BACKUP)>,
-        OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(BgpAddressFamily::DEFAULT_METRIC)>,
-        ListField<std::tuple<uint8_t, std::vector<std::tuple<types::IPPrefix, std::string>>> CONFIG_INDEX_ARG(BgpAddressFamily::DISTANCE_RANGE)>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::DISTANCE_BGP_EXTERNAL)>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::DISTANCE_BGP_INTERNAL)>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::DISTANCE_BGP_LOCAL)>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::DISTANCE_MBGP_EXTERNAL)>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::DISTANCE_MBGP_INTERNAL)>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::DISTANCE_MBGP_LOCAL)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_IN)>,
-        OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_IN_INTERFACE)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_IN_PREFIX)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_OUT)>,
-        OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_OUT_INTERFACE)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_OUT_PREFIX)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_GATEWAY)>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::MAXIMUM_PATHS_EBGP)>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::MAXIMUM_PATHS_IBGP)>,
-        ListField<std::tuple<types::IPPrefix, bool, std::string> CONFIG_INDEX_ARG(BgpAddressFamily::NETWORK)>,
-        ValueField<std::string CONFIG_INDEX_ARG(BgpAddressFamily::TABLE_MAP)>,
-        AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::TABLE_MAP_FILTER)>
-    > reg;
-};
+struct BgpAddressFamilyRegistry : SubRegistry<BgpAddressFamilyRegistry, BgpAddressFamily, nullptr, BgpAddressFamilyFields> {};
 
 /**
  * @brief Top-level BGP process configuration fields.
@@ -539,6 +534,7 @@ struct BgpAddressFamilyRegistry
  */
 enum class Bgp
 {
+    AUTONOMOUS_SYSTEM,
     BGP_BASE,
     ADDRESS_FAMILIES,
     BGP_ALWAYS_COMPARE_MED,
@@ -580,6 +576,7 @@ enum class Bgp
     BGP_SUPPRESS_INACTIVE,
     BGP_UPDATE_DELAY,
     NEIGHBOR,
+    PEER_GROUP,
     ROUTE_SERVER_CONTEXT, // base // TODO
     TEMPLATE_PEER_POLICY, // base // TODO
     TEMPLATE_PEER_SESSION, // base // TODO
@@ -611,65 +608,66 @@ enum class Bgp
 
 CONFIG_DEFAULT_TABLE(BGP_DEFAULTS);
 
+struct BgpFields : FieldTuple<
+    AtomicField<uint32_t CONFIG_INDEX_ARG(Bgp::AUTONOMOUS_SYSTEM)>,
+    RegistryContainer<BgpBaseRegistry CONFIG_INDEX_ARG(Bgp::BGP_BASE)>,
+    OwnedListField<BgpAddressFamilyRegistry, uint32_t CONFIG_INDEX_ARG(Bgp::ADDRESS_FAMILIES)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_ALWAYS_COMPARE_MED)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_AS_DOT_NOTATION)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_CLIENT_TO_CLIENT_REFLECTION)>,
+    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Bgp::BGP_CLUSTER_ID)>,
+    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Bgp::BGP_CONFEDERATION_IDENTIFIER)>,
+    ListField<uint32_t CONFIG_INDEX_ARG(Bgp::BGP_CONFEDERATION_PEERS)>,
+    AtomicField<uint32_t CONFIG_INDEX_ARG(Bgp::BGP_CONSISTENCY_CHECKER_ERROR_MESSAGE_INTERVAL)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_DETERMINISTIC_MED)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_DMZLINK_BW)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_ENFORCE_FIRST_AS)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_ENHANCED_ERROR)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_FAST_EXTERNAL_FAILOVER)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_GRACEFUL_RESTART)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_GRACEFUL_RESTART_EXTENDED)>,
+    AtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_GRACEFUL_RESTART_RESTART_TIME)>,
+    AtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_GRACEFUL_RESTART_STALEPATH_TIME)>,
+    ValueField<std::string CONFIG_INDEX_ARG(Bgp::BGP_INJECT_MAP)>,
+    ValueField<std::string CONFIG_INDEX_ARG(Bgp::BGP_INJECT_MAP_EXIST_MAP)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_INJECT_MAP_COPY_ATTRIBUTES)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_LISTEN)>,
+    OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_LISTEN_LIMIT)>,
+    ListField<std::tuple<uint32_t, uint32_t, std::string> CONFIG_INDEX_ARG(Bgp::BGP_LISTEN_RANGE)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_LOG_NEIGHBOR_CHANGES)>,
+    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(Bgp::BGP_MAX_AS_LIMIT)>,
+    OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_MAX_COMMUNITY_LIMIT)>,
+    OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_MAX_EXT_COMMUNITY_LIMIT)>,
+    OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_NOPEERUP_DELAY_COLD_BOOT)>,
+    OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_NOPEERUP_DELAY_NSF_SWITCHOVER)>,
+    OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_NOPEERUP_DELAY_POST_BOOT)>,
+    OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_NOPEERUP_DELAY_USER_INITIATED)>,
+    AtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_REFRESH_MAX_EOR_TIME)>,
+    AtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_REFRESH_STALEPATH_TIME)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_REGEX_DETERMINISTIC)>,
+    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Bgp::BGP_ROUTER_ID)>,
+    ListField<std::tuple<
+        types::IPAddress,
+        uint16_t, // port
+        uint16_t, // refresh time
+        std::string, // ssh username
+        std::string // ssh password
+    > CONFIG_INDEX_ARG(Bgp::BGP_RPKI_SERVER)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(Bgp::BGP_SCAN_TIME)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_SUPPRESS_INACTIVE)>,
+    OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_UPDATE_DELAY)>,
+    OwnedListField<BgpNeighborSessionRegistry, types::IPAddress CONFIG_INDEX_ARG(Bgp::NEIGHBOR)>,
+    OwnedListField<BgpNeighborSessionRegistry, std::string CONFIG_INDEX_ARG(Bgp::PEER_GROUP)>,
+    ValueField<std::string CONFIG_INDEX_ARG(Bgp::ROUTE_SERVER_CONTEXT)>,
+    OwnedListField<BgpNeighborRegistry, std::string CONFIG_INDEX_ARG(Bgp::TEMPLATE_PEER_POLICY)>,
+    OwnedListField<BgpNeighborSessionRegistry, std::string CONFIG_INDEX_ARG(Bgp::TEMPLATE_PEER_SESSION)>
+> {};
+
 /**
  * @brief Registry slot for a BGP process instance.
  * @ingroup BGP
  */
-struct BgpRegistry
-{
-    SubRegistry<Bgp, nullptr,
-        RegistryContainer<BgpBaseRegistry CONFIG_INDEX_ARG(Bgp::BGP_BASE)>,
-        OwnedListField<BgpAddressFamilyRegistry, uint32_t CONFIG_INDEX_ARG(Bgp::ADDRESS_FAMILIES)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_ALWAYS_COMPARE_MED)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_AS_DOT_NOTATION)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_CLIENT_TO_CLIENT_REFLECTION)>,
-        OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Bgp::BGP_CLUSTER_ID)>,
-        OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Bgp::BGP_CONFEDERATION_IDENTIFIER)>,
-        ListField<uint32_t CONFIG_INDEX_ARG(Bgp::BGP_CONFEDERATION_PEERS)>,
-        AtomicField<uint32_t CONFIG_INDEX_ARG(Bgp::BGP_CONSISTENCY_CHECKER_ERROR_MESSAGE_INTERVAL)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_DETERMINISTIC_MED)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_DMZLINK_BW)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_ENFORCE_FIRST_AS)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_ENHANCED_ERROR)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_FAST_EXTERNAL_FAILOVER)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_GRACEFUL_RESTART)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_GRACEFUL_RESTART_EXTENDED)>,
-        AtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_GRACEFUL_RESTART_RESTART_TIME)>,
-        AtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_GRACEFUL_RESTART_STALEPATH_TIME)>,
-        ValueField<std::string CONFIG_INDEX_ARG(Bgp::BGP_INJECT_MAP)>,
-        ValueField<std::string CONFIG_INDEX_ARG(Bgp::BGP_INJECT_MAP_EXIST_MAP)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_INJECT_MAP_COPY_ATTRIBUTES)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_LISTEN)>,
-        OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_LISTEN_LIMIT)>,
-        ListField<std::tuple<uint32_t, uint32_t, std::string> CONFIG_INDEX_ARG(Bgp::BGP_LISTEN_RANGE)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_LOG_NEIGHBOR_CHANGES)>,
-        OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(Bgp::BGP_MAX_AS_LIMIT)>,
-        OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_MAX_COMMUNITY_LIMIT)>,
-        OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_MAX_EXT_COMMUNITY_LIMIT)>,
-        OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_NOPEERUP_DELAY_COLD_BOOT)>,
-        OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_NOPEERUP_DELAY_NSF_SWITCHOVER)>,
-        OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_NOPEERUP_DELAY_POST_BOOT)>,
-        OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_NOPEERUP_DELAY_USER_INITIATED)>,
-        AtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_REFRESH_MAX_EOR_TIME)>,
-        AtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_REFRESH_STALEPATH_TIME)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_REGEX_DETERMINISTIC)>,
-        OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Bgp::BGP_ROUTER_ID)>,
-        ListField<std::tuple<
-            types::IPAddress,
-            uint16_t, // port
-            uint16_t, // refresh time
-            std::string, // ssh username
-            std::string // ssh password
-        > CONFIG_INDEX_ARG(Bgp::BGP_RPKI_SERVER)>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(Bgp::BGP_SCAN_TIME)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_SUPPRESS_INACTIVE)>,
-        OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_UPDATE_DELAY)>,
-        OwnedListField<BgpNeighborSessionRegistry, types::IPAddress CONFIG_INDEX_ARG(Bgp::NEIGHBOR)>,
-        ValueField<std::string CONFIG_INDEX_ARG(Bgp::ROUTE_SERVER_CONTEXT)>,
-        ValueField<std::string CONFIG_INDEX_ARG(Bgp::TEMPLATE_PEER_POLICY)>,
-        ValueField<std::string CONFIG_INDEX_ARG(Bgp::TEMPLATE_PEER_SESSION)>
-    > reg;
-};
+struct BgpRegistry : SubRegistry<BgpRegistry, Bgp, nullptr, BgpFields> {};
 }
 
 #endif // BGP_REGISTRY_H

@@ -10,7 +10,6 @@
 
 #ifndef EIGRP_REGISTRY_H
 #define EIGRP_REGISTRY_H
-
 #include <string>
 #include <IPAddress.h>
 #include <EnumBitMap.hpp>
@@ -211,92 +210,91 @@ void EigrpSyncPassive(void* e);
 void EigrpSyncRouterId(void* e);
 void EigrpSyncAfInterface(void* e);
 
+struct EigrpFields : FieldTuple<
+    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::IS_NAMED)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::AUTO_SUMMARIZATION)>,
+    OwnedListField<config::EigrpInterfaceRegistry, interface::InterfaceKey CONFIG_INDEX_ARG(Eigrp::AF_INTERFACE)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::BFD_ALL_INTERFACE)>,
+    OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(Eigrp::BFD_INTERFACE)>,
+    ValueField<std::string CONFIG_INDEX_ARG(Eigrp::DEFAULT_INFORMATION_IN)>,
+    ValueField<std::string CONFIG_INDEX_ARG(Eigrp::DEFAULT_INFORMATION_OUT)>,
+    ValueField<std::tuple<uint32_t, uint32_t, uint8_t, uint8_t, uint16_t> CONFIG_INDEX_ARG(Eigrp::DEFAULT_METRICS)>,
+    ListField<std::tuple<uint8_t, types::IPAddress, types::IPAddress, std::string> CONFIG_INDEX_ARG(Eigrp::ADMIN_DISTANCE_RANGES)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::INTERNAL_ADMIN_DISTANCE)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::EXTERNAL_ADMIN_DISTANCE)>,
+    ValueField<std::string CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_IN)>,
+    OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_IN_INTERFACE)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_IN_ACL)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_IN_PREFIX)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_IN_GATEWAY)>,
+    ValueField<std::string CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_OUT)>,
+    OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_OUT_INTERFACE)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_OUT_ACL)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_OUT_PREFIX)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_OUT_GATEWAY)>,
+    AtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::MAX_EVENT_LOG_SIZE)>,
+    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::DEFAULT_ROUTE_TAG)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::LOG_NEIGHBOR_CHANGES)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::LOG_NEIGHBOR_WARNINGS)>,
+    AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::LOG_NEIGHBOR_WARNINGS_INTERVAL)>,
+    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::ROUTER_ID), EigrpSyncRouterId>,
+    OptionalAtomicField<types::EnumBitMap<eigrp::Stub>::type CONFIG_INDEX_ARG(Eigrp::STUB)>,
+    ValueField<std::string CONFIG_INDEX_ARG(Eigrp::STUB_LEAK_MAP)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::FAST_REROUTE_LOAD_SHARING)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::FAST_REROUTE_PER_PREFIX_ALL)>,
+    ValueField<std::string CONFIG_INDEX_ARG(Eigrp::FAST_REROUTE_PER_PREFIX_ROUTE_MAP)>,
+    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::FAST_REROUTE_TIE_BREAK_INTERFACE_DISJOINT)>,
+    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::FAST_REROUTE_TIE_BREAK_LINECARD_DISJOINT)>,
+    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::FAST_REROUTE_TIE_BREAK_LOWEST_BACKUP_PATH_METRIC)>,
+    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::FAST_REROUTE_TIE_BREAK_SRLG_DISJOINT)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::MAX_PATHS)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::MAX_HOPS)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_K1), EigrpSyncKValues>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_K2), EigrpSyncKValues>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_K3), EigrpSyncKValues>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_K4), EigrpSyncKValues>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_K5), EigrpSyncKValues>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_K6), EigrpSyncKValues>,
+    ListField<std::tuple<types::IPAddress, interface::InterfaceKey> CONFIG_INDEX_ARG(Eigrp::NEIGHBOR), EigrpSyncNeighbors>,
+    ListField<std::tuple<types::IPAddress, IGNOR(uint8_t)> CONFIG_INDEX_ARG(Eigrp::NETWORK), EigrpSyncNetworks>,
+    ValueField<std::string CONFIG_INDEX_ARG(Eigrp::OFFSET_LIST_IN)>,
+    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::OFFSET_LIST_IN_OFFSET)>,
+    OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(Eigrp::OFFSET_LIST_IN_INTERFACE)>,
+    ValueField<std::string CONFIG_INDEX_ARG(Eigrp::OFFSET_LIST_OUT)>,
+    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::OFFSET_LIST_OUT_OFFSET)>,
+    OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(Eigrp::OFFSET_LIST_OUT_INTERFACE)>,
+    ListField<interface::InterfaceKey CONFIG_INDEX_ARG(Eigrp::PASSIVE_INTERFACES), EigrpSyncPassive>,
+    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::SHUTDOWN), EigrpShutdown>,
+    ListField<std::tuple<types::IPAddress, uint8_t, uint32_t, uint32_t, uint8_t, uint8_t, uint16_t, uint8_t> CONFIG_INDEX_ARG(Eigrp::SUMMARY_METRIC)>,
+    OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::ACTIVE_TIME)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::ACTIVE_DISABLED)>,
+    AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::GRACEFUL_PURGE_TIME)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::NON_STOP_FORWARDING)>,
+    AtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::WIDE_METRIC)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::RIB_SCALE)>,
+    AtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::MAXIMUM_PREFIX)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::DAMPENING)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::DAMPENING_WARNINGS)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::DAMPENING_THRESHOLD)>,
+    AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::DAMPENING_RESET_TIME)>,
+    AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::DAMPENING_RESTART)>,
+    AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::DAMPENING_RESTART_COUNT)>,
+    AtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::NEIGHBOR_MAXIMUM_PREFIX)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::NEIGHBOR_DAMPENING)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::NEIGHBOR_DAMPENING_WARNINGS)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::NEIGHBOR_DAMPENING_THRESHOLD)>,
+    AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::NEIGHBOR_DAMPENING_RESET_TIME)>,
+    AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::NEIGHBOR_DAMPENING_RESTART)>,
+    AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::NEIGHBOR_DAMPENING_RESTART_COUNT)>,
+    AtomicField<eigrp::TrafficShareMode CONFIG_INDEX_ARG(Eigrp::TRAFFIC_SHARE)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::VARIANCE), EigrpSyncVariance>
+> {};
+
 /**
  * @brief Registry slot for an EIGRP process instance.
  * @ingroup EIGRP
  */
-struct EigrpRegistry
-{
-    SubRegistry<Eigrp, nullptr,
-        AtomicField<bool CONFIG_INDEX_ARG(Eigrp::IS_NAMED)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Eigrp::AUTO_SUMMARIZATION)>,
-        OwnedListField<config::EigrpInterfaceRegistry, interface::InterfaceKey CONFIG_INDEX_ARG(Eigrp::AF_INTERFACE)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Eigrp::BFD_ALL_INTERFACE)>,
-        OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(Eigrp::BFD_INTERFACE)>,
-        ValueField<std::string CONFIG_INDEX_ARG(Eigrp::DEFAULT_INFORMATION_IN)>,
-        ValueField<std::string CONFIG_INDEX_ARG(Eigrp::DEFAULT_INFORMATION_OUT)>,
-        ValueField<std::tuple<uint32_t, uint32_t, uint8_t, uint8_t, uint16_t> CONFIG_INDEX_ARG(Eigrp::DEFAULT_METRICS)>,
-        ListField<std::tuple<uint8_t, types::IPAddress, types::IPAddress, std::string> CONFIG_INDEX_ARG(Eigrp::ADMIN_DISTANCE_RANGES)>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::INTERNAL_ADMIN_DISTANCE)>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::EXTERNAL_ADMIN_DISTANCE)>,
-        ValueField<std::string CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_IN)>,
-        OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_IN_INTERFACE)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_IN_ACL)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_IN_PREFIX)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_IN_GATEWAY)>,
-        ValueField<std::string CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_OUT)>,
-        OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_OUT_INTERFACE)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_OUT_ACL)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_OUT_PREFIX)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_OUT_GATEWAY)>,
-        AtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::MAX_EVENT_LOG_SIZE)>,
-        OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::DEFAULT_ROUTE_TAG)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Eigrp::LOG_NEIGHBOR_CHANGES)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Eigrp::LOG_NEIGHBOR_WARNINGS)>,
-        AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::LOG_NEIGHBOR_WARNINGS_INTERVAL)>,
-        OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::ROUTER_ID), EigrpSyncRouterId>,
-        OptionalAtomicField<types::EnumBitMap<eigrp::Stub>::type CONFIG_INDEX_ARG(Eigrp::STUB)>,
-        ValueField<std::string CONFIG_INDEX_ARG(Eigrp::STUB_LEAK_MAP)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Eigrp::FAST_REROUTE_LOAD_SHARING)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Eigrp::FAST_REROUTE_PER_PREFIX_ALL)>,
-        ValueField<std::string CONFIG_INDEX_ARG(Eigrp::FAST_REROUTE_PER_PREFIX_ROUTE_MAP)>,
-        OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::FAST_REROUTE_TIE_BREAK_INTERFACE_DISJOINT)>,
-        OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::FAST_REROUTE_TIE_BREAK_LINECARD_DISJOINT)>,
-        OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::FAST_REROUTE_TIE_BREAK_LOWEST_BACKUP_PATH_METRIC)>,
-        OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::FAST_REROUTE_TIE_BREAK_SRLG_DISJOINT)>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::MAX_PATHS)>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::MAX_HOPS)>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_K1), EigrpSyncKValues>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_K2), EigrpSyncKValues>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_K3), EigrpSyncKValues>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_K4), EigrpSyncKValues>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_K5), EigrpSyncKValues>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_K6), EigrpSyncKValues>,
-        ListField<std::tuple<types::IPAddress, interface::InterfaceKey> CONFIG_INDEX_ARG(Eigrp::NEIGHBOR), EigrpSyncNeighbors>,
-        ListField<std::tuple<types::IPAddress, IGNOR(uint8_t)> CONFIG_INDEX_ARG(Eigrp::NETWORK), EigrpSyncNetworks>,
-        ValueField<std::string CONFIG_INDEX_ARG(Eigrp::OFFSET_LIST_IN)>,
-        OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::OFFSET_LIST_IN_OFFSET)>,
-        OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(Eigrp::OFFSET_LIST_IN_INTERFACE)>,
-        ValueField<std::string CONFIG_INDEX_ARG(Eigrp::OFFSET_LIST_OUT)>,
-        OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::OFFSET_LIST_OUT_OFFSET)>,
-        OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(Eigrp::OFFSET_LIST_OUT_INTERFACE)>,
-        ListField<interface::InterfaceKey CONFIG_INDEX_ARG(Eigrp::PASSIVE_INTERFACES), EigrpSyncPassive>,
-        AtomicField<bool CONFIG_INDEX_ARG(Eigrp::SHUTDOWN), EigrpShutdown>,
-        ListField<std::tuple<types::IPAddress, uint8_t, uint32_t, uint32_t, uint8_t, uint8_t, uint16_t, uint8_t> CONFIG_INDEX_ARG(Eigrp::SUMMARY_METRIC)>,
-        OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::ACTIVE_TIME)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Eigrp::ACTIVE_DISABLED)>,
-        AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::GRACEFUL_PURGE_TIME)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Eigrp::NON_STOP_FORWARDING)>,
-        AtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::WIDE_METRIC)>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::RIB_SCALE)>,
-        AtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::MAXIMUM_PREFIX)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Eigrp::DAMPENING)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Eigrp::DAMPENING_WARNINGS)>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::DAMPENING_THRESHOLD)>,
-        AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::DAMPENING_RESET_TIME)>,
-        AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::DAMPENING_RESTART)>,
-        AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::DAMPENING_RESTART_COUNT)>,
-        AtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::NEIGHBOR_MAXIMUM_PREFIX)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Eigrp::NEIGHBOR_DAMPENING)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Eigrp::NEIGHBOR_DAMPENING_WARNINGS)>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::NEIGHBOR_DAMPENING_THRESHOLD)>,
-        AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::NEIGHBOR_DAMPENING_RESET_TIME)>,
-        AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::NEIGHBOR_DAMPENING_RESTART)>,
-        AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::NEIGHBOR_DAMPENING_RESTART_COUNT)>,
-        AtomicField<eigrp::TrafficShareMode CONFIG_INDEX_ARG(Eigrp::TRAFFIC_SHARE)>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::VARIANCE), EigrpSyncVariance>
-    > reg;
-};
+struct EigrpRegistry : SubRegistry<EigrpRegistry, Eigrp, nullptr, EigrpFields> {};
 
 /**
  * @brief Named-mode EIGRP container fields (IPv4 and IPv6 AF instances, shutdown).
@@ -315,18 +313,17 @@ enum class EigrpNamed
 
 CONFIG_DEFAULT_TABLE(EIGRP_NAMED_DEFAULTS);
 
+struct EigrpNamedFields : FieldTuple<
+    ListField<std::tuple<uint16_t, std::string> CONFIG_INDEX_ARG(EigrpNamed::NAMED_INSTANCES_V4)>,
+    ListField<std::tuple<uint16_t, std::string> CONFIG_INDEX_ARG(EigrpNamed::NAMED_INSTANCES_V6)>,
+    AtomicField<bool CONFIG_INDEX_ARG(EigrpNamed::SHUTDOWN)>
+> {};
+
 /**
  * @brief Registry slot for a named-mode EIGRP container.
  * @ingroup EIGRP
  */
-struct EigrpNamedRegistry
-{
-    SubRegistry<EigrpNamed, nullptr,
-        ListField<std::tuple<uint16_t, std::string> CONFIG_INDEX_ARG(EigrpNamed::NAMED_INSTANCES_V4)>,
-        ListField<std::tuple<uint16_t, std::string> CONFIG_INDEX_ARG(EigrpNamed::NAMED_INSTANCES_V6)>,
-        AtomicField<bool CONFIG_INDEX_ARG(EigrpNamed::SHUTDOWN)>
-    > reg;
-};
+struct EigrpNamedRegistry : SubRegistry<EigrpNamedRegistry, EigrpNamed, nullptr, EigrpNamedFields> {};
 }
 
 #endif // EIGRP_REGISTRY_H

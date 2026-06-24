@@ -145,15 +145,15 @@ public:
      * @param src       Protocol source being removed.
      * @param pid       Process instance ID.
      */
-    template <typename AddrType>
-    void removeRoutes(std::vector<std::pair<AddrType, uint8_t>> withdraws, RouteSource src, uint32_t pid)
+    template <typename PrefixType>
+    void removeRoutes(std::vector<PrefixType> withdraws, RouteSource src, uint32_t pid)
     {
-        if constexpr (std::is_same_v<AddrType, uint32_t>)
+        if constexpr (std::is_same_v<PrefixType, types::IPv4Prefix>)
             return rib4.removeRoutes(withdraws, src, pid);
-        else if constexpr (std::is_same_v<AddrType, __uint128_t>)
+        else if constexpr (std::is_same_v<PrefixType, types::IPv6Prefix>)
             return rib6.removeRoutes(withdraws, src, pid);
         else
-            static_assert(always_false<AddrType>, "Unsupported Address Type");
+            static_assert(always_false<PrefixType>, "Unsupported Prefix Type");
     }
 
     // LOOKUP
@@ -190,6 +190,15 @@ public:
     {
         return lookup<AddrType>(reinterpret_cast<const types::NetworkSpan<AddrType>&>(addr), g);
     }
+
+    /**
+     * TODO doxy comment
+     */
+    template <types::IsIPPrefix Prefix>
+    RibBucket<typename Prefix::Addr>* lookupBucket(const Prefix& prefix, utils::RCU::Guard&)
+    {
+        return rib4.lookupBucket(PrefixKey<decltype(Prefix::Addr)>{prefix.addr, prefix.prefixLength});
+    } 
 
     // WATCH SUBSCRIPTIONS
 
@@ -300,6 +309,17 @@ public:
         rib6.clear();
         utils::RCU::synchronize();
         utils::RCU::tryReclaim();
+    }
+
+    template <typename AddrType>
+    void wait()
+    {
+        if constexpr (std::is_same_v<AddrType, uint32_t>)
+            rib4.wait();
+        else if constexpr (std::is_same_v<AddrType, __uint128_t>)
+            rib6.wait();
+        else
+            static_assert(always_false<AddrType>, "Unsupported Address Type");
     }
 
 private:

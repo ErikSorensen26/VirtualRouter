@@ -18,7 +18,7 @@
 #include "tcp/Tcp.h"
 #include "routing/RoutingTable.hpp"
 #include "interface/InterfaceManager.h"
-#include "configs/registry/global/GlobalRegistry.h"
+namespace config { struct VrfRegistry; struct GlobalRegistry; }
 
 namespace interface { class Interface; enum class InterfaceType : uint8_t; }
 

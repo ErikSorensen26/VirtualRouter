@@ -102,43 +102,42 @@ void OspfInterfaceSyncNeighbors(void* iface);
 void OspfInterfaceSyncNetworkType(void* iface);
 void OspfInterfaceDemandCircuit(void* iface);
 
-struct OspfInterfaceRegistry
-{
-    SubRegistry<OspfInterface, nullptr,
-        AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::BFD)>, // TODO
-        OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(OspfInterface::COST)>,
-        AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::DATABASE_FILTER)>,
-        OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(OspfInterface::DEAD_INTERVAL),
-            OspfInterfaceSyncTimers>,
-        AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::DEMAND_CIRCUIT),
-            OspfInterfaceDemandCircuit>,
-        AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::DEMAND_CIRCUIT_IGNORE),
-            OspfInterfaceDemandCircuit>,
-        AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::FLOOD_REDUCTION),
-            OspfInterfaceDemandCircuit>,
-        OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(OspfInterface::HELLO_INTERVAL),
-            OspfInterfaceSyncTimers>,
-        OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(OspfInterface::HELLO_MULTIPLIER),
-            OspfInterfaceSyncTimers>,
-        AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::MTU_IGNORE)>,
-        ListField<std::tuple<
-            types::IPAddress,           // neighbor address
-            IGNOR(std::optional<uint16_t>),    // cost
-            IGNOR(bool),                       // database-filter
-            IGNOR(std::optional<uint16_t>),    // poll interval
-            IGNOR(std::optional<uint8_t>)
-        > CONFIG_INDEX_ARG(OspfInterface::NEIGHBOR),
-            OspfInterfaceSyncNeighbors>,
-        AtomicField<ospf::NetworkType CONFIG_INDEX_ARG(OspfInterface::NETWORK),
-            OspfInterfaceSyncNetworkType>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(OspfInterface::PRIORITY)>,
-        AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::PASSIVE)>,
-        AtomicField<uint16_t CONFIG_INDEX_ARG(OspfInterface::RETRANSMIT_INTERVAL)>,
-        AtomicField<uint16_t CONFIG_INDEX_ARG(OspfInterface::TRANSMIT_DELAY)>,
-        OptionalAtomicField<bool CONFIG_INDEX_ARG(OspfInterface::TTL_SEC)>, // XXX:
-        AtomicField<uint8_t CONFIG_INDEX_ARG(OspfInterface::TTL_SEC_HOPS)> // XXX:
-    > reg;
-};
+struct OspfInterfaceFields : FieldTuple<
+    AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::BFD)>, // TODO
+    OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(OspfInterface::COST)>,
+    AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::DATABASE_FILTER)>,
+    OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(OspfInterface::DEAD_INTERVAL),
+        OspfInterfaceSyncTimers>,
+    AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::DEMAND_CIRCUIT),
+        OspfInterfaceDemandCircuit>,
+    AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::DEMAND_CIRCUIT_IGNORE),
+        OspfInterfaceDemandCircuit>,
+    AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::FLOOD_REDUCTION),
+        OspfInterfaceDemandCircuit>,
+    OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(OspfInterface::HELLO_INTERVAL),
+        OspfInterfaceSyncTimers>,
+    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(OspfInterface::HELLO_MULTIPLIER),
+        OspfInterfaceSyncTimers>,
+    AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::MTU_IGNORE)>,
+    ListField<std::tuple<
+        types::IPAddress,           // neighbor address
+        IGNOR(std::optional<uint16_t>),    // cost
+        IGNOR(bool),                       // database-filter
+        IGNOR(std::optional<uint16_t>),    // poll interval
+        IGNOR(std::optional<uint8_t>)
+    > CONFIG_INDEX_ARG(OspfInterface::NEIGHBOR),
+        OspfInterfaceSyncNeighbors>,
+    AtomicField<ospf::NetworkType CONFIG_INDEX_ARG(OspfInterface::NETWORK),
+        OspfInterfaceSyncNetworkType>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(OspfInterface::PRIORITY)>,
+    AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::PASSIVE)>,
+    AtomicField<uint16_t CONFIG_INDEX_ARG(OspfInterface::RETRANSMIT_INTERVAL)>,
+    AtomicField<uint16_t CONFIG_INDEX_ARG(OspfInterface::TRANSMIT_DELAY)>,
+    OptionalAtomicField<bool CONFIG_INDEX_ARG(OspfInterface::TTL_SEC)>, // XXX:
+    AtomicField<uint8_t CONFIG_INDEX_ARG(OspfInterface::TTL_SEC_HOPS)> // XXX:
+> {};
+
+struct OspfInterfaceRegistry : SubRegistry<OspfInterfaceRegistry, OspfInterface, nullptr, OspfInterfaceFields> {};
 
 enum class OspfInterfaceAddressFamily : uint8_t
 {
@@ -148,14 +147,13 @@ enum class OspfInterfaceAddressFamily : uint8_t
     COUNT,
 };
 
-struct OspfInterfaceAddressFamilyRegistry
-{
-    SubRegistry<OspfInterfaceAddressFamily, nullptr,
-        RegistryContainer<OspfInterfaceRegistry CONFIG_INDEX_ARG(OspfInterfaceAddressFamily::BASE)>,
-        RegistryContainer<OspfInterfaceRegistry CONFIG_INDEX_ARG(OspfInterfaceAddressFamily::IPV4)>,
-        RegistryContainer<OspfInterfaceRegistry CONFIG_INDEX_ARG(OspfInterfaceAddressFamily::IPV6)>
-    > reg;
-};
+struct OspfInterfaceAddressFamilyFields : FieldTuple<
+    RegistryContainer<OspfInterfaceRegistry CONFIG_INDEX_ARG(OspfInterfaceAddressFamily::BASE)>,
+    RegistryContainer<OspfInterfaceRegistry CONFIG_INDEX_ARG(OspfInterfaceAddressFamily::IPV4)>,
+    RegistryContainer<OspfInterfaceRegistry CONFIG_INDEX_ARG(OspfInterfaceAddressFamily::IPV6)>
+> {};
+
+struct OspfInterfaceAddressFamilyRegistry : SubRegistry<OspfInterfaceAddressFamilyRegistry, OspfInterfaceAddressFamily, nullptr, OspfInterfaceAddressFamilyFields> {};
 
 enum class OspfInterfaceIPSec : uint8_t
 {
@@ -167,16 +165,15 @@ enum class OspfInterfaceIPSec : uint8_t
     COUNT
 };
 
-struct OspfInterfaceIPSecRegistry
-{
-    SubRegistry<OspfInterfaceIPSec, nullptr,
-        OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(OspfInterfaceIPSec::SPI)>, // TODO:
-        OptionalAtomicField<ospf::IPsecAuthType CONFIG_INDEX_ARG(OspfInterfaceIPSec::AUTHENTICATION_TYPE)>, // TODO:
-        ValueField<std::array<uint8_t, 40> CONFIG_INDEX_ARG(OspfInterfaceIPSec::AUTHENTICATION_KEY)>, // TODO:
-        OptionalAtomicField<ospf::IPsecEncryptType CONFIG_INDEX_ARG(OspfInterfaceIPSec::ENCRYPTION_TYPE)>, // TODO:
-        ValueField<std::array<uint8_t, 64> CONFIG_INDEX_ARG(OspfInterfaceIPSec::ENCRYPTION_KEY)> // TODO:
-    > reg;
-};
+struct OspfInterfaceIPSecFields : FieldTuple<
+    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(OspfInterfaceIPSec::SPI)>, // TODO:
+    OptionalAtomicField<ospf::IPsecAuthType CONFIG_INDEX_ARG(OspfInterfaceIPSec::AUTHENTICATION_TYPE)>, // TODO:
+    ValueField<std::array<uint8_t, 40> CONFIG_INDEX_ARG(OspfInterfaceIPSec::AUTHENTICATION_KEY)>, // TODO:
+    OptionalAtomicField<ospf::IPsecEncryptType CONFIG_INDEX_ARG(OspfInterfaceIPSec::ENCRYPTION_TYPE)>, // TODO:
+    ValueField<std::array<uint8_t, 64> CONFIG_INDEX_ARG(OspfInterfaceIPSec::ENCRYPTION_KEY)> // TODO:
+> {};
+
+struct OspfInterfaceIPSecRegistry : SubRegistry<OspfInterfaceIPSecRegistry, OspfInterfaceIPSec, nullptr, OspfInterfaceIPSecFields> {};
 
 enum class OspfInterfaceBase : uint8_t
 {
@@ -211,28 +208,27 @@ CONFIG_DEFAULT_TABLE(OSPF_INTERFACE_BASE_DEFAULTS)
 void OspfInterfaceBaseUpdateDigestKey(void* iface);
 void OspfInterfaceBasePrefixSuppression(void* iface);
 
-struct OspfInterfaceBaseRegistry
-{
-    SubRegistry<OspfInterfaceBase, nullptr,
-        RegistryContainer<OspfInterfaceRegistry CONFIG_INDEX_ARG(OspfInterfaceBase::BASE)>,
-        OwnedListField<OspfInterfaceAddressFamilyRegistry, uint32_t CONFIG_INDEX_ARG(OspfInterfaceBase::PROCESS_CONFIGS)>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(OspfInterfaceBase::INSTANCE_ID)>,
-        OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(OspfInterfaceBase::PROCESS_ID)>,
-        OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(OspfInterfaceBase::AREA_ID)>,
-        AtomicField<bool CONFIG_INDEX_ARG(OspfInterfaceBase::INCLUDE_SECONDARIES)>,
-        OptionalAtomicField<ospf::AuthType CONFIG_INDEX_ARG(OspfInterfaceBase::AUTHENTICATION_TYPE)>,
-        OptionalAtomicField<uint64_t CONFIG_INDEX_ARG(OspfInterfaceBase::AUTHENTICATION_KEY)>,
-        RegistryContainer<OspfInterfaceIPSecRegistry CONFIG_INDEX_ARG(OspfInterfaceBase::IPSEC)>,
-        OptionalAtomicField<bool CONFIG_INDEX_ARG(OspfInterfaceBase::LLS)>,
-        ListField<std::tuple<uint8_t, IgnoreCompare<std::array<uint8_t, 16>>> CONFIG_INDEX_ARG(OspfInterfaceBase::MESSAGE_DIGEST_KEYS),
-            OspfInterfaceBaseUpdateDigestKey>,
-        AtomicField<bool CONFIG_INDEX_ARG(OspfInterfaceBase::MESSAGE_DIGEST_ENCRYPT)>,
-        AtomicField<bool CONFIG_INDEX_ARG(OspfInterfaceBase::PREFIX_SUPPRESSION),
-            OspfInterfaceBasePrefixSuppression>,
-        AtomicField<uint16_t CONFIG_INDEX_ARG(OspfInterfaceBase::RESYNC_TIMEOUT)>, // TODO 
-        AtomicField<bool CONFIG_INDEX_ARG(OspfInterfaceBase::SHUTDOWN)> // TODO
-    > reg;
-};
+struct OspfInterfaceBaseFields : FieldTuple<
+    RegistryContainer<OspfInterfaceRegistry CONFIG_INDEX_ARG(OspfInterfaceBase::BASE)>,
+    OwnedListField<OspfInterfaceAddressFamilyRegistry, uint32_t CONFIG_INDEX_ARG(OspfInterfaceBase::PROCESS_CONFIGS)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(OspfInterfaceBase::INSTANCE_ID)>,
+    OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(OspfInterfaceBase::PROCESS_ID)>,
+    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(OspfInterfaceBase::AREA_ID)>,
+    AtomicField<bool CONFIG_INDEX_ARG(OspfInterfaceBase::INCLUDE_SECONDARIES)>,
+    OptionalAtomicField<ospf::AuthType CONFIG_INDEX_ARG(OspfInterfaceBase::AUTHENTICATION_TYPE)>,
+    OptionalAtomicField<uint64_t CONFIG_INDEX_ARG(OspfInterfaceBase::AUTHENTICATION_KEY)>,
+    RegistryContainer<OspfInterfaceIPSecRegistry CONFIG_INDEX_ARG(OspfInterfaceBase::IPSEC)>,
+    OptionalAtomicField<bool CONFIG_INDEX_ARG(OspfInterfaceBase::LLS)>,
+    ListField<std::tuple<uint8_t, IgnoreCompare<std::array<uint8_t, 16>>> CONFIG_INDEX_ARG(OspfInterfaceBase::MESSAGE_DIGEST_KEYS),
+        OspfInterfaceBaseUpdateDigestKey>,
+    AtomicField<bool CONFIG_INDEX_ARG(OspfInterfaceBase::MESSAGE_DIGEST_ENCRYPT)>,
+    AtomicField<bool CONFIG_INDEX_ARG(OspfInterfaceBase::PREFIX_SUPPRESSION),
+        OspfInterfaceBasePrefixSuppression>,
+    AtomicField<uint16_t CONFIG_INDEX_ARG(OspfInterfaceBase::RESYNC_TIMEOUT)>, // TODO 
+    AtomicField<bool CONFIG_INDEX_ARG(OspfInterfaceBase::SHUTDOWN)> // TODO
+> {};
+
+struct OspfInterfaceBaseRegistry : SubRegistry<OspfInterfaceBaseRegistry, OspfInterfaceBase, nullptr, OspfInterfaceBaseFields> {};
 
 enum class OspfInterfaceAf
 {
@@ -242,14 +238,13 @@ enum class OspfInterfaceAf
     COUNT
 };
 
-struct OspfInterfaceAfRegistry 
-{
-    SubRegistry<OspfInterfaceAf, nullptr,
-        RegistryContainer<OspfInterfaceBaseRegistry CONFIG_INDEX_ARG(OspfInterfaceAf::IPV4)>,
-        RegistryContainer<OspfInterfaceBaseRegistry CONFIG_INDEX_ARG(OspfInterfaceAf::IPV6)>,
-        RegistryContainer<OspfInterfaceBaseRegistry CONFIG_INDEX_ARG(OspfInterfaceAf::DEFAULT)>
-    > reg;
-};
+struct OspfInterfaceAfFields : FieldTuple<
+    RegistryContainer<OspfInterfaceBaseRegistry CONFIG_INDEX_ARG(OspfInterfaceAf::IPV4)>,
+    RegistryContainer<OspfInterfaceBaseRegistry CONFIG_INDEX_ARG(OspfInterfaceAf::IPV6)>,
+    RegistryContainer<OspfInterfaceBaseRegistry CONFIG_INDEX_ARG(OspfInterfaceAf::DEFAULT)>
+> {};
+
+struct OspfInterfaceAfRegistry : SubRegistry<OspfInterfaceAfRegistry, OspfInterfaceAf, nullptr, OspfInterfaceAfFields> {};
 }
 
 #endif // OSPF_INTERFACE_REGISTRY_H

@@ -53,8 +53,6 @@ add_library(VirtualRouter STATIC
     ${VR_TYPES_CPP}
 )
 
-target_precompile_headers(VirtualRouter PRIVATE <bits/stdc++.h>)
-
 # ----- INCLUDE POLICY (this is the entire point) -----
 # 1) protocol includes: "eigrp/..." (root is src/protocol)
 # 2) common/external/types stay <file> (each folder is its own root)

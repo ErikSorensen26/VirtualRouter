@@ -82,8 +82,9 @@ class Rib
 
     std::atomic<size_t> siz{};
     std::unordered_map<PrefixKey<AddrType>, RibBucket<AddrType>*, PrefixHash<AddrType>> table; ///< Prefix-to-bucket map.
-    Fib<AddrType>           fib;          ///< Forwarding table updated after each best-path run.
     ProcessQueue            scheduler;    ///< Serialises all RIB mutations.
+    ProcessQueueRef         selfRef;      ///< Lifetime-safe ref for self-referencing posts; released in ~Rib() after the final clear() completes.
+    Fib<AddrType>           fib;          ///< Forwarding table updated after each best-path run.
     RouteWatcher<AddrType>  routeWatcher; ///< Subscription manager for route-change callbacks.
 
 public:
@@ -99,7 +100,7 @@ public:
      * @param s `ProcessQueue` used to serialise all state mutations.
      *          Must be created via `ControlScheduler::create()`.
      */
-    Rib(ProcessQueue&& s) : scheduler(std::move(s)), routeWatcher(fib, scheduler) {}
+    Rib(ProcessQueue&& s) : scheduler(std::move(s)), selfRef(scheduler.ref()), routeWatcher(fib, scheduler) {}
 
     Rib(const Rib&)            = delete;
     Rib& operator=(const Rib&) = delete;
@@ -107,9 +108,15 @@ public:
     Rib& operator=(Rib&&)      = delete;
 
     /**
-     * @brief Destroy the RIB, posting a `clear()` task to drain all state.
+     * @brief Destroy the RIB: posts a final `clear()` task, then blocks until
+     *        it (and any other in-flight task) finishes before tearing down
+     *        `routeWatcher`/`fib`/`table`.
      */
-    ~Rib() { clear(); }
+    ~Rib()
+    {
+        clear();
+        selfRef.release();
+    }
 
     // ROUTE INSTALLATION
 
@@ -123,7 +130,7 @@ public:
      */
     void addRoutes(std::vector<RibEntry<AddrType>*>& es)
     {
-        scheduler.post([this, routes = std::move(es)]() {
+        selfRef.post([this, routes = std::move(es)]() {
             for (const auto* rt : routes)
                 installRoute(rt);
             if (siz.load(std::memory_order_relaxed) != table.size())
@@ -140,7 +147,7 @@ public:
      */
     void addRoute(const RibEntry<AddrType>* e)
     {
-        scheduler.post([this, e]() {
+        selfRef.post([this, e]() {
             installRoute(e);
             if (siz.load(std::memory_order_relaxed) != table.size())
                 siz.store(table.size(), std::memory_order_release);
@@ -155,11 +162,12 @@ public:
      * @param src       Protocol source to remove.
      * @param pid       Process instance ID (0 = any).
      */
-    void removeRoutes(std::vector<std::pair<AddrType, uint8_t>>& withdraws, RouteSource src, uint64_t pid = 0)
+    template <types::IsIPPrefix Prefix>    
+    void removeRoutes(std::vector<Prefix>& withdraws, RouteSource src, uint64_t pid = 0)
     {
-        scheduler.post([this, ws = std::move(withdraws), src, pid]() {
+        selfRef.post([this, ws = std::move(withdraws), src, pid]() {
             for (const auto& w : ws)
-                withdrawRoute(w.first, w.second, src, pid);
+                withdrawRoute(w.addr, w.prefixLength, src, pid);
         });
     }
 
@@ -172,7 +180,7 @@ public:
      */
     void removeRoute(AddrType prefix, uint8_t length, RouteSource src, uint64_t pid = 0)
     {
-        scheduler.post([this, prefix, length, src, pid]() {
+        selfRef.post([this, prefix, length, src, pid]() {
             withdrawRoute(prefix, length, src, pid);
         });
     }
@@ -252,7 +260,7 @@ public:
      */
     void clear() noexcept
     {
-        scheduler.post([this]() {
+        selfRef.post([this]() {
             fib.clear();
 
             for (auto& kv : table)
@@ -285,6 +293,23 @@ public:
     RibEntry<AddrType>* lookup(const types::NetworkSpan<AddrType>& addr) const
     {
         return fib.lookup(addr);
+    }
+    /**
+     * TODO doxy comment
+     */
+    RibBucket<AddrType>* lookupBucket(PrefixKey<AddrType>& prefixKey) const
+    {
+        if (auto bucket = table.find(prefixKey); bucket != table.end())
+            return bucket.second;
+        return nullptr;
+    }
+
+    /**
+     * TODO: Finish Doxy
+     */
+    void wait()
+    {
+        scheduler.waitIdle();
     }
 
 private:

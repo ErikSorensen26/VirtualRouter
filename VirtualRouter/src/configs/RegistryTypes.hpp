@@ -32,6 +32,7 @@
 #include <atomic>
 #include <concepts>
 #include <cassert>
+#include <optional>
 #include <utility>
 #include <unordered_map>
 #include <vector>
@@ -75,7 +76,9 @@ class RegistryDatabase;
 // TYPE ALIASES
 using ApplyFn = void (*)(void* ctx); ///< Callback signature for live-notification appliers.
 
-template <typename ENUM, ApplyFn H, typename... Fields>
+template <typename ...Fields>
+struct FieldTuple;
+template <typename Base, typename ENUM, ApplyFn H, typename Fields>
 class SubRegistry;
 
 /**
@@ -114,12 +117,20 @@ struct AtomicFieldFlag {};
 struct OptionalAtomicFieldFlag : AtomicFieldFlag {};
 
 /**
- * @brief Flag type that marks a field as a reference-container (sub-scope pointer).
+ * @brief Flag type that marks a field as a reference-container (sub-scope).
  * @ingroup CONFIG
  *
  * Used by @ref RegistryContainer to satisfy the @ref IsRefContainer concept.
  */
 struct RefContainerFieldFlag {};
+
+/**
+ * @brief Flag type that markes a field as an optional reference-container (sub-scope).
+ * @ingroup CONFIG
+ * 
+ * Used by @ref OptionalRegistryContainer to satisfy the @ref IsOptionalRefContainer concept.
+ */
+struct OptionalRefContainerFieldFlag {};
 
 /**
  * @brief Flag type that marks a field as a mutex-guarded value config field.
@@ -214,6 +225,16 @@ template <typename T>
 concept IsRefContainer =
     IsFieldBase<T> &&
     std::derived_from<T, RefContainerFieldFlag>;
+
+/**
+ * @brief Satisfied by optional reference-container fields that hold a child scope handle.
+ *
+ * @tparam T  Type to test.
+ */
+template <typename T>
+concept IsOptionalRefContainer =
+    IsFieldBase<T> &&
+    std::derived_from<T, OptionalRefContainerFieldFlag>;
 
 /**
  * @brief Satisfied by reference-container fields that carry an embedded index.
@@ -381,7 +402,7 @@ public:
     CONFIG_INDEX_MEMBER
     void setMask(const AtomicField* p) noexcept { mask = p; }
 private:
-    template <typename, ApplyFn, typename...>
+    template <typename, typename, ApplyFn, typename>
     friend class SubRegistry;
     template <IsAtomicField>
     friend class AtomicFieldAccessor;
@@ -400,7 +421,7 @@ public:
     CONFIG_INDEX_MEMBER
     void setMask(const AtomicField* p) noexcept { mask = p; }
 private:
-    template <typename, ApplyFn, typename...>
+    template <typename, typename, ApplyFn, typename>
     friend class SubRegistry;
     template <IsAtomicField>
     friend class AtomicFieldAccessor;
@@ -438,7 +459,7 @@ public:
     CONFIG_INDEX_MEMBER
     void setMask(const OptionalAtomicField* p) noexcept { mask = p; }
 private:
-    template <typename, ApplyFn, typename...>
+    template <typename, typename, ApplyFn, typename>
     friend class SubRegistry;
     template <IsOptionalAtomicField>
     friend class OptionalAtomicFieldAccessor;
@@ -457,7 +478,7 @@ public:
     CONFIG_INDEX_MEMBER
     void setMask(const OptionalAtomicField* p) noexcept { mask = p; }
 private:
-    template <typename, ApplyFn, typename...>
+    template <typename, typename, ApplyFn, typename>
     friend class SubRegistry;
     template <IsOptionalAtomicField>
     friend class OptionalAtomicFieldAccessor;
@@ -501,12 +522,12 @@ public:
     CONFIG_INDEX_MEMBER
     void setMask(const ValueField* p) noexcept { mask = p; }
 private:
-    template <typename, ApplyFn, typename...>
+    template <typename, typename, ApplyFn, typename>
     friend class SubRegistry;
     template <IsValueField>
     friend class ValueFieldAccessor;
 
-    std::atomic<T*> value{};                                         ///< Guarded value; valid only when state == SET.
+    std::atomic<T*> value = nullptr;                                         ///< Guarded value; valid only when state == SET.
     std::atomic<FieldState> state{FieldState::INHERIT};  ///< Whether a local value has been set.
     const ValueField* mask = nullptr;
 };
@@ -520,7 +541,7 @@ public:
     CONFIG_INDEX_MEMBER
     void setMask(const ValueField* p) noexcept { mask = p; }
 private:
-    template <typename, ApplyFn, typename...>
+    template <typename, typename, ApplyFn, typename>
     friend class SubRegistry;
     template <IsValueField>
     friend class ValueFieldAccessor;
@@ -568,7 +589,7 @@ public:
     using node = T;
     CONFIG_INDEX_MEMBER
 private:
-    template <typename, ApplyFn, typename...>
+    template <typename, typename, ApplyFn, typename>
     friend class SubRegistry;
     template <IsListField>
     friend class ListFieldAccessor;
@@ -585,7 +606,7 @@ public:
     using node = T;
     CONFIG_INDEX_MEMBER
 private:
-    template <typename, ApplyFn, typename...>
+    template <typename, typename, ApplyFn, typename>
     friend class SubRegistry;
     template <IsListField>
     friend class ListFieldAccessor;
@@ -638,13 +659,22 @@ public:
     using type = T; ///< Child entry type.
     using key = K;  ///< Key type used to look up children.
     CONFIG_INDEX_MEMBER
+
+    ~OwnedListField() {
+        for (auto& [k, v] : children)
+            if (delFn) delFn(v);
+    }
+    OwnedListField(const OwnedListField&) = delete;
+    OwnedListField& operator=(const OwnedListField&) = delete;
+    OwnedListField() = default;
 private:
-    template <typename, ApplyFn, typename...>
+    template <typename, typename, ApplyFn, typename>
     friend class SubRegistry;
     template <IsOwnedListField>
     friend class OwnedListFieldAccessor;
 
-    std::unordered_map<key, type> children{}; ///< Locally-owned child entries.
+    std::unordered_map<key, type*> children{}; ///< Pointer-owning child entries; ownership managed via delFn.
+    void(*delFn)(type*) = nullptr; ///< Deleter set on first emplaceBack; called in destructor and erase.
 };
 
 /// @brief `OwnedListField` specialization with a live-notification applier callback.
@@ -655,16 +685,24 @@ public:
     using type = T; ///< Child entry type.
     using key = K;  ///< Key type used to look up children.
     CONFIG_INDEX_MEMBER
+
+    ~OwnedListField() {
+        for (auto& [k, v] : children)
+            if (delFn) delFn(v);
+    }
+    OwnedListField(const OwnedListField&) = delete;
+    OwnedListField& operator=(const OwnedListField&) = delete;
+    OwnedListField() = default;
 private:
-    template <typename, ApplyFn, typename...>
+    template <typename, typename, ApplyFn, typename>
     friend class SubRegistry;
     template <IsOwnedListField>
     friend class OwnedListFieldAccessor;
 
     static constexpr ApplyFn applier = H; ///< Callback invoked after every structural change.
 
-    //ContextProvider& provider; ///< Shared context used to fire the applier.
-    std::unordered_map<key, type> children{}; ///< Locally-owned child entries.
+    std::unordered_map<key, type*> children{}; ///< Pointer-owning child entries; ownership managed via delFn.
+    void(*delFn)(type*) = nullptr; ///< Deleter set on first emplaceBack; called in destructor and erase.
 };
 
 /**

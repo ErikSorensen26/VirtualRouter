@@ -12,17 +12,25 @@
 
 #include "configs/RegistryTypes.hpp"
 #include "configs/SubRegistry.hpp"
+#include "configs/RegistryReference.hpp"
+#include "configs/TupleSchema.hpp"
 
 #include "core/routing/rib/RouteSource.hpp"
-#include "configs/registry/router/BgpRegistry.h"
-#include "configs/registry/router/EigrpRegistry.h"
-#include "configs/registry/router/OspfRegistry.h"
+#include "interface/configs/InterfaceType.hpp"
+
+namespace config {
+struct BgpRegistry;
+struct EigrpRegistry;
+struct OspfRegistry;
+struct Ospfv3AddressFamilyRegistry;
+}
 
 #undef IP_PIM
 
 struct Incomplete {};
 enum class Empty { COUNT };
-using EmptyRegistry = config::SubRegistry<Empty, nullptr>;
+class EmptyFields : public config::FieldTuple<> {};
+class EmptyRegistry : public config::SubRegistry<EmptyRegistry, Empty, nullptr, EmptyFields> {};
 
 namespace config
 {
@@ -37,7 +45,6 @@ namespace config
 enum class Vrf
 {
     ARP_STATIC_ENTRY,
-    ROUTER_BGP_AS, // TODO
     ROUTER_BGP, // TODO
     ROUTER_EIGRP_V4,
     ROUTER_EIGRP_V6,
@@ -132,6 +139,47 @@ DEFINE_TUPLE_SCHEMA(IPMRoute, IP_MROUTE_FIELDS)
 void VrfRouterEigrpV4(void*);
 void VrfRouterEigrpV6(void*);
 
+struct VrfFields : FieldTuple<
+    ListField<std::tuple<types::IPv4Address, IGNOR(types::Mac), std::optional<interface::InterfaceKey>> CONFIG_INDEX_ARG(Vrf::ARP_STATIC_ENTRY)>,
+    OptionalRegistryContainer<BgpRegistry CONFIG_INDEX_ARG(Vrf::ROUTER_BGP)>,
+    OwnedListField<EigrpRegistry, uint16_t CONFIG_INDEX_ARG(Vrf::ROUTER_EIGRP_V4), VrfRouterEigrpV4>,
+    OwnedListField<EigrpRegistry, uint16_t CONFIG_INDEX_ARG(Vrf::ROUTER_EIGRP_V6), VrfRouterEigrpV6>,
+    OwnedListField<OspfRegistry, uint16_t CONFIG_INDEX_ARG(Vrf::ROUTER_OSPF)>,
+    OwnedListField<Ospfv3AddressFamilyRegistry, uint16_t CONFIG_INDEX_ARG(Vrf::ROUTER_OSPFV3)>,
+    OptionalAtomicField<Incomplete CONFIG_INDEX_ARG(Vrf::IP_DOMAIN_LIST)>,
+    OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(Vrf::IP_DOMAIN_LOOKUP_SOURCE_INTERFACE)>,
+    OptionalAtomicField<Incomplete CONFIG_INDEX_ARG(Vrf::IP_DOMAIN_NAME)>,
+    OptionalAtomicField<Incomplete CONFIG_INDEX_ARG(Vrf::IP_HOST)>,
+    ValueField<std::string CONFIG_INDEX_ARG(Vrf::IP_IGMP_IMMEDIATE_LEAVE_GROUP_LIST)>,
+    ValueField<uint16_t CONFIG_INDEX_ARG(Vrf::IP_IGMP_LIMIT)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Vrf::IP_IGMP_SSM_MAP)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Vrf::IP_IGMP_SSM_MAP_QUERY_DNS)>,
+    ValueField<std::tuple<std::string, types::IPv4Address> CONFIG_INDEX_ARG(Vrf::IP_IGMP_SSM_MAP_STATIC)>,
+    ListField<IPMRoute CONFIG_INDEX_ARG(Vrf::IP_MROUTE)>,
+    OptionalAtomicField<Incomplete CONFIG_INDEX_ARG(Vrf::IP_MSDP)>,
+    OptionalAtomicField<Incomplete CONFIG_INDEX_ARG(Vrf::IP_MULTICAST)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Vrf::IP_MULTICAST_ROUTING)>,
+    OptionalAtomicField<types::IPAddress CONFIG_INDEX_ARG(Vrf::IP_NAME_SERVER)>,
+    OptionalAtomicField<Incomplete CONFIG_INDEX_ARG(Vrf::IP_PIM)>,
+    OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(Vrf::IP_RADIUS_SOURCE_INTERFACE)>,
+    ListField<IPRoute CONFIG_INDEX_ARG(Vrf::IP_ROUTE)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Vrf::IP_ROUTE_PROFILE)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(Vrf::IP_ROUTE_STATIC_ADJUST_TIME)>,
+    ListField<std::tuple<interface::InterfaceKey, types::IPv4Address, std::optional<std::string>, bool> CONFIG_INDEX_ARG(Vrf::IP_ROUTE_STATIC_BFD)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Vrf::IP_ROUTE_STATIC_INTER_VRF)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Vrf::IPV6_MLD_SSM_MAP)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Vrf::IPV6_MLD_SSM_MAP_QUERY_DNS)>,
+    ListField<std::tuple<std::string, types::IPv6Address> CONFIG_INDEX_ARG(Vrf::IPV6_MLD_SSM_MAP_STATIC)>,
+    OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Vrf::IPV6_MLD_STATE_LIMIT)>,
+    OptionalAtomicField<Incomplete CONFIG_INDEX_ARG(Vrf::IPV6_MULTICAST)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Vrf::IPV6_MULTICAST_ROUTING)>,
+    OptionalAtomicField<Incomplete CONFIG_INDEX_ARG(Vrf::IPV6_PIM)>,
+    ListField<IPv6Route CONFIG_INDEX_ARG(Vrf::IPV6_ROUTE)>,
+    ListField<std::tuple<interface::InterfaceKey, types::IPv6Address, bool> CONFIG_INDEX_ARG(Vrf::IPV6_ROUTE_STATIC_BFD)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Vrf::IPV6_ROUTE_STATIC_RESOLVE)>,
+    OwnedListField<OspfRegistry, uint16_t CONFIG_INDEX_ARG(Vrf::IPV6_ROUTER_OSPF)>
+> {};
+
 /**
  * @brief Registry slot for one VRF instance.
  * @ingroup CONFIG_GLOBAL
@@ -139,50 +187,7 @@ void VrfRouterEigrpV6(void*);
  * Owns a `SubRegistry<Vrf, ...>` containing all per-VRF fields. Multiple VrfRegistry
  * instances are stored in `GlobalRegistry::VRF_CONFIGS` keyed by VRF name.
  */
-struct VrfRegistry
-{
-    SubRegistry<Vrf, nullptr,
-        ListField<std::tuple<types::IPv4Address, IGNOR(types::Mac), std::optional<interface::InterfaceKey>> CONFIG_INDEX_ARG(Vrf::ARP_STATIC_ENTRY)>,
-        OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Vrf::ROUTER_BGP_AS)>,
-        RegistryContainer<BgpRegistry CONFIG_INDEX_ARG(Vrf::ROUTER_BGP)>,
-        OwnedListField<EigrpRegistry, uint16_t CONFIG_INDEX_ARG(Vrf::ROUTER_EIGRP_V4), VrfRouterEigrpV4>,
-        OwnedListField<EigrpRegistry, uint16_t CONFIG_INDEX_ARG(Vrf::ROUTER_EIGRP_V6), VrfRouterEigrpV6>,
-        OwnedListField<OspfRegistry, uint16_t CONFIG_INDEX_ARG(Vrf::ROUTER_OSPF)>,
-        OwnedListField<Ospfv3AddressFamilyRegistry, uint16_t CONFIG_INDEX_ARG(Vrf::ROUTER_OSPFV3)>,
-        OptionalAtomicField<Incomplete CONFIG_INDEX_ARG(Vrf::IP_DOMAIN_LIST)>,
-        OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(Vrf::IP_DOMAIN_LOOKUP_SOURCE_INTERFACE)>,
-        OptionalAtomicField<Incomplete CONFIG_INDEX_ARG(Vrf::IP_DOMAIN_NAME)>,
-        OptionalAtomicField<Incomplete CONFIG_INDEX_ARG(Vrf::IP_HOST)>,
-        ValueField<std::string CONFIG_INDEX_ARG(Vrf::IP_IGMP_IMMEDIATE_LEAVE_GROUP_LIST)>,
-        ValueField<uint16_t CONFIG_INDEX_ARG(Vrf::IP_IGMP_LIMIT)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Vrf::IP_IGMP_SSM_MAP)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Vrf::IP_IGMP_SSM_MAP_QUERY_DNS)>,
-        ValueField<std::tuple<std::string, types::IPv4Address> CONFIG_INDEX_ARG(Vrf::IP_IGMP_SSM_MAP_STATIC)>,
-        ListField<IPMRoute CONFIG_INDEX_ARG(Vrf::IP_MROUTE)>,
-        OptionalAtomicField<Incomplete CONFIG_INDEX_ARG(Vrf::IP_MSDP)>,
-        OptionalAtomicField<Incomplete CONFIG_INDEX_ARG(Vrf::IP_MULTICAST)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Vrf::IP_MULTICAST_ROUTING)>,
-        OptionalAtomicField<types::IPAddress CONFIG_INDEX_ARG(Vrf::IP_NAME_SERVER)>,
-        OptionalAtomicField<Incomplete CONFIG_INDEX_ARG(Vrf::IP_PIM)>,
-        OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(Vrf::IP_RADIUS_SOURCE_INTERFACE)>,
-        ListField<IPRoute CONFIG_INDEX_ARG(Vrf::IP_ROUTE)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Vrf::IP_ROUTE_PROFILE)>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(Vrf::IP_ROUTE_STATIC_ADJUST_TIME)>,
-        ListField<std::tuple<interface::InterfaceKey, types::IPv4Address, std::optional<std::string>, bool> CONFIG_INDEX_ARG(Vrf::IP_ROUTE_STATIC_BFD)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Vrf::IP_ROUTE_STATIC_INTER_VRF)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Vrf::IPV6_MLD_SSM_MAP)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Vrf::IPV6_MLD_SSM_MAP_QUERY_DNS)>,
-        ListField<std::tuple<std::string, types::IPv6Address> CONFIG_INDEX_ARG(Vrf::IPV6_MLD_SSM_MAP_STATIC)>,
-        OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Vrf::IPV6_MLD_STATE_LIMIT)>,
-        OptionalAtomicField<Incomplete CONFIG_INDEX_ARG(Vrf::IPV6_MULTICAST)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Vrf::IPV6_MULTICAST_ROUTING)>,
-        OptionalAtomicField<Incomplete CONFIG_INDEX_ARG(Vrf::IPV6_PIM)>,
-        ListField<IPv6Route CONFIG_INDEX_ARG(Vrf::IPV6_ROUTE)>,
-        ListField<std::tuple<interface::InterfaceKey, types::IPv6Address, bool> CONFIG_INDEX_ARG(Vrf::IPV6_ROUTE_STATIC_BFD)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Vrf::IPV6_ROUTE_STATIC_RESOLVE)>,
-        OwnedListField<OspfRegistry, uint16_t CONFIG_INDEX_ARG(Vrf::IPV6_ROUTER_OSPF)>
-    > reg;
-};
+struct VrfRegistry : SubRegistry<VrfRegistry, Vrf, nullptr, VrfFields> {};
 }
 
 #endif // VRF_REGISTRY_HPP

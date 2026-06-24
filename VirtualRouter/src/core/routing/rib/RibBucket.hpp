@@ -100,7 +100,10 @@ public:
                 if (r.metric        == e->metric        &&
                     r.nextHopCount  == e->nextHopCount  &&
                     r.adminDistance == e->adminDistance)
+                {
+                    delete e;
                     return false;
+                }
                 r = *e;
                 replaced = true;
                 break;

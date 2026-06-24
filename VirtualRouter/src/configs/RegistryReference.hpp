@@ -46,44 +46,99 @@ public:
 
     // CONSTRUCTION
 
-    /**
-     * @brief Constructs a container in the unbound, no-parent state.
-     *
-     * The container is neither locally set nor inherited until a reference is
-     * bound via @ref RegistryDatabase::emplace or @ref RegistryDatabase::ensure.
-     */
-    RegistryContainer() = default;
+    RegistryContainer() { ptr = new T(); };
+    ~RegistryContainer() { if (delFn) delFn(ptr); }
 
-    /**
-     * @brief Returns the locally-set reference without inheritance fallback.
-     *
-     * @return Mutable reference to the locally stored `Reference<T>`.
-     * @warning Asserts if no local reference has been set (state != SET).
-     */
-    void bind(T& obj) noexcept { registry = &obj; state = FieldState::CANNED; }
+    RegistryContainer(const RegistryContainer&) = delete;
+    RegistryContainer& operator=(const RegistryContainer&) = delete;
 
-    T& get() noexcept
-    {
-        return *registry;
-    }
+    T& get() noexcept { assert(ptr); return *ptr; }
 
-    /**
-     * @brief Returns the locally-set reference without inheritance fallback (const overload).
-     *
-     * @return Const reference to the locally stored `Reference<T>`.
-     * @warning Asserts if no local reference has been set (state != SET).
-     */
-    const T& get() const noexcept
-    {
-        return *registry;
+    const T& get() const noexcept { assert(ptr); return *ptr; }
+
+    void init() {
+        delFn = [](T* p) { delete p; };
+        ptr = new T();
     }
 
 private:
-    template <typename...>
-    friend class RegistryDatabase;
+    T* ptr = nullptr;
+    void(*delFn)(T*) = nullptr;
+};
 
-    T* registry; ///< Locally-set registry value;
-    FieldState state; ///< Whether a local override is in effect.
+/**
+ * @brief Optional slot-reference field that supports parent-inheritance and explicit unsetting.
+ * @ingroup CONFIG
+ *
+ * An `OptionalRegistryContainer` lives as a field inside a `SubRegistry` struct.
+ * It holds one of three states:
+ * - An *inherited* reference from a parent scope (state = `INHERIT`),
+ * - A locally-set reference (state = `SET`), or
+ * - Explicitly un-configured/empty (state = `UNSET`).
+ *
+ * The `bound()` / `effective()` / `get()` API resolves the correct reference
+ * according to the current mask state, mirroring how optional atomic fields 
+ * walk the parent chain or return nullopt/throw if completely unconfigured.
+ *
+ * ## Lifecycle & Ownership
+ * `OptionalRegistryContainer` does not own the reference; it holds an `optional` 
+ * copy whose destructor decrements the bucket refcount if a local reference is active.
+ *
+ * @tparam T  Registry struct type of the referenced scope.
+ *
+ * @see Reference
+ * @see RegistryContainer
+ * @see SubRegistry
+ */
+template <typename T CONFIG_INDEX_PARAM>
+class OptionalRegistryContainer : public RefContainerFieldFlag
+{
+public:
+    using type = T;
+    CONFIG_INDEX_MEMBER
+
+    // CONSTRUCTION
+
+    OptionalRegistryContainer() = default;
+    ~OptionalRegistryContainer() { if (delFn) delFn(owned); }
+
+    OptionalRegistryContainer(const OptionalRegistryContainer&) = delete;
+    OptionalRegistryContainer& operator=(const OptionalRegistryContainer&) = delete;
+
+    T& get() noexcept
+    {
+        assertRegistry();
+        return *owned;
+    }
+
+    const T& get() const noexcept
+    {
+        assertRegistry();
+        return *owned;
+    }
+
+    bool hasValue() const noexcept
+    {
+        return owned != nullptr;
+    }
+
+    void reset() noexcept
+    {
+        if (delFn) delFn(owned);
+        owned = nullptr;
+    }
+
+private:
+    void assertRegistry()
+    {
+        if (!owned) {
+            delFn = [](T* p) { delete p; };
+            owned = new T();
+        }
+    }
+
+    T* owned = nullptr;
+    void(*delFn)(T*) = nullptr;
 };
 }
 

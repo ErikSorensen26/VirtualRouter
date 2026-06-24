@@ -26,6 +26,13 @@ enum class PrefixList
     COUNT
 };
 
+template <types::IsIPPrefix P>
+struct PrefixListFields : FieldTuple<
+    ValueField<std::string CONFIG_INDEX_ARG(PrefixList::DESCRIPTION)>,
+    ListField<std::tuple<uint32_t, IGNOR(P), IGNOR(uint8_t), IGNOR(uint8_t)> CONFIG_INDEX_ARG(PrefixList::PERMIT)>,
+    ListField<std::tuple<uint32_t, IGNOR(P), IGNOR(uint8_t), IGNOR(uint8_t)> CONFIG_INDEX_ARG(PrefixList::DENY)>
+> {};
+
 /**
  * @brief Registry slot for one named prefix-list (IPv4 or IPv6).
  * @ingroup CONFIG_POLICY
@@ -36,14 +43,7 @@ enum class PrefixList
  * @tparam P  Prefix type — either `types::IPv4Prefix` or `types::IPv6Prefix`.
  */
 template <types::IsIPPrefix P>
-struct PrefixListRegistry
-{
-    SubRegistry<PrefixList, nullptr,
-        ValueField<std::string CONFIG_INDEX_ARG(PrefixList::DESCRIPTION)>,
-        ListField<std::tuple<uint32_t, IGNOR(P), IGNOR(uint8_t), IGNOR(uint8_t)> CONFIG_INDEX_ARG(PrefixList::PERMIT)>,
-        ListField<std::tuple<uint32_t, IGNOR(P), IGNOR(uint8_t), IGNOR(uint8_t)> CONFIG_INDEX_ARG(PrefixList::DENY)>
-    > reg;
-};
+struct PrefixListRegistry : SubRegistry<PrefixListRegistry<P>, PrefixList, nullptr, PrefixListFields<P>> {};
 }
 
 #endif // PREFIX_LIST_REGISTRY_HPP

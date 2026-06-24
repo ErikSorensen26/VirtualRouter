@@ -12,6 +12,7 @@
 #define GLOBAL_H
 
 #include <string>
+#include <memory>
 #include <mutex>
 #include <shared_mutex>
 #include <atomic>
@@ -26,7 +27,7 @@
 #include "security/keys/KeyChainManager.h"
 #include "ControlScheduler.h"
 #include "AddressFamily.hpp"
-#include "configs/registry/global/GlobalRegistry.h"
+namespace config { struct GlobalRegistry; }
 
 namespace interface { class Interface; }
 namespace hardware { struct HwIfaceInfo; }
@@ -300,6 +301,10 @@ public:
      */
     bool removeRoutingInstance(const std::string& name);
 
+    core::ThreadPool threadPool;       ///< Global thread pool for off-loading.
+    core::TimeManager timeManager;     ///< Global time manager for time keeping.
+    ControlScheduler scheduler;  ///< Global control plane execution engine.
+
     // DHCP SERVERS
     
     services::dhcp::DhcpServer* dhcpServer = nullptr;     ///< Global IPv4 DHCP Server.
@@ -330,6 +335,8 @@ private:
 
     Global& operator=(const Global&) = delete;
 
+    std::unique_ptr<config::GlobalRegistry> pConfigs; ///< Heap-allocated global config registry (decouples Global.h from GlobalRegistry.h).
+
     std::string hostname = DEFAULT_HOSTNAME;    ///< System hostname.
     std::shared_mutex hostnameMutex;            ///< Mutex protecting the hostname.
 
@@ -350,11 +357,8 @@ public:
     bool routingEnabled = false; ///< Initial routing enable flag.
     bool testingMode = false;    ///< Testing mode flag.
 
-    config::GlobalRegistry configs; ///< Global ARP/NDP/NSF/etc configuration
-
-    core::ThreadPool threadPool;       ///< Global thread pool for off-loading.
-    core::TimeManager timeManager;     ///< Global time manager for time keeping.
-    ControlScheduler scheduler;  ///< Global control plane execution engine.
+    config::GlobalRegistry& getConfigs(); ///< Returns the global configuration registry.
+    config::GlobalRegistry& configs;     ///< Alias for getConfigs() — kept for call-site compatibility.
 
     cli::CliEngine engine;            ///< Global CLI engine for user interface.
 

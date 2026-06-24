@@ -221,11 +221,65 @@ bool HardwareManager::createDummy(const char* ifname)
     if (strlen(ifname) >= IFNAMSIZ)
         return false;
 
-    std::string cmd = "ip link add " + std::string(ifname) + " type dummy";
-    int ret = system(cmd.c_str());
-    if (ret != 0)
+    int sock = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+    if (sock < 0)
         return false;
-    
+
+    struct
+    {
+        struct nlmsghdr nh;
+        struct ifinfomsg ifi;
+        char attrbuf[512];
+    } req = {};
+
+    req.nh.nlmsg_len = NLMSG_LENGTH(sizeof(req.ifi));
+    req.nh.nlmsg_type  = RTM_NEWLINK;
+    req.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_EXCL | NLM_F_ACK;
+    req.ifi.ifi_family = AF_UNSPEC;
+
+    // IFLA_IFNAME
+    struct rtattr* rta = reinterpret_cast<struct rtattr*>(((char*)&req) + NLMSG_ALIGN(req.nh.nlmsg_len));
+    rta->rta_type = IFLA_IFNAME;
+    rta->rta_len = RTA_LENGTH(strlen(ifname) + 1);
+    std::memcpy(RTA_DATA(rta), ifname, strlen(ifname) + 1);
+    req.nh.nlmsg_len = NLMSG_ALIGN(req.nh.nlmsg_len) + RTA_ALIGN(rta->rta_len);
+
+    // IFLA_LINKINFO
+    struct rtattr* linkinfo = reinterpret_cast<struct rtattr*>(((char*)&req) + NLMSG_ALIGN(req.nh.nlmsg_len));
+    linkinfo->rta_type = IFLA_LINKINFO;
+    linkinfo->rta_len = RTA_LENGTH(0);
+
+    // IFLA_INFO_KIND = "dummy"
+    struct rtattr* kind = reinterpret_cast<struct rtattr*>(((char*)linkinfo) + RTA_ALIGN(linkinfo->rta_len));
+    kind->rta_type = IFLA_INFO_KIND;
+    kind->rta_len = RTA_LENGTH(strlen("dummy") + 1);
+    std::memcpy(RTA_DATA(kind), "dummy", strlen("dummy") + 1);
+
+    linkinfo->rta_len += RTA_ALIGN(kind->rta_len);
+    req.nh.nlmsg_len += RTA_ALIGN(linkinfo->rta_len);
+
+    if (send(sock, &req, req.nh.nlmsg_len, 0) < 0)
+    {
+        close(sock);
+        return false;
+    }
+
+    // Read ACK
+    char buf[4096];
+    ssize_t n = recv(sock, buf, sizeof(buf), 0);
+    close(sock);
+
+    if (n < 0)
+        return false;
+
+    struct nlmsghdr* nh = reinterpret_cast<struct nlmsghdr*>(buf);
+    if (nh->nlmsg_type == NLMSG_ERROR)
+    {
+        struct nlmsgerr* err = reinterpret_cast<struct nlmsgerr*>(NLMSG_DATA(nh));
+        if (err->error != 0)
+            return false;
+    }
+
     return ifnametoindex(ifname) != 0;
 }
 
@@ -254,6 +308,10 @@ bool HardwareManager::bringUp(const std::string& ifname)
 
 bool HardwareManager::bringDown(const std::string& ifname)
 {
+    return false;
+    if (allowDummies)
+        return false;
+
     if (ifname.size() >= IFNAMSIZ)
         return false;
 

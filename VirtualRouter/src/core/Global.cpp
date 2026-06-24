@@ -5,6 +5,9 @@
 #include <mutex>
 
 #include "Global.h"
+#include "configs/registry/global/GlobalRegistry.h"
+#include "configs/registry/global/VrfRegistry.h"
+#include "configs/registry/interface/InterfaceRegistry.h"
 #include "VirtualRouter.h"
 #include "interface/Interface.h"
 #include "hardware/HardwareManager.h"
@@ -13,9 +16,15 @@
 namespace core
 {
 
+config::GlobalRegistry& Global::getConfigs()
+{
+    return *pConfigs;
+}
+
 Global::Global(cli::FileSystem& fs, const cli::StartupFiles& stfs, bool enableRouting, bool test)
     : routingEnabled(enableRouting),
-      configs(),
+      pConfigs(std::make_unique<config::GlobalRegistry>()),
+      configs(*pConfigs),
       threadPool(/*std::thread::hardware_concurrency()*/5),
       timeManager(threadPool),
       scheduler(threadPool, timeManager),
@@ -40,6 +49,7 @@ Global::~Global()
         delete dhcpServer;
     if (dhcpv6Server)
         delete dhcpv6Server;
+    routingInstances.clear();
 }
 
 void Global::setHostname(const std::string& name)
@@ -67,7 +77,7 @@ void Global::interfaceRefresh()
 {
     {
         std::lock_guard<std::mutex> lock(interfaceMutex);
-        auto interfaceCfgs = configs.reg.get<config::Global::INTERFACE>();
+        auto interfaceCfgs = getConfigs().get<config::Global::INTERFACE>();
         
         // Erase
         for (auto it = interfaceList.begin(); it != interfaceList.end();)
@@ -86,7 +96,7 @@ void Global::interfaceRefresh()
                 const hardware::HwIfaceInfo* info = engine.hwManager.getHwInfo(id);
                 if (!info) continue;
 
-                std::string ifaceVrf = cfg.reg.get<config::Interface::VRF_FORWARDING>().load();
+                std::string ifaceVrf = cfg->get<config::Interface::VRF_FORWARDING>().load();
 
                 interface::InterfaceCreation iface = {type, key, *getRoutingInstance(ifaceVrf), *info};
                 interfaceList.emplace(id, iface);
@@ -128,7 +138,7 @@ void Global::routingInstanceRefresh()
 {
     {
         std::lock_guard<std::mutex> lock(routingInstanceMutex);
-        auto vrfConfigs = configs.reg.get<config::Global::VRF_CONFIGS>();
+        auto vrfConfigs = getConfigs().get<config::Global::VRF_CONFIGS>();
 
         // Erase
         for (auto it = routingInstances.begin(); it != routingInstances.end();)

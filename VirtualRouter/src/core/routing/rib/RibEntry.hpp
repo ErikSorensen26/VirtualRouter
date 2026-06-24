@@ -167,6 +167,23 @@ struct RibEntry
         return true;
     }
 
+    /** 
+     * @brief Iterates through all available next hop addresses and
+     * sees if the specified one already exists.
+     *
+     * @param uint32_t ifaceid  Interface Key
+     * @return `true` if the interface is included, otherwise `false`.
+     */
+    bool hasNextHopInterface(uint32_t ifaceId)
+    {
+        for (int i = 0; i < nextHopCount; ++i)
+        {
+            if (nextHops[i].iface == ifaceId)
+                return true;
+        }
+        return false;
+    }
+
     /**
      * @brief Add an interface-only (connected / unnumbered) next-hop.
      * @param iface  Egress interface index.

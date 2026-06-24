@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <chrono>
 #include <condition_variable>
+#include <future>
 #include <initializer_list>
 #include <mutex>
 #include <optional>
@@ -58,6 +59,7 @@ struct ProcessQueueRefState
     std::atomic<bool> alive{true};             ///< False after the owning ProcessQueueRef is released.
     std::atomic<uint32_t> pending{0};          ///< Count of posted tasks not yet executed.
     std::atomic<RefTimerNode*> timerHead{nullptr}; ///< Head of the singly-linked list of live timers.
+    std::atomic<uint32_t> epoch;
 };
 
 /**
@@ -248,6 +250,23 @@ public:
      * @return `true` if the timer was found and cancelled before firing.
      */
     bool cancelDelayed(uint32_t timerId) noexcept;
+
+private:
+    /**
+     * @brief Blocks the calling thread until the named @ref ProcessQueue has no
+     *        in-flight or pending tasks.
+     *
+     * Used by tests to deterministically wait for asynchronous work posted via
+     * `EigrpSyncNetworks`-style appliers to finish before inspecting state.
+     *
+     * @warning Must not be called from within a task running on this queue;
+     * doing so deadlocks (the queue can never become idle while it is draining
+     * the very task that called this).
+     *
+     * @param id   Slot index identifying the @ref ProcessQueue.
+     * @param gen  Generation counter matching @ref ProcessQueueSlot::generation.
+     */
+    void waitIdle(ProcessQueueId id, uint32_t gen) noexcept;
 
 private:
     struct SubQueue
@@ -542,10 +561,9 @@ bool ControlScheduler::postOwned(ProcessQueueId id,
     owner->pending.fetch_add(1, std::memory_order_acq_rel);
 
     return post(id, gen, label,
-        [owner, token = RefPendingToken(owner), fn = std::forward<F>(fn)]() mutable noexcept
+        [token = RefPendingToken(owner), fn = std::forward<F>(fn)]() mutable noexcept
         {
-            if (owner->alive.load(std::memory_order_acquire))
-                fn();
+            fn();
         });
 }
 
@@ -626,10 +644,9 @@ uint32_t ControlScheduler::schedule(ProcessQueueId id,
         owner->pending.fetch_add(1, std::memory_order_acq_rel);
 
         ds.task.set(
-            [owner, token = RefPendingToken(owner), fn = std::forward<F>(fn), publicHandle]() mutable noexcept
+            [token = RefPendingToken(owner), fn = std::forward<F>(fn), publicHandle]() mutable noexcept
             {
-                if (owner->alive.load(std::memory_order_acquire))
-                    fn(publicHandle);
+                fn(publicHandle);
             });
     }
     else
@@ -736,6 +753,43 @@ public:
     }
 
     /**
+     * @brief Releases this ref early, blocking until in-flight tasks finish.
+     *
+     * Equivalent to what the destructor does, but callable explicitly so an
+     * owner can guarantee no posted task is running before tearing down the
+     * members that task would touch. Safe to call multiple times; the ref is
+     * left empty (default-constructed) afterward.
+     */
+    void release() noexcept
+    {
+        if (!state)
+        {
+            engine = nullptr;
+            id = 0;
+            gen = 0;
+            return;
+        }
+
+        state->alive.store(false, std::memory_order_release);
+
+        if (engine)
+            engine->destroyRefState(state);
+
+        uint32_t v = state->pending.load(std::memory_order_acquire);
+        while (v != 0)
+        {
+            state->pending.wait(v, std::memory_order_relaxed);
+            v = state->pending.load(std::memory_order_acquire);
+        }
+
+        delete state;
+        state = nullptr;
+        engine = nullptr;
+        id = 0;
+        gen = 0;
+    }
+
+    /**
      * @brief Posts a task to the default sub-queue, guarded by the ref's lifetime.
      *
      * The task is silently dropped (not executed) if the @ref ProcessQueueRefState
@@ -769,6 +823,45 @@ public:
             return false;
 
         return engine->postOwned(id, gen, label, state, std::forward<F>(fn));
+    }
+
+    /**
+     * @brief Posts a task to the default sub-queue and blocks the calling
+     *        thread until that exact task has finished executing.
+     *
+     * Use this when a teardown step must be guaranteed complete before the
+     * calling thread proceeds to destroy state the task might touch (e.g.
+     * `InterfaceManager::deactivateAll()` erasing entries that a concurrently
+     * running `refreshInterfaceList()` is iterating).
+     *
+     * @return `true` if the task was enqueued and ran (or was dropped because
+     *         the ref is no longer alive); `false` if it could not be posted
+     *         at all (queue closed/full), in which case `fn` did not run.
+     *
+     * @warning Do not call this from within a task already running on this
+     * ref's queue: the queue is single-consumer, so the calling thread would
+     * block forever waiting for a task that can only run after it returns.
+     */
+    template <typename F>
+    bool postAndWait(F&& fn) const
+    {
+        if (!engine || !state)
+            return false;
+
+        std::promise<void> done;
+        std::future<void> fut = done.get_future();
+
+        bool posted = engine->postOwned(id, gen, std::nullopt, state,
+            [fn = std::forward<F>(fn), &done]() mutable {
+                fn();
+                done.set_value();
+            });
+
+        if (!posted)
+            return false;
+
+        fut.wait();
+        return true;
     }
 
     /**
@@ -839,35 +932,6 @@ private:
           gen(qgen),
           state(new ProcessQueueRefState())
     {}
-
-    void release() noexcept
-    {
-        if (!state)
-        {
-            engine = nullptr;
-            id = 0;
-            gen = 0;
-            return;
-        }
-
-        state->alive.store(false, std::memory_order_release);
-
-        if (engine)
-            engine->destroyRefState(state);
-
-        uint32_t v = state->pending.load(std::memory_order_acquire);
-        while (v != 0)
-        {
-            state->pending.wait(v, std::memory_order_relaxed);
-            v = state->pending.load(std::memory_order_acquire);
-        }
-
-        delete state;
-        state = nullptr;
-        engine = nullptr;
-        id = 0;
-        gen = 0;
-    }
 
 private:
     ControlScheduler* engine = nullptr;            ///< Owning scheduler; null for a moved-from ref.
@@ -946,94 +1010,15 @@ public:
     }
 
     /**
-     * @brief Posts a task to the default sub-queue.
-     *
-     * @tparam F  Callable type; must fit within inline task storage (≤128 bytes).
-     * @param fn  Task to execute; no arguments, no return value.
-     * @return `true` if the task was enqueued; `false` if closed or ring full.
-     */
-    template <typename F>
-    bool post(F&& fn) const noexcept
-    {
-        if (!engine)
-            return false;
-
-        return engine->post(id, gen, std::nullopt, std::forward<F>(fn));
-    }
-
-    /**
-     * @brief Posts a task to a specific labeled sub-queue.
-     *
-     * @tparam F      Callable type.
-     * @param label   Sub-queue label, registered at creation via @ref SubQueueConfig.
-     * @param fn      Task to execute.
-     * @return `true` if enqueued; `false` if label unknown, closed, or ring full.
-     */
-    template <typename F>
-    bool post(ControlScheduler::Label label, F&& fn) const noexcept
-    {
-        if (!engine)
-            return false;
-
-        return engine->post(id, gen, label, std::forward<F>(fn));
-    }
-
-    /**
-     * @brief Schedules a task to run at `expiration` on the default sub-queue.
-     *
-     * @tparam F          Callable of type `void(uint32_t)`; the argument is the timer handle.
-     * @param expiration  Absolute time point (steady_clock) at which to fire.
-     * @param fn          Task to execute; receives its own timer handle as argument.
-     * @return Non-zero timer handle on success; `0` if no slot was available.
-     */
-    template <typename F>
-    uint32_t schedule(std::chrono::steady_clock::time_point expiration, F&& fn) const noexcept
-    {
-        if (!engine)
-            return 0;
-
-        return engine->schedule(id, gen, std::nullopt, nullptr, expiration, std::forward<F>(fn));
-    }
-
-    /**
-     * @brief Schedules a task to run at `expiration` on a labeled sub-queue.
-     *
-     * @tparam F          Callable of type `void(uint32_t)`.
-     * @param label       Sub-queue label.
-     * @param expiration  Absolute expiry time point.
-     * @param fn          Task; receives its timer handle as argument.
-     * @return Non-zero timer handle on success; `0` on failure.
-     */
-    template <typename F>
-    uint32_t schedule(ControlScheduler::Label label,
-                      std::chrono::steady_clock::time_point expiration,
-                      F&& fn) const noexcept
-    {
-        if (!engine)
-            return 0;
-
-        return engine->schedule(id, gen, label, nullptr, expiration, std::forward<F>(fn));
-    }
-
-    /**
-     * @brief Cancels a pending delayed task by its handle.
-     *
-     * @param timerId  Handle returned by @ref schedule.
-     * @return `true` if found and cancelled before firing.
-     */
-    bool cancel(uint32_t timerId) noexcept
-    {
-        if (!engine)
-            return false;
-
-        return engine->cancelDelayed(timerId);
-    }
-
-    /**
      * @brief Creates a @ref ProcessQueueRef that borrows this queue with safe lifetime semantics.
      *
      * The returned ref may be stored in objects whose lifetime is shorter than the queue's.
      * Tasks posted through the ref after the ref is destroyed are silently discarded.
+     *
+     * @note This is the only way to enqueue work on a @ref ProcessQueue. Posting and
+     * scheduling are deliberately not exposed directly on `ProcessQueue` — a
+     * `ProcessQueueRef` ties posted tasks to a lifetime that can be safely waited on
+     * and released before the owning object's members are torn down.
      */
     ProcessQueueRef ref() const noexcept
     {
@@ -1041,6 +1026,22 @@ public:
             return ProcessQueueRef();
 
         return ProcessQueueRef(*engine, id, gen);
+    }
+
+    /**
+     * @brief Blocks until this queue has drained all pending and in-flight tasks.
+     *
+     * Intended for tests that post asynchronous work (e.g. via a config-change
+     * applier) and need to wait for it to complete before asserting on state.
+     *
+     * @warning Do not call from within a task posted to this queue; that
+     * deadlocks because the queue cannot finish draining while the calling
+     * task is still running.
+     */
+    void waitIdle() const noexcept
+    {
+        if (engine)
+            engine->waitIdle(id, gen);
     }
 
     /**

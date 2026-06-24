@@ -15,7 +15,7 @@ void EigrpIfacePassive(void* i)
     eigrp.getScheduler().post([&eigrp, key] {
         auto* eigrpIface = eigrp.getIfaceMgr().getInterface(key);
         if (!eigrpIface) return;
-        bool passive = eigrpIface->configs.reg.get<config::EigrpInterface::PASSIVE_INTERFACE>().load();
+        bool passive = eigrpIface->configs.get<config::EigrpInterface::PASSIVE_INTERFACE>().load();
         eigrpIface->setPassiveMode(passive);
     });
 }
@@ -39,7 +39,7 @@ void EigrpIfaceSummary(void* i)
         if (!eigrpIface) return;
 
         std::set<types::IPPrefix> summaries;
-        eigrpIface->configs.reg.get<config::EigrpInterface::SUMMARY_ADDRESS>().withRead(
+        eigrpIface->configs.get<config::EigrpInterface::SUMMARY_ADDRESS>().withRead(
             [&](const std::vector<std::tuple<types::IPPrefix, std::optional<std::string>>>& v) {
                 for (const auto& [prefix, name] : v)
                     summaries.emplace(prefix);

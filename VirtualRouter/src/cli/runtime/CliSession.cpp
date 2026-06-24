@@ -5,6 +5,7 @@
 #include <sstream>
 
 #include <Global.h>
+#include "configs/registry/global/GlobalRegistry.h"
 
 #include "Token.hpp"
 #include "CliSession.h"
@@ -465,7 +466,7 @@ CliSession::CliSession(CliEngine& engine, ConsoleController& controller, bool en
 {
     configNode = &engine.getCommandTree();
     modeHistory.push_back(configNode);
-    changeMode<CliMode::UserExec>(engine.global.configs);
+    changeMode<CliMode::UserExec>(engine.global.getConfigs());
     initConsole();
 
 #ifdef DEBUG
@@ -501,7 +502,7 @@ bool CliSession::handleInput(std::string test)
 
     if (userCommand == "CRT-Z" && getMode() != CliMode::UserExec)
     {
-        if (!resetAndChangeMode<CliMode::PrivilegedExec>(engine.global.configs))
+        if (!resetAndChangeMode<CliMode::PrivilegedExec>(engine.global.getConfigs()))
         {
             controller.print("\r\n");
             return false;
@@ -820,7 +821,7 @@ bool CliSession::tryDoCommand(const std::string& remainder)
     const json*       savedCfg    = configNode;
     const size_t      savedNavTop = navTop;   // temp transition: undo nav push on return
 
-    if (!changeMode<CliMode::PrivilegedExec>(engine.global.configs))
+    if (!changeMode<CliMode::PrivilegedExec>(engine.global.getConfigs()))
         return false;
 
     std::string cmd = remainder;
@@ -850,7 +851,7 @@ bool CliSession::tryGlobalCommand(const std::string& rawInput)
     const json*       savedCfg    = configNode;
     const size_t      savedNavTop = navTop;   // may revert if command fails
 
-    changeMode<CliMode::GlobalConfiguration>(engine.global.configs);
+    changeMode<CliMode::GlobalConfiguration>(engine.global.getConfigs());
     historyToGlobal();
 
     std::string cmd = rawInput;

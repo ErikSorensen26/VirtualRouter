@@ -30,10 +30,10 @@ namespace cli
  */
 inline static bool getVrfConfigs(config::VrfRegistry*& vrf, cli::Context<config::GlobalRegistry>& ctx, std::string_view name = "default")
  {
-    auto vrfs = ctx.configs().reg.get<config::Global::VRF_CONFIGS>();
+    auto vrfs = ctx.configs().get<config::Global::VRF_CONFIGS>();
     if (auto it = vrfs.find(std::string(name)); it != vrfs.end())
     {
-        vrf = const_cast<config::VrfRegistry*>(&it->second);
+        vrf = const_cast<config::VrfRegistry*>(it->second);
         return true;
     }
     ctx.terminal.controller.print("% IP routing table " + std::string(name) + " does not exist. Create it first.");

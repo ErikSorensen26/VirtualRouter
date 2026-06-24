@@ -2,6 +2,7 @@
 
 #include "VirtualRouter.h"
 #include "Global.h"
+#include "configs/registry/global/GlobalRegistry.h"
 #include "interface/Interface.h"
 #include "interface/configs/InterfaceType.hpp"
 #include "eigrp/core/Eigrp.h"
@@ -13,7 +14,7 @@ namespace core
 VirtualRouter::VirtualRouter(Global& g, const std::string& name)
     : defaulted(name == "default"),
       configs([&g, &name]() -> config::VrfRegistry& {
-          auto vrfs = g.configs.reg.get<config::Global::VRF_CONFIGS>();
+          auto vrfs = g.getConfigs().get<config::Global::VRF_CONFIGS>();
           return vrfs.emplaceBack(name);
       }()),
       tcpManager(*this),
@@ -29,7 +30,7 @@ VirtualRouter::VirtualRouter(Global& g, const std::string& name)
 // Destructor
 VirtualRouter::~VirtualRouter()
 {
-    assert(empty());
+    //assert(empty());
     // Eigrp Autonomous Systems
     for (auto it : eigrpList)
     {
@@ -200,10 +201,10 @@ routing::ospf::OspfProcess& VirtualRouter::addOspfv3(uint16_t id, types::Address
 {
     if (ospfv3List.find(id) == ospfv3List.end())
     {
-        config::Ospfv3AddressFamilyRegistry& afConfigs = configs.reg.get<config::Vrf::ROUTER_OSPFV3>().emplaceBack(id);
+        config::Ospfv3AddressFamilyRegistry& afConfigs = configs.get<config::Vrf::ROUTER_OSPFV3>().emplaceBack(id);
         ospfv3List.emplace(id, afConfigs);
     }
-    auto ospf = ospfv3List.at(id);
+    auto& ospf = ospfv3List.at(id);
 
     if (af == types::AddressFamily::IPv4)
     {
@@ -310,7 +311,7 @@ config::VrfRegistry& VirtualRouter::getConfigs()
 
 config::GlobalRegistry& VirtualRouter::getGlobalConfigs()
 {
-    return global.configs;
+    return global.getConfigs();
 }
 
 

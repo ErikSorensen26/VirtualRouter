@@ -274,7 +274,7 @@ bool extractIPv4Prefix(std::string_view addr, std::string_view mask, types::IPv4
 
 bool extractMacAddress(std::string_view str, types::Mac mac)
 {
-    types::NetworkSpan<uint64_t> buf = *reinterpret_cast<types::NetworkSpan<uint64_t>*>(mac.mac);
+    types::NetworkSpan<uint64_t>& buf = *reinterpret_cast<types::NetworkSpan<uint64_t>*>(mac.mac);
     std::string hex;
 
     if (str.find('.') != std::string::npos)

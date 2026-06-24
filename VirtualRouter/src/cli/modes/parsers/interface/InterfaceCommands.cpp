@@ -23,7 +23,7 @@ bool Interface_Shutdown_Handler(INTERFACE_PARAMS)
 {
     UNUSED(segs);
     //auto shut = config::AtomicFieldAccessor<>I
-    auto shut = ctx.configs().reg.get<config::Interface::SHUTDOWN>();
+    auto shut = ctx.configs().get<config::Interface::SHUTDOWN>();
     utils::setToggleValue(shut, ctx);
     return true;
 }

@@ -37,21 +37,16 @@ enum class Arp
 
 CONFIG_DEFAULT_TABLE(ARP_DEFAULTS);
 
-/**
- * @brief Registry slot for per-interface ARP configuration.
- * @ingroup CONFIG_INTERFACE
- */
-struct ArpRegistry
-{
-    SubRegistry<Arp, nullptr,
-        AtomicField<bool CONFIG_INDEX_ARG(Arp::AUTHORIZED)>,
-        AtomicField<uint32_t CONFIG_INDEX_ARG(Arp::LOG_THRESHOLD_ENTRIES)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Arp::PACKET_PRIORITY)>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(Arp::PROBE_INTERVAL)>,
-        AtomicField<uint8_t CONFIG_INDEX_ARG(Arp::PROBE_COUNT)>,
-        AtomicField<uint32_t CONFIG_INDEX_ARG(Arp::TIMEOUT)>
-    > reg;
-};
+struct ArpFields : FieldTuple<
+    AtomicField<bool CONFIG_INDEX_ARG(Arp::AUTHORIZED)>,
+    AtomicField<uint32_t CONFIG_INDEX_ARG(Arp::LOG_THRESHOLD_ENTRIES)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Arp::PACKET_PRIORITY)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(Arp::PROBE_INTERVAL)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(Arp::PROBE_COUNT)>,
+    AtomicField<uint32_t CONFIG_INDEX_ARG(Arp::TIMEOUT)>
+> {};
+
+struct ArpRegistry : SubRegistry<ArpRegistry, Arp, nullptr, ArpFields> {};
 }
 
 #endif // ARP_REGISTRY

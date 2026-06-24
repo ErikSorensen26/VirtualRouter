@@ -31,7 +31,6 @@
 #include <utility>
 #include <cstddef>
 #include <mutex>
-#include <optional>
 #include <typeinfo>
 #include <stdexcept>
 #include <RCU.hpp>
@@ -67,11 +66,23 @@ concept IsSubRegistry =
 
 template <typename T>
 concept IsSubRegistryWrapper =
-    requires (T t) { t.reg; } &&
-    IsSubRegistry<std::remove_cvref_t<decltype(T::reg)>>;
+    requires(T& object) {
+        []<typename ENUM, ApplyFn H, typename... Fields>
+        (SubRegistry<T, ENUM, H, Fields...>&) {}(object);
+    };
 
 template <typename T>
-using SubRegistryType = decltype(std::declval<T>().reg);
+concept IsFieldTuple =
+    requires(T* obj) { []<typename... Fields>(FieldTuple<Fields...>*){}(obj); };
+
+/**
+ * TODO finish doxy
+ */
+template <typename ...Field>
+struct FieldTuple
+{
+    using Type = std::tuple<Field...>;
+};
 
 /**
  * @class SubRegistry
@@ -101,25 +112,24 @@ using SubRegistryType = decltype(std::declval<T>().reg);
  *
  * @see RegistryTypes.hpp, RegistryDefaultTable.hpp
  */
-template <typename ENUM, ApplyFn H, typename... Fields>
+template <typename Base, typename ENUM, ApplyFn H, typename Fields>
 class SubRegistry : public SubRegistryFlag
 {
 public:
+    static_assert(IsFieldTuple<Fields>, "Must be a FieldTuple type.");
+
     using sub     = SubRegistry;
     using type    = ENUM;
     static constexpr ApplyFn applier = H; ///< Callback invoked whenever the effective value changes.
 
     // Meta tuple: used ONLY for compile-time checks / type indexing.
     /// Type alias for the field tuple (for type checking only, not storage).
-    using FieldTuple = std::tuple<Fields...>;
+    using FieldTuple = Fields::Type;
 
     template <ENUM i>
     using FieldTypeAt = std::tuple_element_t<static_cast<size_t>(i), FieldTuple>;
-    
-    /// Type alias for storage: optional wrapper around each field (allows lazy init).
-    using StorageTuple = std::tuple<std::optional<Fields>...>;
 
-    static_assert(sizeof...(Fields) == config::toIndex<ENUM::COUNT>);
+    static_assert(std::tuple_size_v<FieldTuple> == config::toIndex<ENUM::COUNT>);
 
 #if USE_CONFIG_INDEX
     static_assert(
@@ -226,7 +236,7 @@ public:
     decltype(auto) getValue() noexcept
     {
         constexpr size_t I = config::toIndex<F>;
-        return (*std::get<I>(fields));
+        return (std::get<I>(fields));
     }
 
     /**
@@ -239,7 +249,7 @@ public:
     const FieldTypeAt<F>& getValue() const noexcept
     {
         constexpr size_t I = config::toIndex<F>;
-        return (*std::get<I>(fields));
+        return (std::get<I>(fields));
     }
 
     /**
@@ -354,15 +364,11 @@ private:
     template <typename... Entries, size_t... I>
     void initContainersImpl(RegistryDatabase<Entries...>& db, std::index_sequence<I...>)
     {
-        (initContainerOne<I>(db), ...);
-    }
-
-    template <size_t I, typename... Entries>
-    void initContainerOne(RegistryDatabase<Entries...>& db)
-    {
-        using F = std::tuple_element_t<I, FieldTuple>;
-        if constexpr (IsRefContainer<F>)
-            db.autoInit(*std::get<I>(fields));
+        ([&]<size_t Index>() {
+            using F = std::tuple_element_t<Index, FieldTuple>;
+            if constexpr (IsRefContainer<F>)
+                db.autoInit(std::get<Index>(fields));
+        }.template operator()<I>(), ...);
     }
 
     /// Creates constructor arguments for a field (context/mutex/parent as needed).
@@ -393,74 +399,54 @@ private:
     template <size_t... I>
     void constructFields(std::index_sequence<I...>) noexcept
     {
-        (constructOne<I, std::tuple_element_t<I, FieldTuple>>(), ...);
-    }
-
-    /// Constructs one field at index I and emplaces it in its optional.
-    template <size_t I, typename F>
-    void constructOne() noexcept
-    {
-        auto& opt = std::get<I>(fields); // std::optional<F>
-        std::apply(
-            [&](auto&&... args)
-            {
-                opt.emplace(std::forward<decltype(args)>(args)...);
-            },
-            this->template createField<F>()
-        );
+        ([&]<size_t Index>() {
+            using F = std::tuple_element<Index, FieldTuple>;
+            std::apply(
+                [&](auto&&... args) {
+                    std::construct_at(&std::get<Index>(fields), std::forward<decltype(args)>(args)...);
+                },
+                this->template createField<F>()
+            );
+        }.template operator()<I>(), ...);
     }
 
     /// Installs default values from RegistryDefaultTable for all AtomicFields.
     template <size_t... I>
     void installDefaults(std::index_sequence<I...>) noexcept
     {
-        (installDefaultOne<I>(), ...);
-    }
-
-    /// Installs default for one field if it's an AtomicField.
-    template <size_t I>
-    void installDefaultOne() noexcept
-    {
-        using Field = std::tuple_element_t<I, FieldTuple>;
-
-        if constexpr (config::IsAtomicField<Field>)
-        {
-            constexpr ENUM E = static_cast<ENUM>(I);
-            auto f = get<static_cast<ENUM>(I)>();
-            if constexpr (hasV<ENUM, E>)
-                f.setDefault();
-        }
+        ([&]<size_t Index>() {
+            using Field = std::tuple_element_t<Index, FieldTuple>;
+            if constexpr (config::IsAtomicField<Field>)
+            {
+                constexpr ENUM E = static_cast<ENUM>(Index);
+                auto f = get<E>();
+                if constexpr (hasV<ENUM, E>)
+                    f.setDefault();
+            }
+        }.template operator()<I>(), ...);
     }
 
     /// Applies masking to all fields from a parent registry.
     template <size_t... I>
     void applyMask(SubRegistry* mask, std::index_sequence<I...>) noexcept
     {
-        (applyMaskOne<I>(mask), ...);
-    }
-
-    /// Applies masking to one field if it supports the setMask() interface.
-    template <size_t I>
-    void applyMaskOne(SubRegistry* mask) noexcept
-    {
-        using Field = std::tuple_element_t<I, FieldTuple>;
-
-        auto& local = *std::get<I>(fields);
-
-        if constexpr (requires(Field& f, const Field* p) { f.setMask(p); })
-        {
-            const Field* parentField =
-                parent ? std::get<I>(mask->fields).operator->() : nullptr;
-
-            local.setMask(parentField);
-        }
+        ([&]<size_t Index>() {
+            using Field = std::tuple_element_t<Index, FieldTuple>;
+            auto& local = std::get<Index>(fields);
+            if constexpr (requires(Field& f, const Field* p) { f.setMask(p); })
+            {
+                const Field* parentField =
+                    parent ? &std::get<Index>(mask->fields) : nullptr;
+                local.setMask(parentField);
+            }
+        }.template operator()<I>(), ...);
     }
 
     /// Context provider for fields requiring external data.
     ContextProvider ctxProvider;
     
     /// Optional storage for all fields (allows lazy initialization).
-    StorageTuple fields;
+    FieldTuple fields;
 
     /// Parent pointer, must point to the parent object
     void* const parent = nullptr;

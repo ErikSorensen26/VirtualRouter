@@ -164,7 +164,7 @@ public:
 
     inline void set(F::type v) noexcept
     {
-        bool apply = load() != v;
+        bool apply = !hasValue() || load() != v;
         field.value.store(v, std::memory_order_release);
         field.state.store(FieldState::CANNED, std::memory_order_release);
         if (apply && provider.hasCtx())
@@ -267,7 +267,7 @@ public:
 
     inline void set(F::type v) noexcept
     {
-        bool apply = load() != v;
+        bool apply = !hasValue() || load() != v;
         typename F::type* val = new F::type(v);
         typename F::type* old = field.value.exchange(val, std::memory_order_relaxed);
         utils::RCU::retire([](void* ctx) {
@@ -448,9 +448,14 @@ public:
      */
     type& emplaceBack(const key& k) noexcept
     {
-        auto [it, ok] = field.children.try_emplace(k);
-        if (ok) notifyChanged();
-        return it->second;
+        if (!field.delFn)
+            field.delFn = [](type* p) { delete p; };
+        auto [it, ok] = field.children.try_emplace(k, nullptr);
+        if (ok) {
+            it->second = new type();
+            notifyChanged();
+        }
+        return *it->second;
     }
 
     /**
@@ -459,7 +464,7 @@ public:
      * @param k  Key to search for.
      * @return Const iterator to the matching entry, or `end()` if not found.
      */
-    inline std::unordered_map<key, type>::const_iterator find(const key& k) const noexcept
+    inline std::unordered_map<key, type*>::const_iterator find(const key& k) const noexcept
     {
         return field.children.find(k);
     }
@@ -467,7 +472,7 @@ public:
     /**
      * @brief Returns the past-the-end iterator for the local children map.
      */
-    inline std::unordered_map<key, type>::const_iterator end() const noexcept
+    inline std::unordered_map<key, type*>::const_iterator end() const noexcept
     {
         return field.children.end();
     }
@@ -475,27 +480,27 @@ public:
     /**
      * @brief Returns the begin iterator for the local children map.
      */
-    inline std::unordered_map<key, type>::const_iterator begin() const noexcept
+    inline std::unordered_map<key, type*>::const_iterator begin() const noexcept
     {
         return field.children.begin();
     }
 
     /**
-     * @brief Returns a reference to the local children map.
+     * @brief Returns a reference to the pointer-map of local children.
      *
-     * @return Reference to the `unordered_map<K, T>`.
+     * @return Reference to the `unordered_map<K, T*>`.
      */
-    inline std::unordered_map<key, type>& get() noexcept
+    inline std::unordered_map<key, type*>& get() noexcept
     {
         return field.children;
     }
 
     /**
-     * @brief Returns a const reference to the local children map.
+     * @brief Returns a const reference to the pointer-map of local children.
      *
-     * @return Const reference to the `unordered_map<K, T>`.
+     * @return Const reference to the `unordered_map<K, T*>`.
      */
-    inline const std::unordered_map<key, type>& get() const noexcept
+    inline const std::unordered_map<key, type*>& get() const noexcept
     {
         return field.children;
     }
@@ -517,7 +522,11 @@ public:
      */
     inline void erase(const key& k) noexcept
     {
-        field.children.erase(k);
+        auto it = field.children.find(k);
+        if (it != field.children.end()) {
+            if (field.delFn) field.delFn(it->second);
+            field.children.erase(it);
+        }
         notifyChanged();
     }
 
@@ -526,6 +535,8 @@ public:
      */
     inline void clear() noexcept
     {
+        for (auto& [k, v] : field.children)
+            if (field.delFn) field.delFn(v);
         field.children.clear();
         notifyChanged();
     }
@@ -536,28 +547,28 @@ private:
     ApplyFn applier;
 };
 
-template <typename ENUM, ApplyFn H, typename... Fields>
+template <typename Base, typename ENUM, ApplyFn H, typename Fields>
 template <ENUM F>
-decltype(auto) SubRegistry<ENUM, H, Fields...>::get() noexcept
+decltype(auto) SubRegistry<Base, ENUM, H, Fields>::get() noexcept
 {
     using Field = FieldTypeAt<F>;
     if constexpr (IsRefContainer<Field>)
         return getValue<F>();
     else if constexpr (IsAtomicField<Field>)
-        return AtomicFieldAccessor<Field>(*this, AccessorField<F>{});
+        return AtomicFieldAccessor<Field>(*static_cast<Base*>(this), AccessorField<F>{});
     else if constexpr (IsOptionalAtomicField<Field>)
-        return OptionalAtomicFieldAccessor<Field>(*this, AccessorField<F>{});
+        return OptionalAtomicFieldAccessor<Field>(*static_cast<Base*>(this), AccessorField<F>{});
     else if constexpr (IsValueField<Field>)
-        return ValueFieldAccessor<Field>(*this, AccessorField<F>{});
+        return ValueFieldAccessor<Field>(*static_cast<Base*>(this), AccessorField<F>{});
     else if constexpr (IsListField<Field>)
-        return ListFieldAccessor<Field>(*this, AccessorField<F>{});
+        return ListFieldAccessor<Field>(*static_cast<Base*>(this), AccessorField<F>{});
     else
-        return OwnedListFieldAccessor<Field>(*this, AccessorField<F>{});
+        return OwnedListFieldAccessor<Field>(*static_cast<Base*>(this), AccessorField<F>{});
 }
 
-template <typename ENUM, ApplyFn H, typename... Fields>
+template <typename Base, typename ENUM, ApplyFn H, typename Fields>
 template <ENUM F>
-decltype(auto) SubRegistry<ENUM, H, Fields...>::get() const noexcept
+decltype(auto) SubRegistry<Base, ENUM, H, Fields>::get() const noexcept
 {
     return const_cast<SubRegistry&>(*this).template get<F>();
 }

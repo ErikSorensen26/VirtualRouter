@@ -1,6 +1,7 @@
 // PrivilegedExecCommands.cpp    
 
 #include <Global.h>
+#include "configs/registry/global/GlobalRegistry.h"
 
 #include "PrivilegedExecCommands.h"
 #include "cli/parser/CliModeParser.hpp"
@@ -25,7 +26,7 @@ bool PrivilegedExec_Exit_Handler(PRIVILEGED_EXEC_PARAMS)
 {
     UNUSED(segs);
     if (!ctx.terminal.popMode())
-        ctx.terminal.resetAndChangeMode<CliMode::UserExec>(ctx.terminal.engine.global.configs);
+        ctx.terminal.resetAndChangeMode<CliMode::UserExec>(ctx.terminal.engine.global.getConfigs());
     return true;
 }
 
