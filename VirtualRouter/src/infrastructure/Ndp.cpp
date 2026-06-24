@@ -39,7 +39,7 @@ uint8_t* calculateEui64(uint8_t* out, const uint8_t* prefix, const uint8_t* mac)
 Ndp::Ndp(interface::Interface& interface)
     : iface(interface),
       configs([&interface]() -> config::NdpRegistry& {
-          return interface.configs.getConfigs().reg.get<config::Interface::IPV6_ND>().get();
+          return interface.configs.getConfigs().get<config::Interface::IPV6_ND>().get();
       }()),
       global(interface.getVRF()->getGlobal()),
       scheduler(interface.getScheduler().ref())
@@ -72,7 +72,7 @@ void Ndp::refresh()
 void Ndp::initializeNdp()
 {
     running.store(true, std::memory_order_release);
-    if (!configs.reg.get<config::Ndp::RA_SUPPRESS_ALL>().load())
+    if (!configs.get<config::Ndp::RA_SUPPRESS_ALL>().load())
         scheduleNextRA();
 }
 
@@ -95,12 +95,6 @@ void Ndp::clear()
         if (entry.timerId)      scheduler.cancel(entry.timerId);
         if (entry.retryTimerId) scheduler.cancel(entry.retryTimerId);
     }
-    // Cancel NS retry timers
-    for (auto& [ip, timerId] : nsRetryTimers)
-        scheduler.cancel(timerId);
-    // Cancel DAD timers
-    for (auto& [ip, timerId] : dadTimers)
-        scheduler.cancel(timerId);
     // Cancel RA timers
     for (uint32_t timerId : raTimerIds)
         scheduler.cancel(timerId);
@@ -115,20 +109,11 @@ void Ndp::clear()
 
     ndpCache.clear();
     ndpTable.clear();
-    pendingPackets.clear();
-    insertionOrder.clear();
-    nsRetryCount.clear();
-    nsRetryTimers.clear();
-    dadTimers.clear();
-    dadStatus.clear();
     raTimerIds.clear();
     raReceivedTimestamps.clear();
     lastUnsolicitedNaTime.clear();
     defaultRouterTimers.clear();
-    currentNudProbes = 0;
-    currentResolvingNeighbors = 0;
-    queuedNudProbes.clear();
-    queuedResolution.clear();
+    incompletes = 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -151,87 +136,87 @@ void Ndp::completeNdpEntry(types::IPv6Address targetIp, NdpCacheEntry& entry, ty
     if (entry.timerId)      { scheduler.cancel(entry.timerId);      entry.timerId = 0; }
     if (entry.retryTimerId) { scheduler.cancel(entry.retryTimerId); entry.retryTimerId = 0; }
 
+    if (entry.state == NudState::INCOMPLETE)
+        incompletes--;
+    if (entry.state == NudState::PROBE)
+        nuds--;
+
     entry.macAddress = mac;
     entry.state      = NudState::REACHABLE;
     entry.retries    = 0;
 
     ndpTable.insert(targetIp, mac);
 
-    uint16_t refreshPeriod = configs.reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::NUD_REFRESH_PERIOD>().load();
-    if (refreshPeriod > 0)
+    auto refreshPeriod = configs.get<config::Ndp::BASE>().get().get<config::NdpBase::NUD_REFRESH_PERIOD>();
+    if (refreshPeriod.hasValue())
     {
         entry.timerId = scheduler.postAfter(
-            std::chrono::steady_clock::now() + std::chrono::seconds(refreshPeriod),
+            std::chrono::steady_clock::now() + std::chrono::seconds(refreshPeriod.load()),
             [this, targetIp](uint32_t) { refreshNeighborEntry(targetIp); }
         );
     }
     else
     {
-        uint32_t reachableTime = configs.reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::REACHABLE_TIME>().load();
+        uint32_t reachableTime = configs.get<config::Ndp::BASE>().get().get<config::NdpBase::REACHABLE_TIME>().load();
         entry.timerId = scheduler.postAfter(
             std::chrono::steady_clock::now() + std::chrono::milliseconds(reachableTime),
             [this, targetIp](uint32_t) { onReachableTimeout(targetIp); }
         );
     }
 
-    processQueuedPackets(targetIp, mac);
+    sendQueuedPackets(targetIp, mac);
 }
 
-void Ndp::addNdpEntry(types::IPv6Address targetIp, types::Mac targetMac, bool proxy, bool isStatic)
+void Ndp::addNdpEntry(types::IPv6Address targetIp, types::Mac targetMac, bool proxy)
 {
-    if (!isStatic)
+    if (proxy)
     {
-        // Enforce per-interface cache limit
-        auto limitField = configs.reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::CACHE_INTERFACE_LIMIT>();
-        if (limitField.hasValue())
-        {
-            uint32_t limit = limitField.load();
-            if (limit != 0 && ndpCache.size() >= limit)
-            {
-                if (insertionOrder.empty()) return;
-                types::IPv6Address evicted = insertionOrder.front();
-                insertionOrder.pop_front();
-                removeEntry(evicted);
-            }
-        }
-    }
-
-    auto& entry = ndpCache[targetIp];
-    entry.isStatic = isStatic;
-    entry.isProxy  = proxy;
-
-    if (isStatic)
-    {
-        entry.macAddress = targetMac;
-        entry.state      = NudState::REACHABLE;
-        ndpTable.insert(targetIp, targetMac);
-        processQueuedPackets(targetIp, targetMac);
+        proxyTable[targetIp] = targetMac;
     }
     else
     {
-        insertionOrder.push_back(targetIp);
-        completeNdpEntry(targetIp, entry, targetMac);
+        auto& entry = ndpCache[targetIp];
+        entry.macAddress = targetMac;
+        entry.state = NudState::REACHABLE;
+        ndpCache[targetIp] = std::move(entry);
+
+        // Add to table
+        ndpTable.insert(targetIp, targetMac);
     }
 }
 
-void Ndp::removeNdpEntry(types::IPv6Address targetIp)
+void Ndp::addStaticNdpEntry(types::IPv6Address targetIp, types::Mac targetMac, bool proxy)
 {
-    scheduler.post([this, targetIp] { removeEntry(targetIp); });
+    scheduler.post([this, targetIp, targetMac, proxy]{
+        addNdpEntry(targetIp, targetMac, proxy);
+    });
 }
 
-void Ndp::removeEntry(types::IPv6Address targetIp)
+void Ndp::removeStaticNdpEntry(types::IPv6Address targetIp, bool proxy)
 {
-    auto it = ndpCache.find(targetIp);
-    if (it == ndpCache.end()) return;
+    scheduler.post([this, targetIp, proxy] {
+        removeNdpEntry(targetIp, proxy);
+    });
+}
 
-    auto& entry = it->second;
-    if (entry.timerId)      scheduler.cancel(entry.timerId);
-    if (entry.retryTimerId) scheduler.cancel(entry.retryTimerId);
+void Ndp::removeNdpEntry(types::IPv6Address targetIp, bool proxy)
+{
+    if (proxy)
+    {
+        proxyTable.erase(targetIp);
+    }
+    else
+    {
+        auto it = ndpCache.find(targetIp);
+        if (it == ndpCache.end()) return;
 
-    ndpCache.erase(it);
-    ndpTable.erase(targetIp);
-    std::erase(insertionOrder, targetIp);
-    pendingPackets.erase(targetIp);
+        auto& entry = it->second;
+        if (entry.timerId)      scheduler.cancel(entry.timerId);
+        if (entry.retryTimerId) scheduler.cancel(entry.retryTimerId);
+
+        ndpCache.erase(it);
+        ndpTable.erase(targetIp);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -240,138 +225,128 @@ void Ndp::removeEntry(types::IPv6Address targetIp)
 
 void Ndp::resolveAndSend(types::IPv6Address targetIp, processing::PacketBuilder& packetToSend)
 {
-    auto it = ndpCache.find(targetIp);
-    if (it != ndpCache.end())
+    bool cached = ndpCache.contains(targetIp);
+
+    // Entry limit enforcement, only enforce if a new entry is required
+    if (!cached)
     {
-        bool strict = configs.reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::HOST_MODE_STRICT>().load();
-
-        switch (it->second.state)
-        {
-            case NudState::REACHABLE:
-                if (!strict)
-                {
-                    ethernet::build(&iface, packetToSend, it->second.macAddress, ETHERNET_IPV6);
-                    return;
-                }
-                startNud(targetIp, it->second);
-                break;
-
-            case NudState::STALE:
-            case NudState::DELAY:
-                startNud(targetIp, it->second);
-                break;
-
-            default:
-                break; // PROBE / UNREACHABLE: packet will be delivered on resolution
-        }
+        auto incompleteEntries = configs.get<config::Ndp::BASE>().get().get<config::NdpBase::CACHE_INTERFACE_LIMIT>();
+        if (incompleteEntries.hasValue() && incompletes >= incompleteEntries.load())
+            return; // Too many incomplete entries
     }
-    else
+
+    NdpCacheEntry& entry = ndpCache[targetIp];
+
+    auto& queue = entry.queue;
+
+    if (cached)
     {
-        uint16_t maxResolution = configs.reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::RESOLUTION_DATA_LIMIT>().load();
-        if (maxResolution != 0 && currentResolvingNeighbors >= maxResolution)
+        bool strict = configs.get<config::Ndp::BASE>().get().get<config::NdpBase::HOST_MODE_STRICT>().load();
+
+        if (entry.state == NudState::REACHABLE)
         {
-            queuedResolution.insert(targetIp);
-            return;
+            if (!strict)
+                sendQueuedPacket(packetToSend, entry.macAddress);
+            else
+                startNud(targetIp, entry);
         }
-        currentResolvingNeighbors++;
-        ndpCache.emplace(targetIp, NdpCacheEntry{});
-        insertionOrder.push_back(targetIp);
-        sendNeighborSolicitation(targetIp);
+        else if (entry.state == NudState::STALE)
+        {
+            startNud(targetIp, entry);
+        }
+        return;
     }
 
     // Queue the packet
-    auto& queue = pendingPackets[targetIp];
-    uint8_t queueLimit = configs.reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::RESOLUTION_DATA_LIMIT>().load();
+    uint8_t queueLimit = configs.get<config::Ndp::BASE>().get().get<config::NdpBase::RESOLUTION_DATA_LIMIT>().load();
     if (queue.size() < queueLimit)
         queue.push(std::move(packetToSend));
+
+    if (!cached) incompletes++;
+
+    sendNeighborSolicitation(targetIp, entry);
 }
 
-void Ndp::processQueuedPackets(types::IPv6Address targetIp, types::Mac macAddress)
+void Ndp::sendQueuedPackets(types::IPv6Address targetIp, types::Mac macAddress)
 {
-    auto it = pendingPackets.find(targetIp);
-    if (it == pendingPackets.end()) return;
+    auto cacheIt = ndpCache.find(targetIp);
+    if (cacheIt == ndpCache.end())
+        return;
 
-    auto& queue = it->second;
-    while (!queue.empty())
+    auto& packets = cacheIt->second.queue;
+
+    while (!packets.empty())
     {
-        auto& pkt = queue.front();
-        auto* current = pkt.previewNextBuildHeader();
-        if (current && current->type == packet::HeaderType::ETHERNET)
-            ethernet::build(&iface, pkt, macAddress, ETHERNET_IPV6);
-        queue.pop();
+        sendQueuedPacket(packets.front(), macAddress);
+        packets.pop();
     }
-    pendingPackets.erase(it);
+}
+
+void Ndp::sendQueuedPacket(processing::PacketBuilder& pkt, types::Mac mac)
+{
+    auto current = pkt.previewNextBuildHeader();
+    if (!current) return;
+
+    // Continue building next header
+    switch (current->type)
+    {
+        //TODO add more headers
+        case packet::HeaderType::ETHERNET:
+            ethernet::build(&iface, pkt, mac, ETHERNET_IPV4);
+            break;
+        default:
+            return;
+    }
 }
 
 // ---------------------------------------------------------------------------
 // Neighbor Solicitation / NUD
 // ---------------------------------------------------------------------------
 
-void Ndp::sendNeighborSolicitation(types::IPv6Address targetIp)
+void Ndp::sendNeighborSolicitation(types::IPv6Address targetIp, NdpCacheEntry& entry)
 {
-    if (nsRetryTimers.count(targetIp)) return; // Already pending
-    nsRetryCount[targetIp] = 0;
-    scheduleNeighborSolicitation(targetIp);
+    if (entry.retryTimerId) return; // Request already active
+    scheduleNeighborSolicitation(targetIp, entry);
 }
 
-void Ndp::scheduleNeighborSolicitation(types::IPv6Address targetIp)
+void Ndp::scheduleNeighborSolicitation(types::IPv6Address targetIp, NdpCacheEntry& entry)
 {
-    if (!running.load(std::memory_order_relaxed)) return;
-
-    uint8_t attempt    = nsRetryCount[targetIp];
-    bool runningNud    = false;
-    uint16_t maxRetries = configs.reg.get<config::Ndp::NUD_RETRY_ATTEMPTS>().load();
-
-    auto cacheIt = ndpCache.find(targetIp);
-    if (cacheIt != ndpCache.end())
+    if (!running.load(std::memory_order_relaxed) || entry.state == NudState::REACHABLE)
+        return;
+    if (entry.state == NudState::STALE)
     {
-        auto state = cacheIt->second.state;
-        if (state == NudState::PROBE || state == NudState::UNREACHABLE)
-            runningNud = true;
+        startNud(targetIp, entry);
+        return;
+    }
+
+    uint8_t attempt    = entry.retries;
+    bool runningNud    = false;
+    uint32_t maxRetries;
+
+    auto state = entry.state;
+    if (state == NudState::PROBE)
+    {
+        runningNud = true;
+        maxRetries = configs.get<config::Ndp::NUD_RETRY_ATTEMPTS>().load();
+    }
+    else
+    {
+        maxRetries = 3;
     }
 
     // On exhaustion
-    if (attempt >= (runningNud ? maxRetries : configs.reg.get<config::Ndp::NUD_RETRY>().load()))
+    if (attempt >= maxRetries)
     {
-        if (runningNud && cacheIt != ndpCache.end() &&
-            cacheIt->second.nudGroup <= configs.reg.get<config::Ndp::NUD_RETRY>().load())
+        if (runningNud)
         {
             // Transition to UNREACHABLE with final-wait timer
-            cacheIt->second.state = NudState::UNREACHABLE;
-            uint16_t finalWait    = configs.reg.get<config::Ndp::NUD_FINAL_WAIT>().load();
-            cacheIt->second.retryTimerId = scheduler.postAfter(
+            uint16_t finalWait    = configs.get<config::Ndp::NUD_FINAL_WAIT>().load();
+            entry.retryTimerId = scheduler.postAfter(
                 std::chrono::steady_clock::now() + std::chrono::milliseconds(finalWait),
-                [this, targetIp](uint32_t) { retryNud(targetIp); }
+                [this, targetIp](uint32_t) { removeNdpEntry(targetIp); }
             );
-            if (currentNudProbes > 0) currentNudProbes--;
-
-            // Drain the NUD queue
-            if (!queuedNudProbes.empty())
-            {
-                auto next = *queuedNudProbes.begin();
-                queuedNudProbes.erase(queuedNudProbes.begin());
-                auto nextIt = ndpCache.find(next);
-                if (nextIt != ndpCache.end())
-                    startNud(next, nextIt->second);
-            }
         }
-        else
-        {
-            removeEntry(targetIp);
-            if (currentResolvingNeighbors > 0) currentResolvingNeighbors--;
-
-            // Resume a queued resolution
-            if (!queuedResolution.empty())
-            {
-                auto next = *queuedResolution.begin();
-                queuedResolution.erase(queuedResolution.begin());
-                sendNeighborSolicitation(next);
-            }
-        }
-
-        nsRetryCount.erase(targetIp);
-        nsRetryTimers.erase(targetIp);
-        dadStatus.erase(targetIp);
+        else removeNdpEntry(targetIp);
         return;
     }
 
@@ -391,46 +366,45 @@ void Ndp::scheduleNeighborSolicitation(types::IPv6Address targetIp)
         ippacket::buildIpv6(build);
     }
 
-    nsRetryCount[targetIp]++;
+    entry.retries++;
 
     uint32_t interval = runningNud
-        ? configs.reg.get<config::Ndp::NUD_RETRY_INTERVAL>().load()
-        : configs.reg.get<config::Ndp::NS_INTERVAL>().load();
+        ? configs.get<config::Ndp::NUD_RETRY_INTERVAL>().load()
+        : configs.get<config::Ndp::NS_INTERVAL>().load();
 
-    if (nsRetryTimers.count(targetIp))
-        scheduler.cancel(nsRetryTimers[targetIp]);
+    if (runningNud) // Apply nud multiplier (base)
+    {
+        uint16_t multiplier  = configs.get<config::Ndp::NUD_RETRY>().load();
+        for (int i = 0; i < static_cast<int>(attempt); i++)
+        {
+            interval *= multiplier;
+        }
+    }
 
-    nsRetryTimers[targetIp] = scheduler.postAfter(
+    if (entry.retryTimerId)
+        scheduler.cancel(entry.retryTimerId);
+
+    entry.retryTimerId = scheduler.postAfter(
         std::chrono::steady_clock::now() + std::chrono::milliseconds(interval),
         [this, targetIp](uint32_t)
         {
-            nsRetryTimers.erase(targetIp);
-            // If a reply arrived (DAD resolution), clean up
-            if (auto dit = dadStatus.find(targetIp); dit != dadStatus.end() && dit->second)
-            {
-                nsRetryCount.erase(targetIp);
-                return;
-            }
-            scheduleNeighborSolicitation(targetIp);
+            if (auto entryIt = ndpCache.find(targetIp); entryIt != ndpCache.end())
+                scheduleNeighborSolicitation(targetIp, entryIt->second);
         }
     );
 }
 
 void Ndp::startNud(types::IPv6Address targetIp, NdpCacheEntry& entry)
 {
-    uint16_t nudLimit = configs.reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::NUD_LIMIT>().load();
-    if (nudLimit != 0 && currentNudProbes >= nudLimit)
-    {
-        queuedNudProbes.insert(targetIp);
+    uint16_t nudLimit = configs.get<config::Ndp::BASE>().get().get<config::NdpBase::NUD_LIMIT>().load();
+    if (nudLimit != 0 && nuds >= nudLimit)
         return;
-    }
 
     entry.state   = NudState::PROBE;
     entry.retries = 0;
-    currentNudProbes++;
+    nuds++;
 
-    nsRetryCount[targetIp] = 0;
-    scheduleNeighborSolicitation(targetIp);
+    scheduleNeighborSolicitation(targetIp, entry);
 }
 
 void Ndp::onReachableTimeout(types::IPv6Address targetIp)
@@ -440,11 +414,21 @@ void Ndp::onReachableTimeout(types::IPv6Address targetIp)
 
     it->second.timerId = 0;
 
-    bool doRefresh = configs.reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::CACHE_REFRESH>().load();
+    bool doRefresh = configs.get<config::Ndp::BASE>().get().get<config::NdpBase::CACHE_REFRESH>().load();
     if (doRefresh)
+    {
         startNud(targetIp, it->second);
+    }
     else
+    {
         it->second.state = NudState::STALE;
+
+        uint16_t cacheExpire = configs.get<config::Ndp::BASE>().get().get<config::NdpBase::CACHE_EXPIRE>().load();
+        it->second.timerId = scheduler.postAfter(
+            std::chrono::steady_clock::now() + std::chrono::seconds(cacheExpire),
+            [this, targetIp](uint32_t) { removeNdpEntry(targetIp); }
+        );
+    }
 }
 
 void Ndp::refreshNeighborEntry(types::IPv6Address targetIp)
@@ -455,19 +439,6 @@ void Ndp::refreshNeighborEntry(types::IPv6Address targetIp)
     it->second.timerId = 0;
     if (it->second.state == NudState::REACHABLE)
         startNud(targetIp, it->second);
-}
-
-void Ndp::retryNud(types::IPv6Address targetIp)
-{
-    if (!running.load(std::memory_order_relaxed)) return;
-
-    auto it = ndpCache.find(targetIp);
-    if (it == ndpCache.end() || it->second.state != NudState::UNREACHABLE) return;
-
-    it->second.retryTimerId = 0;
-    it->second.nudGroup++;
-    nsRetryCount[targetIp] = 0;
-    sendNeighborSolicitation(targetIp);
 }
 
 // ---------------------------------------------------------------------------
@@ -499,9 +470,9 @@ void Ndp::receiveNeighborAdvertisement(const packet::Icmpv6Header& receivedNA, t
         __uint128_t addrValue = utils::readU128(trail.data());
         for (const auto& addr : iface.configs.ipv6.globalAddresses)
         {
-            if (addr->prefix == addrValue && addr->tentative && targetIp == IPV6_SOURCE)
+            if (addr->prefix == addrValue && addr->tentative)
             {
-                dadStatus[targetIp] = true;
+                dadEntries[addrValue].duplicate = true;
                 return;
             }
         }
@@ -510,42 +481,17 @@ void Ndp::receiveNeighborAdvertisement(const packet::Icmpv6Header& receivedNA, t
     auto it = ndpCache.find(targetIp);
     if (it != ndpCache.end())
     {
-        bool wasUnresolved = (it->second.state == NudState::ACTIVE);
         completeNdpEntry(targetIp, it->second, mac);
-
-        if (wasUnresolved && currentResolvingNeighbors > 0)
-        {
-            currentResolvingNeighbors--;
-            if (!queuedResolution.empty())
-            {
-                auto next = *queuedResolution.begin();
-                queuedResolution.erase(queuedResolution.begin());
-                sendNeighborSolicitation(next);
-            }
-        }
-        if (it->second.state == NudState::PROBE && currentNudProbes > 0)
-        {
-            currentNudProbes--;
-            if (!queuedNudProbes.empty())
-            {
-                auto next = *queuedNudProbes.begin();
-                queuedNudProbes.erase(queuedNudProbes.begin());
-                auto nextIt = ndpCache.find(next);
-                if (nextIt != ndpCache.end())
-                    startNud(next, nextIt->second);
-            }
-        }
     }
     else
     {
         // Unsolicited NA (NA_GLEAN): learn from it if configured
-        if (configs.reg.get<config::Ndp::NA_GLEAN>().load())
+        if (configs.get<config::Ndp::NA_GLEAN>().load())
+        {
             addNdpEntry(targetIp, mac);
+            completeNdpEntry(targetIp, ndpCache[targetIp], mac);
+        }
     }
-
-    // Mark reply received (for NS retry cancellation)
-    if (dadStatus.count(targetIp))
-        dadStatus[targetIp] = true;
 }
 
 void Ndp::receiveNeighborSolicitation(const packet::Icmpv6Header& nsHeader, types::IPv6Address srcIp, types::Mac srcMac)
@@ -555,33 +501,25 @@ void Ndp::receiveNeighborSolicitation(const packet::Icmpv6Header& nsHeader, type
 
     bool isOwned = false;
     bool isProxy = false;
-    types::Mac replyMac;
 
     if (iface.configs.ipv6.hasAddress(trail.data()))
     {
-        replyMac = iface.configs.getMac();
         isOwned  = true;
     }
-    else if (auto it = ndpCache.find(targetIp); it != ndpCache.end() && it->second.isProxy)
+    else if (auto proxyIt = proxyTable.find(trail.data()); proxyIt != proxyTable.end())
     {
-        replyMac = it->second.macAddress;
-        isProxy  = true;
+        isProxy = true; // Static entry
     }
 
-    if (!isOwned && !isProxy) return;
+    if (!isOwned && !isProxy)
+        return;
 
     processing::PacketBuilder na(&iface);
-    if (isProxy)
-    {
-        types::IPv6Address adv = trail.data();
-        neighborAdvertisement(na, replyMac, &adv);
-    }
-    else
-    {
-        neighborAdvertisement(na, replyMac, &srcIp);
-    }
 
-    if (srcMac.mac == 0 && srcIp == IPV6_SOURCE)
+    types::IPv6Address adv = trail.data();
+    neighborAdvertisement(na, iface.configs.getMac(), &adv);
+
+    if (srcIp == IPV6_SOURCE)
     {
         // DAD probe or missing MAC — send multicast NA
         ippacket::BuildIP build = {
@@ -610,18 +548,18 @@ void Ndp::receiveNeighborSolicitation(const packet::Icmpv6Header& nsHeader, type
 
 void Ndp::receiveRouteAdvertisement(const packet::Icmpv6Header& receivedRA, types::IPv6Address sourceIp, types::Mac sourceMac)
 {
-    if (configs.reg.get<config::Ndp::RA_SUPPRESS>().load()) return;
+    if (configs.get<config::Ndp::RA_SUPPRESS>().load()) return;
 
-    if (configs.reg.get<config::Ndp::DESTINATION_GUARD>().load())
+    if (configs.get<config::Ndp::DESTINATION_GUARD>().load())
     {
-        auto mode = configs.reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::HOST_MODE_STRICT>().load();
+        auto mode = configs.get<config::Ndp::BASE>().get().get<config::NdpBase::HOST_MODE_STRICT>().load();
 
         if (!mode) return; // BLOCK_ALL when strict
 
         if (!raGuardAllowedMacs.count(sourceMac))
         {
             auto& lastTime = raReceivedTimestamps[sourceMac.mac];
-            auto rateLimit = configs.reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::CACHE_INTERFACE_LIMIT_LOG_RATE>().load();
+            auto rateLimit = configs.get<config::Ndp::BASE>().get().get<config::NdpBase::CACHE_INTERFACE_LIMIT_LOG_RATE>().load();
             auto interval  = std::chrono::milliseconds(1000 / std::max<uint16_t>(rateLimit, 1));
             auto now       = std::chrono::steady_clock::now();
 
@@ -635,7 +573,7 @@ void Ndp::receiveRouteAdvertisement(const packet::Icmpv6Header& receivedRA, type
     bool mFlag = flags & 0x80;
     bool oFlag = flags & 0x40;
 
-    if (configs.reg.get<config::Ndp::AUTOCONFIG_DEFAULT_ROUTE>().load())
+    if (configs.get<config::Ndp::AUTOCONFIG_DEFAULT_ROUTE>().load())
     {
         uint32_t pid = (uint32_t)std::hash<__uint128_t>{}(sourceIp.addr);
 
@@ -698,7 +636,7 @@ void Ndp::receiveRouteAdvertisement(const packet::Icmpv6Header& receivedRA, type
             );
             if (isExcluded) continue;
 
-            if (A && validLifetime > 0 && configs.reg.get<config::Ndp::AUTOCONFIG_PREFIX>().load())
+            if (A && validLifetime > 0 && configs.get<config::Ndp::AUTOCONFIG_PREFIX>().load())
             {
                 auto* slaacAddr              = new interface::InterfaceConfigs::IPv6State::IPv6Address();
                 slaacAddr->prefix.prefixLength = prefixLen;
@@ -760,7 +698,10 @@ void Ndp::receiveRedirectMessage(const packet::Icmpv6Header& redirect, types::IP
     }
 
     if (macFound)
+    {
         addNdpEntry(betterNextHop, nextHopMac);
+        completeNdpEntry(betterNextHop, ndpCache[betterNextHop], nextHopMac);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -769,7 +710,13 @@ void Ndp::receiveRedirectMessage(const packet::Icmpv6Header& redirect, types::IP
 
 void Ndp::sendNeighborAdvertisement(types::Mac destMac, types::IPv6Address targetIp)
 {
-    if (configs.reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::HOST_MODE_STRICT>().load()) return; // suppressNA
+    if (configs.get<config::Ndp::BASE>().get().get<config::NdpBase::HOST_MODE_STRICT>().load()) return; // suppressNA
+
+    auto now     = std::chrono::steady_clock::now();
+    auto& lastTime = lastUnsolicitedNaTime[targetIp];
+    if (now - lastTime < std::chrono::seconds(1)) return;
+    lastTime = now;
+
     if (iface.shutdownFlag.load(std::memory_order_relaxed)) return;
 
     processing::PacketBuilder naPacket(&iface);
@@ -845,7 +792,7 @@ void Ndp::sendRouteAdvertisement(types::Mac targetMac, types::IPv6Address target
 
 void Ndp::sendRedirectMessage(types::IPv6Address targetIp, types::IPv6Address destinationIp)
 {
-    if (!configs.reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::ROUTE_OWNER>().load()) return;
+    if (!configs.get<config::Ndp::BASE>().get().get<config::NdpBase::ROUTE_OWNER>().load()) return;
     if (iface.shutdownFlag.load(std::memory_order_relaxed)) return;
 
     processing::PacketBuilder packet(&iface);
@@ -884,7 +831,7 @@ void Ndp::sendRedirectMessage(types::IPv6Address targetIp, types::IPv6Address de
 void Ndp::sendRedirectIfNeeded(const packet::PacketInfo& originalPacket, const uint8_t* pkt)
 {
     if (iface.shutdownFlag.load(std::memory_order_relaxed)) return;
-    if (!configs.reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::ROUTE_OWNER>().load()) return;
+    if (!configs.get<config::Ndp::BASE>().get().get<config::NdpBase::ROUTE_OWNER>().load()) return;
 
     // Find the IPv6 header
     packet::IPv6HeaderRaw* ipv6 = nullptr;
@@ -963,10 +910,10 @@ void Ndp::scheduleNextRA()
             ++it;
     }
 
-    uint32_t baseInterval = configs.reg.get<config::Ndp::RA_INTERVAL>().load();
-    if (configs.reg.get<config::Ndp::ADVERTISEMENT_INTERVAL>().load())
+    uint32_t baseInterval = configs.get<config::Ndp::RA_INTERVAL>().load();
+    if (configs.get<config::Ndp::ADVERTISEMENT_INTERVAL>().load())
     {
-        uint32_t minInterval = configs.reg.get<config::Ndp::RA_MIN_INTERVAL>().load();
+        uint32_t minInterval = configs.get<config::Ndp::RA_MIN_INTERVAL>().load();
         if (minInterval > baseInterval) minInterval = baseInterval;
         uint32_t delta = baseInterval - minInterval;
         baseInterval   = minInterval + (static_cast<uint32_t>(rand()) % (delta + 1));
@@ -979,7 +926,7 @@ void Ndp::scheduleNextRA()
             raTimerIds.erase(timerId);
 
             if (!running.load(std::memory_order_relaxed) ||
-                configs.reg.get<config::Ndp::RA_SUPPRESS>().load())
+                configs.get<config::Ndp::RA_SUPPRESS>().load())
                 return;
 
             auto localAddr = iface.configs.ipv6.getLocalAddress();
@@ -998,7 +945,7 @@ void Ndp::scheduleNextRA()
 
 void Ndp::initiateSlaac()
 {
-    if (!configs.reg.get<config::Ndp::AUTOCONFIG_PREFIX>().load()) return;
+    if (!configs.get<config::Ndp::AUTOCONFIG_PREFIX>().load()) return;
 
     processing::PacketBuilder rs(&iface);
     routeSolicitation(rs, iface.configs.getMac());
@@ -1015,28 +962,29 @@ void Ndp::initiateSlaac()
 void Ndp::duplicateAddressDetection(interface::InterfaceConfigs::IPv6State::IPv6Address& addr)
 {
     if (iface.shutdownFlag.load(std::memory_order_relaxed)) return;
-    if (configs.reg.get<config::Ndp::DAD_ATTEMPTS>().load() == 0) return;
+    if (configs.get<config::Ndp::DAD_ATTEMPTS>().load() == 0) return;
     if (!addr.tentative) return;
 
-    nsRetryCount[addr.prefix] = 0;
+    auto& entry = dadEntries[addr.prefix];
 
-    // Remove any stale cache entry for this address
-    ndpCache.erase(addr.prefix);
-
-    // Reset DAD status
-    dadStatus[addr.prefix] = false;
+    entry.retires = 0;
+    entry.duplicate = false;
 
     preformDad(addr);
 }
 
 void Ndp::preformDad(interface::InterfaceConfigs::IPv6State::IPv6Address& addr)
 {
-    const int    maxAttempts = configs.reg.get<config::Ndp::DAD_ATTEMPTS>().load();
-    const auto   delay       = std::chrono::milliseconds(
-                                   configs.reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::DAD_TIME>().load());
-    int          attempt     = nsRetryCount[addr.prefix];
+    auto entry = dadEntries.find(addr.prefix);
+    if (entry == dadEntries.end())
+        return;
 
-    bool isDuplicate = dadStatus.count(addr.prefix) && dadStatus[addr.prefix];
+    const uint32_t maxAttempts = configs.get<config::Ndp::DAD_ATTEMPTS>().load();
+    const auto delay       = std::chrono::milliseconds(
+    configs.get<config::Ndp::BASE>().get().get<config::NdpBase::DAD_TIME>().load());
+
+    uint32_t attempt = entry->second.retires;
+    bool isDuplicate = entry->second.duplicate;
     bool done        = false;
 
     if (isDuplicate)
@@ -1068,9 +1016,9 @@ void Ndp::preformDad(interface::InterfaceConfigs::IPv6State::IPv6Address& addr)
         };
         ippacket::buildIpv6(build);
 
-        nsRetryCount[addr.prefix]++;
+        entry->second.retires++;
 
-        dadTimers[addr.prefix] = scheduler.postAfter(
+        entry->second.timerId = scheduler.postAfter(
             std::chrono::steady_clock::now() + delay,
             [this, &addr](uint32_t) { preformDad(addr); }
         );
@@ -1078,9 +1026,7 @@ void Ndp::preformDad(interface::InterfaceConfigs::IPv6State::IPv6Address& addr)
 
     if (done)
     {
-        nsRetryCount.erase(addr.prefix);
-        dadTimers.erase(addr.prefix);
-        dadStatus.erase(addr.prefix);
+        dadEntries.erase(entry);
     }
 }
 
@@ -1113,7 +1059,7 @@ void Ndp::addRaGuardAllowedMac(types::Mac mac, bool remove)
 bool Ndp::shouldLog()
 {
     auto now  = std::chrono::steady_clock::now();
-    uint16_t rate = configs.reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::CACHE_INTERFACE_LIMIT_LOG_RATE>().load();
+    uint16_t rate = configs.get<config::Ndp::BASE>().get().get<config::NdpBase::CACHE_INTERFACE_LIMIT_LOG_RATE>().load();
     if (rate == 0) return true;
 
     auto minInterval = std::chrono::microseconds(1'000'000 / rate);
@@ -1242,22 +1188,22 @@ void Ndp::routeAdvertisement(processing::PacketBuilder& packet, types::Mac curre
     icmp.setCode(0);
 
     uint8_t reserved[4] = {};
-    if (configs.reg.get<config::Ndp::MANAGED_CONFIG_FLAG>().load()) reserved[1] |= 0x80;
-    if (configs.reg.get<config::Ndp::OTHER_CONFIG_FLAG>().load())   reserved[1] |= 0x40;
+    if (configs.get<config::Ndp::MANAGED_CONFIG_FLAG>().load()) reserved[1] |= 0x80;
+    if (configs.get<config::Ndp::OTHER_CONFIG_FLAG>().load())   reserved[1] |= 0x40;
 
-    switch (configs.reg.get<config::Ndp::ROUTER_PREFERENCE>().load())
+    switch (configs.get<config::Ndp::ROUTER_PREFERENCE>().load())
     {
         case config::ndp::Preference::LOW:  reserved[1] |= 0x18; break; // 11
         case config::ndp::Preference::HIGH: reserved[1] |= 0x08; break; // 01
         default: break;                                                   // 00 = MEDIUM
     }
 
-    reserved[0] |= configs.reg.get<config::Ndp::RA_HOP_LIMIT_UNSPECIFIED>().load() ? 0 : 64;
-    utils::writeU16(reserved + 2, configs.reg.get<config::Ndp::RA_LIFETIME>().load());
+    reserved[0] |= configs.get<config::Ndp::RA_HOP_LIMIT_UNSPECIFIED>().load() ? 0 : 64;
+    utils::writeU16(reserved + 2, configs.get<config::Ndp::RA_LIFETIME>().load());
     icmp.setReserved(reserved);
 
     uint8_t* trail = icmp.getTrailData();
-    uint32_t reachableTime = configs.reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::REACHABLE_TIME>().load();
+    uint32_t reachableTime = configs.get<config::Ndp::BASE>().get().get<config::NdpBase::REACHABLE_TIME>().load();
     utils::writeU32(trail,     reachableTime);
     utils::writeU32(trail + 4, 0); // retrans timer — let neighbor use its own
 
@@ -1266,14 +1212,14 @@ void Ndp::routeAdvertisement(processing::PacketBuilder& packet, types::Mac curre
     utils::writeU48(buf, currentMac);
     options.append(ICMPV6_OPTION_NDP_SOURCE, 1, nullptr, 6);
 
-    if (!configs.reg.get<config::Ndp::RA_MTU_SUPPRESS>().load())
+    if (!configs.get<config::Ndp::RA_MTU_SUPPRESS>().load())
     {
         uint8_t mtu[6] = {};
         utils::writeU32(mtu + 2, iface.configs.ipv6.mtu.load(std::memory_order_relaxed));
         options.append(ICMPV6_OPTION_NDP_MTU, 1, mtu, 6);
     }
 
-    if (configs.reg.get<config::Ndp::AUTOCONFIG_PREFIX>().load())
+    if (configs.get<config::Ndp::AUTOCONFIG_PREFIX>().load())
     {
         for (const auto& addr : iface.configs.ipv6.globalAddresses)
         {
@@ -1282,7 +1228,7 @@ void Ndp::routeAdvertisement(processing::PacketBuilder& packet, types::Mac curre
             const uint8_t prefixLen = addr->prefix.prefixLength;
             uint8_t flags = 0xC0; // L=1 (on-link), A=1 (autonomous)
 
-            uint32_t lifetime          = configs.reg.get<config::Ndp::RA_LIFETIME>().load();
+            uint32_t lifetime          = configs.get<config::Ndp::RA_LIFETIME>().load();
             uint32_t preferredLifetime = lifetime / 2;
 
             uint8_t value[30] = {};

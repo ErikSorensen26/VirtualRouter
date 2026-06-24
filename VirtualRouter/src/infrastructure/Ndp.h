@@ -61,12 +61,10 @@ public:
      */
     enum class NudState
     {
-        ACTIVE,       ///< Neighbor actively reachable via recent Tx or Rx.
+        INCOMPLETE,   ///< Neighbor actively reachable via recent Tx or Rx.
         REACHABLE,    ///< Neighbor confirmed reachable; timer running.
         STALE,        ///< Reachable timeout expired; no probing yet.
-        DELAY,        ///< Waiting before starting PROBE.
         PROBE,        ///< Actively probing with NS; retry count running.
-        UNREACHABLE   ///< Probe attempts exhausted; final wait timer running.
     };
 
     /**
@@ -74,14 +72,22 @@ public:
      */
     struct NdpCacheEntry
     {
+        std::queue<processing::PacketBuilder> queue;       ///< Packet queue while waiting on resolution.
         types::Mac macAddress;                             ///< Resolved MAC address.
-        NudState   state       = NudState::ACTIVE;         ///< Current reachability state.
+        NudState   state       = NudState::INCOMPLETE;     ///< Current reachability state.
         uint32_t   timerId     = 0;                        ///< Primary state-transition timer ID.
         uint32_t   retryTimerId = 0;                       ///< NS retry timer ID.
         uint8_t    retries     = 0;                        ///< Current retry count.
-        uint8_t    nudGroup    = 1;                        ///< NUD group (incremented on each unreachable cycle).
-        bool       isStatic    = false;                    ///< Entry never expires or ages out.
-        bool       isProxy     = false;                    ///< Respond to NS on behalf of this address.
+    };
+
+    /**
+     * TODO finish doxy comment
+     */
+    struct DadEntry
+    {
+        bool duplicate = false;
+        uint32_t timerId = 0;
+        uint32_t retires = 0;
     };
 
     /**
@@ -107,13 +113,6 @@ public:
     void refresh();
 
     /**
-     * @brief Loads static neighbor entries and schedules the first RA (if enabled).
-     *
-     * Must be called on the control scheduler.
-     */
-    void initializeNdp();
-
-    /**
      * @brief Adds or updates a dynamic NDP cache entry.
      *
      * Creates a REACHABLE entry, updates the data-plane table, starts the reachability
@@ -121,17 +120,36 @@ public:
      *
      * @param targetIp  Target IPv6 address.
      * @param targetMac Resolved MAC address.
-     * @param proxy     If true, the entry responds to NS on behalf of this IP.
-     * @param isStatic  If true, the entry never expires.
+     * @param proxy Adds the entry as a proxy.
      */
-    void addNdpEntry(types::IPv6Address targetIp, types::Mac targetMac, bool proxy = false, bool isStatic = false);
+    void addNdpEntry(types::IPv6Address targetIp, types::Mac targetMac, bool proxy = false);
 
     /**
-     * @brief Removes a cache entry (static or dynamic) by IPv6 address.
+     * @brief Adds a static arp entry to the arp cache table
+     *
+     * @parap targetIp The target IP of the resolved arp entry.
+     * @param mac The MAC of the resolved arp entry.
+     * @param proxy Adds the entry as a proxy.
+     */
+    void addStaticNdpEntry(types::IPv6Address targetIp, types::Mac targetMac, bool proxy = false);
+
+    /**
+     * @brief Removes a static cache entry by IPv6 address.
      *
      * @param targetIp Address to remove.
+     * @param proxy Removes the entry as a proxy.
      */
-    void removeNdpEntry(types::IPv6Address targetIp);
+    void removeStaticNdpEntry(types::IPv6Address targetIp, bool proxy = false);
+
+    /**
+     * TODO finish doxy
+     */
+    void addProxyNdpEntry(types::IPv6Address targetIp, types::Mac targetMac);
+
+    /**
+     * TODO finish doxy
+     */
+    void removeProxyNdpEntry(types::IPv6Address targetIp);
 
     /**
      * @brief Resolves an IPv6 address and transmits a queued packet once resolved.
@@ -143,61 +161,6 @@ public:
      * @param packetToSend Packet to send when resolution completes.
      */
     void resolveAndSend(types::IPv6Address targetIp, processing::PacketBuilder& packetToSend);
-
-    /**
-     * @brief Sends a Neighbor Solicitation for the given target address.
-     *
-     * Initiates the NS/retry cycle if not already pending.
-     *
-     * @param targetIp Target IPv6 address to solicit.
-     */
-    void sendNeighborSolicitation(types::IPv6Address targetIp);
-
-    /**
-     * @brief Sends a unicast Neighbor Advertisement to a specific destination.
-     *
-     * @param destMac   Destination MAC address.
-     * @param targetIp  Destination IPv6 address.
-     */
-    void sendNeighborAdvertisement(types::Mac destMac, types::IPv6Address targetIp);
-
-    /**
-     * @brief Sends an unsolicited Neighbor Advertisement for the interface link-local address.
-     *
-     * Rate-limited to one per second per advertised IP.
-     */
-    void sendNeighborAdvertisement();
-
-    /**
-     * @brief Sends an IPv6 Router Solicitation toward the given target.
-     *
-     * @param targetIp Solicited router address (typically all-routers multicast).
-     */
-    void sendRouteSolicitation(types::IPv6Address targetIp);
-
-    /**
-     * @brief Sends a Router Advertisement to the given destination.
-     *
-     * @param targetMac Destination MAC address.
-     * @param targetIp  Destination IPv6 address.
-     */
-    void sendRouteAdvertisement(types::Mac targetMac, types::IPv6Address targetIp);
-
-    /**
-     * @brief Sends an ICMPv6 Redirect informing a host of a better next hop.
-     *
-     * @param targetIp      Better next-hop IPv6 address.
-     * @param destinationIp Destination for which the redirect applies.
-     */
-    void sendRedirectMessage(types::IPv6Address targetIp, types::IPv6Address destinationIp);
-
-    /**
-     * @brief Sends a redirect if the original packet's forwarding path warrants one.
-     *
-     * @param originalPacket Parsed packet information.
-     * @param pkt            Raw packet bytes.
-     */
-    void sendRedirectIfNeeded(const packet::PacketInfo& originalPacket, const uint8_t* pkt);
 
     /**
      * @brief Processes an inbound Neighbor Advertisement.
@@ -243,6 +206,17 @@ public:
      * @param sourceIp  IPv6 source address of the redirecting router.
      */
     void receiveRedirectMessage(const packet::Icmpv6Header& redirect, types::IPv6Address sourceIp);
+
+    /**
+     * @brief Looks up a cached MAC address for fast-path forwarding.
+     *
+     * Lock-free read from the data-plane AtomicHashMap.
+     *
+     * @param out Output buffer (must be at least 6 bytes).
+     * @param ip  IPv6 address to resolve.
+     * @return Pointer to @p out on success; nullptr if not in cache.
+     */
+    uint8_t* getMac(uint8_t* out, types::IPv6Address ip);
 
     /**
      * @brief Shuts down NDP and cancels all pending timers.
@@ -297,15 +271,60 @@ public:
     void addRaGuardAllowedMac(types::Mac mac, bool remove = false);
 
     /**
-     * @brief Looks up a cached MAC address for fast-path forwarding.
+     * @brief Sends a Neighbor Solicitation for the given target address.
      *
-     * Lock-free read from the data-plane AtomicHashMap.
+     * Initiates the NS/retry cycle if not already pending.
      *
-     * @param out Output buffer (must be at least 6 bytes).
-     * @param ip  IPv6 address to resolve.
-     * @return Pointer to @p out on success; nullptr if not in cache.
+     * @param targetIp Target IPv6 address to solicit.
+     * @param entry The NDP cache entry.
      */
-    uint8_t* getMac(uint8_t* out, types::IPv6Address ip);
+    void sendNeighborSolicitation(types::IPv6Address targetIp, NdpCacheEntry& entry);
+
+    /**
+     * @brief Sends a unicast Neighbor Advertisement to a specific destination.
+     *
+     * @param destMac   Destination MAC address.
+     * @param targetIp  Destination IPv6 address.
+     */
+    void sendNeighborAdvertisement(types::Mac destMac, types::IPv6Address targetIp);
+
+    /**
+     * @brief Sends an unsolicited Neighbor Advertisement for the interface link-local address.
+     *
+     * Rate-limited to one per second per advertised IP.
+     */
+    void sendNeighborAdvertisement();
+
+    /**
+     * @brief Sends an IPv6 Router Solicitation toward the given target.
+     *
+     * @param targetIp Solicited router address (typically all-routers multicast).
+     */
+    void sendRouteSolicitation(types::IPv6Address targetIp);
+
+    /**
+     * @brief Sends a Router Advertisement to the given destination.
+     *
+     * @param targetMac Destination MAC address.
+     * @param targetIp  Destination IPv6 address.
+     */
+    void sendRouteAdvertisement(types::Mac targetMac, types::IPv6Address targetIp);
+
+    /**
+     * @brief Sends an ICMPv6 Redirect informing a host of a better next hop.
+     *
+     * @param targetIp      Better next-hop IPv6 address.
+     * @param destinationIp Destination for which the redirect applies.
+     */
+    void sendRedirectMessage(types::IPv6Address targetIp, types::IPv6Address destinationIp);
+
+    /**
+     * @brief Sends a redirect if the original packet's forwarding path warrants one.
+     *
+     * @param originalPacket Parsed packet information.
+     * @param pkt            Raw packet bytes.
+     */
+    void sendRedirectIfNeeded(const packet::PacketInfo& originalPacket, const uint8_t* pkt);
 
 private:
     friend class ::Internal_NdpTest;
@@ -317,18 +336,15 @@ private:
     types::AtomicHashMap<types::IPv6Address, types::Mac> ndpTable;        ///< Fast-path MAC lookup table.
 
     // Control-plane cache (scheduler-serialized)
-    std::unordered_map<types::IPv6Address, NdpCacheEntry> ndpCache;       ///< Neighbor cache (dynamic + static + proxy).
-    std::unordered_map<types::IPv6Address,
-        std::queue<processing::PacketBuilder>> pendingPackets;            ///< Queued packets awaiting resolution.
-    std::deque<types::IPv6Address> insertionOrder;                        ///< Eviction order for cache-limit enforcement.
+    std::unordered_map<types::IPv6Address, NdpCacheEntry> ndpCache;       ///< Neighbor cache (dynamic + static).
+    uint32_t incompletes = 0;
+    uint32_t nuds = 0;
 
     // DAD state
-    std::unordered_map<types::IPv6Address, bool> dadStatus;               ///< Conflict detected (true) for addresses under DAD.
-    std::unordered_map<types::IPv6Address, uint32_t> dadTimers;           ///< DAD retry timer IDs.
+    std::unordered_map<types::IPv6Address, DadEntry> dadEntries;          ///< DAD entries
 
-    // NS/NUD retry tracking
-    std::unordered_map<types::IPv6Address, uint8_t>  nsRetryCount;        ///< NS probe retry count per neighbor.
-    std::unordered_map<types::IPv6Address, uint32_t> nsRetryTimers;       ///< NS retry timer IDs per neighbor.
+    // Static Proxy
+    std::unordered_map<types::IPv6Address, types::Mac> proxyTable;      ///< Proxy Entries
 
     // RA scheduling and rate-limiting
     std::unordered_set<uint32_t> raTimerIds;                              ///< Active RA timer IDs.
@@ -336,12 +352,6 @@ private:
         std::chrono::steady_clock::time_point> raReceivedTimestamps;      ///< Per-source RA receive timestamps (rate-limit).
     std::unordered_map<types::IPv6Address,
         std::chrono::steady_clock::time_point> lastUnsolicitedNaTime;     ///< Last unsolicited NA time per address.
-
-    // NUD backpressure
-    uint32_t currentNudProbes        = 0;                                 ///< Number of active NUD probes.
-    uint32_t currentResolvingNeighbors = 0;                               ///< Number of neighbors under initial resolution.
-    std::unordered_set<types::IPv6Address> queuedNudProbes;               ///< NUD probes deferred due to probe limit.
-    std::unordered_set<types::IPv6Address> queuedResolution;              ///< Resolution requests deferred due to limit.
 
     // Security
     std::unordered_set<types::Mac>       raGuardAllowedMacs;              ///< RA Guard MAC whitelist.
@@ -357,6 +367,13 @@ private:
 protected:
 
     /**
+     * @brief Loads static neighbor entries and schedules the first RA (if enabled).
+     *
+     * Must be called on the control scheduler.
+     */
+    void initializeNdp();
+
+    /**
      * @brief Cancels all pending timers and clears all cache and table state.
      *
      * Must be called on the control scheduler.
@@ -369,7 +386,16 @@ protected:
      * @param targetIp   Resolved IPv6 address.
      * @param macAddress Resolved MAC address.
      */
-    void processQueuedPackets(types::IPv6Address targetIp, types::Mac macAddress);
+    void sendQueuedPackets(types::IPv6Address targetIp, types::Mac macAddress);
+
+    /**
+     * @brief Dispatches a single queued packet to the next build stage once its
+     *        destination MAC has been resolved.
+     *
+     * @param builder The packet waiting for MAC resolution.
+     * @param mac     The resolved destination MAC address.
+     */
+    void sendQueuedPacket(processing::PacketBuilder& builder, types::Mac mac);
 
     /**
      * @brief Completes a cache entry: sets MAC, resets timers, updates data-plane table.
@@ -387,8 +413,9 @@ protected:
      * @brief Cancels all timers for an entry and removes it from both cache and table.
      *
      * @param targetIp Address to remove.
+     * @param proxy Removes the entry as a proxy.
      */
-    void removeEntry(types::IPv6Address targetIp);
+    void removeNdpEntry(types::IPv6Address targetIp, bool proxy = false);
 
     /**
      * @brief Called when the REACHABLE timer expires; begins NUD probing or transitions to STALE.
@@ -412,8 +439,9 @@ protected:
      * NUD_RETRY_INTERVAL. Removes the entry or transitions to UNREACHABLE on exhaustion.
      *
      * @param targetIp Neighbor to solicit.
+     * @param entry NDP cache entry.
      */
-    void scheduleNeighborSolicitation(types::IPv6Address targetIp);
+    void scheduleNeighborSolicitation(types::IPv6Address targetIp, NdpCacheEntry& entry);
 
     /**
      * @brief Transitions a neighbor entry into NUD PROBE state and begins probing.
@@ -439,13 +467,6 @@ protected:
      * @brief Returns true if logging is allowed under the configured rate limit.
      */
     bool shouldLog();
-
-    /**
-     * @brief Re-attempts NUD probing for an UNREACHABLE neighbor after the final wait.
-     *
-     * @param targetIp Neighbor to retry.
-     */
-    void retryNud(types::IPv6Address targetIp);
 
     /**
      * @brief Derives the solicited-node multicast address for a target IPv6 address.
