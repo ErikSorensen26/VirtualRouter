@@ -134,8 +134,6 @@ bool TimeManager::cancelTimer(uint32_t id)
     auto it = timerIndex.find(id);
     if (it != timerIndex.end())
     {
-        cancelFlags[id].store(true, std::memory_order_relaxed);
-
         auto nodeIt = it->second;
         if (nodeIt != timers.end())
         {
@@ -147,17 +145,28 @@ bool TimeManager::cancelTimer(uint32_t id)
         timerIndex.erase(it);
         executing.erase(id);
         executingThreads.erase(id);
+        cancelFlags.erase(id);
+        dynamicIntervals.erase(id);
+        repeatedCounters.erase(id);
+        repeatLimits.erase(id);
+        finalCallbacks.erase(id);
         return true;
     }
 
     if (executing.count(id) && executing[id])
     {
-        if (executingThreads.count(id) && executingThreads[id] == std::this_thread::get_id())
-            return false;
+        // Mark cancelled so runSingleTimer skips the reschedule once the
+        // in-flight callback finishes.
+        cancelFlags[id].store(true, std::memory_order_relaxed);
 
-        //timerDoneCV.wait(lock, [&] { return !executing[id]; });
-        executing.erase(id);
-        executingThreads.erase(id);
+        if (executingThreads.count(id) && executingThreads[id] == std::this_thread::get_id())
+        {
+            // Self-cancel from within the callback: cannot block on our own
+            // completion. The cancelFlags entry above prevents reschedule.
+            return true;
+        }
+
+        timerDoneCV.wait(lock, [&] { return !executing[id]; });
         return true;
     }
 
@@ -227,17 +236,28 @@ void TimeManager::runSingleTimer(const TimerData& timer)
         timer.callback(timer.id);
 
     std::chrono::milliseconds rescheduleInterval;
+    bool cancelled = false;
     {
         std::unique_lock<std::mutex> lock(mutex);
         executing[timer.id] = false;
         executingThreads.erase(timer.id);
+
+        auto cancelIt = cancelFlags.find(timer.id);
+        if (cancelIt != cancelFlags.end() && cancelIt->second.load(std::memory_order_relaxed))
+        {
+            cancelled = true;
+            cancelFlags.erase(cancelIt);
+            executing.erase(timer.id);
+            dynamicIntervals.erase(timer.id);
+        }
+
         timerDoneCV.notify_all();
 
         auto intervalIt = dynamicIntervals.find(timer.id);
         rescheduleInterval = (intervalIt != dynamicIntervals.end()) ? intervalIt->second : timer.interval;
     }
 
-    if (!stop && rescheduleInterval.count() > 0)
+    if (!cancelled && !stop && rescheduleInterval.count() > 0)
     {
         std::unique_lock<std::mutex> lock(mutex);
         if (!stop)
