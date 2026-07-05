@@ -50,7 +50,7 @@ Neighbor::~Neighbor()
 void Neighbor::resetDbExchange()
 {
     currentSeq = generateInitialDDSequence();
-    currentDbd = LsaKey{};
+    currentDbd = std::nullopt;
 }
 
 bool Neighbor::setState(Neighbor::State s)
@@ -134,6 +134,7 @@ bool Neighbor::setState(Neighbor::State s)
             if (oldState == State::EXCHANGE || oldState == State::LOADING)
             {
                 state = s;
+                iface.getArea().setFloodReduction(iface);
                 if (iface.demandCircuit == OspfInterface::DcDecision::ENABLED)
                     iface.getTimers().stopHello();
             }

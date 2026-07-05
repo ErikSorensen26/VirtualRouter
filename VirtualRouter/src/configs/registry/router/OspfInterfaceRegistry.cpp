@@ -36,6 +36,7 @@ void OspfInterfaceDemandCircuit(void* ifacePtr)
     auto& iface = *static_cast<routing::ospf::OspfInterface*>(ifacePtr);
     iface.getProcess().getScheduler().post([&iface] {
         iface.getArea().runDCIntegrityScan();
+        iface.getArea().setFloodReduction(iface);
     });
 }
 

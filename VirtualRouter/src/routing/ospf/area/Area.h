@@ -357,6 +357,15 @@ public:
     void reset();
 
     /**
+     * @brief Reloads the area type from configuration and synchronizes options flags.
+     *
+     * Called before reset() when the area type config changes so that the
+     * E-bit/N-bit in Hello and DD packets, LSA filtering, and default route
+     * origination all reflect the new type without destroying the Area object.
+     */
+    void reloadType();
+
+    /**
      * @brief Clears the LSDB and all runtime state without destroying the area object.
      */
     void clear();
@@ -495,7 +504,7 @@ public:
     core::ProcessQueueRef scheduler; ///< Reference to the owning process scheduler; all area work is serialized through this.
     Originator& originator; ///< LSA originator shared with the owning process (Router LSA, Network LSA, etc.).
 
-    const config::ospf::AreaType type;   ///< Area type (backbone, stub, NSSA, etc.); immutable after construction.
+    config::ospf::AreaType type;          ///< Area type (backbone, stub, NSSA, etc.); updated via reloadType().
     const uint32_t areaId;               ///< 32-bit OSPF area identifier (host byte order); immutable after construction.
 
     std::atomic<bool> dcCompatible{true}; ///< True while all routers in the area support Demand Circuit operation (RFC 1793).

@@ -348,7 +348,7 @@ void Originator::processReoriginatedLsa(const LsaKey& key, const OriginationInfo
         uint32_t options = area.getFlags().getFlags();
         if (key.lsaType == OSPFV2_LSA_NSSA)
             InterfaceFlagManager::setPropagate(options, true);
-        InterfaceFlagManager::setDemandCircuits(options, true);
+        InterfaceFlagManager::setDemandCircuits(options, area.dcCompatible.load(std::memory_order_relaxed));
         ctx.header.options = static_cast<uint8_t>(options);
     }
     ctx.selfOriginatedKey = true;

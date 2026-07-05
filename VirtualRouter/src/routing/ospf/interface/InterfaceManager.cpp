@@ -198,7 +198,8 @@ void InterfaceManager::refreshInterfaceList()
 
 void InterfaceManager::deactivateAll()
 {
-    ospfInterfaceList.clear();
+    while (!ospfInterfaceList.empty())
+        ospfInterfaceList.erase(ospfInterfaceList.begin());
 }
 
 void InterfaceManager::syncNeighbors()

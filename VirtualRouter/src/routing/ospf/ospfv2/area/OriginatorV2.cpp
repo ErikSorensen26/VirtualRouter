@@ -17,7 +17,7 @@ OriginatorV2::OriginatorV2(Area& area) : Originator(area)
     initGroupPacing<PolicyV2>();
     auto& configs = area.getConfigs();
     auto type = configs.get<config::OspfArea::AREA_TYPE>().load();
-    if (type == config::ospf::AreaType::TOTALLY_STUB || type == config::ospf::AreaType::TOTALLY_STUB)
+    if (type == config::ospf::AreaType::STUB || type == config::ospf::AreaType::TOTALLY_STUB)
         addStubDefaultRoute(true);
     fullRefresh();
 }
@@ -86,8 +86,10 @@ void OriginatorV2::addNetworkLsa(const OspfInterface& iface, bool refresh)
     LsaKey key(OSPFV2_LSA_NETWORK, addr, selfRid);
 
     auto& info = originationState[key];
-    LsaBody lsa = info.body;
-    NetworkLsaV2 oldLsa = std::get<NetworkLsaV2>(lsa);
+    LsaBody& lsa = info.body;
+    auto* oldPtr = std::get_if<NetworkLsaV2>(&lsa);
+    std::optional<NetworkLsaV2> oldLsa;
+    if (oldPtr) oldLsa = *oldPtr;
     lsa = NetworkLsaV2{};
     NetworkLsaV2& network = std::get<NetworkLsaV2>(lsa);
 
@@ -105,8 +107,8 @@ void OriginatorV2::addNetworkLsa(const OspfInterface& iface, bool refresh)
     uniqueLinks(network.attachedRouters);
 
     info.refresh = refresh;
-    
-    if (!refresh && oldLsa == network)
+
+    if (!refresh && oldLsa && *oldLsa == network)
         return;
 
     networkLsas.insert(addr);
@@ -235,7 +237,8 @@ void OriginatorV2::addStubDefaultRoute(bool add)
 
     info.expire = !add;
 
-    summary.metric = area.getConfigs().get<config::OspfArea::DEFAULT_COST>().load();
+    auto costField = area.getConfigs().get<config::OspfArea::DEFAULT_COST>();
+    summary.metric = costField.hasValue() ? costField.load() : 1;
     summary.networkMask = 0;
 
     processOriginatedLsa<PolicyV2>(stubDefaultRoute.value());
@@ -255,8 +258,10 @@ void OriginatorV2::addAsbrLsa(uint32_t asbr, bool refresh)
     LsaKey key(OSPFV2_LSA_SUM_ASBR, asbr, selfRid);
 
     auto& info = originationState[key];
-    LsaBody lsa = info.body;
-    SummaryRouterLsa oldLsa = std::get<SummaryRouterLsa>(lsa);
+    LsaBody& lsa = info.body;
+    auto* oldPtr = std::get_if<SummaryRouterLsa>(&lsa);
+    std::optional<SummaryRouterLsa> oldLsa;
+    if (oldPtr) oldLsa = *oldPtr;
     lsa = SummaryRouterLsa{};
     SummaryRouterLsa& asbrLsa = std::get<SummaryRouterLsa>(lsa);
 
@@ -265,7 +270,7 @@ void OriginatorV2::addAsbrLsa(uint32_t asbr, bool refresh)
 
     asbrLsa.metric = metric;
 
-    if (!refresh && oldLsa == asbrLsa)
+    if (!refresh && oldLsa && *oldLsa == asbrLsa)
         return;
 
     asbrLsas[asbr] = key;

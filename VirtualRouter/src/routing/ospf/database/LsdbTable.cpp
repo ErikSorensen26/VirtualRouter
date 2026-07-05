@@ -151,6 +151,7 @@ size_t LsdbTable::ageAll(uint16_t deltaAge, uint16_t maxAge, bool eraseExpired)
         for (auto& kv : dbStorage)
         {
             LsaHeader& h = kv.second.header;
+            if (h.age & 0x8000) continue;
             h.age = saturatingAddAge(h.age, deltaAge, maxAge);
             if (h.age >= maxAge)
                 ++expired;
@@ -161,6 +162,11 @@ size_t LsdbTable::ageAll(uint16_t deltaAge, uint16_t maxAge, bool eraseExpired)
     for (auto it = dbStorage.begin(); it != dbStorage.end();)
     {
         LsaHeader& h = it->second.header;
+        if (h.age & 0x8000)
+        {
+            ++it;
+            continue;
+        }
         h.age = saturatingAddAge(h.age, deltaAge, maxAge);
 
         if (h.age >= maxAge)

@@ -16,8 +16,8 @@ class OspfInterface;
 /// @brief Internal bitfield primitives used by AreaFlagManager and InterfaceFlagManager.
 namespace flagmanager
 {
-static constexpr uint8_t FLAGS_BASE = 0;   ///< Bit offset for the flags region.
-static constexpr uint8_t OPTIONS_BASE = 8; ///< Bit offset for the options region.
+static constexpr uint8_t FLAGS_BASE = 16;   ///< Bit offset for the flags region.
+static constexpr uint8_t OPTIONS_BASE = 0; ///< Bit offset for the options region.
 
 /**
  * @brief Atomically set or clear a single bit in a flag word.
@@ -46,7 +46,7 @@ static void setBit(uint32_t& flags, uint8_t bit, bool val)
     if (val)
         flags |= mask;
     else
-        flags |= ~mask;
+        flags &= ~mask;
 }
 
 /**
