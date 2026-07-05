@@ -103,19 +103,23 @@ protected:
         // OSPFv2 process (IPv4)
         ospfInstance = &vrf->addOspf(1);
         ospfInstance->calculateRID();
-        ospfInstance->insureArea(0);
-        ospfInterface = &ospfInstance->getIfaceMgr().createInterface(
-            *mockInterface, routing::ospf::OspfInterfaceId(ipIntv4.addr, 0));
-
+        ospfInstance->getScheduler().post([this]
+        {
+            ospfInstance->insureArea(0);
+            ospfInterface = &ospfInstance->getIfaceMgr().createInterface(
+                *mockInterface, routing::ospf::OspfInterfaceId(ipIntv4.addr, 0));
+        });
         ospfInstance->getSchedulerQueue().waitIdle();
 
         // OSPFv3 process (IPv6)
         ospfv3Instance = &vrf->addOspfv3(2, types::AddressFamily::IPv6);
         ospfv3Instance->calculateRID();
-        ospfv3Instance->insureArea(0);
-        ospfv3Interface = &ospfv3Instance->getIfaceMgr().createInterface(
-            *mockInterface, routing::ospf::OspfInterfaceId(ipIntv4.addr, 0));
-
+        ospfv3Instance->getScheduler().post([this]
+        {
+            ospfv3Instance->insureArea(0);
+            ospfv3Interface = &ospfv3Instance->getIfaceMgr().createInterface(
+                *mockInterface, routing::ospf::OspfInterfaceId(ipIntv4.addr, 0));
+        });
         ospfv3Instance->getSchedulerQueue().waitIdle();
     }
 
@@ -720,7 +724,6 @@ protected:
 
 #pragma region NeighborStateMachine
 
-/*
 // Test: Neighbor_SetState_Returns_True_When_State_Changes
 TEST_F(Internal_OspfTest, Neighbor_SetState_Returns_True_When_State_Changes)
 {
@@ -2212,7 +2215,6 @@ TEST_F(Internal_OspfTest, Dbd_Sequence_Number_Negotiation_Slave_Echoes_Master)
     ASSERT_EQ(nbr->getRole(), routing::ospf::Neighbor::Role::SLAVE);
     EXPECT_EQ(nbr->currentSeq.load(std::memory_order_relaxed), 0xDEADBEEFu);
 }
-*/
 
 // Test: Dbd_Empty_Exchange_Transitions_To_Loading_Then_Full
 TEST_F(Internal_OspfTest, Dbd_Empty_Exchange_Transitions_To_Loading_Then_Full)

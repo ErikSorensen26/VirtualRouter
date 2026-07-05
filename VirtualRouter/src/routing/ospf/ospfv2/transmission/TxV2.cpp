@@ -12,6 +12,7 @@
 
 #include "ospf/database/LSDB.hpp"
 #include "ospf/area/Area.h"
+#include "ospf/transmission/OspfFletcher.hpp"
 
 #include "packet/headers/embedded/ospf/Ospfv2HelloHeader.hpp"
 #include "packet/headers/embedded/ospf/Ospfv2DBDHeader.hpp"
@@ -70,6 +71,13 @@ void PacketDispatcherV2::finalizeHeader(packet::Ospfv2Header& hdr, OspfBuilder& 
             auto key = getConfigs().get<config::OspfInterfaceBase::AUTHENTICATION_KEY>();
             if (key.hasValue()) buildOspfSimpleAuthentication(hdr, key.load());
         }
+
+        // Crypto auth covers the checksum via HMAC, so it is only computed for NULL/SIMPLE.
+        hdr.setChecksum(0);
+        ChecksumFletcher check;
+        check.addBytes(hdr.buffer, 12); // version..areaID (up to checksum field)
+        check.addBytes(hdr.buffer + 14, hdr.getPacketLen() - 14); // authType..end of packet
+        hdr.setChecksum(check.finalize());
     }
 
     hdr.setTrailSize(builder.offset);
@@ -209,6 +217,9 @@ bool PacketDispatcherV2::sendLSAck(Neighbor& nbr, std::vector<LsaRecordRef>& ack
 
 bool PacketDispatcherV2::sendLSRequest(Neighbor& nbr)
 {
+    auto& lsrs = nbr.getRtr().lsrs();
+    if (!lsrs.burstActive()) lsrs.beginRetransmitBurst();
+
     auto request = buildLSRequest(nbr);
     if (!request.has_value()) return false;
     transmit(request.value(), &nbr.ipAddress);
@@ -217,6 +228,9 @@ bool PacketDispatcherV2::sendLSRequest(Neighbor& nbr)
 
 bool PacketDispatcherV2::sendLSUpdate(Neighbor* nbr)
 {
+    auto& lsus = nbr ? nbr->getRtr().lsus() : multicastLsus;
+    if (!lsus.burstActive()) lsus.beginRetransmitBurst();
+
     std::vector<LsaRecordRef> sent;
     auto pkt = buildLSUpdate(nbr);
     if (!pkt.has_value()) return false;
@@ -322,10 +336,10 @@ std::optional<packet::Ospfv2HelloHeader> PacketDispatcherV2::buildHello(OspfBuil
 {
     if (!builder.hasRoom(packet::Ospfv2HelloHeader::fixedSize))
         return std::nullopt;
-    builder.offset += packet::Ospfv2HelloHeader::fixedSize;
 
     packet::Ospfv2HelloHeader hello;
     hello.setBuffer(builder.getBuf());
+    builder.offset += packet::Ospfv2HelloHeader::fixedSize;
 
     hello.setMask(iface.interfaceAddress.getMask());
     hello.setHelloInterval(static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(iface.helloTime).count()));
@@ -355,10 +369,10 @@ std::optional<packet::Ospfv2DBDHeader> PacketDispatcherV2::buildDBD(OspfBuilder&
 {
     if (!builder.hasRoom(packet::Ospfv2DBDHeader::fixedSize))
         return std::nullopt;
-    builder.offset += packet::Ospfv2DBDHeader::fixedSize;
 
     packet::Ospfv2DBDHeader dbd;
     dbd.setBuffer(builder.getBuf());
+    builder.offset += packet::Ospfv2DBDHeader::fixedSize;
 
     uint8_t options = static_cast<uint8_t>(iface.getFlags().getFlags());
     if (lls) options |= 0x10;
@@ -374,10 +388,10 @@ std::optional<packet::Ospfv2LSAHeader> PacketDispatcherV2::buildLSAHeader(OspfBu
 {
     if (!builder.hasRoom(packet::Ospfv2LSAHeader::fixedSize))
         return std::nullopt;
-    builder.offset += packet::Ospfv2LSAHeader::fixedSize;
 
     packet::Ospfv2LSAHeader db;
     db.setBuffer(builder.getBuf());
+    builder.offset += packet::Ospfv2LSAHeader::fixedSize;
 
     // Check if self originated
     db.setAge(calculateAge(floodReduction, record));
@@ -399,10 +413,10 @@ std::optional<packet::Ospfv2LSAHeader> PacketDispatcherV2::buildCopyLSAHeader(Os
 {
     if (!builder.hasRoom(packet::Ospfv2LSAHeader::fixedSize))
         return std::nullopt;
-    builder.offset += packet::Ospfv2LSAHeader::fixedSize;
 
     packet::Ospfv2LSAHeader db;
     db.setBuffer(builder.getBuf());
+    builder.offset += packet::Ospfv2LSAHeader::fixedSize;
 
     db.setAge(record.header.age);
     db.setOptions(record.header.options);

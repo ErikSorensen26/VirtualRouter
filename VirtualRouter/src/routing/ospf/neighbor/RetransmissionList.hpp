@@ -287,10 +287,9 @@ public:
      *        advances the cursor.
      *
      * Increments the retransmission counter for the entry. If the counter
-     * reaches the configured limit the entry is automatically erased.
-     * The burst budget is decremented by two (once here, once during the
-     * `erase` path if removal happens) which limits re-queuing within a
-     * single burst.
+     * reaches the configured limit the entry is automatically erased, which
+     * handles its own cursor/burst-budget bookkeeping. Otherwise the cursor
+     * advances and the burst budget is decremented by one for this send.
      *
      * @param key  Key of the entry just sent.
      */
@@ -298,9 +297,6 @@ public:
     {
         if (auto it = outboundInfo.find(key); it != outboundInfo.end())
         {
-            cursor = (cursor + 1) % outbound.size();
-            --burstRemaining;
-
             it->second.retransmissions++;
             if (it->second.retransmissions >= getMaxRetransmission())
             {
