@@ -49,7 +49,7 @@ namespace routing::ospf
 {
 // Set to 0 if you do not want std::pmr containers in LSDB storage
 #ifndef OSPF_LSDB_USE_PMR
-#define OSPF_LSDB_USE_PMR 1
+#define OSPF_LSDB_USE_PMR 0
 #endif
 
 // PMR-aware container aliases used throughout the LSDB.  When OSPF_LSDB_USE_PMR
@@ -69,6 +69,8 @@ template <typename T> using Vec = std::vector<T>;
 using ByteVec = std::vector<std::byte>;
 template <typename K, typename V, typename H = std::hash<K>, typename E = std::equal_to<K>>
 using UMap = std::unordered_map<K, V, H, E>;
+template <typename K, typename H = std::hash<K>, typename E = std::equal_to<K>>
+using USet = std::unordered_set<K, H, E>;
 template <typename K, typename V, typename C = std::less<K>>
 using OMap = std::map<K, V, C>;
 #endif
@@ -198,8 +200,8 @@ struct LsaTlvForest final
     explicit LsaTlvForest(std::pmr::memory_resource* mr = std::pmr::get_default_resource())
         : blob(mr), nodes(mr) { nodes.push_back(LsaTlvNode{}); }
 #else
-    LsaTlvForest()
-    { nodes.push_back(LsaTlvForest{}); }
+    explicit LsaTlvForest()
+    { nodes.push_back(LsaTlvNode{}); }
 #endif
 };
 
@@ -345,7 +347,7 @@ struct LsaRecordRef final
     LsaKey key;
     LsaRecord* record;
 
-    LsaRecordRef() = default;
+    LsaRecordRef() : record(nullptr) {}
 
     LsaRecordRef(const LsaKey& k, LsaRecord& r) : key(k), record(&r)
     {

@@ -170,7 +170,6 @@ routing::ospf::OspfProcess& VirtualRouter::addOspf(uint16_t id)
     if (auto it = ospfList.find(id); it == ospfList.end())
     {
         ospfList.try_emplace(id, false, id, types::AddressFamily::IPv4, this);
-        return it->second;
     }
     return ospfList.at(id);
 }

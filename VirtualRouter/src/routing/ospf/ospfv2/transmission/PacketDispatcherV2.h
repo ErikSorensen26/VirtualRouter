@@ -49,6 +49,7 @@ class NeighborTable;
  */
 class PacketDispatcherV2 : public PacketDispatcher
 {
+    friend class ::Internal_OspfTest;
 public:
     /**
      * @brief Constructs the dispatcher and binds it to an OSPFv2 interface.
@@ -121,7 +122,7 @@ private:
     /// Allocates a builder and writes the OSPFv2 common header of the given type.
     std::optional<packet::Ospfv2Header> buildHeader(processing::PacketBuilder& builder, uint8_t type);
     /// Appends a Hello payload to `builder`; includes LLS block if `lls` is true.
-    std::optional<packet::Ospfv2HelloHeader> buildHello(OspfBuilder builder, bool lls);
+    std::optional<packet::Ospfv2HelloHeader> buildHello(OspfBuilder& builder, bool lls);
     /// Appends a DBD payload for the given neighbor.
     std::optional<packet::Ospfv2DBDHeader> buildDBD(OspfBuilder& builder, Neighbor& nbr, bool lls);
     /// Serializes a single LSA header from the LSDB into `builder`.

@@ -10,7 +10,7 @@
 namespace routing::ospf
 {
 FloodManager::FloodManager(Area& area)
-    : area(area), fq(0)
+    : area(area), fq(1024)
 {}
 
 void FloodManager::enqueueFlood(LsaRecordRef& record, const FloodInfo& info)

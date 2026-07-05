@@ -36,7 +36,7 @@ struct Ospfv3DBDHeader
     DEFINE_FIXED_HEADER(Ospfv3DBDHeaderRaw);
 
     uint16_t getMtu() const                 { return utils::readU16(raw->mtu); }
-    uint32_t getOptions() const             { return utils::readU16(raw->mtu); }
+    uint32_t getOptions() const             { return utils::readU24(raw->options); }
     uint32_t getSeqNum() const              { return utils::readU32(raw->seqNum); }
 
     bool getFlagMS() const                  { return raw->flags & 0x01; }
@@ -46,6 +46,8 @@ struct Ospfv3DBDHeader
 
     void setMtu(uint16_t val)
         { utils::writeU16(raw->mtu, val); }
+    void setOptions(uint32_t val)
+        { utils::writeU24(raw->options, val); }
     void setSequence(uint32_t val)
         { utils::writeU32(raw->seqNum, val); }
 

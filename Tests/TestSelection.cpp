@@ -2,16 +2,19 @@
 #include <iostream>
 #include <vector>
 #include <map>
+#include <set>
 #include <string>
+#include <sstream>
 #include <termios.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <fstream>
-#include <map>
 
-const std::string defaultSuitePath = ".default_suite";
+const std::string stateDir = ".";
+const std::string defaultSuitePath = stateDir + "/.default_suite";
+const std::string testModePath = stateDir + "/.test_mode_state";
 
-struct Entry 
+struct Entry
 {
     enum Type { GROUP, SUITE, TEST } type;
     std::string group;
@@ -89,6 +92,30 @@ std::string extractName(const std::string& suite)
     return suite;
 }
 
+void saveTestModeState(const std::string& scope, const std::set<std::string>& disabled)
+{
+    std::ofstream out(testModePath);
+    if (!out) return;
+    out << scope << "\n";
+    for (const auto& key : disabled)
+        out << key << "\n";
+}
+
+void loadTestModeState(std::string& scope, std::set<std::string>& disabled)
+{
+    std::ifstream in(testModePath);
+    if (!in) return;
+    std::getline(in, scope);
+    std::string key;
+    while (std::getline(in, key))
+        if (!key.empty()) disabled.insert(key);
+}
+
+void clearTestModeState()
+{
+    std::remove(testModePath.c_str());
+}
+
 void runWithFilter(const std::string& filter)
 {
     auto* unit = ::testing::UnitTest::GetInstance();
@@ -108,14 +135,64 @@ void runWithFilter(const std::string& filter)
 
     previousFrame.clear();
     std::cout << "\033[2J\033[H";
-    std::cout << "\033[?25l]";
+    std::cout << "\033[?25l";
+}
+
+void toggleRangeDisabled(const std::vector<Entry>& flatList, int a, int b, std::set<std::string>& disabledTests)
+{
+    if (a > b) std::swap(a, b);
+    int disabledCount = 0, testCount = 0;
+    for (int i = a; i <= b; ++i)
+    {
+        if (flatList[i].type == Entry::TEST)
+        {
+            testCount++;
+            if (disabledTests.count(flatList[i].suite + "." + flatList[i].test))
+                disabledCount++;
+        }
+    }
+    bool shouldDisable = (disabledCount < testCount);
+    for (int i = a; i <= b; ++i)
+    {
+        if (flatList[i].type != Entry::TEST) continue;
+        std::string key = flatList[i].suite + "." + flatList[i].test;
+        if (shouldDisable) disabledTests.insert(key);
+        else disabledTests.erase(key);
+    }
+}
+
+std::string buildFilterWithDisabled(const std::string& baseFilter, const TestMap& grouped, const std::set<std::string>& disabledTests)
+{
+    std::vector<std::string> enabled;
+    for (const auto& [group, suites] : grouped)
+    {
+        for (const auto& [suite, tests] : suites)
+        {
+            bool suiteInScope = (baseFilter == "*" || baseFilter == suite + ".*" ||
+                baseFilter.find(suite + ".*") != std::string::npos);
+            if (!suiteInScope) continue;
+
+            for (const auto& test : tests)
+            {
+                std::string key = suite + "." + test;
+                if (disabledTests.count(key) == 0)
+                    enabled.push_back(key);
+            }
+        }
+    }
+
+    if (enabled.empty()) return "NOTHING_TO_RUN";
+
+    std::string filter;
+    for (const auto& s : enabled) filter += s + ":";
+    filter.pop_back();
+    return filter;
 }
 
 int main(int argc, char** argv)
 {
     ::testing::InitGoogleTest(&argc, argv);
-    //::testing::GTEST_FLAG(catch_exceptions) = false;
-    //::testing::GTEST_FLAG(install_failure_signal_handler) = false;
+
     std::ifstream defaultFile(defaultSuitePath);
     if (defaultFile)
     {
@@ -130,10 +207,7 @@ int main(int argc, char** argv)
 
     auto* unit = ::testing::UnitTest::GetInstance();
 
-    TestMap grouped;
-    std::map<std::string, bool> groupOpen;
-    std::map<std::string, std::map<std::string, bool>> suiteOpen;
-
+    TestMap allGrouped;
     for (int i = 0; i < unit->total_test_suite_count(); ++i)
     {
         const auto* suite = unit->GetTestSuite(i);
@@ -141,10 +215,59 @@ int main(int argc, char** argv)
         std::string group = extractGroup(suiteName);
 
         for (int j = 0; j < suite->total_test_count(); ++j)
+            allGrouped[group][suiteName].push_back(suite->GetTestInfo(j)->name());
+    }
+
+    bool testMode = false;
+    std::string testModeScope;
+    std::string testModeSuite;
+    std::set<std::string> disabledTests;
+    int rangeStart = -1;
+
+    loadTestModeState(testModeScope, disabledTests);
+    if (!testModeScope.empty() && testModeScope.size() > 2 &&
+        testModeScope.substr(testModeScope.size() - 2) == ".*")
+    {
+        testModeSuite = testModeScope.substr(0, testModeScope.size() - 2);
+        std::string group = extractGroup(testModeSuite);
+        if (allGrouped.count(group) && allGrouped[group].count(testModeSuite))
+            testMode = true;
+        else
         {
-            grouped[group][suiteName].push_back(suite->GetTestInfo(j)->name());
+            testModeScope.clear();
+            testModeSuite.clear();
+            disabledTests.clear();
         }
     }
+    else
+    {
+        testModeScope.clear();
+        disabledTests.clear();
+    }
+
+    TestMap grouped;
+    std::map<std::string, bool> groupOpen;
+    std::map<std::string, std::map<std::string, bool>> suiteOpen;
+
+    auto rebuildGrouped = [&]()
+    {
+        grouped.clear();
+        groupOpen.clear();
+        suiteOpen.clear();
+        if (testMode)
+        {
+            std::string group = extractGroup(testModeSuite);
+            grouped[group][testModeSuite] = allGrouped[group][testModeSuite];
+            groupOpen[group] = true;
+            suiteOpen[group][testModeSuite] = true;
+        }
+        else
+        {
+            grouped = allGrouped;
+        }
+    };
+
+    rebuildGrouped();
 
     std::vector<Entry> flatList;
     auto rebuildList = [&]()
@@ -196,7 +319,9 @@ int main(int argc, char** argv)
         else if (cursor >= scrollOffset + visibleLines) scrollOffset = cursor - visibleLines + 1;
 
         std::vector<std::string> frame;
-        frame.push_back("🔧 \033[1;34mRouter Test UI\033[0m  —  ↑↓ = move, ←/→ = collapse/expand, Enter = run, q = quit");
+        frame.push_back(testMode
+            ? "🔬 \033[1;33mTEST MODE\033[0m  —  x=disable, m=mark range, r=run, R=run range, e=exit | scope: " + testModeScope
+            : "🔧 \033[1;34mRouter Test UI\033[0m  —  ↑↓ = move, ←/→ = collapse/expand, Enter = run, t=test mode, q = quit");
         frame.push_back("");
         
         for (int i = scrollOffset; i < std::min(scrollOffset + visibleLines, totalLines); ++i)
@@ -212,7 +337,17 @@ int main(int argc, char** argv)
                 std::string icon = suiteOpen[entry.group][entry.suite] ? "▼" : "▶";
                 line << (selected ? "\033[7m" : "") << "  " << icon << " " << extractName(entry.suite) << "\033[0m";
             } else if (entry.type == Entry::TEST) {
-                line << (selected ? "\033[7m" : "") << "     • " << entry.test << "\033[0m";
+                std::string key = entry.suite + "." + entry.test;
+                bool disabled = disabledTests.count(key);
+                bool inRange = testMode && rangeStart >= 0 &&
+                    i >= std::min(rangeStart, cursor) && i <= std::max(rangeStart, cursor);
+
+                line << (selected ? "\033[7m" : "");
+                if (disabled) line << "\033[9;31m";
+                if (inRange && !selected) line << "\033[43m";
+                line << "     • " << entry.test;
+                if (disabled) line << " [DISABLED]";
+                line << "\033[0m";
             }
 
             frame.push_back(line.str());
@@ -225,12 +360,12 @@ int main(int argc, char** argv)
 
         setRawMode(true);
         char key = readKey();
-        setRawMode(false);
 
         if (key == '\033')
         {
             readKey(); // skip [
             char arrow = readKey();
+            setRawMode(false);
             if (arrow == 'A') cursor = (cursor - 1 + flatList.size()) % flatList.size(); // up
             if (arrow == 'B') cursor = (cursor + 1) % flatList.size(); // down
             if (arrow == 'C')
@@ -248,6 +383,7 @@ int main(int argc, char** argv)
         }
         else if (key == '\n')
         {
+            setRawMode(false);
             const auto& e = flatList[cursor];
             if (e.type == Entry::GROUP)
             {
@@ -268,12 +404,13 @@ int main(int argc, char** argv)
         }
         else if (key == 'q')
         {
-            std::cout << "\033[?25h";
             setRawMode(false);
+            std::cout << "\033[?25h";
             break;
         }
         else if (key == 'd')
         {
+            setRawMode(false);
             const auto& e = flatList[cursor];
             std::string filter;
 
@@ -303,6 +440,7 @@ int main(int argc, char** argv)
         }
         else
         {
+            setRawMode(false);
             if (key == 'j') cursor = (cursor + 1) % flatList.size();
             if (key == 'k') cursor = (cursor - 1 + flatList.size()) % flatList.size();
             if (key == 'l')
@@ -316,6 +454,102 @@ int main(int argc, char** argv)
                 const auto& e = flatList[cursor];
                 if (e.type == Entry::GROUP) groupOpen[e.group] = false;
                 else if (e.type == Entry::SUITE) suiteOpen[e.group][e.suite] = false;
+            }
+            if (key == 't')
+            {
+                const auto& e = flatList[cursor];
+                if (e.type != Entry::SUITE) continue;
+
+                testMode = true;
+                testModeSuite = e.suite;
+                testModeScope = e.suite + ".*";
+                rangeStart = -1;
+                disabledTests.clear();
+                cursor = 0;
+                scrollOffset = 0;
+                rebuildGrouped();
+
+                saveTestModeState(testModeScope, disabledTests);
+            }
+            if (key == 'e')
+            {
+                testMode = false;
+                rangeStart = -1;
+                disabledTests.clear();
+                testModeScope.clear();
+                testModeSuite.clear();
+                cursor = 0;
+                scrollOffset = 0;
+                rebuildGrouped();
+                clearTestModeState();
+            }
+            if (key == 'x')
+            {
+                if (rangeStart >= 0)
+                {
+                    toggleRangeDisabled(flatList, rangeStart, cursor, disabledTests);
+                    rangeStart = -1;
+                }
+                else
+                {
+                    const auto& e = flatList[cursor];
+                    if (e.type == Entry::TEST)
+                    {
+                        std::string k = e.suite + "." + e.test;
+                        if (disabledTests.count(k)) disabledTests.erase(k);
+                        else disabledTests.insert(k);
+                    }
+                    else if (e.type == Entry::SUITE)
+                    {
+                        for (const auto& test : grouped[e.group][e.suite])
+                            disabledTests.insert(e.suite + "." + test);
+                    }
+                }
+                saveTestModeState(testModeScope, disabledTests);
+            }
+            if (key == 'm')
+            {
+                rangeStart = cursor;
+            }
+            if (key == 'r')
+            {
+                const auto& e = flatList[cursor];
+                std::string base;
+                if (e.type == Entry::TEST) base = e.suite + "." + e.test;
+                else if (e.type == Entry::SUITE) base = e.suite + ".*";
+                else if (e.type == Entry::GROUP)
+                {
+                    for (const auto& [suite, _] : grouped[e.group])
+                        base += suite + ".*:";
+                    if (!base.empty()) base.pop_back();
+                }
+                std::string filter = testMode
+                    ? buildFilterWithDisabled(testModeScope, grouped, disabledTests)
+                    : base;
+                runWithFilter(filter);
+            }
+            if (key == 'R')
+            {
+                if (rangeStart >= 0)
+                {
+                    int lo = std::min(rangeStart, cursor), hi = std::max(rangeStart, cursor);
+                    std::string filter;
+                    for (int i = lo; i <= hi; ++i)
+                    {
+                        if (flatList[i].type == Entry::TEST)
+                        {
+                            std::string k = flatList[i].suite + "." + flatList[i].test;
+                            if (!disabledTests.count(k))
+                                filter += k + ":";
+                        }
+                    }
+                    if (!filter.empty())
+                    {
+                        filter.pop_back();
+                        runWithFilter(filter);
+                    }
+                    rangeStart = -1;
+                }
             }
         }
     }

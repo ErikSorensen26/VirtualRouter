@@ -26,14 +26,21 @@ Area::Area(OspfProcess& base, uint32_t id, std::pmr::memory_resource* mr)
       spfMgr(*this),
       flags(base.isV3),
       floodMgr(*this),
+      scheduler(base.getSchedulerQueue().ref()),
       originator(base.isV3
           ? *static_cast<Originator*>(new OriginatorV3(*this))
           : *static_cast<Originator*>(new OriginatorV2(*this))
       ),
-      scheduler(base.getSchedulerQueue().ref()),
       type(configs.get<config::OspfArea::AREA_TYPE>().load()),
       areaId(id)
 {
+    bool isStub = (type == config::ospf::AreaType::STUB ||
+                   type == config::ospf::AreaType::TOTALLY_STUB);
+    bool isNssa = (type == config::ospf::AreaType::NSSA ||
+                   type == config::ospf::AreaType::TOTALLY_NSSA);
+    flags.setExternalRouting(!isStub);
+    flags.setNssa(isNssa);
+
     configs.context().set(this);
     startAgingTimer();
 }
@@ -57,8 +64,26 @@ void Area::initializeReset()
     });
 }
 
+void Area::reloadType()
+{
+    auto newType = configs.get<config::OspfArea::AREA_TYPE>().load();
+    if (newType == type) return;
+
+    type = newType;
+
+    bool isStub = (type == config::ospf::AreaType::STUB ||
+                   type == config::ospf::AreaType::TOTALLY_STUB);
+    bool isNssa = (type == config::ospf::AreaType::NSSA ||
+                   type == config::ospf::AreaType::TOTALLY_NSSA);
+
+    flags.setExternalRouting(!isStub);
+    flags.setNssa(isNssa);
+}
+
 void Area::reset()
 {
+    reloadType();
+
     // Reset all neighbors on all interfaces in this area
     auto& ifaceMgr = base.getIfaceMgr();
     for (auto& [ifId, iface] : ifaceMgr.ospfInterfaceList)
@@ -415,6 +440,15 @@ const std::unordered_set<types::IPPrefix>& Area::getRanges() const
     return rangePrefixes;
 }
 
+void Area::suppressInterAreaPrefix(const types::IPPrefix& prefix) const
+{
+    auto it = ranges.find(prefix);
+    if (it == ranges.end() || !it->second.summary.has_value())
+        return;
+
+    originator.originateSummary(it->second.summary.value(), prefix, 0, true);
+}
+
 std::unordered_map<types::IPPrefix, std::pair<uint32_t, uint32_t>> Area::computeRangeContributors(
     const std::vector<std::pair<types::IPPrefix, OspfPath>>& intraAreaRoutes,
     const std::unordered_map<types::IPPrefix, AreaRange>& activeRanges)
@@ -545,13 +579,16 @@ Area::Result Area::process(IncomingLsaContext& ctx, const LsaBody& body)
 {
     Result out{};
 
-    const LsaRecord* existing = db.find(ctx.key);
+    LsaRecord* existing = db.find(ctx.key);
 
     out.decision = evaluateIncomingLsa(existing, ctx, body);
-    
+
     if (out.decision.action == InstallAction::REJECT_INVALID ||
         out.decision.action == InstallAction::IGNORE_OLDER)
     {
+        // IGNORE_OLDER still acks (per RFC 2328 §13) using the existing, newer
+        // stored instance; REJECT_INVALID never acks (shouldAck is false).
+        out.record = existing;
         return out;
     }
 

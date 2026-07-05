@@ -40,6 +40,7 @@ class NeighborTable;
  */
 class PacketDispatcherV3 : public PacketDispatcher
 {
+    friend class ::Internal_OspfTest;
 public:
     /**
      * @brief Constructs a PacketDispatcherV3 for a given interface.
@@ -166,7 +167,7 @@ private:
     uint16_t getMtu();
 
     std::optional<packet::Ospfv3Header> buildHeader(processing::PacketBuilder& builder, uint8_t type);
-    std::optional<packet::Ospfv3HelloHeader> buildHello(OspfBuilder builder, bool lls);
+    std::optional<packet::Ospfv3HelloHeader> buildHello(OspfBuilder& builder, bool lls);
     std::optional<packet::Ospfv3DBDHeader> buildDBD(OspfBuilder& builder, Neighbor& nbr, bool lls);
     std::optional<packet::Ospfv3LSAHeader> buildLSAHeader(OspfBuilder& builder, const LsaKey& key, const LsaRecord& record, bool floodReduction);
     std::optional<packet::Ospfv3LSAHeader> buildCopyLSAHeader(OspfBuilder& builder, const LsaKey& key, const LsaRecord& record);

@@ -18,6 +18,7 @@
 
 namespace processing { class PacketBuilder; }
 namespace types { struct IPAddress; }
+class Internal_OspfTest;
 
 namespace routing::ospf
 {
@@ -57,6 +58,7 @@ class NeighborTable;
  */
 class PacketDispatcher
 {
+    friend class ::Internal_OspfTest;
 public:
     /**
      * @brief Constructs the dispatcher and binds it to an interface.

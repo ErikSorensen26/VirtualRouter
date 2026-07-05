@@ -199,7 +199,7 @@ enum class Interface
 };
 
 #define INTERFACE_DEFAULTS(X) \
-    X(Interface, BANDWIDTH, 0) \
+    X(Interface, BANDWIDTH, 100000) \
     X(Interface, BANDWIDTH_RECEIVE, 0) \
     X(Interface, BFD_ECHO, true) \
     X(Interface, BFD_INTERVAL, 250) \

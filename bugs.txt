@@ -1,0 +1,214 @@
+==77113==ERROR: AddressSanitizer: attempting double-free on 0x5060000333e0 in thread T0:
+    #0 0x7ffff78ff5e8 in operator delete(void*, unsigned long) ../../../../src/libsanitizer/asan/asan_new_delete.cpp:164
+    #1 0x555555bc1e63 in std::__new_allocator<std::_Rb_tree_node<types::IPPrefix> >::deallocate(std::_Rb_tree_node<types::IPPrefix>*, unsigned long) /usr/include/c++/13/bits/new_allocator.h:172
+    #2 0x555555bbfd5b in std::allocator<std::_Rb_tree_node<types::IPPrefix> >::deallocate(std::_Rb_tree_node<types::IPPrefix>*, unsigned long) /usr/include/c++/13/bits/allocator.h:210
+    #3 0x555555bbfd5b in std::allocator_traits<std::allocator<std::_Rb_tree_node<types::IPPrefix> > >::deallocate(std::allocator<std::_Rb_tree_node<types::IPPrefix> >&, std::_Rb_tree_node<types::IPPrefix>*, unsigned long) /usr/include/c++/13/bits/alloc_traits.h:517
+    #4 0x555555bbfd5b in std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_M_put_node(std::_Rb_tree_node<types::IPPrefix>*) /usr/include/c++/13/bits/stl_tree.h:567
+    #5 0x555555bbf123 in std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_M_drop_node(std::_Rb_tree_node<types::IPPrefix>*) /usr/include/c++/13/bits/stl_tree.h:634
+    #6 0x555555bbeada in std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_M_erase(std::_Rb_tree_node<types::IPPrefix>*) /usr/include/c++/13/bits/stl_tree.h:1938
+    #7 0x555555d157a7 in std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::clear() /usr/include/c++/13/bits/stl_tree.h:1255
+    #8 0x555555d1531d in std::set<types::IPPrefix, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::clear() /usr/include/c++/13/bits/stl_set.h:736
+    #9 0x555555d14a0d in routing::eigrp::EigrpTopology::synchronizeConnected(routing::eigrp::EigrpInterface&) /home/erik/VirtualRouter/VirtualRouter/src/routing/eigrp/core/Topology.cpp:54
+    #10 0x555555d0dd5b in routing::eigrp::InterfaceManager::refreshInterfaceList() /home/erik/VirtualRouter/VirtualRouter/src/routing/eigrp/core/InterfaceManager.cpp:164
+    #11 0x555555cfa321 in routing::eigrp::Eigrp::refreshInterfaceList() /home/erik/VirtualRouter/VirtualRouter/src/routing/eigrp/core/Eigrp.cpp:101
+    #12 0x5555559dea0c in Internal_EigrpTest_Frequent_Interface_Flapping_No_Global_Corruption_Extended_Test::TestBody() /home/erik/VirtualRouter/Tests/Internal/src/EigrpTest.cpp:2667
+    #13 0x555555f95f6e in void testing::internal::HandleExceptionsInMethodIfSupported<testing::Test, void>(testing::Test*, void (testing::Test::*)(), char const*) (/home/erik/VirtualRouter/build/TestSelection+0xa41f6e) (BuildId: 6a2ad6926db3534420f3da46e9f8af914246f06e)
+    #14 0x555555f79535 in testing::Test::Run() (/home/erik/VirtualRouter/build/TestSelection+0xa25535) (BuildId: 6a2ad6926db3534420f3da46e9f8af914246f06e)
+    #15 0x555555f796f4 in testing::TestInfo::Run() (/home/erik/VirtualRouter/build/TestSelection+0xa256f4) (BuildId: 6a2ad6926db3534420f3da46e9f8af914246f06e)
+    #16 0x555555f798de in testing::TestSuite::Run() (/home/erik/VirtualRouter/build/TestSelection+0xa258de) (BuildId: 6a2ad6926db3534420f3da46e9f8af914246f06e)
+    #17 0x555555f8774b in testing::internal::UnitTestImpl::RunAllTests() (/home/erik/VirtualRouter/build/TestSelection+0xa3374b) (BuildId: 6a2ad6926db3534420f3da46e9f8af914246f06e)
+    #18 0x555555f96646 in bool testing::internal::HandleExceptionsInMethodIfSupported<testing::internal::UnitTestImpl, bool>(testing::internal::UnitTestImpl*, bool (testing::internal::UnitTestImpl::*)(), char const*) (/home/erik/VirtualRouter/build/TestSelection+0xa42646) (BuildId: 6a2ad6926db3534420f3da46e9f8af914246f06e)
+    #19 0x555555f79ad7 in testing::UnitTest::Run() (/home/erik/VirtualRouter/build/TestSelection+0xa25ad7) (BuildId: 6a2ad6926db3534420f3da46e9f8af914246f06e)
+    #20 0x5555558e9360 in runWithFilter(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&) /home/erik/VirtualRouter/Tests/TestSelection.cpp:102
+    #21 0x5555558e9fa8 in main /home/erik/VirtualRouter/Tests/TestSelection.cpp:127
+    #22 0x7ffff6a2a1c9 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+    #23 0x7ffff6a2a28a in __libc_start_main_impl ../csu/libc-start.c:360
+    #24 0x5555558e82b4 in _start (/home/erik/VirtualRouter/build/TestSelection+0x3942b4) (BuildId: 6a2ad6926db3534420f3da46e9f8af914246f06e)
+
+0x5060000333e0 is located 0 bytes inside of 64-byte region [0x5060000333e0,0x506000033420)
+freed by thread T15 here:
+    #0 0x7ffff78ff5e8 in operator delete(void*, unsigned long) ../../../../src/libsanitizer/asan/asan_new_delete.cpp:164
+    #1 0x555555bc1e63 in std::__new_allocator<std::_Rb_tree_node<types::IPPrefix> >::deallocate(std::_Rb_tree_node<types::IPPrefix>*, unsigned long) /usr/include/c++/13/bits/new_allocator.h:172
+    #2 0x555555bbfd5b in std::allocator<std::_Rb_tree_node<types::IPPrefix> >::deallocate(std::_Rb_tree_node<types::IPPrefix>*, unsigned long) /usr/include/c++/13/bits/allocator.h:210
+    #3 0x555555bbfd5b in std::allocator_traits<std::allocator<std::_Rb_tree_node<types::IPPrefix> > >::deallocate(std::allocator<std::_Rb_tree_node<types::IPPrefix> >&, std::_Rb_tree_node<types::IPPrefix>*, unsigned long) /usr/include/c++/13/bits/alloc_traits.h:517
+    #4 0x555555bbfd5b in std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_M_put_node(std::_Rb_tree_node<types::IPPrefix>*) /usr/include/c++/13/bits/stl_tree.h:567
+    #5 0x555555bbf123 in std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_M_drop_node(std::_Rb_tree_node<types::IPPrefix>*) /usr/include/c++/13/bits/stl_tree.h:634
+    #6 0x555555bbeada in std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_M_erase(std::_Rb_tree_node<types::IPPrefix>*) /usr/include/c++/13/bits/stl_tree.h:1938
+    #7 0x555555d157a7 in std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::clear() /usr/include/c++/13/bits/stl_tree.h:1255
+    #8 0x555555d1531d in std::set<types::IPPrefix, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::clear() /usr/include/c++/13/bits/stl_set.h:736
+    #9 0x555555d14a0d in routing::eigrp::EigrpTopology::synchronizeConnected(routing::eigrp::EigrpInterface&) /home/erik/VirtualRouter/VirtualRouter/src/routing/eigrp/core/Topology.cpp:54
+    #10 0x555555d0dd5b in routing::eigrp::InterfaceManager::refreshInterfaceList() /home/erik/VirtualRouter/VirtualRouter/src/routing/eigrp/core/InterfaceManager.cpp:164
+    #11 0x555555cfa321 in routing::eigrp::Eigrp::refreshInterfaceList() /home/erik/VirtualRouter/VirtualRouter/src/routing/eigrp/core/Eigrp.cpp:101
+    #12 0x555555bc2010 in operator() /home/erik/VirtualRouter/VirtualRouter/src/configs/registry/router/EigrpRegistry.cpp:13
+    #13 0x555555bc2c6f in operator() /home/erik/VirtualRouter/VirtualRouter/src/core/ControlScheduler.h:566
+    #14 0x555555bc8027 in operator() /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:93
+    #15 0x555555bc804b in _FUN /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:93
+    #16 0x555555a22413 in core::ThreadPool::Task::run() /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:100
+    #17 0x555555bd4367 in core::ControlScheduler::SubQueue::tryConsumeOne(bool) /home/erik/VirtualRouter/VirtualRouter/src/core/ControlScheduler.cpp:102
+    #18 0x555555bd70c1 in core::ControlScheduler::drainProcessQueue(unsigned int, unsigned int) /home/erik/VirtualRouter/VirtualRouter/src/core/ControlScheduler.cpp:633
+    #19 0x555555bc3660 in operator() /home/erik/VirtualRouter/VirtualRouter/src/core/ControlScheduler.h:541
+    #20 0x555555bc8171 in operator() /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:93
+    #21 0x555555bc8195 in _FUN /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:93
+    #22 0x555555a22413 in core::ThreadPool::Task::run() /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:100
+    #23 0x555555a22c31 in core::ThreadPool::consumeOne() /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:282
+    #24 0x555555a229d0 in core::ThreadPool::workerLoop() /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:245
+    #25 0x555555a22564 in core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}::operator()() const /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:143
+    #26 0x555555a89eb3 in void std::__invoke_impl<void, core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}>(std::__invoke_other, core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}&&) /usr/include/c++/13/bits/invoke.h:61
+    #27 0x555555a8873a in std::__invoke_result<core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}>::type std::__invoke<core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}>(core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}&&) /usr/include/c++/13/bits/invoke.h:96
+    #28 0x555555a81b81 in void std::thread::_Invoker<std::tuple<core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}> >::_M_invoke<0ul>(std::_Index_tuple<0ul>) /usr/include/c++/13/bits/std_thread.h:292
+    #29 0x555555a81103 in std::thread::_Invoker<std::tuple<core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}> >::operator()() /usr/include/c++/13/bits/std_thread.h:299
+    #30 0x555555a7daef in std::thread::_State_impl<std::thread::_Invoker<std::tuple<core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}> > >::_M_run() /usr/include/c++/13/bits/std_thread.h:244
+    #31 0x7ffff6eecdb3  (/lib/x86_64-linux-gnu/libstdc++.so.6+0xecdb3) (BuildId: 753c6c8608b61d4e67be8f0c890e03e0aa046b8b)
+
+previously allocated by thread T15 here:
+    #0 0x7ffff78fe548 in operator new(unsigned long) ../../../../src/libsanitizer/asan/asan_new_delete.cpp:95
+    #1 0x555555bc1f3f in std::__new_allocator<std::_Rb_tree_node<types::IPPrefix> >::allocate(unsigned long, void const*) /usr/include/c++/13/bits/new_allocator.h:151
+    #2 0x555555bc1a2d in std::allocator<std::_Rb_tree_node<types::IPPrefix> >::allocate(unsigned long) /usr/include/c++/13/bits/allocator.h:198
+    #3 0x555555bc1a2d in std::allocator_traits<std::allocator<std::_Rb_tree_node<types::IPPrefix> > >::allocate(std::allocator<std::_Rb_tree_node<types::IPPrefix> >&, unsigned long) /usr/include/c++/13/bits/alloc_traits.h:482
+    #4 0x555555bc1a2d in std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_M_get_node() /usr/include/c++/13/bits/stl_tree.h:563
+    #5 0x555555bc0a93 in std::_Rb_tree_node<types::IPPrefix>* std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_M_create_node<types::IPPrefix const&>(types::IPPrefix const&) /usr/include/c++/13/bits/stl_tree.h:613
+    #6 0x555555d0a78e in std::_Rb_tree_node<types::IPPrefix>* std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_Alloc_node::operator()<types::IPPrefix const&>(types::IPPrefix const&) const /usr/include/c++/13/bits/stl_tree.h:531
+    #7 0x555555d09d25 in std::_Rb_tree_iterator<types::IPPrefix> std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_M_insert_<types::IPPrefix const&, std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_Alloc_node>(std::_Rb_tree_node_base*, std::_Rb_tree_node_base*, types::IPPrefix const&, std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_Alloc_node&) /usr/include/c++/13/bits/stl_tree.h:1831
+    #8 0x555555d092e3 in std::pair<std::_Rb_tree_iterator<types::IPPrefix>, bool> std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_M_insert_unique<types::IPPrefix const&>(types::IPPrefix const&) /usr/include/c++/13/bits/stl_tree.h:2176
+    #9 0x555555d08c41 in std::set<types::IPPrefix, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::insert(types::IPPrefix const&) /usr/include/c++/13/bits/stl_set.h:514
+    #10 0x555555d146d3 in operator() /home/erik/VirtualRouter/VirtualRouter/src/routing/eigrp/core/Topology.cpp:65
+    #11 0x555555d14b6b in routing::eigrp::EigrpTopology::synchronizeConnected(routing::eigrp::EigrpInterface&) /home/erik/VirtualRouter/VirtualRouter/src/routing/eigrp/core/Topology.cpp:76
+    #12 0x555555d0d2d3 in routing::eigrp::InterfaceManager::createInterface(interface::Interface*) /home/erik/VirtualRouter/VirtualRouter/src/routing/eigrp/core/InterfaceManager.cpp:60
+    #13 0x555555d0dd79 in routing::eigrp::InterfaceManager::refreshInterfaceList() /home/erik/VirtualRouter/VirtualRouter/src/routing/eigrp/core/InterfaceManager.cpp:166
+    #14 0x555555cfa321 in routing::eigrp::Eigrp::refreshInterfaceList() /home/erik/VirtualRouter/VirtualRouter/src/routing/eigrp/core/Eigrp.cpp:101
+    #15 0x555555bc2010 in operator() /home/erik/VirtualRouter/VirtualRouter/src/configs/registry/router/EigrpRegistry.cpp:13
+    #16 0x555555bc2c6f in operator() /home/erik/VirtualRouter/VirtualRouter/src/core/ControlScheduler.h:566
+    #17 0x555555bc8027 in operator() /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:93
+    #18 0x555555bc804b in _FUN /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:93
+    #19 0x555555a22413 in core::ThreadPool::Task::run() /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:100
+    #20 0x555555bd4367 in core::ControlScheduler::SubQueue::tryConsumeOne(bool) /home/erik/VirtualRouter/VirtualRouter/src/core/ControlScheduler.cpp:102
+    #21 0x555555bd70c1 in core::ControlScheduler::drainProcessQueue(unsigned int, unsigned int) /home/erik/VirtualRouter/VirtualRouter/src/core/ControlScheduler.cpp:633
+    #22 0x555555bc3660 in operator() /home/erik/VirtualRouter/VirtualRouter/src/core/ControlScheduler.h:541
+    #23 0x555555bc8171 in operator() /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:93
+    #24 0x555555bc8195 in _FUN /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:93
+    #25 0x555555a22413 in core::ThreadPool::Task::run() /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:100
+    #26 0x555555a22c31 in core::ThreadPool::consumeOne() /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:282
+    #27 0x555555a229d0 in core::ThreadPool::workerLoop() /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:245
+    #28 0x555555a22564 in core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}::operator()() const /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:143
+    #29 0x555555a89eb3 in void std::__invoke_impl<void, core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}>(std::__invoke_other, core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}&&) /usr/include/c++/13/bits/invoke.h:61
+    #30 0x555555a8873a in std::__invoke_result<core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}>::type std::__invoke<core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}>(core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}&&) /usr/include/c++/13/bits/invoke.h:96
+    #31 0x555555a81b81 in void std::thread::_Invoker<std::tuple<core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}> >::_M_invoke<0ul>(std::_Index_tuple<0ul>) /usr/include/c++/13/bits/std_thread.h:292
+
+Thread T15 created by T0 here:
+    #0 0x7ffff78f51f9 in pthread_create ../../../../src/libsanitizer/asan/asan_interceptors.cpp:245
+    #1 0x7ffff6eeceb0 in std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State> >, void (*)()) (/lib/x86_64-linux-gnu/libstdc++.so.6+0xeceb0) (BuildId: 753c6c8608b61d4e67be8f0c890e03e0aa046b8b)
+    #2 0x555555a5970a in std::thread::thread<core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}, , void>(core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}&&) /usr/include/c++/13/bits/std_thread.h:164
+    #3 0x555555a4e863 in decltype (::new ((void*)(0)) std::thread((declval<core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}>)())) std::construct_at<std::thread, core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}>(std::thread*, core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}&&) /usr/include/c++/13/bits/stl_construct.h:97
+    #4 0x555555a3726b in void std::allocator_traits<std::allocator<std::thread> >::construct<std::thread, core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}>(std::allocator<std::thread>&, std::thread*, core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}&&) /usr/include/c++/13/bits/alloc_traits.h:540
+    #5 0x555555a3726b in std::thread& std::vector<std::thread, std::allocator<std::thread> >::emplace_back<core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}>(core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}&&) /usr/include/c++/13/bits/vector.tcc:117
+    #6 0x555555a227f7 in core::ThreadPool::ThreadPool(unsigned long, unsigned long) /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:143
+    #7 0x555555bdb703 in core::Global::Global(cli::FileSystem&, cli::StartupFiles const&, bool, bool) /home/erik/VirtualRouter/VirtualRouter/src/core/Global.cpp:28
+    #8 0x5555559dc97a in Internal_EigrpTest::SetUp() /home/erik/VirtualRouter/Tests/Internal/src/EigrpTest.cpp:64
+    #9 0x555555f95f6e in void testing::internal::HandleExceptionsInMethodIfSupported<testing::Test, void>(testing::Test*, void (testing::Test::*)(), char const*) (/home/erik/VirtualRouter/build/TestSelection+0xa41f6e) (BuildId: 6a2ad6926db3534420f3da46e9f8af914246f06e)
+
+
+
+
+=================================================================
+==81291==ERROR: AddressSanitizer: attempting double-free on 0x506000028280 in thread T459:
+    #0 0x7ffff78ff5e8 in operator delete(void*, unsigned long) ../../../../src/libsanitizer/asan/asan_new_delete.cpp:164
+    #1 0x555555c2e2f1 in std::__new_allocator<std::_Rb_tree_node<types::IPPrefix> >::deallocate(std::_Rb_tree_node<types::IPPrefix>*, unsigned long) /usr/include/c++/13/bits/new_allocator.h:172
+    #2 0x555555c2c1e9 in std::allocator<std::_Rb_tree_node<types::IPPrefix> >::deallocate(std::_Rb_tree_node<types::IPPrefix>*, unsigned long) /usr/include/c++/13/bits/allocator.h:210
+    #3 0x555555c2c1e9 in std::allocator_traits<std::allocator<std::_Rb_tree_node<types::IPPrefix> > >::deallocate(std::allocator<std::_Rb_tree_node<types::IPPrefix> >&, std::_Rb_tree_node<types::IPPrefix>*, unsigned long) /usr/include/c++/13/bits/alloc_traits.h:517
+    #4 0x555555c2c1e9 in std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_M_put_node(std::_Rb_tree_node<types::IPPrefix>*) /usr/include/c++/13/bits/stl_tree.h:567
+    #5 0x555555c2b5b1 in std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_M_drop_node(std::_Rb_tree_node<types::IPPrefix>*) /usr/include/c++/13/bits/stl_tree.h:634
+    #6 0x555555c2af7a in std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_M_erase(std::_Rb_tree_node<types::IPPrefix>*) /usr/include/c++/13/bits/stl_tree.h:1938
+    #7 0x555555d7e737 in std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::clear() /usr/include/c++/13/bits/stl_tree.h:1255
+    #8 0x555555d7e359 in std::set<types::IPPrefix, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::clear() /usr/include/c++/13/bits/stl_set.h:736
+    #9 0x555555d7da49 in routing::eigrp::EigrpTopology::synchronizeConnected(routing::eigrp::EigrpInterface&) /home/erik/VirtualRouter/VirtualRouter/src/routing/eigrp/core/Topology.cpp:54
+    #10 0x555555d77823 in routing::eigrp::InterfaceManager::refreshInterfaceList() /home/erik/VirtualRouter/VirtualRouter/src/routing/eigrp/core/InterfaceManager.cpp:164
+    #11 0x555555d653bd in routing::eigrp::Eigrp::refreshInterfaceList() /home/erik/VirtualRouter/VirtualRouter/src/routing/eigrp/core/Eigrp.cpp:101
+    #12 0x555555c2e49e in operator() /home/erik/VirtualRouter/VirtualRouter/src/configs/registry/router/EigrpRegistry.cpp:13
+    #13 0x555555c2f0fd in operator() /home/erik/VirtualRouter/VirtualRouter/src/core/ControlScheduler.h:566
+    #14 0x555555c344b5 in operator() /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:93
+    #15 0x555555c344d9 in _FUN /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:93
+    #16 0x555555a8fe5b in core::ThreadPool::Task::run() /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:100
+    #17 0x555555c407f5 in core::ControlScheduler::SubQueue::tryConsumeOne(bool) /home/erik/VirtualRouter/VirtualRouter/src/core/ControlScheduler.cpp:102
+    #18 0x555555c4354f in core::ControlScheduler::drainProcessQueue(unsigned int, unsigned int) /home/erik/VirtualRouter/VirtualRouter/src/core/ControlScheduler.cpp:633
+    #19 0x555555c2faee in operator() /home/erik/VirtualRouter/VirtualRouter/src/core/ControlScheduler.h:541
+    #20 0x555555c345ff in operator() /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:93
+    #21 0x555555c34623 in _FUN /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:93
+    #22 0x555555a8fe5b in core::ThreadPool::Task::run() /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:100
+    #23 0x555555a90679 in core::ThreadPool::consumeOne() /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:282
+    #24 0x555555a90418 in core::ThreadPool::workerLoop() /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:245
+    #25 0x555555a8ffac in core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}::operator()() const /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:143
+    #26 0x555555af7577 in void std::__invoke_impl<void, core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}>(std::__invoke_other, core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}&&) /usr/include/c++/13/bits/invoke.h:61
+    #27 0x555555af5dfe in std::__invoke_result<core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}>::type std::__invoke<core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}>(core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}&&) /usr/include/c++/13/bits/invoke.h:96
+    #28 0x555555aef245 in void std::thread::_Invoker<std::tuple<core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}> >::_M_invoke<0ul>(std::_Index_tuple<0ul>) /usr/include/c++/13/bits/std_thread.h:292
+    #29 0x555555aee7c7 in std::thread::_Invoker<std::tuple<core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}> >::operator()() /usr/include/c++/13/bits/std_thread.h:299
+    #30 0x555555aeb1b3 in std::thread::_State_impl<std::thread::_Invoker<std::tuple<core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}> > >::_M_run() /usr/include/c++/13/bits/std_thread.h:244
+    #31 0x7ffff6eecdb3  (/lib/x86_64-linux-gnu/libstdc++.so.6+0xecdb3) (BuildId: 753c6c8608b61d4e67be8f0c890e03e0aa046b8b)
+    #32 0x7ffff785ea41 in asan_thread_start ../../../../src/libsanitizer/asan/asan_interceptors.cpp:234
+    #33 0x7ffff6a9caa3 in start_thread nptl/pthread_create.c:447
+    #34 0x7ffff6b29c6b in clone3 ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+
+0x506000028280 is located 0 bytes inside of 64-byte region [0x506000028280,0x5060000282c0)
+freed by thread T0 here:
+    #0 0x7ffff78ff5e8 in operator delete(void*, unsigned long) ../../../../src/libsanitizer/asan/asan_new_delete.cpp:164
+    #1 0x555555c2e2f1 in std::__new_allocator<std::_Rb_tree_node<types::IPPrefix> >::deallocate(std::_Rb_tree_node<types::IPPrefix>*, unsigned long) /usr/include/c++/13/bits/new_allocator.h:172
+    #2 0x555555c2c1e9 in std::allocator<std::_Rb_tree_node<types::IPPrefix> >::deallocate(std::_Rb_tree_node<types::IPPrefix>*, unsigned long) /usr/include/c++/13/bits/allocator.h:210
+    #3 0x555555c2c1e9 in std::allocator_traits<std::allocator<std::_Rb_tree_node<types::IPPrefix> > >::deallocate(std::allocator<std::_Rb_tree_node<types::IPPrefix> >&, std::_Rb_tree_node<types::IPPrefix>*, unsigned long) /usr/include/c++/13/bits/alloc_traits.h:517
+    #4 0x555555c2c1e9 in std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_M_put_node(std::_Rb_tree_node<types::IPPrefix>*) /usr/include/c++/13/bits/stl_tree.h:567
+    #5 0x555555c2b5b1 in std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_M_drop_node(std::_Rb_tree_node<types::IPPrefix>*) /usr/include/c++/13/bits/stl_tree.h:634
+    #6 0x555555c2af7a in std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_M_erase(std::_Rb_tree_node<types::IPPrefix>*) /usr/include/c++/13/bits/stl_tree.h:1938
+    #7 0x555555d7e737 in std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::clear() /usr/include/c++/13/bits/stl_tree.h:1255
+    #8 0x555555d7e359 in std::set<types::IPPrefix, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::clear() /usr/include/c++/13/bits/stl_set.h:736
+    #9 0x555555d7da49 in routing::eigrp::EigrpTopology::synchronizeConnected(routing::eigrp::EigrpInterface&) /home/erik/VirtualRouter/VirtualRouter/src/routing/eigrp/core/Topology.cpp:54
+    #10 0x555555d77823 in routing::eigrp::InterfaceManager::refreshInterfaceList() /home/erik/VirtualRouter/VirtualRouter/src/routing/eigrp/core/InterfaceManager.cpp:164
+    #11 0x555555d653bd in routing::eigrp::Eigrp::refreshInterfaceList() /home/erik/VirtualRouter/VirtualRouter/src/routing/eigrp/core/Eigrp.cpp:101
+    #12 0x555555a1fd96 in Internal_EigrpTest_Frequent_Interface_Flapping_No_Global_Corruption_Test::TestBody() /home/erik/VirtualRouter/Tests/Internal/src/EigrpTest.cpp:2435
+    #13 0x555555ff8c9e in void testing::internal::HandleExceptionsInMethodIfSupported<testing::Test, void>(testing::Test*, void (testing::Test::*)(), char const*) (/home/erik/VirtualRouter/build/TestSelection+0xaa4c9e) (BuildId: 83b14004b81fc12968d82f33d22623e386006d4c)
+
+previously allocated by thread T459 here:
+    #0 0x7ffff78fe548 in operator new(unsigned long) ../../../../src/libsanitizer/asan/asan_new_delete.cpp:95
+    #1 0x555555c2e3cd in std::__new_allocator<std::_Rb_tree_node<types::IPPrefix> >::allocate(unsigned long, void const*) /usr/include/c++/13/bits/new_allocator.h:151
+    #2 0x555555c2debb in std::allocator<std::_Rb_tree_node<types::IPPrefix> >::allocate(unsigned long) /usr/include/c++/13/bits/allocator.h:198
+    #3 0x555555c2debb in std::allocator_traits<std::allocator<std::_Rb_tree_node<types::IPPrefix> > >::allocate(std::allocator<std::_Rb_tree_node<types::IPPrefix> >&, unsigned long) /usr/include/c++/13/bits/alloc_traits.h:482
+    #4 0x555555c2debb in std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_M_get_node() /usr/include/c++/13/bits/stl_tree.h:563
+    #5 0x555555c2cf21 in std::_Rb_tree_node<types::IPPrefix>* std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_M_create_node<types::IPPrefix const&>(types::IPPrefix const&) /usr/include/c++/13/bits/stl_tree.h:613
+    #6 0x555555d75474 in std::_Rb_tree_node<types::IPPrefix>* std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_Alloc_node::operator()<types::IPPrefix const&>(types::IPPrefix const&) const /usr/include/c++/13/bits/stl_tree.h:531
+    #7 0x555555d74bcb in std::_Rb_tree_iterator<types::IPPrefix> std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_M_insert_<types::IPPrefix const&, std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_Alloc_node>(std::_Rb_tree_node_base*, std::_Rb_tree_node_base*, types::IPPrefix const&, std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_Alloc_node&) /usr/include/c++/13/bits/stl_tree.h:1831
+    #8 0x555555d742b7 in std::pair<std::_Rb_tree_iterator<types::IPPrefix>, bool> std::_Rb_tree<types::IPPrefix, types::IPPrefix, std::_Identity<types::IPPrefix>, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::_M_insert_unique<types::IPPrefix const&>(types::IPPrefix const&) /usr/include/c++/13/bits/stl_tree.h:2176
+    #9 0x555555d73c15 in std::set<types::IPPrefix, std::less<types::IPPrefix>, std::allocator<types::IPPrefix> >::insert(types::IPPrefix const&) /usr/include/c++/13/bits/stl_set.h:514
+    #10 0x555555d7d70f in operator() /home/erik/VirtualRouter/VirtualRouter/src/routing/eigrp/core/Topology.cpp:65
+    #11 0x555555d7dba7 in routing::eigrp::EigrpTopology::synchronizeConnected(routing::eigrp::EigrpInterface&) /home/erik/VirtualRouter/VirtualRouter/src/routing/eigrp/core/Topology.cpp:76
+    #12 0x555555d76d9b in routing::eigrp::InterfaceManager::createInterface(interface::Interface*) /home/erik/VirtualRouter/VirtualRouter/src/routing/eigrp/core/InterfaceManager.cpp:60
+    #13 0x555555d77841 in routing::eigrp::InterfaceManager::refreshInterfaceList() /home/erik/VirtualRouter/VirtualRouter/src/routing/eigrp/core/InterfaceManager.cpp:166
+    #14 0x555555d653bd in routing::eigrp::Eigrp::refreshInterfaceList() /home/erik/VirtualRouter/VirtualRouter/src/routing/eigrp/core/Eigrp.cpp:101
+    #15 0x555555c2e49e in operator() /home/erik/VirtualRouter/VirtualRouter/src/configs/registry/router/EigrpRegistry.cpp:13
+    #16 0x555555c2f0fd in operator() /home/erik/VirtualRouter/VirtualRouter/src/core/ControlScheduler.h:566
+    #17 0x555555c344b5 in operator() /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:93
+    #18 0x555555c344d9 in _FUN /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:93
+    #19 0x555555a8fe5b in core::ThreadPool::Task::run() /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:100
+    #20 0x555555c407f5 in core::ControlScheduler::SubQueue::tryConsumeOne(bool) /home/erik/VirtualRouter/VirtualRouter/src/core/ControlScheduler.cpp:102
+    #21 0x555555c4354f in core::ControlScheduler::drainProcessQueue(unsigned int, unsigned int) /home/erik/VirtualRouter/VirtualRouter/src/core/ControlScheduler.cpp:633
+    #22 0x555555c2faee in operator() /home/erik/VirtualRouter/VirtualRouter/src/core/ControlScheduler.h:541
+    #23 0x555555c345ff in operator() /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:93
+    #24 0x555555c34623 in _FUN /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:93
+    #25 0x555555a8fe5b in core::ThreadPool::Task::run() /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:100
+    #26 0x555555a90679 in core::ThreadPool::consumeOne() /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:282
+    #27 0x555555a90418 in core::ThreadPool::workerLoop() /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:245
+    #28 0x555555a8ffac in core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}::operator()() const /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:143
+    #29 0x555555af7577 in void std::__invoke_impl<void, core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}>(std::__invoke_other, core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}&&) /usr/include/c++/13/bits/invoke.h:61
+    #30 0x555555af5dfe in std::__invoke_result<core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}>::type std::__invoke<core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}>(core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}&&) /usr/include/c++/13/bits/invoke.h:96
+    #31 0x555555aef245 in void std::thread::_Invoker<std::tuple<core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}> >::_M_invoke<0ul>(std::_Index_tuple<0ul>) /usr/include/c++/13/bits/std_thread.h:292
+
+Thread T459 created by T0 here:
+    #0 0x7ffff78f51f9 in pthread_create ../../../../src/libsanitizer/asan/asan_interceptors.cpp:245
+    #1 0x7ffff6eeceb0 in std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State> >, void (*)()) (/lib/x86_64-linux-gnu/libstdc++.so.6+0xeceb0) (BuildId: 753c6c8608b61d4e67be8f0c890e03e0aa046b8b)
+    #2 0x555555ac6f40 in std::thread::thread<core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}, , void>(core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}&&) /usr/include/c++/13/bits/std_thread.h:164
+    #3 0x555555abc1b9 in decltype (::new ((void*)(0)) std::thread((declval<core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}>)())) std::construct_at<std::thread, core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}>(std::thread*, core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}&&) /usr/include/c++/13/bits/stl_construct.h:97
+    #4 0x555555aa4cb3 in void std::allocator_traits<std::allocator<std::thread> >::construct<std::thread, core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}>(std::allocator<std::thread>&, std::thread*, core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}&&) /usr/include/c++/13/bits/alloc_traits.h:540
+    #5 0x555555aa4cb3 in std::thread& std::vector<std::thread, std::allocator<std::thread> >::emplace_back<core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}>(core::ThreadPool::ThreadPool(unsigned long, unsigned long)::{lambda()#1}&&) /usr/include/c++/13/bits/vector.tcc:117
+    #6 0x555555a9023f in core::ThreadPool::ThreadPool(unsigned long, unsigned long) /home/erik/VirtualRouter/VirtualRouter/src/core/ThreadPool.hpp:143
+    #7 0x555555c47b7f in core::Global::Global(cli::FileSystem&, cli::StartupFiles const&, bool, bool) /home/erik/VirtualRouter/VirtualRouter/src/core/Global.cpp:28
+    #8 0x5555559ffd38 in Internal_EigrpTest::SetUp() /home/erik/VirtualRouter/Tests/Internal/src/EigrpTest.cpp:64
+    #9 0x555555ff8c9e in void testing::internal::HandleExceptionsInMethodIfSupported<testing::Test, void>(testing::Test*, void (testing::Test::*)(), char const*) (/home/erik/VirtualRouter/build/TestSelection+0xaa4c9e) (BuildId: 83b14004b81fc12968d82f33d22623e386006d4c)
+
+SUMMARY: AddressSanitizer: double-free ../../../../src/libsanitizer/asan/asan_new_delete.cpp:164 in operator delete(void*, unsigned long)
+==81291==ABORTING

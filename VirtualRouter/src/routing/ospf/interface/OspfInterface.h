@@ -238,9 +238,9 @@ public:
     bool floodReduction = false;           ///< Whether flood reduction (RFC 2328 §G.2) is active.
 
 private:
-    PacketDispatcher* dispatcher = nullptr; ///< Version-specific packet dispatcher; allocated at construction.
-
     OspfProcess& process;
+
+    PacketDispatcher* dispatcher = nullptr; ///< Version-specific packet dispatcher; allocated at construction.
     Area& area;
 
     InterfaceFlagManager flags;    ///< Event flags (e.g. DR changed, neighbor state changed).

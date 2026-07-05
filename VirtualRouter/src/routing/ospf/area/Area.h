@@ -465,8 +465,6 @@ protected:
     SpfManager spfMgr;     ///< Dijkstra SPF engine for this area.
     AreaFlagManager flags;  ///< Tracks area-type flags (stub, NSSA, etc.) and propagates changes.
     FloodManager floodMgr; ///< Manages reliable LSA flooding within this area.
-
-    Originator& originator; ///< LSA originator shared with the owning process (Router LSA, Network LSA, etc.).
 private:
     bool onNewLsa();
     void ignoreLsa();
@@ -495,6 +493,7 @@ private:
 
 public:
     core::ProcessQueueRef scheduler; ///< Reference to the owning process scheduler; all area work is serialized through this.
+    Originator& originator; ///< LSA originator shared with the owning process (Router LSA, Network LSA, etc.).
 
     const config::ospf::AreaType type;   ///< Area type (backbone, stub, NSSA, etc.); immutable after construction.
     const uint32_t areaId;               ///< 32-bit OSPF area identifier (host byte order); immutable after construction.

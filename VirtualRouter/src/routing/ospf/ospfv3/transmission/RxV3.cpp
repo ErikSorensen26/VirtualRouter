@@ -19,12 +19,17 @@
 
 namespace routing::ospf
 {
+// Recomputes the checksum over bytes [2, len) (skipping the 2-byte Age field) with the
+// 2-byte checksum field (at LSA offset 16-17) treated as zero — matching how the
+// checksum was originally computed — then compares against the value on the wire.
 static bool verifyOspfFletcher(const uint8_t* lsa, uint16_t len)
 {
     if (len < 20) return false;
     ChecksumFletcher check;
-    check.addBytes(lsa + 2, len - 2);
-    return check.finalize() == 0;
+    check.addBytes(lsa + 2, 14);   // type..seqNum (LSA offset 2..15)
+    check.addU16(0);               // checksum field (LSA offset 16..17), treated as zero
+    check.addBytes(lsa + 18, len - 18); // length..end of body (LSA offset 18..len-1)
+    return check.finalize() == utils::readU16(lsa + 16);
 }
 
 void PacketDispatcherV3::handleIncoming(const packet::Ospfv3Header& ospfHeader, const uint8_t* neighborIp, bool multicast)
@@ -52,7 +57,8 @@ void PacketDispatcherV3::handleIncoming(const packet::Ospfv3Header& ospfHeader, 
     size_t packetSize = packet::Ospfv3Header::fixedSize + ospfHeader.getTrail().size();
     if (ospfHeader.getPacketLen() > packetSize) return;
 
-    HeaderInfo info(ospfHeader.getTrail().data(), packetSize, ospfHeader.getPacketLen(), 0, neigIp, rid);
+    HeaderInfo info(ospfHeader.getTrail().data(), packetSize,
+        static_cast<uint16_t>(ospfHeader.getPacketLen() - packet::Ospfv3Header::fixedSize), 0, neigIp, rid);
     info.neighbor = iface.getNTable().lookup(rid);
 
     {
@@ -137,8 +143,8 @@ void PacketDispatcherV3::processHello(PacketDispatcher::HeaderInfo& info, bool u
         return;
 
     // Validate timers — if mismatch, tear down an existing neighbor; for unknown neighbors just drop
-    if (hdr.getHelloInterval() != ifaceConfigs.get<config::OspfInterface::HELLO_INTERVAL>().load() ||
-        hdr.getDeadInterval() != ifaceConfigs.get<config::OspfInterface::DEAD_INTERVAL>().load())
+    if (hdr.getHelloInterval() != static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(iface.helloTime).count()) ||
+        hdr.getDeadInterval() != static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(iface.deadTime).count()))
     {
         if (info.neighbor)
             info.neighbor->setState(Neighbor::State::DOWN);
@@ -152,6 +158,7 @@ void PacketDispatcherV3::processHello(PacketDispatcher::HeaderInfo& info, bool u
     if (!info.neighbor)
     {
         info.neighbor = ntable.createNeighbor(info.rid, info.neighborIp, unicast);
+        info.neighbor->setState(Neighbor::State::INIT);
     }
     else if (unicast)
     {
@@ -185,9 +192,17 @@ void PacketDispatcherV3::processHello(PacketDispatcher::HeaderInfo& info, bool u
         }
 
         // Handle two way
-        if (!ridFound) return;
-        if (ridFound && info.neighbor->getState() == Neighbor::State::INIT)
-            info.neighbor->setState(Neighbor::State::TWOWAY);
+        if (ridFound)
+        {
+            // Bidirectional comminication established
+            if (info.neighbor->getState() == Neighbor::State::INIT)
+                info.neighbor->setState(Neighbor::State::TWOWAY);
+        }
+        else if (info.neighbor->getState() > Neighbor::State::INIT)
+        {
+            // No bidirectional communication established
+            info.neighbor->setState(Neighbor::State::INIT);
+        }
     }
     else if (info.neighbor->getState() == Neighbor::State::INIT)
     {
@@ -274,8 +289,8 @@ void PacketDispatcherV3::processDBD(PacketDispatcher::HeaderInfo& info)
             return;
 
         Neighbor::Role role = info.neighbor->routerID > iface.getProcess().getRouterId()
-            ? Neighbor::Role::MASTER
-            : Neighbor::Role::SLAVE;
+            ? Neighbor::Role::SLAVE
+            : Neighbor::Role::MASTER;
         info.neighbor->setRole(role);
 
         if (role == Neighbor::Role::SLAVE)
@@ -322,17 +337,17 @@ void PacketDispatcherV3::processDBD(PacketDispatcher::HeaderInfo& info)
                 rtr.lsrs().add(key, key);
         }
 
-        if ((info.neighbor->currentDbd.has_value() || hdr.getFlagM()) || info.neighbor->getRole() == Neighbor::Role::SLAVE)
-        {
-            sendDBD(*info.neighbor);
-        }
-        else
-        {
-            if (info.neighbor->getRole() == Neighbor::Role::SLAVE)
-                sendDBD(*info.neighbor); // Respond to MASTER even if no lsas to process
+        bool peerHasMore = hdr.getFlagM();
 
-            // Move to LOADING
-            info.neighbor->setState(Neighbor::State::LOADING); 
+        // Slave must ack every Master DBD, including the final empty one.
+        // Master only needs to reply while it still has more to describe.
+        if (info.neighbor->getRole() == Neighbor::Role::SLAVE || info.neighbor->currentDbd.has_value())
+            sendDBD(*info.neighbor);
+
+        if (!peerHasMore && !info.neighbor->currentDbd.has_value())
+        {
+            // Both sides have fully described their databases.
+            info.neighbor->setState(Neighbor::State::LOADING);
         }
     }
 

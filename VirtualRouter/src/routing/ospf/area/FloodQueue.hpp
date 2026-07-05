@@ -96,7 +96,7 @@ public:
     {
         while (true)
         {
-            const size_t available = count.load(std::memory_order_acq_rel);
+            const size_t available = count.load(std::memory_order_acquire);
             if (available == 0)
                 return {};
 
@@ -105,9 +105,9 @@ public:
             size_t k = 0;
             for (; k < available; ++k)
             {
-                Slot& slot = slots[(head + k) % cap];
+                Slot& slot = slots[(localHead + k) % cap];
                 const size_t seq = slot.seq.load(std::memory_order_acquire);
-                const size_t expected = (head + k) + 1;
+                const size_t expected = (localHead + k) + 1;
                 if (seq != expected)
                     break;
             }
@@ -125,7 +125,7 @@ public:
 
             for (size_t i = 0; i < k; ++i)
             {
-                const size_t pos = head + i;
+                const size_t pos = localHead + i;
                 Slot& slot = slots[pos % cap];
 
                 LsaRecordRef* p = slot.ptr();
@@ -168,10 +168,10 @@ private:
 
         while (true)
         {
-            Slot& slot = slots[tail % cap];
+            Slot& slot = slots[localTail % cap];
             const size_t seq = slot.seq.load(std::memory_order_acquire);
 
-            const intptr_t dif = static_cast<intptr_t>(seq) - static_cast<intptr_t>(tail);
+            const intptr_t dif = static_cast<intptr_t>(seq) - static_cast<intptr_t>(localTail);
 
             if (dif == 0)
             {
@@ -180,8 +180,8 @@ private:
                     ::new (static_cast<void*>(slot.storage))
                         LsaRecordRef(std::forward<T>(req));
 
-                    slot.seq.store(tail + 1, std::memory_order_release);
                     slot.info = r;
+                    slot.seq.store(localTail + 1, std::memory_order_release);
                     count.fetch_add(1, std::memory_order_release);
                     return true;
                 }

@@ -9,6 +9,7 @@
 #include "ospf/database/LSDB.hpp"
 
 namespace core { class ProcessQueueRef; }
+class Internal_OspfTest;
 
 namespace routing::ospf
 {
@@ -68,6 +69,7 @@ class Neighbor;
  */
 class Originator
 {
+    friend class ::Internal_OspfTest;
 public:
 
     /**
@@ -215,7 +217,7 @@ protected:
     struct OriginationInfo
     {
         LsaThrottleState throttleInfo;
-        LsaBody body;
+        LsaBody body = std::monostate{};
         bool refresh = false; ///< True if this pending origination is a periodic refresh (body unchanged).
         bool expire  = false; ///< True if this pending origination should flush the LSA (MaxAge).
     };

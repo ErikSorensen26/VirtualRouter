@@ -53,7 +53,8 @@ void OriginatorV2::addRouterLsa(std::optional<uint32_t> ifaceId, bool refresh, b
 
     auto& info = originationState[key];
     LsaBody lsa = info.body;
-    RouterLsaV2 oldLsa = std::get<RouterLsaV2>(lsa);
+    RouterLsaV2 oldLsa = std::holds_alternative<std::monostate>(lsa)
+        ? RouterLsaV2{} : std::get<RouterLsaV2>(lsa);
     lsa = RouterLsaV2{};
     RouterLsaV2& router = std::get<RouterLsaV2>(lsa);
 

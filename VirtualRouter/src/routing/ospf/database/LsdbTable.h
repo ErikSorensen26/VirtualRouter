@@ -360,6 +360,7 @@ template <typename Fn>
 inline void LsdbTable::forEachInType(uint32_t type, Fn&& fn) const
 {
     auto it = typeDb.find(type);
+    if (it == typeDb.end()) return;
     for (const auto& kv : it->second)
         if (kv.second)
             fn(kv.first, *kv.second);

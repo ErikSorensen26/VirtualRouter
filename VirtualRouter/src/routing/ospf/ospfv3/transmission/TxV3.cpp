@@ -255,7 +255,6 @@ std::optional<processing::PacketBuilder> PacketDispatcherV3::buildLSUpdate(Neigh
     builder.offset += 2;
 
     auto updSent = addLSUpdates(builder, nbr);
-    if (sent == 0) return std::nullopt;
     utils::writeU16(trail, static_cast<uint16_t>(updSent));
     if (updSent == 0)
     {
@@ -284,7 +283,7 @@ std::optional<packet::Ospfv3Header> PacketDispatcherV3::buildHeader(processing::
     return ospf;
 }
 
-std::optional<packet::Ospfv3HelloHeader> PacketDispatcherV3::buildHello(OspfBuilder builder, bool lls)
+std::optional<packet::Ospfv3HelloHeader> PacketDispatcherV3::buildHello(OspfBuilder& builder, bool lls)
 {
     if (!builder.hasRoom(packet::Ospfv3HelloHeader::fixedSize))
         return std::nullopt;
@@ -294,20 +293,19 @@ std::optional<packet::Ospfv3HelloHeader> PacketDispatcherV3::buildHello(OspfBuil
     hello.setBuffer(builder.getBuf());
 
     hello.setInterfaceID(iface.interfaceId);
-    hello.setHelloInterval(iface.getConfigs().get<config::OspfInterface::HELLO_INTERVAL>().load());
+    hello.setHelloInterval(static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(iface.helloTime).count()));
 
     uint8_t options = static_cast<uint8_t>(iface.getFlags().getFlags());
     if (lls) options |= 0x10;
     hello.setOptions(options);
 
     hello.setRouterPriority(iface.getConfigs().get<config::OspfInterface::PRIORITY>().load());
-    hello.setDeadInterval(iface.getConfigs().get<config::OspfInterface::DEAD_INTERVAL>().load());
+    hello.setDeadInterval(static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(iface.deadTime).count()));
     hello.setDrID(static_cast<uint32_t>(iface.dr.rid.load(std::memory_order_relaxed)));
     hello.setBdrID(static_cast<uint32_t>(iface.bdr.rid.load(std::memory_order_relaxed)));
 
     auto ntype = iface.getConfigs().get<config::OspfInterface::NETWORK>().load();
-    if (ntype == config::ospf::NetworkType::BROADCAST ||
-        ntype == config::ospf::NetworkType::NON_BROADCAST)
+    if (ntype == config::ospf::NetworkType::BROADCAST || ntype == config::ospf::NetworkType::NON_BROADCAST)
     {
         auto result = ntable.addNeighborList(builder.getBuf(), builder.maxSize - builder.offset);
         if (!result.has_value()) return std::nullopt;
@@ -326,11 +324,11 @@ std::optional<packet::Ospfv3DBDHeader> PacketDispatcherV3::buildDBD(OspfBuilder&
     packet::Ospfv3DBDHeader dbd;
     dbd.setBuffer(builder.getBuf());
 
-    uint8_t options = static_cast<uint8_t>(iface.getFlags().getFlags());
+    uint32_t options = iface.getFlags().getFlags();
     if (lls) options |= 0x10;
-    dbd.setFlagI(options);
+    dbd.setOptions(options);
 
-    dbd.setMtu(iface.getIface().configs.ipv4.mtu.load(std::memory_order_relaxed));
+    dbd.setMtu(iface.getIface().configs.ipv6.mtu.load(std::memory_order_relaxed));
     dbd.setSequence(nbr.currentSeq.load(std::memory_order_relaxed));
 
     return dbd;

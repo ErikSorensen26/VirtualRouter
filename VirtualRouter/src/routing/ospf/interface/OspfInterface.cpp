@@ -19,7 +19,7 @@ auto getIfaceAddr(interface::Interface& iface, types::AddressFamily af) -> types
 {
     if (af == types::AddressFamily::IPv4)
     {
-        auto pfx = iface.configs.ipv4.getPrimaryPrefix();
+        auto pfx = iface.configs.ipv4.getPrimaryPrefix(true);
         return types::IPPrefix(pfx.addr, pfx.prefixLength, true);
     }
     else
@@ -35,10 +35,10 @@ OspfInterface::OspfInterface(OspfProcess& proc, interface::Interface& iface, con
     : id(id),
       interfaceId(iface.configs.key.getId()),
       interfaceAddress(getIfaceAddr(iface, proc.getAF())),
+      process(proc),
       dispatcher(proc.isV3
           ? static_cast<PacketDispatcher*>(new PacketDispatcherV3(*this))
           : static_cast<PacketDispatcher*>(new PacketDispatcherV2(*this))),
-      process(proc),
       area(process.insureArea(id.area)),
       flags(*this),
       lsaFlags(*this),
@@ -99,6 +99,20 @@ void OspfInterface::calculateCost()
 
 bool OspfInterface::setDr(uint32_t candDr)
 {
+    if (candDr == 0)
+    {
+        dr.rid.store(0, std::memory_order_release);
+        dr.ip.store(0, std::memory_order_release);
+        return true;
+    }
+
+    if (candDr == getArea().process().getRouterId())
+    {
+        dr.rid.store(candDr, std::memory_order_release);
+        dr.ip.store(interfaceAddress.addr, std::memory_order_release);
+        return true;
+    }
+
     auto* nbr = ntable.lookup(candDr);
     if (!nbr) return false;
 
@@ -109,6 +123,20 @@ bool OspfInterface::setDr(uint32_t candDr)
 
 bool OspfInterface::setBdr(uint32_t candBdr)
 {
+    if (candBdr == 0)
+    {
+        bdr.rid.store(0, std::memory_order_release);
+        bdr.ip.store(0, std::memory_order_release);
+        return true;
+    }
+
+    if (candBdr == getArea().process().getRouterId())
+    {
+        bdr.rid.store(candBdr, std::memory_order_release);
+        bdr.ip.store(interfaceAddress.addr, std::memory_order_release);
+        return true;
+    }
+
     auto* nbr = ntable.lookup(candBdr);
     if (!nbr) return false;
 
@@ -120,28 +148,36 @@ bool OspfInterface::setBdr(uint32_t candBdr)
 void OspfInterface::election()
 {
     // RFC 2328 §9.4 — two-pass DR/BDR election
-    struct Candidate { uint32_t rid; uint8_t priority; uint32_t claimedDr; uint32_t claimedBdr; };
+    struct Candidate {
+        uint32_t rid;
+        uint8_t priority;
+        uint32_t claimedDr;
+        uint32_t claimedBdr;
+    };
 
     uint32_t selfRid  = getArea().process().getRouterId();
     uint8_t  selfPrio = configs.get<config::OspfInterface::PRIORITY>().load();
 
-    // Build candidate list: self + all >= 2-way neighbors with priority > 0
+    const uint32_t prevDr = dr.rid.load(std::memory_order_relaxed);
+    const uint32_t prevBdr = dr.rid.load(std::memory_order_relaxed);
+    const bool wasDr  = (prevDr  == selfRid);
+    const bool wasBdr = (prevBdr == selfRid);
+
     std::vector<Candidate> eligible;
+    eligible.reserve(ntable.neighbors.size() + 1);
 
     if (selfPrio > 0)
-    {
-        eligible.push_back({
-            selfRid, selfPrio,
-            dr.rid.load(std::memory_order_relaxed),
-            bdr.rid.load(std::memory_order_relaxed)
-        });
-    }
+        eligible.push_back({ selfRid, selfPrio, prevDr, prevBdr });
 
     for (const auto& [rid, nbr] : ntable.neighbors)
     {
-        if (nbr.getState() < Neighbor::State::TWOWAY) continue;
+        if (nbr.getState() < Neighbor::State::TWOWAY)
+            continue;
+
         uint8_t prio = nbr.priority.load(std::memory_order_relaxed);
-        if (prio == 0) continue;
+        if (prio == 0)
+            continue;
+
         eligible.push_back({
             rid, prio,
             nbr.dr.load(std::memory_order_relaxed),
@@ -149,91 +185,105 @@ void OspfInterface::election()
         });
     }
 
-    if (eligible.empty()) return;
+    if (eligible.empty())
+    {
+        setDr(0);
+        setBdr(0);
+        isDr.store(false, std::memory_order_release);
+        isBdr.store(false, std::memory_order_release);
+        if (prevDr != 0 || prevBdr != 0)
+            area.getOriginator().updateInterface(interfaceId);
+        return;
+    }
 
     // Higher priority wins; tie-break by higher RID
-    auto best = [](const Candidate& a, const Candidate& b) -> bool {
+    auto best = [](const Candidate& a, const Candidate& b) -> bool
+    {
         if (a.priority != b.priority) return a.priority > b.priority;
         return a.rid > b.rid;
     };
 
-    auto runElection = [&](uint32_t prevDr, uint32_t prevBdr) -> std::pair<uint32_t,uint32_t>
+    auto runElection = [&]() -> std::pair<uint32_t,uint32_t>
     {
         // Step 1: Elect BDR
-        // Among eligible NOT declaring themselves DR, find highest prio/RID that claims BDR.
-        // If none claim BDR, take the highest prio/RID not claiming DR.
-        const Candidate* newBdrCand = nullptr;
-        const Candidate* fallbackBdrCand = nullptr;
+        const Candidate* declaredBdr = nullptr;
+        const Candidate* fallbackBdr = nullptr;
 
         for (const auto& c : eligible)
         {
-            bool selfIsDr = (c.claimedDr == c.rid);
-            if (selfIsDr) continue;  // Can't be BDR if claiming DR
-
-            bool selfIsBdr = (c.claimedBdr == c.rid);
-
-            if (selfIsBdr)
+            if (c.claimedBdr == c.rid)
+                continue;
+            if (c.claimedBdr == c.rid)
             {
-                if (!newBdrCand || best(c, *newBdrCand))
-                    newBdrCand = &c;
+                if (!declaredBdr || best(c, *declaredBdr))
+                    declaredBdr = &c;
             }
-            if (!fallbackBdrCand || best(c, *fallbackBdrCand))
-                fallbackBdrCand = &c;
+            if (!fallbackBdr || best(c, *fallbackBdr))
+                fallbackBdr = &c;
         }
 
-        uint32_t newBdr = newBdrCand ? newBdrCand->rid
-                        : (fallbackBdrCand ? fallbackBdrCand->rid : 0);
+        const uint32_t newBdr = declaredBdr ? declaredBdr->rid
+                              : fallbackBdr ? fallbackBdr->rid
+                              : 0;
 
         // Step 2: Elect DR
-        // Among eligible declaring themselves DR, take highest prio/RID.
-        // If none, DR = BDR.
-        const Candidate* newDrCand = nullptr;
+        const Candidate* declaredDr = nullptr;
         for (const auto& c : eligible)
         {
             if (c.claimedDr == c.rid)
             {
-                if (!newDrCand || best(c, *newDrCand))
-                    newDrCand = &c;
+                if (!declaredDr || best(c, *declaredDr))
+                    declaredDr = &c;
             }
         }
 
-        uint32_t newDr = newDrCand ? newDrCand->rid : newBdr;
+        // If nobody declares itself DR, the newly elecvted BDR becomes DR.
+        uint32_t newDr = declaredDr ? declaredDr->rid : newBdr;
 
         return {newDr, newBdr};
     };
 
-    uint32_t prevDr  = dr.rid.load(std::memory_order_relaxed);
-    uint32_t prevBdr = bdr.rid.load(std::memory_order_relaxed);
+    auto setSelfClaims = [&](uint32_t asDr, uint32_t asBdr)
+    {
+        for (auto& c : eligible)
+        {
+            if (c.rid != selfRid)
+                continue;
+            c.claimedDr = asDr;
+            c.claimedBdr = asBdr;
+            return;
+        }
+    };
 
     // First pass
-    auto [newDr, newBdr] = runElection(prevDr, prevBdr);
+    auto [newDr, newBdr] = runElection();
 
-    // Update self's claims to reflect election result, then run a second pass
-    // so other candidates' views of us are updated (RFC 2328 §9.4 step 4)
-    bool selfIsDr  = (newDr  == selfRid);
-    bool selfIsBdr = (newBdr == selfRid);
-
-    for (auto& c : eligible)
+    // Step 4: repeat steps 2 & 3 only if OUR OWN status changed
+    if ((newDr == selfRid) != wasDr || (newBdr == selfRid) != wasBdr)
     {
-        if (c.rid == selfRid)
-        {
-            c.claimedDr  = selfIsDr  ? selfRid : 0;
-            c.claimedBdr = selfIsBdr ? selfRid : 0;
-            break;
-        }
+        if (newDr == selfRid)
+            setSelfClaims(selfRid, 0);
+        else if (newBdr == selfRid)
+            setSelfClaims(0, selfRid);
+        else
+            setSelfClaims(0, 0);
+
+        std::tie(newDr, newBdr) = runElection();
     }
 
-    // Second pass to stabilize
-    auto [finalDr, finalBdr] = runElection(newDr, newBdr);
+    const uint32_t finalDr = newDr;
+    const uint32_t finalBdr = newBdr;
 
-    bool drChanged  = (finalDr  != prevDr);
-    bool bdrChanged = (finalBdr != prevBdr);
+    const bool drChanged  = (finalDr  != prevDr);
+    const bool bdrChanged = (finalBdr != prevBdr);
 
     setDr(finalDr);
     setBdr(finalBdr);
 
-    isDr.store(finalDr  == selfRid, std::memory_order_release);
-    isBdr.store(finalBdr == selfRid, std::memory_order_release);
+    const bool amDr  = (finalDr  == selfRid);
+    const bool amBdr = (finalBdr == selfRid);
+    isDr.store(amDr, std::memory_order_release);
+    isBdr.store(amBdr, std::memory_order_release);
 
     // If DR/BDR changed, trigger neighbor transitions and router LSA rebuild
     if (drChanged || bdrChanged)
@@ -241,8 +291,15 @@ void OspfInterface::election()
         // Neighbors that were TWOWAY and are now DR or BDR eligible need EXSTART
         for (auto& [rid, nbr] : ntable.neighbors)
         {
-            if (nbr.getState() == Neighbor::State::TWOWAY)
+            if (nbr.getState() < Neighbor::State::TWOWAY)
+                continue;
+            const bool adjacencyNeeded =
+                amDr || amBdr || rid == finalDr || rid == finalBdr;
+
+            if (adjacencyNeeded && nbr.getState() == Neighbor::State::TWOWAY)
                 nbr.setState(Neighbor::State::EXSTART);
+            else if (!adjacencyNeeded && nbr.getState() > Neighbor::State::TWOWAY)
+                nbr.setState(Neighbor::State::TWOWAY);
         }
 
         area.getOriginator().updateInterface(interfaceId);
@@ -283,12 +340,16 @@ void OspfInterface::syncTimers()
                 ht = OSPF_MU_HELLO_TIME;
             else
                 ht = OSPF_HELLO_TIME;
+            helloTimer.set(ht);
         }
 
         if (deadTimer.hasValue())
             dt = deadTimer.load();
         else
+        {
             dt = ht * 4;
+            deadTimer.set(dt);
+        }
 
         helloTime = std::chrono::seconds(ht);
         deadTime = std::chrono::seconds(dt);

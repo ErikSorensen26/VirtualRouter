@@ -29,7 +29,10 @@ void PacketDispatcherV2::finalizeHeader(packet::Ospfv2Header& hdr, OspfBuilder& 
 {
     hdr.setPacketLen(static_cast<uint16_t>(builder.offset + packet::Ospfv2Header::fixedSize));
 
-    config::ospf::AuthType auth = getConfigs().get<config::OspfInterfaceBase::AUTHENTICATION_TYPE>().load();
+    auto authField = getConfigs().get<config::OspfInterfaceBase::AUTHENTICATION_TYPE>();
+    config::ospf::AuthType auth = authField.hasValue()
+        ? authField.load() : config::ospf::AuthType::NULL_AUTH;
+
     if (auth == config::ospf::AuthType::CRYPTO)
     {
         auto& id = iface.authKeyId;
@@ -287,7 +290,6 @@ std::optional<processing::PacketBuilder> PacketDispatcherV2::buildLSUpdate(Neigh
     builder.offset += 2;
 
     auto updSent = addLSUpdates(builder, nbr);
-    if (sent == 0) return std::nullopt;
     utils::writeU16(trail, static_cast<uint16_t>(updSent));
     if (updSent == 0)
     {
@@ -305,7 +307,7 @@ std::optional<packet::Ospfv2Header> PacketDispatcherV2::buildHeader(processing::
 {
     infrastructure::ippacket::reserveIpv4(pkt);
 
-    packet::Ospfv2Header ospf = pkt.reserveAndBuildHeader<packet::Ospfv2Header>(packet::HeaderType::IPV4);
+    packet::Ospfv2Header ospf = pkt.reserveAndBuildHeader<packet::Ospfv2Header>(packet::HeaderType::OSPFV2);
     if (!ospf.buffer) return std::nullopt;
 
     ospf.setVersion(OSPFV2_VERSION);
@@ -316,7 +318,7 @@ std::optional<packet::Ospfv2Header> PacketDispatcherV2::buildHeader(processing::
     return ospf;
 }
 
-std::optional<packet::Ospfv2HelloHeader> PacketDispatcherV2::buildHello(OspfBuilder builder, bool lls)
+std::optional<packet::Ospfv2HelloHeader> PacketDispatcherV2::buildHello(OspfBuilder& builder, bool lls)
 {
     if (!builder.hasRoom(packet::Ospfv2HelloHeader::fixedSize))
         return std::nullopt;
@@ -326,14 +328,14 @@ std::optional<packet::Ospfv2HelloHeader> PacketDispatcherV2::buildHello(OspfBuil
     hello.setBuffer(builder.getBuf());
 
     hello.setMask(iface.interfaceAddress.getMask());
-    hello.setHelloInterval(iface.getConfigs().get<config::OspfInterface::HELLO_INTERVAL>().load());
+    hello.setHelloInterval(static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(iface.helloTime).count()));
 
     uint8_t options = static_cast<uint8_t>(iface.getFlags().getFlags());
     if (lls) options |= 0x10;
     hello.setOptions(options);
 
     hello.setPriority(iface.getConfigs().get<config::OspfInterface::PRIORITY>().load());
-    hello.setDeadInterval(iface.getConfigs().get<config::OspfInterface::DEAD_INTERVAL>().load());
+    hello.setDeadInterval(static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(iface.deadTime).count()));
     hello.setDR(static_cast<uint32_t>(iface.dr.rid.load(std::memory_order_relaxed)));
     hello.setBDR(static_cast<uint32_t>(iface.bdr.rid.load(std::memory_order_relaxed)));
 
@@ -360,7 +362,7 @@ std::optional<packet::Ospfv2DBDHeader> PacketDispatcherV2::buildDBD(OspfBuilder&
 
     uint8_t options = static_cast<uint8_t>(iface.getFlags().getFlags());
     if (lls) options |= 0x10;
-    dbd.setFlagI(options);
+    dbd.setOptions(options);
 
     dbd.setMtu(iface.getIface().configs.ipv4.mtu.load(std::memory_order_relaxed));
     dbd.setSequence(nbr.currentSeq.load(std::memory_order_relaxed));

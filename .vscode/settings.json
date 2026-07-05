@@ -98,5 +98,7 @@
         "__debug": "cpp",
         "locale": "cpp"
     },
-    "cmake.sourceDirectory": "/home/erik/VirtualRouter"
+    "cmake.sourceDirectory": "/home/erik/VirtualRouter",
+    "cmake.generator": "Unix Makefiles",
+    "cmake.buildArgs": ["-j", "10"]
 }

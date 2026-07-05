@@ -12,6 +12,7 @@ class Internal_CliTest;
 #include <cli/runtime/Configs.h>
 #include <cli/modes/Mode.hpp>
 #include <core/Global.h>
+#include <configs/registry/global/GlobalRegistry.h>
 
 using json = nlohmann::ordered_json;
 

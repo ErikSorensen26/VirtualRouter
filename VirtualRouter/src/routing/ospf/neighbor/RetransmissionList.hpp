@@ -111,7 +111,7 @@ public:
 
         outbound.emplace_back(std::move(record));
         outboundKeys.emplace_back(key);
-        outboundInfo.emplace(key, OutboundInfo{outbound.size(), 0});
+        outboundInfo.emplace(key, OutboundInfo{outbound.size() - 1, 0});
         return true;
     }
 
@@ -135,7 +135,7 @@ public:
 
         outbound.emplace_back(record);
         outboundKeys.emplace_back(key);
-        outboundInfo.emplace(key, OutboundInfo{outbound.size(), 0});
+        outboundInfo.emplace(key, OutboundInfo{outbound.size() - 1, 0});
         return true;
     }
 
@@ -160,6 +160,8 @@ public:
     {
         auto it = outboundInfo.find(key);
         if (it == outboundInfo.end())
+            return std::nullopt;
+        if (it->second.index >= outbound.size())
             return std::nullopt;
         return outbound[it->second.index];
     }
@@ -328,9 +330,12 @@ private:
      */
     uint8_t getMaxRetransmission()
     {
-        return iface.getConfigs().get<config::OspfInterface::DEMAND_CIRCUIT>().load()
-            ? process.getConfigs().get<config::Ospf::RETRANSMISSION_DC_LIMIT>().load()
-            : process.getConfigs().get<config::Ospf::RETRANSMISSION_NON_DC_LIMIT>().load();
+        static constexpr uint8_t kDefaultMaxRetransmission = 5;
+
+        auto limit = iface.getConfigs().get<config::OspfInterface::DEMAND_CIRCUIT>().load()
+            ? process.getConfigs().get<config::Ospf::RETRANSMISSION_DC_LIMIT>()
+            : process.getConfigs().get<config::Ospf::RETRANSMISSION_NON_DC_LIMIT>();
+        return limit.hasValue() ? limit.load() : kDefaultMaxRetransmission;
     }
 
     size_t   cursor = 0;          ///< Index of the next entry to deliver in the current burst.

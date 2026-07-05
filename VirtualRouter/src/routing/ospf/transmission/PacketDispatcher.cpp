@@ -90,6 +90,7 @@ void PacketDispatcher::sendReliableLSUpdate(Neighbor* nbr, std::vector<std::pair
             if (!(filter || (floodReduction && info.reason == FloodReason::REFRESH)))
                 lsus.add(record.key, record);
         }
+        lsus.beginRetransmitBurst();
     }
     else
     {
@@ -98,6 +99,7 @@ void PacketDispatcher::sendReliableLSUpdate(Neighbor* nbr, std::vector<std::pair
             if (!(filter || (floodReduction && info.reason == FloodReason::REFRESH)))
                 multicastLsus.add(record.key, record);
         }
+        multicastLsus.beginRetransmitBurst();
 
         for (auto& [_, neighbor] : iface.getNTable().neighbors)
         {
@@ -107,6 +109,7 @@ void PacketDispatcher::sendReliableLSUpdate(Neighbor* nbr, std::vector<std::pair
                 if (!(filter || (floodReduction && info.reason == FloodReason::REFRESH)))
                     lsus.add(record.key, record);
             }
+            lsus.beginRetransmitBurst();
             iface.getTimers().startLsuRetransmissionTimer(neighbor);
         }
     }
