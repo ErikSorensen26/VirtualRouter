@@ -1,10 +1,10 @@
 /**
- * @file FlagManager.h
+ * @file FlagManager.hpp
  * @brief Per-area and per-interface OSPF options/flags bitfield managers.
  */
 
-#ifndef OSPF_FLAG_MANAGER_H
-#define OSPF_FLAG_MANAGER_H
+#ifndef OSPF_FLAG_MANAGER_HPP
+#define OSPF_FLAG_MANAGER_HPP
 
 #include <atomic>
 
@@ -191,7 +191,7 @@ public:
     }
 
     /** @brief Return a snapshot of the packed flags/options word. */
-    uint32_t getFlags()
+    uint32_t getFlags() const
     {
         return flags.load(std::memory_order_relaxed);
     }
@@ -239,20 +239,20 @@ public:
     static void setAuthTrailer(uint32_t& fgs, bool val)
         { flagmanager::setOption(fgs, static_cast<uint8_t>(V3Option::AUTH_TRAILER), val); }
 
-    bool getExternalRouting()
+    bool getExternalRouting() const
         { return flagmanager::testOption(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(Options::EXTERNAL_ROUTING)); }
-    bool getNssa()
+    bool getNssa() const
         { return flagmanager::testOption(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(Options::NSSA)); }
     static bool getExternalRouting(uint32_t fgs)
         { return flagmanager::testOption(fgs, static_cast<uint8_t>(Options::EXTERNAL_ROUTING)); }
     static bool getNssa(uint32_t fgs)
         { return flagmanager::testOption(fgs, static_cast<uint8_t>(Options::NSSA)); }
 
-    bool getMultiTopology()
+    bool getMultiTopology() const
         { return flagmanager::testOption(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(V2Option::MULTI_TOPOLOGY)); }
-    bool getExternalAttribute()
+    bool getExternalAttribute() const
         { return flagmanager::testOption(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(V2Option::EXTERNAL_ATTR)); }
-    bool getOpaque()
+    bool getOpaque() const
         { return flagmanager::testOption(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(V2Option::OPAQUE)); }
     static bool getMultiTopology(uint32_t fgs)
         { return flagmanager::testOption(fgs, static_cast<uint8_t>(V2Option::MULTI_TOPOLOGY)); }
@@ -261,15 +261,15 @@ public:
     static bool getOpaque(uint32_t fgs)
         { return flagmanager::testOption(fgs, static_cast<uint8_t>(V2Option::OPAQUE)); }
 
-    bool getV6()
+    bool getV6() const
         { return flagmanager::testOption(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(V3Option::V6)); }
-    bool getRouterBit()
+    bool getRouterBit() const
         { return flagmanager::testOption(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(V3Option::ROUTER_BIT)); }
-    bool getAddressFamilySupport()
+    bool getAddressFamilySupport() const
         { return flagmanager::testOption(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(V3Option::ADDRESS_FAMILY_SUPPORT)); }
-    bool getLBit()
+    bool getLBit() const
         { return flagmanager::testOption(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(V3Option::L_BIT)); }
-    bool getAuthTrailer()
+    bool getAuthTrailer() const
         { return flagmanager::testOption(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(V3Option::AUTH_TRAILER)); }
     static bool getV6(uint32_t fgs)
         { return flagmanager::testOption(fgs, static_cast<uint8_t>(V3Option::V6)); }
@@ -291,9 +291,9 @@ public:
     static void setAsbr(uint32_t& fgs, bool val)
         { flagmanager::setFlag(fgs, static_cast<uint8_t>(Flags::ASBR), val); }
 
-    bool getAbr()
+    bool getAbr() const
         { return flagmanager::testFlag(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(Flags::ABR)); }
-    bool getAsbr()
+    bool getAsbr() const
         { return flagmanager::testFlag(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(Flags::ASBR)); }
     static bool getAbr(uint32_t fgs)
         { return flagmanager::testFlag(fgs, static_cast<uint8_t>(Flags::ABR)); }
@@ -345,10 +345,11 @@ public:
      *        the interface configuration.
      * @param iface The owning OspfInterface.
      */
-    InterfaceFlagManager(OspfInterface& iface);
+    InterfaceFlagManager(AreaFlagManager& aFlags)
+        : areaFlags(aFlags) {}
 
     /** @brief Return a snapshot of the packed flags/options word. */
-    uint32_t getFlags();
+    uint32_t getFlags() { return areaFlags.getFlags() | flags.load(std::memory_order_relaxed); }
 
     void setMulticast(bool val)
         { flagmanager::setOption(flags, static_cast<uint8_t>(Options::MULTICAST), val); }
@@ -364,16 +365,16 @@ public:
     static void setPropagate(uint32_t& fgs, bool val)
         { flagmanager::setOption(fgs, static_cast<uint8_t>(v2Options::PROPAGATE), val); }
 
-    bool getMulticast()
+    bool getMulticast() const
         { return flagmanager::testOption(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(Options::MULTICAST)); }
-    bool getDemandCircuits()
+    bool getDemandCircuits() const
         { return flagmanager::testOption(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(Options::DEMAND_CIRCUITS)); }
     static bool getMulticast(uint32_t fgs)
         { return flagmanager::testOption(fgs, static_cast<uint8_t>(Options::MULTICAST)); }
     static bool getDemandCircuits(uint32_t fgs)
         { return flagmanager::testOption(fgs, static_cast<uint8_t>(Options::DEMAND_CIRCUITS)); }
 
-    bool getPropagate()
+    bool getPropagate() const
         { return flagmanager::testOption(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(v2Options::PROPAGATE)); }
     static bool getPropagate(uint32_t fgs)
         { return flagmanager::testOption(fgs, static_cast<uint8_t>(v2Options::PROPAGATE)); }
@@ -387,9 +388,9 @@ public:
     static void setWildcard(uint32_t fgs, bool val)
         { flagmanager::setFlag(fgs, static_cast<uint8_t>(Flags::WILDCARD), val); }
 
-    bool getVLink()
+    bool getVLink() const
         { return flagmanager::testFlag(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(Flags::V_LINK)); }
-    bool getWildcard()
+    bool getWildcard() const
         { return flagmanager::testFlag(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(Flags::WILDCARD)); }
     static bool getVLink(uint32_t fgs)
         { return flagmanager::testFlag(fgs, static_cast<uint8_t>(Flags::V_LINK)); }
@@ -397,10 +398,9 @@ public:
         { return flagmanager::testFlag(fgs, static_cast<uint8_t>(Flags::WILDCARD)); }
 
 private:
-    Area& area;                      ///< The area that owns this interface.
+    AreaFlagManager& areaFlags;      ///< The flag manager in the area that this interface is apart of.
     std::atomic<uint32_t> flags;     ///< Packed options and interface-type flags.
 };
 } // namespace routing
 
-#endif
-
+#endif // OSPF_FLAG_MANAGER_HPP
