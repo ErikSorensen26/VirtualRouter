@@ -8,6 +8,7 @@
 
 #include <functional>
 #include <map>
+#include <unordered_map>
 #include <mutex>
 #include <thread>
 #include <chrono>
@@ -23,140 +24,112 @@ namespace core
  * @brief Deadline-based timer manager that dispatches expired callbacks via a @ref ThreadPool.
  * @ingroup CORE
  *
- * `TimeManager` maintains a sorted set of pending timers keyed by expiration time.
- * A dedicated internal thread (`timerThread`) sleeps until the next deadline, then
- * submits the callback to the shared `ThreadPool` for execution.
+ * A dedicated thread sleeps until the next deadline, then submits the callback
+ * to the pool. Supports one-shot, recurring, and limited-recurring (N ticks
+ * then a final callback) timers. All state is guarded by a single mutex.
  *
- * Supports three timer flavors:
- * - **One-shot**: fires once at an absolute time point.
- * - **Recurring**: fires repeatedly at a fixed interval until cancelled.
- * - **Limited recurring**: fires a fixed number of times, then invokes a final callback.
+ * The @ref ThreadPool must outlive this object. stopTimer() (called by the
+ * destructor) joins the worker thread and then waits for every callback
+ * already handed to the pool, so no callback can touch a destroyed instance.
  *
- * ## Lifecycle & Ownership
- * - Owned by @ref Global; must outlive all users.
- * - `stopTimer()` signals the worker thread and waits for it to exit; called from the destructor.
- *
- * ## Concurrency Model
- * - All internal state is guarded by a single `mutex`.
- * - Callbacks are dispatched to the `ThreadPool`, so they execute on pool threads, not
- *   the timer thread itself.
- * - `cancelTimer()` waits for the callback to complete if it is currently executing,
- *   using `timerDoneCV` to avoid a race between cancel and in-progress execution.
+ * @warning Do not call stopTimer() from within a timer callback; it waits for
+ * all in-flight callbacks (including the caller) and would deadlock.
  *
  * @see ControlScheduler
  */
 class TimeManager
 {
 public:
-    /**
-     * @brief Constructs a TimeManager and starts the internal timer thread.
-     * @ingroup CORE
-     * @param pool  ThreadPool to which expired timer callbacks are submitted.
-     */
+    /** @brief Starts the internal timer thread; callbacks dispatch to @p pool. */
     TimeManager(ThreadPool& pool);
 
-    /**
-     * @brief Stops the timer thread and cancels all pending timers.
-     *
-     * Waits for the worker thread to exit before returning.  Any currently
-     * executing callbacks are allowed to finish naturally.
-     */
+    /** @brief Stops the timer thread and waits for all in-flight callbacks. */
     ~TimeManager();
 
     /**
-     * @brief Registers a one-shot timer that fires at an absolute time point.
-     *
-     * @param expirationTime  Absolute `steady_clock` time point at which to fire.
-     * @param callback        Callback invoked with the timer's ID as its argument.
-     * @return Unique timer ID; pass to `cancelTimer()` to abort before firing.
+     * @brief Registers a one-shot timer firing at an absolute time point.
+     * @return Unique timer ID; pass to cancelTimer() to abort before firing.
      */
     uint32_t addTimer(std::chrono::steady_clock::time_point expirationTime, std::function<void(uint32_t)> callback);
 
     /**
-     * @brief Registers a recurring timer that fires `repeatCount` times then calls a final callback.
-     *
-     * @param interval       Interval between firings.
-     * @param repeatCount    Number of times `repeated` is invoked before `finalCallback`.
-     * @param repeated       Callback invoked on each interval tick; receives the timer ID.
-     * @param finalCallback  Optional callback invoked after the last tick; receives the timer ID.
+     * @brief Registers a timer that fires `repeated` every @p interval,
+     * `repeatCount` times, then invokes @p finalCallback (if any).
      * @return Unique timer ID.
      */
     uint32_t addLimitedRecurringTimer(std::chrono::milliseconds interval, size_t repeatCount, std::function<void(uint32_t)> repeated, std::function<void(uint32_t)> finalCallback = nullptr);
 
     /**
-     * @brief Registers a recurring timer that fires indefinitely until cancelled.
-     *
-     * @param interval  Interval between firings.
-     * @param callback  Callback invoked on each tick; receives the timer ID.
+     * @brief Registers a recurring timer that fires until cancelled.
      * @return Unique timer ID.
      */
     uint32_t addRecurringTimer(std::chrono::milliseconds interval, std::function<void(uint32_t)> callback);
 
     /**
-     * @brief Cancels a timer by its ID.
+     * @brief Cancels a timer by ID.
      *
-     * If the timer is currently executing, this call blocks until the callback returns.
+     * If the callback is currently executing this blocks until it returns
+     * (unless called from within the callback itself, which returns
+     * immediately; the timer is not rescheduled either way).
      *
-     * @param timerId  ID returned by one of the `add*Timer` methods.
-     * @return `true` if the timer was found and cancelled; `false` if already fired or unknown.
+     * @return true if found and cancelled; false if already fired or unknown.
      */
     bool cancelTimer(uint32_t timerId);
 
     /**
-     * @brief Updates the firing interval of a recurring timer.
-     *
-     * Takes effect on the next tick.  The timer is not reset to fire immediately.
-     *
-     * @param timerId     ID of a recurring timer.
-     * @param newInterval New interval to apply from the next firing onward.
+     * @brief Reschedules a recurring timer to fire @p newInterval from now; if
+     * currently executing, the new interval applies from the next reschedule.
+     * Unknown IDs are ignored.
      */
     void updateInterval(uint32_t timerId, std::chrono::milliseconds newInterval);
 
     /**
-     * @brief Signals the timer thread to stop and waits for it to exit.
-     *
-     * Called automatically by the destructor.  May be called explicitly to drain
-     * before destroying dependent objects.
+     * @brief Signals the timer thread to stop, joins it, and waits for all
+     * in-flight callbacks. After it returns, no callback is running or
+     * pending in the pool. Called automatically by the destructor.
      */
     void stopTimer();
 
 private:
     using TimePoint = std::chrono::steady_clock::time_point;
+    using Callback = std::function<void(uint32_t)>;
+    using Queue = std::multimap<TimePoint, uint32_t>;
 
     /**
-     * @brief Internal record for a registered timer.
+     * @brief Complete state for one registered timer; lives in `timers` from
+     * registration until the timer dies. All fields guarded by `mutex`.
      */
-    struct TimerData
+    struct TimerState
     {
-        uint32_t id;                              ///< Unique timer identifier assigned at registration.
-        std::function<void(uint32_t)> callback;   ///< User-supplied callback; receives `id` as argument.
-        std::chrono::milliseconds interval;        ///< Repeat interval; `0` for one-shot timers.
+        Callback callback;                     ///< User callback; receives the timer ID.
+        std::chrono::milliseconds interval{0}; ///< Repeat interval; 0 for one-shot timers.
+        Queue::iterator queuePos;              ///< Position in `queue`; valid iff `queued`.
+        bool queued = false;                   ///< True while waiting in `queue`.
+        bool executing = false;                ///< True while the callback runs on a pool thread.
+        bool cancelled = false;                ///< Set by cancelTimer() while executing; blocks reschedule.
+        std::thread::id executingThread{};     ///< For self-cancel detection.
+        size_t repeatCount = 0;                ///< Ticks completed (limited-recurring).
+        size_t repeatLimit = 0;                ///< Ticks before the final callback; 0 = unlimited.
+        Callback finalCallback;                ///< Invoked after the last tick (limited-recurring).
     };
 
     void Run(); ///< Worker loop: sleeps until the next deadline and dispatches expired timers.
-    void runSingleTimer(const TimerData& timer); ///< Fires a single one-shot timer callback via the pool.
-    void scheduleCallback(const TimerData& data); ///< Reinserts a recurring timer after firing.
+    void runSingleTimer(uint32_t id); ///< Runs one dispatched callback, then reschedules/retires the timer.
 
-    std::atomic<uint32_t> nextTimerId; ///< Monotonically increasing timer ID counter.
-    std::atomic<bool> stop;            ///< Signals the worker thread to exit.
-    std::mutex mutex;                  ///< Guards all internal timer state.
-    std::condition_variable cv;        ///< Wakes the worker when a new timer is added or stop is set.
+    std::atomic<uint32_t> nextTimerId; ///< Monotonic ID counter (IDs never reused).
+    std::atomic<bool> stop;
+    std::mutex mutex;                    ///< Guards `queue` and `timers`.
+    std::condition_variable cv;          ///< Wakes the worker on new timer / stop.
+    std::condition_variable timerDoneCV; ///< Notified when a callback finishes (unblocks cancelTimer).
 
-    std::multimap<TimePoint, TimerData> timers; ///< Pending timers sorted by expiration.
-    std::unordered_map<uint32_t, std::multimap<TimePoint, TimerData>::iterator> timerIndex; ///< Fast O(1) lookup by timer ID into the multimap.
-    std::unordered_map<uint32_t, bool> executing; ///< Tracks which timers are currently executing callbacks.
-    std::unordered_map<uint32_t, std::chrono::milliseconds> dynamicIntervals; ///< Pending interval overrides for recurring timers.
-    std::unordered_map<uint32_t, std::thread::id> executingThreads; ///< Which pool thread is running each active callback.
-    std::unordered_map<uint32_t, std::atomic<bool>> cancelFlags; ///< Per-timer cancellation flag checked before callback execution.
-    std::unordered_map<uint32_t, size_t> repeatedCounters; ///< Current tick count for limited-recurring timers.
-    std::unordered_map<uint32_t, size_t> repeatLimits;     ///< Maximum tick count for limited-recurring timers.
-    std::unordered_map<uint32_t, std::function<void(uint32_t)>> finalCallbacks; ///< Final callback for limited-recurring timers.
-    std::condition_variable timerDoneCV; ///< Notified when a callback finishes, unblocking cancelTimer().
-    std::thread timerThread;             ///< Dedicated thread that sleeps until the next deadline.
-    ThreadPool& threadPool;              ///< Pool to which expired callbacks are dispatched.
+    Queue queue;                                     ///< Pending timers sorted by expiration.
+    std::unordered_map<uint32_t, TimerState> timers; ///< All live timers by ID.
+
+    std::atomic<uint32_t> dispatched{0}; ///< Callbacks handed to the pool but not yet finished.
+    std::thread timerThread;
+    ThreadPool& threadPool;
 };
 
 } // namespace core
 
 #endif // TIME_MANAGER_H
-

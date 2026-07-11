@@ -1,4 +1,6 @@
-// TimerManager.cpp
+// TimeManager.cpp
+
+#include <vector>
 
 #include <TimeManager.h>
 
@@ -11,7 +13,7 @@ TimeManager::TimeManager(ThreadPool& pool)
     timerThread = std::thread(&TimeManager::Run, this);
 }
 
-TimeManager::~TimeManager() 
+TimeManager::~TimeManager()
 {
     stopTimer();
 }
@@ -19,9 +21,13 @@ TimeManager::~TimeManager()
 uint32_t TimeManager::addTimer(std::chrono::steady_clock::time_point expirationTime, std::function<void(uint32_t)> callback)
 {
     std::lock_guard<std::mutex> lock(mutex);
-    uint32_t id = nextTimerId++;
-    auto it = timers.emplace(expirationTime, TimerData{ id, std::move(callback), std::chrono::milliseconds(0) });
-    timerIndex[id] = it;
+    const uint32_t id = nextTimerId++;
+
+    TimerState& st = timers[id];
+    st.callback = std::move(callback);
+    st.queuePos = queue.emplace(expirationTime, id);
+    st.queued = true;
+
     cv.notify_one();
     return id;
 }
@@ -29,53 +35,19 @@ uint32_t TimeManager::addTimer(std::chrono::steady_clock::time_point expirationT
 uint32_t TimeManager::addLimitedRecurringTimer(std::chrono::milliseconds interval, size_t repeatCount, std::function<void(uint32_t)> repeated, std::function<void(uint32_t)> finalCallback)
 {
     std::lock_guard<std::mutex> lock(mutex);
-    uint32_t id = nextTimerId++;
+    const uint32_t id = nextTimerId++;
 
-    // Register repetition limit and initial counter.
-    repeatedCounters[id] = 0;
-    repeatLimits[id] = repeatCount;
-    if (finalCallback)
-        finalCallbacks[id] = std::move(finalCallback);
+    if (repeatCount == 0)
+        return id; // Nothing to fire; ID is valid but the timer is already dead.
 
-    TimePoint now = std::chrono::steady_clock::now();
-    auto it = timers.emplace(now + interval, TimerData{
-        id,
-        [this, id, repeated = std::move(repeated)](uint32_t timerId) mutable {
-            size_t current = 0;
-            size_t limit = 0;
-            std::function<void(uint32_t)> finalCb;
+    TimerState& st = timers[id];
+    st.callback = std::move(repeated);
+    st.interval = interval;
+    st.repeatLimit = repeatCount;
+    st.finalCallback = std::move(finalCallback);
+    st.queuePos = queue.emplace(std::chrono::steady_clock::now() + interval, id);
+    st.queued = true;
 
-            {
-                std::lock_guard<std::mutex> lock(mutex);
-                current = ++repeatedCounters[id];
-                limit = repeatLimits[id];
-                if (current == limit)
-                {
-                    auto finalIt = finalCallbacks.find(id);
-                    if (finalIt != finalCallbacks.end())
-                    {
-                        finalCb = std::move(finalIt->second);
-                        finalCallbacks.erase(finalIt);
-                    }
-                }
-            }
-
-            if (current <= limit)
-                repeated(timerId);
-
-            if (current == limit)
-            {
-                cancelTimer(id);
-                if (finalCb)
-                    finalCb(timerId);
-            }
-        },
-        interval
-    });
-
-    timerIndex[id] = it;
-    dynamicIntervals[id] = interval;
-    executing[id] = false;
     cv.notify_one();
     return id;
 }
@@ -83,10 +55,14 @@ uint32_t TimeManager::addLimitedRecurringTimer(std::chrono::milliseconds interva
 uint32_t TimeManager::addRecurringTimer(std::chrono::milliseconds interval, std::function<void(uint32_t)> callback)
 {
     std::lock_guard<std::mutex> lock(mutex);
-    uint32_t id = nextTimerId++;
-    TimePoint now = std::chrono::steady_clock::now();
-    auto it = timers.emplace(now + interval, TimerData{ id, std::move(callback), interval });
-    timerIndex[id] = it;
+    const uint32_t id = nextTimerId++;
+
+    TimerState& st = timers[id];
+    st.callback = std::move(callback);
+    st.interval = interval;
+    st.queuePos = queue.emplace(std::chrono::steady_clock::now() + interval, id);
+    st.queued = true;
+
     cv.notify_one();
     return id;
 }
@@ -95,33 +71,21 @@ void TimeManager::updateInterval(uint32_t timerId, std::chrono::milliseconds new
 {
     std::lock_guard<std::mutex> lock(mutex);
 
-    std::function<void(uint32_t)> callback;
+    auto it = timers.find(timerId);
+    if (it == timers.end())
+        return;
 
-    // Remove current scheduled instance if exists
-    auto it = timerIndex.find(timerId);
-    if (it != timerIndex.end())
+    TimerState& st = it->second;
+    st.interval = newInterval;
+
+    if (st.queued)
     {
-        callback = it->second->second.callback;
-        timers.erase(it->second);
-        timerIndex.erase(it);
+        // Reschedule immediately at the new interval.
+        queue.erase(st.queuePos);
+        st.queuePos = queue.emplace(std::chrono::steady_clock::now() + newInterval, timerId);
+        cv.notify_one();
     }
-
-    // Store new interval
-    dynamicIntervals[timerId] = newInterval;
-
-    // Reschedult immediatly
-    TimePoint nextTime = std::chrono::steady_clock::now();
-    TimerData updated = {
-        timerId,
-        std::move(callback),
-        newInterval
-    };
-    
-    // Insert new timer
-    auto newIt = timers.emplace(nextTime + newInterval, updated);
-    timerIndex[timerId] = newIt;
-    executing[timerId] = false;
-    cv.notify_one();
+    // If executing, the new interval is picked up on the post-callback reschedule.
 }
 
 bool TimeManager::cancelTimer(uint32_t id)
@@ -131,145 +95,161 @@ bool TimeManager::cancelTimer(uint32_t id)
     if (stop)
         return false;
 
-    auto it = timerIndex.find(id);
-    if (it != timerIndex.end())
+    auto it = timers.find(id);
+    if (it == timers.end())
+        return false;
+
+    TimerState& st = it->second;
+
+    if (st.executing)
     {
-        auto nodeIt = it->second;
-        if (nodeIt != timers.end())
-        {
-            auto found = timers.find(nodeIt->first);
-            if (found != timers.end())
-                timers.erase(found);
-        }
+        // Prevent the post-callback reschedule; runSingleTimer erases the entry.
+        st.cancelled = true;
 
-        timerIndex.erase(it);
-        executing.erase(id);
-        executingThreads.erase(id);
-        cancelFlags.erase(id);
-        dynamicIntervals.erase(id);
-        repeatedCounters.erase(id);
-        repeatLimits.erase(id);
-        finalCallbacks.erase(id);
-        return true;
-    }
-
-    if (executing.count(id) && executing[id])
-    {
-        // Mark cancelled so runSingleTimer skips the reschedule once the
-        // in-flight callback finishes.
-        cancelFlags[id].store(true, std::memory_order_relaxed);
-
-        if (executingThreads.count(id) && executingThreads[id] == std::this_thread::get_id())
-        {
-            // Self-cancel from within the callback: cannot block on our own
-            // completion. The cancelFlags entry above prevents reschedule.
+        // Self-cancel from within the callback cannot block on its own completion.
+        if (st.executingThread == std::this_thread::get_id())
             return true;
-        }
 
-        timerDoneCV.wait(lock, [&] { return !executing[id]; });
+        timerDoneCV.wait(lock, [&]
+        {
+            auto cur = timers.find(id);
+            return cur == timers.end() || !cur->second.executing;
+        });
         return true;
     }
 
-    return false;
+    if (st.queued)
+        queue.erase(st.queuePos);
+
+    timers.erase(it);
+    return true;
 }
 
-void TimeManager::stopTimer() 
+void TimeManager::stopTimer()
 {
     {
         std::lock_guard<std::mutex> lock(mutex);
         stop = true;
     }
-    cv.notify_one();
+    cv.notify_all();
     if (timerThread.joinable())
         timerThread.join();
+
+    // Wait for callbacks already handed to the pool; after this returns no
+    // callback can touch this object (or anything scheduled through it).
+    uint32_t v = dispatched.load(std::memory_order_acquire);
+    while (v != 0)
+    {
+        dispatched.wait(v, std::memory_order_relaxed);
+        v = dispatched.load(std::memory_order_acquire);
+    }
 }
 
-void TimeManager::Run() 
+void TimeManager::Run()
 {
     utils::RCU::registerThread();
     std::unique_lock<std::mutex> lock(mutex);
-    while (!stop) 
+    while (!stop)
     {
-        if (timers.empty())
+        if (queue.empty())
         {
-            cv.wait(lock, [&] { return stop || !timers.empty(); });
+            cv.wait(lock, [&] { return stop.load() || !queue.empty(); });
             continue;
         }
 
-        auto now = std::chrono::steady_clock::now();
-        TimePoint nextTime = timers.begin()->first;
+        const auto now = std::chrono::steady_clock::now();
+        const TimePoint nextTime = queue.begin()->first;
         if (nextTime > now)
         {
             cv.wait_until(lock, nextTime);
             continue;
         }
 
-        std::vector<TimerData> toExecute;
-        while (!timers.empty() && timers.begin()->first <= now)
+        std::vector<uint32_t> due;
+        while (!queue.empty() && queue.begin()->first <= now)
         {
-            auto it = timers.begin();
-            toExecute.push_back(it->second);
-            executing[it->second.id] = true;
-            timerIndex.erase(it->second.id);
-            timers.erase(it);
+            const uint32_t id = queue.begin()->second;
+            queue.erase(queue.begin());
+
+            auto it = timers.find(id);
+            if (it == timers.end())
+                continue;
+
+            it->second.queued = false;
+            it->second.executing = true;
+            due.push_back(id);
         }
 
         lock.unlock();
-        for (auto& timer : toExecute)
+        for (uint32_t id : due)
         {
-            threadPool.enqueue([this, timer]() { runSingleTimer(timer); });
+            dispatched.fetch_add(1, std::memory_order_acq_rel);
+            while (!threadPool.enqueue([this, id]() { runSingleTimer(id); }))
+                std::this_thread::yield(); // Pool ring full; it drains as long as the pool outlives us.
         }
         lock.lock();
     }
     utils::RCU::unregisterThread();
 }
 
-void TimeManager::runSingleTimer(const TimerData& timer)
+void TimeManager::runSingleTimer(uint32_t id)
 {
+    Callback cb;
     {
-        std::unique_lock<std::mutex> lock(mutex);
-        executing[timer.id] = true;
-        executingThreads[timer.id] = std::this_thread::get_id();
-    }
-    
-    if (timer.callback)
-        timer.callback(timer.id);
-
-    std::chrono::milliseconds rescheduleInterval;
-    bool cancelled = false;
-    {
-        std::unique_lock<std::mutex> lock(mutex);
-        executing[timer.id] = false;
-        executingThreads.erase(timer.id);
-
-        auto cancelIt = cancelFlags.find(timer.id);
-        if (cancelIt != cancelFlags.end() && cancelIt->second.load(std::memory_order_relaxed))
+        std::lock_guard<std::mutex> lock(mutex);
+        auto it = timers.find(id);
+        if (it != timers.end())
         {
-            cancelled = true;
-            cancelFlags.erase(cancelIt);
-            executing.erase(timer.id);
-            dynamicIntervals.erase(timer.id);
-        }
-
-        timerDoneCV.notify_all();
-
-        auto intervalIt = dynamicIntervals.find(timer.id);
-        rescheduleInterval = (intervalIt != dynamicIntervals.end()) ? intervalIt->second : timer.interval;
-    }
-
-    if (!cancelled && !stop && rescheduleInterval.count() > 0)
-    {
-        std::unique_lock<std::mutex> lock(mutex);
-        if (!stop)
-        {
-            TimePoint nextTime = std::chrono::steady_clock::now() + rescheduleInterval;
-            TimerData updated = timer;
-            updated.interval = rescheduleInterval;
-            auto it = timers.emplace(nextTime, updated);
-            timerIndex[timer.id] = it;
-            cv.notify_one();
+            it->second.executingThread = std::this_thread::get_id();
+            cb = it->second.callback; // Copy: the entry may be mutated while the callback runs.
         }
     }
+
+    if (cb)
+        cb(id);
+
+    Callback finalCb;
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        auto it = timers.find(id);
+        if (it != timers.end())
+        {
+            TimerState& st = it->second;
+            st.executing = false;
+            st.executingThread = {};
+
+            bool dead = st.cancelled || stop || st.interval.count() <= 0;
+
+            if (st.repeatLimit > 0 && !st.cancelled && ++st.repeatCount >= st.repeatLimit)
+            {
+                dead = true;
+                finalCb = std::move(st.finalCallback);
+            }
+
+            if (dead)
+            {
+                timers.erase(it);
+            }
+            else
+            {
+                // Reschedule in the same critical section that clears
+                // `executing`, so a concurrent cancelTimer() can never miss
+                // both the queue entry and the executing flag.
+                st.queuePos = queue.emplace(std::chrono::steady_clock::now() + st.interval, id);
+                st.queued = true;
+                cv.notify_one();
+            }
+
+            timerDoneCV.notify_all();
+        }
+    }
+
+    if (finalCb)
+        finalCb(id);
+
+    const uint32_t prev = dispatched.fetch_sub(1, std::memory_order_acq_rel);
+    if (prev == 1)
+        dispatched.notify_all();
 }
 
-} // namespace utils
+} // namespace core
