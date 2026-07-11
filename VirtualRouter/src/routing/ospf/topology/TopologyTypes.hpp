@@ -11,6 +11,8 @@
 
 namespace routing::ospf
 {
+struct Vertex;
+struct VertexHash;
 
 /**
  * @brief Classifies an OSPF route by its origin relative to the local area.
@@ -165,22 +167,38 @@ struct OspfRouteChange
 };
 
 /**
- * @brief Parameters passed to the external LSA originator when redistributing a route into OSPF.
- * @ingroup OSPF_TOPOLOGY
+ * @brief Constructs an @ref OspfPath from its constituent attributes.
  *
- * Carries all fields needed to build a Type-5 or Type-7 LSA body: the prefix,
- * metric, tag, and an optional forwarding address.
+ * Convenience factory used by all derive* functions to ensure consistent
+ * field ordering and default values.
+ *
+ * @param areaId        Source area, or nullopt for process-wide external paths.
+ * @param options       OSPF options bits (E-bit, etc.) from the originating LSA.
+ * @param adminDistance Administrative distance to apply at RIB installation time.
+ * @param cost          Total path cost.
+ * @param nextHops      ECMP forwarding entries.
+ * @param type          Route type (intra, inter, external, NSSA).
  */
-struct ExternalOriginateContext
+inline OspfPath makePath(
+    std::optional<uint32_t> areaId,
+    uint8_t options,
+    uint8_t adminDistance,
+    uint64_t cost,
+    std::vector<OspfNextHop> nextHops,
+    OspfRouteType type)
 {
-    uint32_t lsId;                        ///< Link State ID to use for this LSA.
-    types::IPPrefix prefix;               ///< Destination prefix being redistributed.
-    uint32_t metric;                      ///< External metric value.
-    uint32_t tag;                         ///< Route tag (passed through transparently).
-    std::optional<types::IPAddress> nextHop; ///< Forwarding address, if non-zero should be included in the LSA.
-    bool metricIsE2;                      ///< False = E1 (cost accumulates); true = E2 (cost is flat).
-};
+    return OspfPath{
+        .type = type,
+        .area = areaId,
+        .cost = cost,
+        .adminDistance = adminDistance,
+        .options = options,
+        .nextHops = std::move(nextHops)
+    };
+}
 
+/// Per-vertex next-hop cache populated during SPF to avoid redundant next-hop resolution.
+using NhCache = std::unordered_map<Vertex, std::vector<OspfNextHop>, VertexHash>;
 } // namespace routing
 
 #endif // OSPF_TOPOLOGY_TYPES_HPP
