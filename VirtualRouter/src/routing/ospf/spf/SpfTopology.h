@@ -11,6 +11,8 @@
 
 namespace routing::ospf
 {
+class LsdbTable;
+class SpfManager;
 class Area;
 struct LsaRecord;
 
@@ -92,9 +94,10 @@ public:
      * the @c rtr, @c net, and @c netV2ByLsId indices. The area must remain
      * valid and unmodified for the lifetime of this object.
      *
+     * @param lsdb  OSPF LSDB.
      * @param area  OSPF area whose LSDB is indexed.
      */
-    SpfTopology(const Area& area);
+    SpfTopology(SpfManager& mgr);
 
     /**
      * @brief Expands a router vertex into its outgoing edges.
@@ -126,7 +129,7 @@ public:
      */
     bool expandNetwork(uint64_t vertexId, std::vector<uint32_t>& attachedRouters);
 
-    const Area& area; ///< OSPF area that owns the LSDB; lifetime must exceed this topology object.
+    const SpfManager& manager; ///< Spf manager holding area information.
 };
 
 } // namespace routing::ospf

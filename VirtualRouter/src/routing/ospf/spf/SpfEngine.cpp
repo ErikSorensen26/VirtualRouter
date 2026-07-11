@@ -22,10 +22,14 @@ struct QItem
     }
 };
 
+SpfEngine::SpfEngine(SpfManager& mgt)
+    : manager(mgt)
+{}
+
 template <typename Policy>
 SpfResult SpfEngine::run(SpfTopology<Policy>& topo)
 {
-    if (!topo.area.process().getConfigs().template get<config::Ospf::ISPF>().load() ||
+    if (!manager.getProcessConfigs().get<config::Ospf::ISPF>().load() ||
         !last.has_value() || lastEdges.empty())
     {
         SpfResult res = runFull<Policy>(topo);
@@ -46,8 +50,8 @@ SpfResult SpfEngine::run(SpfTopology<Policy>& topo)
 template <typename Policy>
 SpfResult SpfEngine::runFull(SpfTopology<Policy>& topo)
 {
-    auto& area = topo.area;
-    uint32_t rid = area.process().getRouterId();
+    auto& area = manager.area;
+    uint32_t rid = area.process.getRouterId();
 
     SpfResult res;
     res.root = Vertex{VertexType::ROUTER, static_cast<uint64_t>(rid)};
@@ -88,7 +92,7 @@ SpfResult SpfEngine::runFull(SpfTopology<Policy>& topo)
         expandAndRelax<Policy>(topo, cur.v, info);
     }
 
-    finalizeParents<Policy>(topo, res);
+    finalizeParents<Policy>(res);
 
     last = res;
     return res;
@@ -389,17 +393,16 @@ SpfResult SpfEngine::runIspfRepair(SpfTopology<Policy>& topo, const SpfDelta& de
         expandAndRelax<Policy>(topo, cur.v, info);
     }
 
-    finalizeParents<Policy>(topo, res);
+    finalizeParents<Policy>(res);
 
     last = res;
     return res;
 }
 
 template <typename Policy>
-void SpfEngine::finalizeParents(SpfTopology<Policy>& topo, SpfResult& res)
+void SpfEngine::finalizeParents(SpfResult& res)
 {
-    auto& area = topo.area;
-    uint8_t maxPaths = area.process().getConfigs().template get<config::Ospf::MAXIMUM_PATHS>().load();
+    uint8_t maxPaths = manager.getProcessConfigs().get<config::Ospf::MAXIMUM_PATHS>().load();
 
     for (auto& kv : res.nodes)
     {
@@ -639,8 +642,8 @@ template SpfResult SpfEngine::runIspfRepair<PolicyV3>(SpfTopology<PolicyV3>&, co
 template SpfDelta SpfEngine::computeDeltaAndUpdateEdgeIndex<PolicyV2>(SpfTopology<PolicyV2>&);
 template SpfDelta SpfEngine::computeDeltaAndUpdateEdgeIndex<PolicyV3>(SpfTopology<PolicyV3>&);
 
-template void SpfEngine::finalizeParents<PolicyV2>(SpfTopology<PolicyV2>&, SpfResult&);
-template void SpfEngine::finalizeParents<PolicyV3>(SpfTopology<PolicyV3>&, SpfResult&);
+template void SpfEngine::finalizeParents<PolicyV2>(SpfResult&);
+template void SpfEngine::finalizeParents<PolicyV3>(SpfResult&);
 
 template void SpfEngine::relaxEdgeFull<PQ>(const Vertex&, const Vertex&, uint64_t, uint32_t, uint32_t, RelaxInfo<PQ>&);
 template void SpfEngine::relaxEdgeRepair<PQ>(const Vertex&, const Vertex&, uint64_t, uint32_t, uint32_t, RelaxInfo<PQ>&);

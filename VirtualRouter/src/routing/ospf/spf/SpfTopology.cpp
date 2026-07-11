@@ -1,19 +1,19 @@
 // SpfTopology.cpp
 
 #include "SpfTopology.h"
-#include "ospf/area/Area.h"
-#include "ospf/OspfProcess.h"
+#include "ospf/database/LsdbTable.h"
+#include "ospf/spf/SpfManager.h"
 #include "ospf/OspfTypes.hpp"
 
 namespace routing::ospf
 {
 template <typename Policy>
-SpfTopology<Policy>::SpfTopology(const Area& area)
-    : area(area)
+SpfTopology<Policy>::SpfTopology(SpfManager& mgr)
+    : manager(mgr)
 {
     std::vector<LsaKey> expired;
 
-    area.lsdb().forEach([this](const LsaKey& key, const LsaRecord& record)
+    manager.getLsdb().forEach([this](const LsaKey& key, const LsaRecord& record)
     {
         const auto& rec = record;
         const LsaBody& body = rec.body;

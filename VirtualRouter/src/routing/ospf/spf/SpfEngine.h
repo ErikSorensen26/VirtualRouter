@@ -57,6 +57,19 @@ struct SpfResult;
 class SpfEngine
 {
 public:
+    
+    /**
+     * @brief Constructs the engine bound to its owning manager.
+     *
+     * Stores the reference only — no computation happens until @ref run.
+     * The manager provides configuration access (iSPF enable flag) and
+     * serialises every call to @ref run on the area's scheduler.
+     *
+     * @param mgr The SpfManager that owns and drives this engine; must
+     *            outlive it.
+     */
+    SpfEngine(SpfManager& mgr);
+
 
     /**
      * @brief Runs SPF over @p topo and returns the new shortest-path tree.
@@ -220,11 +233,10 @@ private:
      * the root-side @c firstHopIfid from each parent node down to its children.
      *
      * @tparam Policy  LSA policy (unused directly; required for template consistency).
-     * @param  topo    Topology (used for root-adjacency lookup).
      * @param  res     SPF result to finalise in-place.
      */
     template <typename Policy>
-    void finalizeParents(SpfTopology<Policy>& topo, SpfResult& res);
+    void finalizeParents(SpfResult& res);
 
     /**
      * @brief Marks previously-settled vertices as unconfirmed when the iSPF repair cannot guarantee their distances.
@@ -237,6 +249,8 @@ private:
      * @param delta  Change set identifying removed or cost-increased edges.
      */
     void invalidateForIncreasesAndRemovals(SpfResult& res, const SpfDelta& delta);
+
+    SpfManager& manager; ///< SPF manager holding area information.
 };
 
 } // namespace routing::ospf

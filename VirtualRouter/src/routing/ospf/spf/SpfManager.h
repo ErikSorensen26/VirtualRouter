@@ -14,8 +14,12 @@
 #include "SpfTypes.hpp"
 #include "SpfEngine.h"
 
+namespace config { struct OspfRegistry; }
+
 namespace routing::ospf
 {
+template <typename Policy>
+class SpfTopology;
 class Area;
 class OspfRib;
 
@@ -75,8 +79,9 @@ public:
      * called.
      *
      * @param area  OSPF area whose LSDB this manager recomputes.
+     * @param rib   OSPF rib that manages the exchanges with the global rib.
      */
-    explicit SpfManager(Area& area);
+    explicit SpfManager(Area& area, OspfRib& rib);
 
     /**
      * @brief Signals that a topology change has occurred and an SPF recompute is needed.
@@ -89,7 +94,6 @@ public:
      * @tparam Policy  Version-specific LSA policy (OSPFv2 or OSPFv3) forwarded
      *                 to the engine and topology builder.
      */
-    template<typename Policy>
     void requestSpf();
 
     /**
@@ -101,12 +105,14 @@ public:
      *
      * @tparam Policy  LSA policy forwarded to @c runSpf.
      */
-    template<typename Policy>
     void onSpfTimer();
 
     SpfResult spfResult; ///< Most recent SPF output; updated after every successful run and read by route installation logic.
 
 private:
+    template <typename Policy> 
+    friend class SpfTopology;
+    friend class SpfEngine;
 
     // SCHEDULING
 
@@ -119,7 +125,6 @@ private:
      * @tparam Policy  LSA policy forwarded to the timer callback.
      * @param  delayMs Delay in milliseconds before the SPF run is allowed to start.
      */
-    template <typename Policy>
     void scheduleSpf(uint32_t delayMs);
 
     /**
@@ -146,6 +151,25 @@ private:
      */
     template <typename Policy>
     void runSpf();
+
+    // HELPERS
+
+    /**
+     * @brief Returns the owning area's LSDB for read-only graph building.
+     *
+     * Access-mediation helper: `SpfManager` is a friend of @ref Area, so the
+     * SPF engine and topology view read the database through it rather than
+     * being friends of `Area` themselves.
+     */
+    const LsdbTable& getLsdb() const;
+
+    /**
+     * @brief Returns the process-level OSPF configuration registry.
+     *
+     * Used for SPF throttle timers (`spf-throttle`), the iSPF enable flag,
+     * and administrative distances consulted during result installation.
+     */
+    const config::OspfRegistry& getProcessConfigs() const;
 
 private:
 

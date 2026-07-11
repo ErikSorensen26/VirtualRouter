@@ -2,19 +2,18 @@
 
 #include <TimeManager.h>
 
+#include "ospf/area/Area.h"
 #include "SpfManager.h"
 #include "SpfEngine.h"
-#include "ospf/topology/RouteManager.h"
 #include "ospf/area/Area.h"
 #include "ospf/OspfProcess.h"
 
 namespace routing::ospf
 {
-SpfManager::SpfManager(Area& area)
-    : area(area), rib(area.process().getRib())
+SpfManager::SpfManager(Area& area, OspfRib& rib)
+    : engine(*this), area(area), rib(rib)
 {}
 
-template<typename Policy>
 void SpfManager::requestSpf()
 {
     requested.store(true, std::memory_order_release);
@@ -29,10 +28,9 @@ void SpfManager::requestSpf()
         return;
 
     uint32_t delay = computeNextDelay();
-    scheduleSpf<Policy>(delay);
+    scheduleSpf(delay);
 }
 
-template<typename Policy>
 void SpfManager::onSpfTimer()
 {
     spfScheduled.store(false, std::memory_order_relaxed);
@@ -44,7 +42,9 @@ void SpfManager::onSpfTimer()
     requested.store(false, std::memory_order_release);
 
     // Run SPF
-    runSpf<Policy>();
+    area.process.isV3
+        ? runSpf<PolicyV3>()
+        : runSpf<PolicyV2>();
 
     lastSpfTime.store(std::chrono::steady_clock::now(), std::memory_order_release);
     spfRunning.store(false, std::memory_order_release);
@@ -52,7 +52,7 @@ void SpfManager::onSpfTimer()
     if (reschedule.exchange(false))
     {
         uint32_t delay = computeNextDelay();
-        scheduleSpf<Policy>(delay);
+        scheduleSpf(delay);
         return;
     }
 
@@ -60,15 +60,14 @@ void SpfManager::onSpfTimer()
     currentDelayMs.store(0, std::memory_order_release);
 }
 
-template<typename Policy>
 void SpfManager::scheduleSpf(uint32_t delayMs)
 {
     if (spfScheduled.exchange(true))
         return;
 
     auto delay = std::chrono::steady_clock::now() + std::chrono::milliseconds(delayMs);
-    timerId = area.getScheduler().postAfter(delay, [this](uint32_t) {
-        this->onSpfTimer<Policy>();
+    timerId = area.scheduler.postAfter(delay, [this](uint32_t) {
+        this->onSpfTimer();
     });
 }
 
@@ -76,35 +75,44 @@ template <typename Policy>
 void SpfManager::runSpf()
 {
     // Create graph
-    SpfTopology<Policy> topo(area);
+    SpfTopology<Policy> topo(*this);
     // Run Dijkstra on graph
     SpfResult spfRes = engine.run<Policy>(topo);
 
     std::vector<std::pair<types::IPPrefix, OspfPath>> pathList;
 
     // Look up networks from Dikjstra results
-    routemanager::deriveIntraAreaRoutes<Policy>(spfRes, pathList, area);
-    routemanager::deriveInterAreaRoutes<Policy>(spfRes, pathList, area);
+    area.routeManager.deriveIntraAreaRoutes<Policy>(spfRes, pathList);
 
     auto summaryChanges = rib.replaceArea(area, pathList);
 
     // Update Ranges
     area.syncRangeRuntime(pathList);
 
-    area.process().table.consumeSpfResult(area.areaId, spfRes);
+    area.getTopoTable().consumeSpfResult(area.areaId, spfRes);
 
-    if (area.process().isABR())
+    if (area.process.isABR())
     {
         // Reoriginate intra as inter 
-        area.process().reoriginateSummaries<Policy>(area, summaryChanges);
+        area.getInterOriginator().reoriginateSummaries<Policy>(area.originContext, summaryChanges);
     }
 
     spfResult = std::move(spfRes);
 }
 
+const LsdbTable& SpfManager::getLsdb() const
+{
+    return area.lsdb;
+}
+
+const config::OspfRegistry& SpfManager::getProcessConfigs() const
+{
+    return area.getProcessConfigs();
+}
+
 uint32_t SpfManager::computeNextDelay()
 {
-    auto& cfgs = area.process().getConfigs();
+    auto& cfgs = area.getProcessConfigs();
     uint32_t initDelayMs = cfgs.get<config::Ospf::SPF_THROTTLE_DELAY>().load();
     uint32_t holdTimeMs = cfgs.get<config::Ospf::SPF_THROTTLE_HOLD>().load();
     uint32_t maxHoldTimeMs = cfgs.get<config::Ospf::SPF_THROTTLE_MAX>().load();
@@ -133,15 +141,6 @@ uint32_t SpfManager::computeNextDelay()
     currentDelayMs.store(backoff, std::memory_order_release);
     return next;
 }
-
-template void SpfManager::requestSpf<PolicyV2>();
-template void SpfManager::requestSpf<PolicyV3>();
-
-template void SpfManager::onSpfTimer<PolicyV2>();
-template void SpfManager::onSpfTimer<PolicyV3>();
-
-template void SpfManager::scheduleSpf<PolicyV2>(uint32_t);
-template void SpfManager::scheduleSpf<PolicyV3>(uint32_t);
 
 template void SpfManager::runSpf<PolicyV2>();
 template void SpfManager::runSpf<PolicyV3>();

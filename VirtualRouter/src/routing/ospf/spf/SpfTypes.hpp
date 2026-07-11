@@ -24,7 +24,6 @@
 
 namespace routing::ospf
 {
-
 /**
  * @brief Discriminates between router and transit-network vertices in the SPF graph.
  * @ingroup OSPF_SPF
@@ -377,7 +376,6 @@ struct RelaxInfo
     SpfResult& out; ///< Destination for relaxation updates.
     PQ& pq;         ///< Candidate list; drives the next-vertex selection loop.
 };
-
 } // namespace routing::ospf
 
 #endif // SPF_VERTEX_HPP
