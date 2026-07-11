@@ -1,5 +1,5 @@
 /**
- * @file OriginatorV3.h
+ * @file IntraOriginatorV3.h
  * @brief OSPFv3 LSA originator: builds and re-originates all OSPFv3 LSA types for one area.
  */
 
@@ -15,21 +15,21 @@
  * @brief OSPFv3 LSA origination for one area.
  */
 
-#ifndef OSPF_ORIGINATOR_V3_H
-#define OSPF_ORIGINATOR_V3_H
+#ifndef OSPF_INTRA_ORIGINATOR_V3_H
+#define OSPF_INTRA_ORIGINATOR_V3_H
 
 #include <deque>
 
-#include "ospf/area/Originator.h"
+#include "ospf/area/IntraOriginator.h"
 
 namespace routing::ospf
 {
 
 /**
- * @brief OSPFv3 concrete implementation of the @ref Originator base class.
+ * @brief OSPFv3 concrete implementation of the @ref IntraOriginator base class.
  * @ingroup OSPF_V3_AREA
  *
- * `OriginatorV3` overrides every abstract origination hook in @ref Originator to
+ * `IntraOriginatorV3` overrides every abstract origination hook in @ref IntraOriginator to
  * produce OSPFv3 wire-format LSA bodies. The key difference from OSPFv2 is that
  * OSPFv3 separates topology information from prefix information:
  *
@@ -66,7 +66,7 @@ namespace routing::ospf
  *
  * @see Originator, OriginatorV2, Area
  */
-class OriginatorV3 : public Originator
+class IntraOriginatorV3 : public IntraOriginator
 {
 public:
     /**
@@ -77,7 +77,7 @@ public:
      *
      * @param a The area that owns this originator.
      */
-    OriginatorV3(Area& a);
+    IntraOriginatorV3(OriginatorContext& ctx);
 
     /**
      * @brief Destroys the originator and cancels any pending group-pacing timers.
@@ -85,7 +85,7 @@ public:
      * Does not expire outstanding LSAs; the LSDB retains them until they age out
      * or the process explicitly flushes them.
      */
-    ~OriginatorV3() override;
+    ~IntraOriginatorV3() override;
 
     /**
      * @brief Originates or refreshes the complete OSPFv3 LSA set for this area.
@@ -106,47 +106,6 @@ public:
      * @param ifaceId Interface index whose state changed.
      */
     void updateInterface(uint32_t ifaceId) override;
-
-    /**
-     * @brief Originates or expires a Type-5/Type-7 AS-External-LSA for a redistributed route.
-     *
-     * @param asbr   Router ID of the originating ASBR (used for NSSA translation).
-     * @param lsid   LS-ID to use for the external LSA.
-     * @param remove True to expire the LSA; false to originate or refresh it.
-     */
-    void addExternal(uint32_t asbr, uint32_t lsid, bool remove) override;
-
-    /**
-     * @brief Translates a Type-7 NSSA-LSA into a Type-5 AS-External-LSA at an ABR.
-     *
-     * Called on the ABR when a Type-7 LSA is received from an NSSA area and must
-     * be redistributed into the backbone as a Type-5 LSA.
-     *
-     * @param key    LSDB key of the Type-7 source LSA.
-     * @param lsa    Parsed body of the Type-7 LSA.
-     * @param expire True to withdraw the translated LSA; false to originate/refresh it.
-     */
-    void translateNssaToExternal(const LsaKey& key, const LsaBody& lsa, bool expire) override;
-
-    /**
-     * @brief Originates or withdraws the inter-area default route (Type-3 LSA for 0.0.0.0/0).
-     *
-     * Used when this router is an ABR with `default-information originate` configured
-     * for stub or NSSA areas.
-     *
-     * @param add True to originate the default; false to expire it.
-     */
-    void addStubDefaultRoute(bool add) override;
-
-    /**
-     * @brief Originates or refreshes a single Inter-Area-Prefix-LSA (Type-3 summary).
-     *
-     * @param lsid   LS-ID for the summary LSA.
-     * @param prefix Prefix being summarized.
-     * @param cost   Cost to advertise.
-     * @param expire True to expire the LSA; false (default) to originate/refresh.
-     */
-    void originateSummary(uint32_t lsid, const types::IPPrefix& prefix, uint32_t cost, bool expire) override;
 
 protected:
     /**
@@ -203,14 +162,6 @@ protected:
      * @param key LSDB key of the LSA to expire.
      */
     void expire(LsaKey& key) override;
-
-    /**
-     * @brief Originates or refreshes an Inter-Area-Router-LSA (Type-4) for an ASBR.
-     *
-     * @param asbr    Router ID of the ASBR being advertised.
-     * @param refresh True if this is a scheduled refresh.
-     */
-    void addAsbrLsa(uint32_t asbr, bool refresh = false) override;
 
     /**
      * @brief Expires all Intra-Area-Prefix-LSAs associated with a Network-LSA when the DR role is lost.

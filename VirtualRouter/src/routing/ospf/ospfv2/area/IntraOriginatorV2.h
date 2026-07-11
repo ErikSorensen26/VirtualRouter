@@ -15,10 +15,10 @@
  * @brief OSPFv2 LSA origination for one area.
  */
 
-#ifndef OSPF_ORIGINATOR_V2_H
-#define OSPF_ORIGINATOR_V2_H
+#ifndef OSPF_INTRA_ORIGINATOR_V2_H
+#define OSPF_INTRA_ORIGINATOR_V2_H
 
-#include "ospf/area/Originator.h"
+#include "ospf/area/IntraOriginator.h"
 
 namespace routing::ospf
 {
@@ -35,19 +35,19 @@ namespace routing::ospf
  *
  * One OriginatorV2 instance exists per OSPFv2 @ref Area.
  */
-class OriginatorV2 : public Originator
+class IntraOriginatorV2 : public IntraOriginator
 {
 public:
     /**
      * @brief Constructs an OriginatorV2 bound to the given area.
      * @param a Owning OSPF area; must outlive this originator.
      */
-    OriginatorV2(Area& a);
+    IntraOriginatorV2(OriginatorContext& ctx);
 
     /**
      * @brief Destroys the originator and withdraws any self-originated LSAs still in the LSDB.
      */
-    ~OriginatorV2() override;
+    ~IntraOriginatorV2() override;
 
     // PUBLIC ORIGINATION INTERFACE
 
@@ -65,38 +65,7 @@ public:
      */
     void updateInterface(uint32_t ifaceId) override;
 
-    /**
-     * @brief Originates or withdraws an AS-External LSA for a redistributed route.
-     * @param asbr   Router ID of the ASBR advertising the external route.
-     * @param lsid   Link-State ID to use for the originated LSA.
-     * @param remove True to flush (MaxAge) the LSA rather than originate it.
-     */
-    void addExternal(uint32_t asbr, uint32_t lsid, bool remove) override;
-
-    /**
-     * @brief Translates an NSSA-External LSA (Type 7) into an AS-External LSA (Type 5).
-     * @param key    LsaKey of the NSSA LSA being translated.
-     * @param lsa    Decoded body of the NSSA LSA.
-     * @param expire True to withdraw the resulting Type-5 rather than originate it.
-     */
-    void translateNssaToExternal(const LsaKey& key, const LsaBody& lsa, bool expire) override;
-
-    /**
-     * @brief Originates or withdraws the default-route stub LSA for this area.
-     * @param add True to inject the default route; false to withdraw it.
-     */
-    void addStubDefaultRoute(bool add) override;
-
-    /**
-     * @brief Originates or withdraws a Type-3 Summary (inter-area prefix) LSA.
-     * @param lsid   Link-State ID for the summary LSA.
-     * @param prefix The IP prefix to advertise into adjacent areas.
-     * @param cost   Metric to attach to the summary.
-     * @param expire True to MaxAge the LSA rather than originate it.
-     */
-    void originateSummary(uint32_t lsid, const types::IPPrefix& prefix, uint32_t cost, bool expire) override;
-
-protected:
+private:
     // ROUTER / NETWORK LSA ORIGINATION
 
     /**
@@ -119,13 +88,6 @@ protected:
      * @param key LsaKey of the LSA to withdraw from the LSDB.
      */
     void expire(LsaKey& key) override;
-
-    /**
-     * @brief Originates or refreshes the Type-4 Summary LSA advertising an ASBR.
-     * @param asbr    Router ID of the ASBR to advertise.
-     * @param refresh True when refreshing an existing Type-4 LSA.
-     */
-    void addAsbrLsa(uint32_t asbr, bool refresh = false) override;
 
     /**
      * @brief Removes the Network LSA previously originated for the given interface.
@@ -177,4 +139,4 @@ protected:
 };
 } // namespace routing::ospf
 
-#endif
+#endif // INTRA_ORIGINATOR_V2_H
