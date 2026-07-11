@@ -7,9 +7,7 @@
 #define OSPF_LSDB_TABLE_H
 
 #include <utility>
-#include <type_traits>
-
-#include "LSDB.hpp"
+#include "LsdbTypes.hpp"
 
 namespace routing::ospf
 {
@@ -36,10 +34,8 @@ namespace routing::ospf
  * `FloodManager` and `SpfEngine` respectively.
  *
  * ## Lifecycle & Ownership
- * Created and owned by the OSPF `Area`.  Construction requires a
- * `std::pmr::memory_resource*` for the PMR-backed internal containers; when
- * PMR is disabled this parameter is ignored.  Move and copy are deleted
- * because the pointer indexes would be invalidated by a container relocation.
+ * Created and owned by the OSPF `Area`.  Move and copy are deleted because
+ * the pointer indexes would be invalidated by a container relocation.
  *
  * ## Concurrency Model
  * All public methods must be called from the area's single-threaded
@@ -55,33 +51,15 @@ namespace routing::ospf
 class LsdbTable final
 {
 public:
-#if OSPF_LSDB_USE_PMR
-    using PoolResource =
-    std::pmr::unsynchronized_pool_resource; ///< Pool resource type used for LSDB allocation when PMR is enabled.
-#endif
 
     /**
-     * @brief Constructs an empty LSDB table, optionally using a custom memory resource.
-     *
-     * When `OSPF_LSDB_USE_PMR` is enabled, all internal containers allocate
-     * from a pool resource that sub-allocates from `upstream`.  This allows the
-     * entire LSDB to be released at once by discarding the pool rather than
-     * individually freeing each record allocation.
-     *
-     * @param upstream PMR upstream resource; defaults to the global default resource.
+     * @brief Constructs an empty LSDB table.
      */
-    explicit LsdbTable(std::pmr::memory_resource* upstream = std::pmr::get_default_resource());
+    explicit LsdbTable() : db() {}
 
-    // Movable
+    // Not movable: the secondary indexes hold pointers into dbStorage.
     LsdbTable(LsdbTable&&) noexcept = delete;
     LsdbTable& operator=(LsdbTable&&) noexcept = delete;
-
-    /**
-     * @brief Returns the memory resource used for LSDB storage.
-     *
-     * When PMR is disabled this always returns `std::pmr::get_default_resource()`.
-     */
-    std::pmr::memory_resource* resource() noexcept;
 
     // CAPACITY
 
@@ -106,11 +84,11 @@ public:
     // MUTATION
 
     /**
-     * @brief Clears all records and releases pooled memory back to the upstream resource.
+     * @brief Clears all records and indexes during area teardown.
      *
-     * More aggressive than `clear()`: after this call the pool itself is
-     * released, freeing all allocations in bulk.  Use during area teardown or
-     * full LSDB flush to avoid O(n) individual deallocations.
+     * Currently equivalent to `clear()`; kept as a separate entry point so a
+     * bulk-release allocation strategy can be reintroduced behind it without
+     * touching callers.
      */
     void releaseMemory();
 
@@ -266,9 +244,6 @@ public:
 
 private:
 
-#if OSPF_LSDB_USE_PMR
-    PoolResource pool;  ///< Pool sub-allocator; sub-allocates from the upstream resource passed at construction.
-#endif
     U_LSDB db;          ///< Unordered primary index for O(1) key lookups; points into dbStorage.
     T_LSDB typeDb;      ///< Type-keyed secondary index; points into dbStorage.
     A_LSDB advDb;       ///< Advertiser-keyed secondary index; points into dbStorage.
@@ -281,20 +256,8 @@ private:
     Iterator findIt(const LsaKey& key);
     ConstIterator findIt(const LsaKey& key) const;
 
-    template <typename Body>
-    static constexpr bool BodyNeedsMr =
-#if OSPF_LSDB_USE_PMR
-        std::is_constructible_v<Body, std::pmr::memory_resource*>;
-#else
-        false;
-#endif
-
     /**
-     * @brief Emplaces a `Body` into the record's variant, passing the pool resource when required.
-     *
-     * If `Body` has a constructor accepting `std::pmr::memory_resource*` and
-     * PMR is enabled, the LSDB pool is forwarded so the body's internal
-     * containers also allocate from the same pool.
+     * @brief Emplaces a default-constructed `Body` into the record's variant.
      *
      * @tparam Body LSA body type to emplace.
      * @param rec   Record into which the body is emplaced.
@@ -328,14 +291,7 @@ inline Body& LsdbTable::upsertBody(const IncomingLsaContext& ctx, LsaRecordFlags
 template <typename Body>
 inline Body& LsdbTable::emplaceBody(LsaRecord& rec)
 {
-    if constexpr (BodyNeedsMr<Body>)
-    {
-        return rec.body.template emplace<Body>(resource());
-    }
-    else
-    {
-        return rec.body.template emplace<Body>();
-    }
+    return rec.body.template emplace<Body>();
 }
 
 template <typename Fn>

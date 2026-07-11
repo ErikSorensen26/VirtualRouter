@@ -1,20 +1,21 @@
 /**
- * @file RetransmissionList.hpp
+ * @file RetransmissionList.h
  * @brief Generic retransmission queue with burst-pacing and per-entry retry limiting.
  */
 
-#ifndef RETRNASMISSION_LIST_HPP
-#define RETRNASMISSION_LIST_HPP
+#ifndef RETRANSMISSION_LIST_H
+#define RETRANSMISSION_LIST_H
 
 #include <vector>
 #include <unordered_map>
 #include <optional>
+#include <cstdint>
 
-#include "ospf/OspfProcess.h"
-#include "ospf/interface/OspfInterface.h"
+namespace config { struct OspfRegistry; }
 
 namespace routing::ospf
 {
+class OspfInterface;
 
 /**
  * @brief Key-indexed retransmission queue supporting paced burst delivery.
@@ -74,12 +75,11 @@ public:
      * `getMaxRetransmission()` can consult the correct config registers at
      * retransmit time rather than caching a value that may change.
      *
-     * @param process  The owning OSPF process (provides retransmit limits).
      * @param iface    The interface this list belongs to (provides
      *                 demand-circuit status).
      */
-    RetransmissionList(OspfProcess& process, OspfInterface& iface)
-        : process(process), iface(iface)
+    RetransmissionList(OspfInterface& iface, const config::OspfRegistry& cfgs)
+        : iface(iface), processCfgs(cfgs)
     {}
 
     uint32_t retransmitTimerId = 0; ///< Active retransmit timer ID; 0 when no periodic retransmit is scheduled.
@@ -99,21 +99,7 @@ public:
      * @return True if a new entry was inserted, false if an existing entry
      *         was updated in place.
      */
-    bool add(Key& key, Record& record)
-    {
-        auto it = outboundInfo.find(key);
-        if (it != outboundInfo.end())
-        {
-            auto& slot = outbound[it->second.index];
-            slot = std::move(record);
-            return false;
-        }
-
-        outbound.emplace_back(std::move(record));
-        outboundKeys.emplace_back(key);
-        outboundInfo.emplace(key, OutboundInfo{outbound.size() - 1, 0});
-        return true;
-    }
+    bool add(Key& key, Record& record);
 
     /**
      * @brief Adds or replaces an entry in the retransmission queue (copy overload).
@@ -123,21 +109,7 @@ public:
      * @return True if a new entry was inserted, false if an existing entry
      *         was updated in place.
      */
-    bool add(const Key& key, const Record& record)
-    {
-        auto it = outboundInfo.find(key);
-        if (it != outboundInfo.end())
-        {
-            auto& slot = outbound[it->second.index];
-            slot = record;
-            return false;
-        }
-
-        outbound.emplace_back(record);
-        outboundKeys.emplace_back(key);
-        outboundInfo.emplace(key, OutboundInfo{outbound.size() - 1, 0});
-        return true;
-    }
+    bool add(const Key& key, const Record& record);
 
     /**
      * @brief Checks whether an entry with the given key is present.
@@ -145,10 +117,7 @@ public:
      * @param key  The key to search for.
      * @return True if the key exists in the queue.
      */
-    bool has(const Key& key)
-    {
-        return outboundInfo.contains(key);
-    }
+    bool has(const Key& key);
 
     /**
      * @brief Retrieves a copy of the record associated with @p key.
@@ -156,15 +125,7 @@ public:
      * @param key  The key to look up.
      * @return The stored record, or `std::nullopt` if the key is not present.
      */
-    std::optional<Record> get(const Key& key)
-    {
-        auto it = outboundInfo.find(key);
-        if (it == outboundInfo.end())
-            return std::nullopt;
-        if (it->second.index >= outbound.size())
-            return std::nullopt;
-        return outbound[it->second.index];
-    }
+    std::optional<Record> get(const Key& key);
 
     /**
      * @brief Returns a read-only view of all records currently in the queue.
@@ -172,10 +133,7 @@ public:
      * The order of records is not guaranteed to be insertion order after
      * removals (swap-and-pop is used internally).
      */
-    const std::vector<Record>& getAll() const
-    {
-        return outbound;
-    }
+    const std::vector<Record>& getAll() const;
 
     /**
      * @brief Removes the entry identified by @p key.
@@ -187,36 +145,7 @@ public:
      * @param key  The key of the entry to remove.
      * @return True if the entry was found and removed, false if not present.
      */
-    bool erase(const Key& key)
-    {
-        auto it = outboundInfo.find(key);
-        if (it == outboundInfo.end())
-            return false;
-
-        const size_t idx = it->second.index;
-        const size_t last = outbound.size() - 1;
-
-        if (idx != last)
-        {
-            outbound[idx] = std::move(outbound[last]);
-            outboundKeys[idx] = std::move(outboundKeys[last]);
-            outboundInfo[outboundKeys[idx]].index = idx;
-        }
-
-        outbound.pop_back();
-        outboundKeys.pop_back();
-        outboundInfo.erase(it);
-
-        if (cursor >= outbound.size()) cursor = 0;
-        if (burstRemaining > 0) --burstRemaining;
-
-        if (outbound.empty())
-        {
-            cursor = 0;
-            burstRemaining = 0;
-        }
-        return true;
-    }
+    bool erase(const Key& key);
 
     /**
      * @brief Removes all entries and resets burst state.
@@ -224,22 +153,12 @@ public:
      * Called when the adjacency resets to ensure no stale entries are
      * retransmitted to the next incarnation of the neighbor.
      */
-    void clear()
-    {
-        outbound.clear();
-        outboundKeys.clear();
-        outboundInfo.clear();
-        cursor = 0;
-        burstRemaining = 0;
-    }
+    void clear();
 
     /**
      * @brief Returns true if there are any pending entries in the queue.
      */
-    bool getActive() const
-    {
-        return !outbound.empty();
-    }
+    bool getActive() const;
 
     /**
      * @brief Initialises a retransmit burst over all current entries.
@@ -252,11 +171,7 @@ public:
      * cursor and refreshes the budget, which may cause some entries to be
      * visited twice.
      */
-    void beginRetransmitBurst()
-    {
-        burstRemaining = static_cast<uint32_t>(outbound.size());
-        if (cursor >= outbound.size()) cursor = 0;
-    }
+    void beginRetransmitBurst();
 
     /**
      * @brief Retrieves the next record in the current burst without advancing.
@@ -269,18 +184,7 @@ public:
      * @return True if a record was written to @p recordOut, false if the burst
      *         budget is exhausted or the queue is empty.
      */
-    bool nextInBurst(Record& recordOut)
-    {
-        if (burstRemaining == 0 || outbound.empty())
-            return false;
-
-        if (cursor >= outbound.size())
-            cursor = 0;
-
-        recordOut = outbound[cursor];
-
-        return true;
-    }
+    bool nextInBurst(Record& recordOut);
 
     /**
      * @brief Marks the burst entry identified by @p key as retransmitted and
@@ -293,29 +197,12 @@ public:
      *
      * @param key  Key of the entry just sent.
      */
-    void markBurst(Key& key)
-    {
-        if (auto it = outboundInfo.find(key); it != outboundInfo.end())
-        {
-            it->second.retransmissions++;
-            if (it->second.retransmissions >= getMaxRetransmission())
-            {
-                erase(key);
-                return;
-            }
-
-            cursor = (cursor + 1) % outbound.size();
-            --burstRemaining;
-        }
-    }
+    void markBurst(Key& key);
 
     /**
      * @brief Returns true while the current burst still has entries to deliver.
      */
-    bool burstActive() const
-    {
-        return burstRemaining != 0;
-    }
+    bool burstActive() const;
 
 private:
     /**
@@ -324,15 +211,7 @@ private:
      * Reads `RETRANSMISSION_DC_LIMIT` for demand circuits or
      * `RETRANSMISSION_NON_DC_LIMIT` for regular interfaces.
      */
-    uint8_t getMaxRetransmission()
-    {
-        static constexpr uint8_t kDefaultMaxRetransmission = 5;
-
-        auto limit = iface.getConfigs().get<config::OspfInterface::DEMAND_CIRCUIT>().load()
-            ? process.getConfigs().get<config::Ospf::RETRANSMISSION_DC_LIMIT>()
-            : process.getConfigs().get<config::Ospf::RETRANSMISSION_NON_DC_LIMIT>();
-        return limit.hasValue() ? limit.load() : kDefaultMaxRetransmission;
-    }
+    uint8_t getMaxRetransmission();
 
     size_t   cursor = 0;          ///< Index of the next entry to deliver in the current burst.
     uint32_t burstRemaining = 0;  ///< Number of entries remaining in the current burst.
@@ -350,10 +229,10 @@ private:
     std::vector<Key>    outboundKeys;                   ///< Keys in the same order as outbound records.
     std::vector<Record> outbound;                       ///< Packed array of pending records.
 
-    OspfProcess&    process; ///< Used to read retransmit-limit configuration.
-    OspfInterface&  iface;   ///< Used to determine whether demand-circuit limits apply.
+    OspfInterface& iface; ///< Used to determine whether demand-circuit limits apply.
+    const config::OspfRegistry& processCfgs; ///< Global process configs for retransmission limit.
 };
 
 } // namespace routing::ospf
 
-#endif // RETRNASMISSION_LIST_HPP
+#endif // RETRANSMISSION_LIST_H

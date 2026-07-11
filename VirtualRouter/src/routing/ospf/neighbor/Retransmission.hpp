@@ -7,8 +7,8 @@
 #define RETRNASMISSION_HPP
 
 #include "ospf/transmission/OspfPacket.hpp"
-#include "ospf/database/LSDB.hpp"
-#include "RetransmissionList.hpp"
+#include "ospf/database/LsdbTypes.hpp"
+#include "RetransmissionList.h"
 
 namespace routing::ospf
 {
@@ -60,8 +60,8 @@ public:
      * @param process  The owning OSPF process.
      * @param iface    The interface on which this neighbor was formed.
      */
-    Retransmission(OspfProcess& process, OspfInterface& iface)
-        : outboundLsus(process, iface), outboundLsrs(process, iface) {}
+    Retransmission(OspfInterface& iface, const config::OspfRegistry& cfgs)
+        : outboundLsus(iface, cfgs), outboundLsrs(iface, cfgs) {}
 
     uint32_t dbdTimerId; ///< Active DBD retransmission timer ID; 0 when no DBD is pending acknowledgment.
 
@@ -77,6 +77,15 @@ public:
     RetransmissionList<LsaKey, LsaRecordRef>& lsus() { return outboundLsus; }
 
     /**
+     * @brief Returns the const outbound LSU retransmission list.
+     *
+     * Holds LSAs flooded to this neighbor that are awaiting an explicit
+     * Link-State Acknowledgment. Entries are removed when the matching
+     * LSAck is received or when the LSA is superseded.
+     */
+    const RetransmissionList<LsaKey, LsaRecordRef>& lsus() const { return outboundLsus; }
+
+    /**
      * @brief Returns the outbound LSR retransmission list.
      *
      * Holds LSA keys that have been requested from this neighbor via
@@ -84,6 +93,15 @@ public:
      * Entries are removed when the LSA is received or the adjacency resets.
      */
     RetransmissionList<LsaKey, LsaKey>& lsrs() { return outboundLsrs; }
+
+    /**
+     * @brief Returns the const outbound LSR retransmission list.
+     *
+     * Holds LSA keys that have been requested from this neighbor via
+     * Link-State Request but whose corresponding LSUs have not yet arrived.
+     * Entries are removed when the LSA is received or the adjacency resets.
+     */
+    const RetransmissionList<LsaKey, LsaKey>& lsrs() const { return outboundLsrs; }
 
     /**
      * @brief Returns true while the DBD retransmission timer is active.

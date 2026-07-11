@@ -1,5 +1,5 @@
 /**
- * @file LSDB.hpp
+ * @file LsdbTypes.hpp
  * @brief OSPF Link State Database: LSA storage and retrieval.
  */
 
@@ -9,15 +9,14 @@
  * @brief Link State Database, LSA key, and LSDB table types.
  */
 
-#ifndef OSPF_LSDB_H
-#define OSPF_LSDB_H
+#ifndef OSPF_LSDB_TYPES_H
+#define OSPF_LSDB_TYPES_H
 
 #include <cstdint>
 #include <cstddef>
 #include <unordered_map>
 #include <unordered_set>
 #include <map>
-#include <memory_resource>
 #include <vector>
 #include <atomic>
 #include <chrono>
@@ -43,28 +42,10 @@
 #include "ospf/ospfv3/database/LinkLsa.hpp"
 #include "ospf/ospfv3/database/IntraAreaPrefixLsa.hpp"
 
-#include "ospf/area/FloodTypes.hpp"
+#include "ospf/flooding/FloodTypes.hpp"
 
 namespace routing::ospf
 {
-// Set to 0 if you do not want std::pmr containers in LSDB storage
-#ifndef OSPF_LSDB_USE_PMR
-#define OSPF_LSDB_USE_PMR 0
-#endif
-
-// PMR-aware container aliases used throughout the LSDB.  When OSPF_LSDB_USE_PMR
-// is disabled the aliases fall back to their standard-library equivalents so the
-// rest of the code compiles without change.
-#if OSPF_LSDB_USE_PMR
-template <typename T> using Vec = std::pmr::vector<T>;
-using ByteVec = std::pmr::vector<std::byte>;
-template <typename K, typename V, typename H = std::hash<K>, typename E = std::equal_to<K>>
-using UMap = std::pmr::unordered_map<K, V, H, E>;
-template <typename K, typename H = std::hash<K>, typename E = std::equal_to<K>>
-using USet = std::pmr::unordered_set<K, H, E>;
-template <typename K, typename V, typename C = std::less<K>>
-using OMap = std::pmr::map<K, V, C>;
-#else
 template <typename T> using Vec = std::vector<T>;
 using ByteVec = std::vector<std::byte>;
 template <typename K, typename V, typename H = std::hash<K>, typename E = std::equal_to<K>>
@@ -73,7 +54,6 @@ template <typename K, typename H = std::hash<K>, typename E = std::equal_to<K>>
 using USet = std::unordered_set<K, H, E>;
 template <typename K, typename V, typename C = std::less<K>>
 using OMap = std::map<K, V, C>;
-#endif
 
 /**
  * @brief Wire-derived header metadata stored for every installed LSA.
@@ -91,7 +71,7 @@ struct LsaHeader final
     uint16_t age{0};      ///< Current LSA age in seconds; saturates at MaxAge.
     uint8_t options{0};   ///< Options field (OSPFv2) or zero-padded (OSPFv3 uses per-LSA options).
 
-    bool operator==(LsaHeader& rhs)
+    bool operator==(LsaHeader& rhs) const
     {
         return sequence == rhs.sequence &&
                checksum == rhs.checksum &&
@@ -185,9 +165,6 @@ static_assert(sizeof(LsaTlvNode) == 20, "Unexpected LsaTlvNode size");
  * All TLV values are stored contiguously in `blob`; `nodes` holds the
  * structural metadata (offsets, lengths, tree links).  Node index 0 is a
  * reserved root sentinel; real nodes start at index 1.
- *
- * When PMR is enabled the blob and node vector are allocated from the LSDB's
- * pool resource to avoid heap fragmentation from per-LSA allocations.
  */
 struct LsaTlvForest final
 {
@@ -196,20 +173,9 @@ struct LsaTlvForest final
     ByteVec blob;       ///< Flat byte buffer holding all TLV values for this LSA.
     Vec<LsaTlvNode> nodes; ///< TLV node descriptors; index 0 is the root sentinel.
 
-#if OSPF_LSDB_USE_PMR
-    explicit LsaTlvForest(std::pmr::memory_resource* mr = std::pmr::get_default_resource())
-        : blob(mr), nodes(mr) { nodes.push_back(LsaTlvNode{}); }
-#else
     explicit LsaTlvForest()
     { nodes.push_back(LsaTlvNode{}); }
-#endif
 };
-
-
-/*#if OSPF_LSDB_USE_PMR
-    explicit NetworkLsa(std::pmr::memory_resource* mr = std::pmr::get_default_resource())
-        : attachedRouters(mr) {}
-#endif*/
 
 /**
  * @brief Type-erased container holding the decoded body of any supported LSA type.
@@ -312,7 +278,7 @@ struct LsaRecord final
     std::chrono::steady_clock::time_point installTime;    ///< When this instance was first installed.
     std::chrono::steady_clock::time_point lastRefreshTime; ///< When the age was last reset (self-originated refresh).
 
-    std::atomic<uint32_t> refCnt; ///< Outstanding LsaRecordRef holders; record must not be freed while non-zero.
+    mutable std::atomic<uint32_t> refCnt; ///< Outstanding LsaRecordRef holders; record must not be freed while non-zero.
 
     LsaHeader header{};
     LsaBody body{};
@@ -345,11 +311,11 @@ struct LsaRecord final
 struct LsaRecordRef final
 {
     LsaKey key;
-    LsaRecord* record;
+    const LsaRecord* record;
 
     LsaRecordRef() : record(nullptr) {}
 
-    LsaRecordRef(const LsaKey& k, LsaRecord& r) : key(k), record(&r)
+    LsaRecordRef(const LsaKey& k, const LsaRecord& r) : key(k), record(&r)
     {
         record->refCnt.fetch_add(1, std::memory_order_relaxed);
     }
@@ -410,4 +376,4 @@ using O_LSDB = OMap<LsaKey, LsaRecord>;    ///< Ordered primary store; owns the 
 
 } // namespace routing::ospf
 
-#endif // OSPF_LSDB_H
+#endif // OSPF_LSDB_TYPES_H

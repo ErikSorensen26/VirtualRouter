@@ -1,18 +1,10 @@
 // LsdbTable.cpp
 
 #include "LsdbTable.h"
-#include "ospf/area/FlagManager.h"
+#include "ospf/FlagManager.hpp"
 
 namespace routing::ospf
 {
-LsdbTable::LsdbTable(std::pmr::memory_resource* upstream)
-#if OSPF_LSDB_USE_PMR
-    : pool(upstream), db(&pool), dbStorage(&pool)
-#else
-    : db()
-#endif
-{}
-
 void LsdbTable::reserve(size_t n)
 {
     db.reserve(n);
@@ -81,9 +73,6 @@ void LsdbTable::releaseMemory()
     advDb.clear();
     typeDb.clear();
     dbStorage.clear();
-#if OSPF_LSDB_USE_PMR
-    pool.release();
-#endif
 }
 
 LsaRecord& LsdbTable::upsertMeta(const IncomingLsaContext& lsa, LsaRecordFlags flags)
