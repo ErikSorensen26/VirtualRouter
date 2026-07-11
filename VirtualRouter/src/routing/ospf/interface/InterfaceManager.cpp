@@ -7,7 +7,9 @@
 #include "ospf/area/Area.h"
 #include "OspfInterface.h"
 #include "ospf/OspfProcess.h"
+#include "ospf/neighbor/NeighborTable.h"
 #include "interface/Interface.h"
+#include "ospf/transmission/PacketDispatcher.h"
 
 namespace routing::ospf
 {
@@ -15,14 +17,14 @@ InterfaceManager::InterfaceManager(OspfProcess& p) : process(p) {}
 
 InterfaceManager::~InterfaceManager() {}
 
-OspfInterface* InterfaceManager::getInterface(const OspfInterfaceId& id)
+const OspfInterface* InterfaceManager::getInterface(const OspfInterfaceId& id) const
 {
     if (auto it = ospfInterfaceList.find(id); it != ospfInterfaceList.end())
         return &it->second;
     return nullptr;
 }
 
-OspfInterface* InterfaceManager::getInterfaceByAddress(const types::IPAddress& addr)
+const OspfInterface* InterfaceManager::getInterfaceByAddress(const types::IPAddress& addr) const
 {
     for (auto& [id, iface] : ospfInterfaceList)
         if (iface.interfaceAddress.addr == addr.raw)
@@ -39,12 +41,68 @@ std::vector<types::IPAddress> InterfaceManager::getReachableInterfaces(uint32_t 
     return addrs;
 }
 
+const config::OspfInterfaceBaseRegistry& InterfaceManager::getInterfaceBaseConfigs(const OspfInterface& iface) const
+{
+    return iface.baseConfigs;
+}
+
+const config::OspfInterfaceRegistry& InterfaceManager::getInterfaceConfigs(const OspfInterface& iface) const
+{
+    return iface.configs;
+}
+
+const NeighborTable& InterfaceManager::getNTable(const OspfInterface& iface) const
+{
+    return iface.ntable;
+}
+
 bool InterfaceManager::isInterfaceReachable(uint32_t area, uint32_t ifaceId)
 {
     for (auto& [id, iface] : ospfInterfaceList)
         if (id.area == area && iface.interfaceId == ifaceId)
             return true;
     return false;
+}
+
+void InterfaceManager::broadcastLsu(Area& area, std::vector<std::pair<FloodInfo, LsaRecordRef>>& records)
+{
+    for (auto& [id, iface] : ospfInterfaceList)
+    {
+        if (id.area != area.areaId)
+            continue;
+
+        if (iface.configs.get<config::OspfInterface::DATABASE_FILTER>().load())
+            continue;
+
+        if (iface.configs.get<config::OspfInterface::NETWORK>().load() == config::ospf::NetworkType::BROADCAST)
+        {
+            iface.dispatcher.sendReliableLsu(nullptr, records);
+        }
+        else
+        {
+            iface.ntable.forEach([&iface, &records](uint32_t, Neighbor& nbr) {
+                iface.dispatcher.sendReliableLsu(&nbr, records);
+            });
+        }
+    }
+}
+
+void InterfaceManager::runDCIntegrityScan(bool enabled)
+{
+    for (auto& [ifId, iface] : ospfInterfaceList)
+    {
+        if ((iface.configs.get<config::OspfInterface::DEMAND_CIRCUIT>().load() ||
+            iface.configs.get<config::OspfInterface::FLOOD_REDUCTION>().load()) &&
+            iface.floodReduction != enabled)
+        {
+            iface.floodReduction = enabled;
+
+            // Re-announce the updated DC bit to neighbors and re-originate
+            // this interface's router-LSA contribution with the new options.
+            iface.tmgr.scheduleHello();
+            iface.updateOriginations();
+        }
+    }
 }
 
 OspfInterface& InterfaceManager::createInterface(interface::Interface& interface, const OspfInterfaceId& key)
@@ -54,7 +112,7 @@ OspfInterface& InterfaceManager::createInterface(interface::Interface& interface
 
     auto ifaceIt = ospfInterfaceList.try_emplace(key, process, interface, key);
     OspfInterface& ospfIface = ifaceIt.first->second;
-    ospfIface.getArea().getOriginator().updateInterface(key.interfaceId);
+    ospfIface.updateOriginations();
     return ospfIface;
 }
 
@@ -97,7 +155,7 @@ void InterfaceManager::refreshInterfaceList()
         // Remove shutdown interfaces
         for (auto it = ospfInterfaceList.begin(); it != ospfInterfaceList.end();)
         {
-            if (it->second.getIface().shutdownFlag.load(std::memory_order_relaxed))
+            if (it->second.iface.shutdownFlag.load(std::memory_order_relaxed))
             {
                 auto node = ospfInterfaceList.extract(it++);
                 interfacesToRemove.push_back(std::move(node));
@@ -108,13 +166,13 @@ void InterfaceManager::refreshInterfaceList()
             }
         }
 
-        uint32_t procId = process.getProcId();
+        uint32_t procId = process.procId;
 
         auto isInNetworkRange = [&](types::IPv4Address ip) -> std::optional<uint32_t>
         {
             // Use first area defined that matches.
             std::optional<uint32_t> area{std::nullopt};
-            process.getConfigs().get<config::Ospf::NETWORKS>().withRead([&](const auto& networksList) {
+            process.configs.get<config::Ospf::NETWORKS>().withRead([&](const auto& networksList) {
                 for (const auto& networks : networksList)
                     for (const auto& [prefix, a] : networks)
                     {
@@ -133,15 +191,13 @@ void InterfaceManager::refreshInterfaceList()
             if (!interface || interface->shutdownFlag.load(std::memory_order_relaxed))
                 continue;
 
-            auto& ipInfo = interface->configs;
-
             types::IPPrefix currentAddress;
             std::optional<OspfInterfaceId> key;
 
             if (!process.isV3)
             {
                 { auto pfx = interface->configs.ipv4.getPrimaryPrefix(); currentAddress = types::IPPrefix(pfx.addr, pfx.prefixLength); }
-                auto area = isInNetworkRange(currentAddress.addr);
+                auto area = isInNetworkRange(static_cast<uint32_t>(currentAddress.addr));
                 if (area.has_value()) key.emplace(interface->configs.ipv4.getPrimaryAddress().addr, area.value());
             }
             else
@@ -155,7 +211,7 @@ void InterfaceManager::refreshInterfaceList()
             // Remove any stale entries for this hardware interface (wrong area or wrong IP)
             for (auto it = ospfInterfaceList.begin(); it != ospfInterfaceList.end();)
             {
-                if (&it->second.getIface() != interface)
+                if (&it->second.iface != interface)
                 {
                     ++it;
                     continue;
@@ -189,7 +245,7 @@ void InterfaceManager::refreshInterfaceList()
         if (exists)
         {
             auto* iface = static_cast<OspfInterface*>(interface);
-            iface->getArea().getOriginator().updateInterface(iface->id.interfaceId);
+            iface->updateOriginations();
         }
         else
             createInterface(*static_cast<interface::Interface*>(interface), key);
@@ -206,7 +262,15 @@ void InterfaceManager::syncNeighbors()
 {
     for (auto& [_, iface] : ospfInterfaceList)
     {
-        iface.getNTable().syncUnicast();
+        iface.ntable.syncUnicast();
+    }
+}
+
+void InterfaceManager::resetNeighbors()
+{
+    for (auto& [_, iface] : ospfInterfaceList)
+    {
+        iface.ntable.resetNeighbors();
     }
 }
 } // namespace routing

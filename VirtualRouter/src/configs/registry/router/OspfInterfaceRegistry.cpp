@@ -10,49 +10,36 @@ namespace config
 void OspfInterfaceSyncTimers(void* ifacePtr)
 {
     auto& iface = *static_cast<routing::ospf::OspfInterface*>(ifacePtr);
-    iface.getProcess().getScheduler().post([&iface] {
-        iface.syncTimers();
-    });
+    iface.enqueueSyncTimers();
 }
 
 void OspfInterfaceSyncNeighbors(void* ifacePtr)
 {
     auto& iface = *static_cast<routing::ospf::OspfInterface*>(ifacePtr);
-    iface.getProcess().getScheduler().post([&iface] {
-        iface.getNTable().syncUnicast();
-    });
+    iface.enqueueSyncUnicastNeighbors();
 }
 
 void OspfInterfaceSyncNetworkType(void* ifacePtr)
 {
     auto& iface = *static_cast<routing::ospf::OspfInterface*>(ifacePtr);
-    iface.getProcess().getScheduler().post([&iface] {
-        iface.syncNetworkType();
-    });
+    iface.enqueueSyncNetworkType();
 }
 
 void OspfInterfaceDemandCircuit(void* ifacePtr)
 {
     auto& iface = *static_cast<routing::ospf::OspfInterface*>(ifacePtr);
-    iface.getProcess().getScheduler().post([&iface] {
-        iface.getArea().runDCIntegrityScan();
-        iface.getArea().setFloodReduction(iface);
-    });
+    iface.enqueueSyncDemandCircuit();
 }
 
 void OspfInterfaceBaseUpdateDigestKey(void* ifacePtr)
 {
     auto& iface = *static_cast<routing::ospf::OspfInterface*>(ifacePtr);
-    iface.getProcess().getScheduler().post([&iface] {
-        iface.syncDigestKey();
-    });
+    iface.enqueueSyncDigestKey(); 
 }
 
 void OspfInterfaceBasePrefixSuppression(void* ifacePtr)
 {
     auto& iface = *static_cast<routing::ospf::OspfInterface*>(ifacePtr);
-    iface.getProcess().getScheduler().post([&iface] {
-        iface.getArea().getOriginator().updateInterface(iface.id.interfaceId);
-    });
+    iface.enqueueSyncPrefixSuppression();
 }
 }

@@ -24,9 +24,9 @@ static uint32_t generateInitialDDSequence()
 static uint16_t getMtu(bool isV6, ospf::OspfInterface& iface)
 {
     if (isV6)
-        return iface.getIface().configs.ipv6.mtu.load(std::memory_order_relaxed);
+        return iface.iface.configs.ipv6.mtu.load(std::memory_order_relaxed);
     else
-        return iface.getIface().configs.ipv4.mtu.load(std::memory_order_relaxed);
+        return iface.iface.configs.ipv4.mtu.load(std::memory_order_relaxed);
 }
 
 namespace ospf
@@ -37,7 +37,7 @@ Neighbor::Neighbor(OspfInterface& iface, InterfaceTimers& tmgr, uint32_t rid, ty
       routerID(rid),
       mtu(getMtu(neighborIp.isIPv6(), iface)),
       currentSeq(generateInitialDDSequence()),
-      rtr(iface.getProcess(), iface),
+      rtr(iface, iface.getProcessConfigs()),
       iface(iface),
       tmgr(tmgr)
 {}
@@ -66,7 +66,7 @@ bool Neighbor::setState(Neighbor::State s)
             rtr.lsrs().clear();
 
             // Flush all LSAs originated by this neighbor from the area LSDB
-            iface.getArea().flushNeighborLsas(routerID);
+            iface.flushNeighborLsas(*this);
         }
         case State::ATTEMPT:
         case State::INIT:
@@ -77,7 +77,7 @@ bool Neighbor::setState(Neighbor::State s)
         {
             state = s;
             
-            auto ntype = iface.getConfigs().get<config::OspfInterface::NETWORK>().load();
+            auto ntype = iface.configs.get<config::OspfInterface::NETWORK>().load();
             if (ntype == config::ospf::NetworkType::BROADCAST ||
                 ntype == config::ospf::NetworkType::NON_BROADCAST)
             {
@@ -94,7 +94,7 @@ bool Neighbor::setState(Neighbor::State s)
             {
                 rtr.lsrs().clear();
                 state = s;
-                iface.getDispatcher().sendInitDBD(*this);
+                iface.dispatcher.sendInitDbd(*this);
             }
             break;
         }
@@ -106,7 +106,7 @@ bool Neighbor::setState(Neighbor::State s)
                 state = s;
                 currentDbd = LsaKey{}; // Reset current LSA key
                 if (getRole() == Role::MASTER)
-                    iface.getDispatcher().sendDBD(*this);
+                    iface.dispatcher.sendDbd(*this);
             }
             break;
         }
@@ -123,7 +123,7 @@ bool Neighbor::setState(Neighbor::State s)
                 }
                 else
                 {
-                    iface.getDispatcher().sendReliableLSRequest(*this, rtr.lsrs().getAll());
+                    iface.dispatcher.sendReliableLsr(*this, rtr.lsrs().getAll());
                 }
             }
             break;
@@ -134,9 +134,9 @@ bool Neighbor::setState(Neighbor::State s)
             if (oldState == State::EXCHANGE || oldState == State::LOADING)
             {
                 state = s;
-                iface.getArea().setFloodReduction(iface);
+                iface.setFloodReduction();
                 if (iface.demandCircuit == OspfInterface::DcDecision::ENABLED)
-                    iface.getTimers().stopHello();
+                    tmgr.stopHello();
             }
             break;
         }

@@ -18,6 +18,8 @@
 #include "configs/SubRegistry.hpp"
 #include "configs/RegistryReference.hpp"
 
+#include "configs/FieldAccessor.hpp" // IWYU pragma: keep
+
 namespace config
 {
 namespace ospf

@@ -32,7 +32,7 @@
 #include <atomic>
 #include <concepts>
 #include <cassert>
-#include <optional>
+#include <optional> // IWYU pragma: keep
 #include <utility>
 #include <unordered_map>
 #include <vector>

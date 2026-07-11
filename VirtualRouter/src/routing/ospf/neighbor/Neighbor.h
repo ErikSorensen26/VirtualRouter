@@ -129,6 +129,13 @@ public:
 
     // STATE
 
+    /**
+     * @brief Returns the neighbor's current RFC 2328 §10.1 state-machine state.
+     *
+     * Progression runs Down → Init → 2-Way → ExStart → Exchange → Loading →
+     * Full; routing information from this neighbor is only trusted once the
+     * adjacency reaches Full.
+     */
     State getState() const { return state; }
 
     /**
@@ -195,6 +202,7 @@ public:
     // RETRANSMISSION
 
     Retransmission& getRtr() { return rtr; }
+    const Retransmission& getRtr() const { return rtr; }
 
     std::atomic<bool> isTransit{true}; ///< False once it is confirmed this neighbor need not receive flooded LSAs.
 

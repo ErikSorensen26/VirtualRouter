@@ -70,7 +70,7 @@ public:
      *
      * @param iface  The owning OSPF interface.
      */
-    explicit InterfaceTimers(OspfInterface& iface);
+    explicit InterfaceTimers(OspfInterface& iface, core::ProcessQueueRef&& scheduler);
 
     /**
      * @brief Arms the Hello timer for a single future firing without starting

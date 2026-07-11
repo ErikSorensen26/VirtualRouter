@@ -9,16 +9,18 @@
 #include <IPAddress.h>
 
 #include "ospf/interface/InterfaceId.hpp"
+#include "ospf/interface/OspfInterface.h"
 
 namespace interface { class Interface; }
 namespace types { struct IPAddress; }
 
 namespace routing::ospf
 {
-struct OspfInterfaceId;
-class InterfaceConfigs;
 class OspfProcess;
+class Area;
 class OspfInterface;
+struct FloodInfo;
+struct LsaRecordRef;
 
 /**
  * @brief Owns and indexes all OSPF interfaces active within one OSPF process.
@@ -125,15 +127,36 @@ public:
     void syncNeighbors();
 
     /**
-     * @brief Looks up an OSPF interface by its composite key.
+     * @brief Tears down and restarts the adjacencies on every managed interface.
+     *
+     * Fans out `OspfInterface::resetNeighbors()` across the whole interface
+     * list: each neighbor drops to Down and is rediscovered via the normal
+     * Hello exchange.  Called during area and process resets so no adjacency
+     * state survives an LSDB flush.
+     */
+    void resetNeighbors();
+
+    /**
+     * @brief Checks whether a specific interface is active in a given area.
+     *
+     * @param area  OSPF area ID.
+     * @param id    Hardware interface index.
+     * @return True if the interface exists, is up, and belongs to @p area.
+     */
+    bool isInterfaceReachable(uint32_t area, uint32_t id);
+
+    // GETTERS
+
+    /**
+     * @brief Looks up a const OSPF interface by its composite key.
      *
      * @param id  The interface key to search for.
      * @return Pointer to the `OspfInterface`, or `nullptr` if not found.
      */
-    OspfInterface* getInterface(const OspfInterfaceId& id);
+    const OspfInterface* getInterface(const OspfInterfaceId& id) const;
 
     /**
-     * @brief Looks up an OSPF interface by one of its IP addresses.
+     * @brief Looks up a const OSPF interface by one of its IP addresses.
      *
      * Searches all tracked interfaces for one whose primary or secondary
      * address matches @p addr. Used by the packet dispatcher to route
@@ -142,7 +165,7 @@ public:
      * @param addr  IP address to search for.
      * @return Pointer to the matching `OspfInterface`, or `nullptr`.
      */
-    OspfInterface* getInterfaceByAddress(const types::IPAddress& addr);
+    const OspfInterface* getInterfaceByAddress(const types::IPAddress& addr) const;
 
     /**
      * @brief Returns the IP addresses of all interfaces reachable within an area.
@@ -155,22 +178,134 @@ public:
      */
     std::vector<types::IPAddress> getReachableInterfaces(uint32_t area);
 
-    /**
-     * @brief Checks whether a specific interface is active in a given area.
-     *
-     * @param area  OSPF area ID.
-     * @param id    Hardware interface index.
-     * @return True if the interface exists, is up, and belongs to @p area.
-     */
-    bool isInterfaceReachable(uint32_t area, uint32_t id);
+    // INTERNAL GETTERS
 
-    // INTERFACE LIST
+    /**
+     * @brief Returns an interface's version-agnostic configuration registry.
+     *
+     * Access-mediation helper: `InterfaceManager` is a friend of
+     * @ref OspfInterface, so OSPF-internal collaborators that are not can
+     * read interface config through the manager instead of each being
+     * friended individually.
+     *
+     * @param iface The interface whose base config is requested.
+     */
+    const config::OspfInterfaceBaseRegistry& getInterfaceBaseConfigs(const OspfInterface& iface) const;
+
+    /**
+     * @brief Returns an interface's version-specific (OSPFv2/OSPFv3) configuration registry.
+     *
+     * Same friend-mediation pattern as @ref getInterfaceBaseConfigs.
+     *
+     * @param iface The interface whose config is requested.
+     */
+    const config::OspfInterfaceRegistry& getInterfaceConfigs(const OspfInterface& iface) const;
+
+    /**
+     * @brief Returns an interface's neighbor table for read-only inspection.
+     *
+     * Same friend-mediation pattern as @ref getInterfaceBaseConfigs; used by
+     * the route managers to resolve SPF next hops to neighbor addresses.
+     *
+     * @param iface The interface whose neighbor table is requested.
+     */
+    const NeighborTable& getNTable(const OspfInterface& iface) const;
+
+    // UPDATE
+
+    /**
+     * @brief Transmits a batch of flood-ready LSAs out of every eligible interface in an area.
+     *
+     * For each managed interface belonging to @p area (skipping those with
+     * `database-filter all out` configured): on broadcast segments the batch
+     * is sent once as a multicast reliable LS Update; on all other network
+     * types it is sent per-neighbor as unicast.  Reliable delivery
+     * (retransmission until acknowledged) is handled by each interface's
+     * packet dispatcher.
+     *
+     * @param area    Area whose interfaces should flood the batch.
+     * @param records Batch of (flood reason, LSA record reference) pairs.
+     */
+    void broadcastLsu(Area& area, std::vector<std::pair<FloodInfo, LsaRecordRef>>& records);
+
+    // DEMAND CIRCUIT / FLOOD REDUCTION
+
+    /**
+     * @brief Applies an area-wide Demand-Circuit capability change to every DC-configured interface.
+     *
+     * Called by `Area::runDCIntegrityScan()` when the area's DC
+     * compatibility flips.  For each interface configured for
+     * `demand-circuit` or `flood-reduction` whose active state differs from
+     * @p enabled: updates the flood-reduction flag, schedules a Hello so
+     * neighbors learn the new DC bit, and re-originates the interface's
+     * Router LSA contribution with the updated options.
+     *
+     * @param enabled True if every router in the area still supports DC
+     *                operation (RFC 1793); false disables it everywhere.
+     */
+    void runDCIntegrityScan(bool enabled);
+
+    // ITERATE
+
+    /**
+     * @brief Invokes `fn(id, interface)` for every managed interface.
+     *
+     * Iteration wrapper over the interface map so collaborators can walk all
+     * interfaces without touching the container.  `fn` must not create or
+     * remove interfaces during iteration.
+     */
+    template <typename Fn>
+    void forEach(Fn&& fn);
+
+    /**
+     * @brief Const overload of @ref forEach for read-only traversal.
+     */
+    template <typename Fn>
+    void forEach(Fn&& fn) const;
+    
+
+private:
 
     std::unordered_map<OspfInterfaceId, OspfInterface> ospfInterfaceList; ///< All OSPF interfaces keyed by (interfaceId, area).
 
-private:
     OspfProcess& process; ///< The owning OSPF process.
 };
+
+template <typename Fn>
+void InterfaceManager::forEach(Fn&& fn)
+{
+    for (auto& [id, iface] : ospfInterfaceList)
+    {
+        using ReturnType = std::invoke_result_t<decltype(fn), decltype(id), decltype(iface)>;
+        if constexpr (std::is_same_v<ReturnType, bool>)
+        {
+            if (fn(id, iface))
+                break;
+        }
+        else
+        {
+            fn(id, iface);
+        }
+    }
+}
+
+template <typename Fn>
+void InterfaceManager::forEach(Fn&& fn) const
+{
+    for (const auto& [id, iface] : ospfInterfaceList)
+    {
+        using ReturnType = std::invoke_result_t<decltype(fn), decltype(id), decltype(iface)>;
+        if constexpr (std::is_same_v<ReturnType, bool>)
+        {
+            if (fn(id, iface))
+                break;
+        }
+        else
+        {
+            fn(id, iface);
+        }
+    }
+}
 
 } // namespace routing::ospf
 

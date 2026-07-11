@@ -167,7 +167,7 @@ public:
      *
      * @return Reference to the context provider shared with parent (if masked).
      */
-    ContextProvider& context() noexcept { return ctxProvider; }
+    ContextProvider& context() const noexcept { return ctxProvider; }
 
     /**
      * @brief Returns a typed accessor for the field identified by enum constant `F`.
@@ -443,7 +443,7 @@ private:
     }
 
     /// Context provider for fields requiring external data.
-    ContextProvider ctxProvider;
+    mutable ContextProvider ctxProvider;
     
     /// Optional storage for all fields (allows lazy initialization).
     FieldTuple fields;

@@ -9,40 +9,30 @@ namespace config
 void OspfAreaTypeChange(void* a)
 {
     routing::ospf::Area& area = *static_cast<routing::ospf::Area*>(a);
-    area.process().getScheduler().post([&area]{
-        area.reset();
-    });
+    area.enqueueReset();
 }
 
 void OspfAreaSycnRanges(void* a)
 {
     routing::ospf::Area& area = *static_cast<routing::ospf::Area*>(a);
-    area.process().getScheduler().post([&area] {
-        area.syncRangeConfig();
-    });
+    area.enqueueSyncRanges();
 }
 
 void OspfSyncNeighbors(void* b)
 {
     routing::ospf::OspfProcess& base = *static_cast<routing::ospf::OspfProcess*>(b);
-    base.getScheduler().post([&base] {
-        base.getIfaceMgr().syncNeighbors();
-    });
+    base.enqueueSyncNeighbor();
 }
 
 void OspfSyncNetworks(void* b)
 {
     routing::ospf::OspfProcess& base = *static_cast<routing::ospf::OspfProcess*>(b);
-    base.getScheduler().post([&base] {
-        base.getIfaceMgr().refreshInterfaceList();
-    });
+    base.enqueueSyncNetworks();
 }
 
 void OspfSyncSummaries(void* b)
 {
     routing::ospf::OspfProcess& base = *static_cast<routing::ospf::OspfProcess*>(b);
-    base.getScheduler().post([&base] {
-        base.syncSummaryConfig();
-    });
+    base.enqueueSyncSummaries();
 }
 }

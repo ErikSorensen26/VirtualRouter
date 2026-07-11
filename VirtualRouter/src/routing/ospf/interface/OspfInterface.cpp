@@ -4,8 +4,8 @@
 
 #include "OspfInterface.h"
 #include "ospf/OspfProcess.h"
+#include "ospf/area/IntraOriginator.h"
 #include "ospf/neighbor/Neighbor.h"
-#include "ospf/area/FlagManager.h"
 #include "ospf/transmission/PacketDispatcher.h"
 #include "ospf/ospfv2/transmission/PacketDispatcherV2.h"
 #include "ospf/ospfv3/transmission/PacketDispatcherV3.h"
@@ -32,20 +32,20 @@ auto getIfaceAddr(interface::Interface& iface, types::AddressFamily af) -> types
 namespace ospf
 {
 OspfInterface::OspfInterface(OspfProcess& proc, interface::Interface& iface, const OspfInterfaceId& id)
-    : id(id),
+    : area(proc.insureArea(id.area)),
+      id(id),
       interfaceId(iface.configs.key.getId()),
-      interfaceAddress(getIfaceAddr(iface, proc.getAF())),
-      process(proc),
-      dispatcher(proc.isV3
-          ? static_cast<PacketDispatcher*>(new PacketDispatcherV3(*this))
-          : static_cast<PacketDispatcher*>(new PacketDispatcherV2(*this))),
-      area(process.insureArea(id.area)),
-      flags(*this),
-      lsaFlags(*this),
-      ntable(*this),
-      tmgr(*this),
+      interfaceAddress(getIfaceAddr(iface, proc.af)),
       iface(iface),
-      baseConfigs(dispatcher->getConfigs()),
+      dispatcher(proc.isV3
+          ? *static_cast<PacketDispatcher*>(new PacketDispatcherV3(*this))
+          : *static_cast<PacketDispatcher*>(new PacketDispatcherV2(*this))),
+      tmgr(*this, proc.schedulerMgr.ref()),
+      ntable(*this, tmgr),
+      flags(area.flags),
+      lsaFlags(area.flags),
+      process(proc),
+      baseConfigs(dispatcher.getConfigs()),
       configs(baseConfigs.get<config::OspfInterfaceBase::BASE>().get())
 {
     configs.context().set(this);
@@ -58,23 +58,62 @@ OspfInterface::OspfInterface(OspfProcess& proc, interface::Interface& iface, con
 
 OspfInterface::~OspfInterface()
 {
-    uint32_t pid = process.getProcId();
-
     // Tear down all neighbors and expire originated LSAs
     tmgr.stopHello();
-    for (auto& [rid, nbr] : ntable.neighbors)
-        nbr.setState(Neighbor::State::DOWN);
 
     // Tell the originator to withdraw this interface's contributions
     // (removes the network LSA if DR, removes router link, rebuilds router LSA)
-    area.getOriginator().updateInterface(interfaceId);
+    updateOriginations();
 
-    delete dispatcher;
+    delete &dispatcher;
+}
+
+void OspfInterface::enqueueSyncTimers()
+{
+    process.scheduler.post([this] {
+        syncTimers();
+    });
+}
+
+void OspfInterface::enqueueSyncNetworkType()
+{
+    process.scheduler.post([this] {
+        syncNetworkType();
+    });
+}
+
+void OspfInterface::enqueueSyncUnicastNeighbors()
+{
+    process.scheduler.post([this] {
+        ntable.syncUnicast();
+    });
+}
+
+void OspfInterface::enqueueSyncDemandCircuit()
+{
+    process.scheduler.post([this] {
+        updateOriginations();
+        setFloodReduction();
+    });
+}
+
+void OspfInterface::enqueueSyncDigestKey()
+{
+    process.scheduler.post([this] {
+        syncDigestKey();
+    });
+}
+
+void OspfInterface::enqueueSyncPrefixSuppression()
+{
+    process.scheduler.post([this] {
+        updateOriginations();
+    });
 }
 
 void OspfInterface::calculateCost()
 {
-    uint16_t oldCost = cost;
+    uint16_t oldCost = priv.cost.load(std::memory_order_relaxed);
     uint16_t newCost{0};
 
     auto configuredCost = configs.get<config::OspfInterface::COST>();
@@ -84,16 +123,16 @@ void OspfInterface::calculateCost()
     }
     else
     {
-        uint32_t referenceBw = process.getConfigs().get<config::Ospf::REFERENCE_BANDWIDTH>().load();
+        uint32_t referenceBw = process.configs.get<config::Ospf::REFERENCE_BANDWIDTH>().load();
         uint32_t interfaceBw = iface.configs.getBandwidth();
         newCost = static_cast<uint16_t>(referenceBw / interfaceBw);
     }
     
-    cost = newCost;
+    priv.cost.store(newCost, std::memory_order_relaxed);
 
     if (oldCost != newCost)
     {
-        area.getOriginator().updateInterface(interfaceId);
+        updateOriginations();
     }
 }
 
@@ -106,7 +145,7 @@ bool OspfInterface::setDr(uint32_t candDr)
         return true;
     }
 
-    if (candDr == getArea().process().getRouterId())
+    if (candDr == process.getRouterId())
     {
         dr.rid.store(candDr, std::memory_order_release);
         dr.ip.store(interfaceAddress.addr, std::memory_order_release);
@@ -130,7 +169,7 @@ bool OspfInterface::setBdr(uint32_t candBdr)
         return true;
     }
 
-    if (candBdr == getArea().process().getRouterId())
+    if (candBdr == process.getRouterId())
     {
         bdr.rid.store(candBdr, std::memory_order_release);
         bdr.ip.store(interfaceAddress.addr, std::memory_order_release);
@@ -148,14 +187,8 @@ bool OspfInterface::setBdr(uint32_t candBdr)
 void OspfInterface::election()
 {
     // RFC 2328 §9.4 — two-pass DR/BDR election
-    struct Candidate {
-        uint32_t rid;
-        uint8_t priority;
-        uint32_t claimedDr;
-        uint32_t claimedBdr;
-    };
 
-    uint32_t selfRid  = getArea().process().getRouterId();
+    uint32_t selfRid  = process.getRouterId();
     uint8_t  selfPrio = configs.get<config::OspfInterface::PRIORITY>().load();
 
     const uint32_t prevDr = dr.rid.load(std::memory_order_relaxed);
@@ -163,41 +196,40 @@ void OspfInterface::election()
     const bool wasDr  = (prevDr  == selfRid);
     const bool wasBdr = (prevBdr == selfRid);
 
-    std::vector<Candidate> eligible;
-    eligible.reserve(ntable.neighbors.size() + 1);
+    std::vector<DrCandidate> eligible;
+    eligible.reserve(ntable.size() + 1);
 
     if (selfPrio > 0)
         eligible.push_back({ selfRid, selfPrio, prevDr, prevBdr });
 
-    for (const auto& [rid, nbr] : ntable.neighbors)
-    {
+    ntable.forEach([&eligible](uint32_t rid, Neighbor& nbr) {
         if (nbr.getState() < Neighbor::State::TWOWAY)
-            continue;
+            return;
 
         uint8_t prio = nbr.priority.load(std::memory_order_relaxed);
         if (prio == 0)
-            continue;
+            return;
 
         eligible.push_back({
             rid, prio,
             nbr.dr.load(std::memory_order_relaxed),
             nbr.bdr.load(std::memory_order_relaxed)
         });
-    }
+    });
 
     if (eligible.empty())
     {
         setDr(0);
         setBdr(0);
-        isDr.store(false, std::memory_order_release);
-        isBdr.store(false, std::memory_order_release);
+        priv.isDr.store(false, std::memory_order_release);
+        priv.isBdr.store(false, std::memory_order_release);
         if (prevDr != 0 || prevBdr != 0)
-            area.getOriginator().updateInterface(interfaceId);
+            updateOriginations();
         return;
     }
 
     // Higher priority wins; tie-break by higher RID
-    auto best = [](const Candidate& a, const Candidate& b) -> bool
+    auto best = [](const DrCandidate& a, const DrCandidate& b) -> bool
     {
         if (a.priority != b.priority) return a.priority > b.priority;
         return a.rid > b.rid;
@@ -206,8 +238,8 @@ void OspfInterface::election()
     auto runElection = [&]() -> std::pair<uint32_t,uint32_t>
     {
         // Step 1: Elect BDR
-        const Candidate* declaredBdr = nullptr;
-        const Candidate* fallbackBdr = nullptr;
+        const DrCandidate* declaredBdr = nullptr;
+        const DrCandidate* fallbackBdr = nullptr;
 
         for (const auto& c : eligible)
         {
@@ -227,7 +259,7 @@ void OspfInterface::election()
                               : 0;
 
         // Step 2: Elect DR
-        const Candidate* declaredDr = nullptr;
+        const DrCandidate* declaredDr = nullptr;
         for (const auto& c : eligible)
         {
             if (c.claimedDr == c.rid)
@@ -282,17 +314,16 @@ void OspfInterface::election()
 
     const bool amDr  = (finalDr  == selfRid);
     const bool amBdr = (finalBdr == selfRid);
-    isDr.store(amDr, std::memory_order_release);
-    isBdr.store(amBdr, std::memory_order_release);
+    priv.isDr.store(amDr, std::memory_order_release);
+    priv.isBdr.store(amBdr, std::memory_order_release);
 
     // If DR/BDR changed, trigger neighbor transitions and router LSA rebuild
     if (drChanged || bdrChanged)
     {
         // Neighbors that were TWOWAY and are now DR or BDR eligible need EXSTART
-        for (auto& [rid, nbr] : ntable.neighbors)
-        {
+        ntable.forEach([amDr, amBdr, finalDr, finalBdr](uint32_t rid, Neighbor& nbr) {
             if (nbr.getState() < Neighbor::State::TWOWAY)
-                continue;
+                return;
             const bool adjacencyNeeded =
                 amDr || amBdr || rid == finalDr || rid == finalBdr;
 
@@ -300,9 +331,9 @@ void OspfInterface::election()
                 nbr.setState(Neighbor::State::EXSTART);
             else if (!adjacencyNeeded && nbr.getState() > Neighbor::State::TWOWAY)
                 nbr.setState(Neighbor::State::TWOWAY);
-        }
+        });
 
-        area.getOriginator().updateInterface(interfaceId);
+        updateOriginations();
     }
 }
 
@@ -320,8 +351,8 @@ void OspfInterface::syncTimers()
 
     if (helloMultiplier.hasValue())
     {
-        helloTime = std::chrono::seconds(1) / helloMultiplier.load();
-        deadTime = std::chrono::seconds(1);
+        priv.helloTime = std::chrono::seconds(1) / helloMultiplier.load();
+        priv.deadTime = std::chrono::seconds(1);
         return;
     }
     else
@@ -351,14 +382,14 @@ void OspfInterface::syncTimers()
             deadTimer.set(dt);
         }
 
-        helloTime = std::chrono::seconds(ht);
-        deadTime = std::chrono::seconds(dt);
+        priv.helloTime = std::chrono::seconds(ht);
+        priv.deadTime = std::chrono::seconds(dt);
     }
 }
 
 void OspfInterface::syncNetworkType()
 {
-    auto ntype = getConfigs().get<config::OspfInterface::NETWORK>().load();
+    auto ntype = configs.get<config::OspfInterface::NETWORK>().load();
 
     syncTimers();
     isMulticast.store(
@@ -367,7 +398,7 @@ void OspfInterface::syncNetworkType()
         ntype == config::ospf::NetworkType::POINT_TO_POINT,
         std::memory_order_release
     );
-    getNTable().syncUnicast();
+    ntable.syncUnicast();
 }
 
 void OspfInterface::syncDigestKey()
@@ -377,13 +408,13 @@ void OspfInterface::syncDigestKey()
         if (!keys.empty())
         {
             const auto& last = keys.back();
-            authKey = utils::readU128(std::get<1>(last).value.data());
-            authKeyId = std::get<0>(last);
+            priv.authKey = utils::readU128(std::get<1>(last).value.data());
+            priv.authKeyId = std::get<0>(last);
         }
         else
         {
-            authKey.reset();
-            authKeyId.reset();
+            priv.authKey.reset();
+            priv.authKeyId.reset();
         }
     });
 }
@@ -393,14 +424,7 @@ void OspfInterface::setPassiveMode(bool passive)
     configs.get<config::OspfInterface::PASSIVE>().load();
     if (passive)
     {
-        for (auto it = ntable.neighbors.begin(); it != ntable.neighbors.end();)
-        {
-            tmgr.cancleInactiveTimer(it->second);
-            auto next = std::next(it);
-            Neighbor& nbr = it->second;
-            nbr.setState(Neighbor::State::DOWN);
-            it = next;
-        }
+        ntable.resetNeighbors();
         tmgr.stopHello();
     }
     else
@@ -409,10 +433,66 @@ void OspfInterface::setPassiveMode(bool passive)
     }
 }
 
-Area& OspfInterface::getArea()
+void OspfInterface::setFloodReduction()
 {
-    return area;
-}
+    const bool enableFloodReduction =
+        area.isDcCompatible() && (
+            configs.get<config::OspfInterface::FLOOD_REDUCTION>().load() ||
+            configs.get<config::OspfInterface::DEMAND_CIRCUIT>().load()
+        );
+
+    if (floodReduction != enableFloodReduction)
+    {
+        floodReduction = enableFloodReduction;
+        tmgr.scheduleHello();
+        updateOriginations();
+    }
 }
 
+void OspfInterface::updateOriginations()
+{
+    area.originator.updateInterface(interfaceId) ;
+}
+
+void OspfInterface::resetNeighbors()
+{
+    ntable.resetNeighbors();
+}
+
+void OspfInterface::flushNeighborLsas(Neighbor& nbr)
+{
+    area.flushNeighborLsas(nbr.routerID);
+}
+
+bool OspfInterface::compareLSASummary(const LsaHeader& hdr, const LsaKey& key) const
+{
+    return area.compareLSASummary(hdr, key);
+}
+
+template <typename Policy>
+std::optional<Area::Result> OspfInterface::processLsa(IncomingLsaContext& ctx, LsaBody& body)
+{
+    return area.processLsa<Policy>(ctx, body);
+}
+
+void OspfInterface::runAreaDCIntegrityScan()
+{
+    area.runDCIntegrityScan();
+}
+
+const LsdbTable& OspfInterface::getLsdb() const
+{
+    return area.lsdb;
+}
+
+const config::OspfRegistry& OspfInterface::getProcessConfigs() const
+{
+    return process.configs;
+}
+
+const config::OspfAreaRegistry& OspfInterface::getAreaConfigs() const
+{
+    return area.configs;
+}
+}
 } // namespace routing
