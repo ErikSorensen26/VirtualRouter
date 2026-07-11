@@ -11,6 +11,12 @@ NeighborTable::NeighborTable(EigrpInterface& iface)
     : iface(iface)
 {}
 
+NeighborTable::~NeighborTable()
+{
+    for (auto& [rid, nbr] : neighbors)
+        nbr.setState(Neighbor::State::DOWN);
+}
+
 Neighbor* NeighborTable::createNeighbor(const types::IPAddress& neighborIp, Neighbor::Version v, bool isUnicast)
 {
     // Add neighbor only if it doesn't already exist

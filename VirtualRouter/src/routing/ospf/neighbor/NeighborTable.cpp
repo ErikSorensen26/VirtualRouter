@@ -3,16 +3,17 @@
 #include "Neighbor.h"
 #include "NeighborTable.h"
 #include "ospf/interface/OspfInterface.h"
+#include "ospf/transmission/PacketDispatcher.h"
+#include "ospf/OspfProcess.h"
 
 namespace routing::ospf
 {
-NeighborTable::NeighborTable(OspfInterface& iface)
-    : iface(iface) {}
+NeighborTable::NeighborTable(OspfInterface& iface, InterfaceTimers& t)
+    : iface(iface), tmgr(t) {}
 
 void NeighborTable::syncUnicast()
 {
-    auto& ifaceConfigs = iface.getConfigs();
-    auto ntype = ifaceConfigs.get<config::OspfInterface::NETWORK>().load();
+    auto ntype = iface.configs.get<config::OspfInterface::NETWORK>().load();
 
     if (ntype == config::ospf::NetworkType::POINT_TO_MULTIPOINT || ntype == config::ospf::NetworkType::NON_BROADCAST)
     {
@@ -23,7 +24,7 @@ void NeighborTable::syncUnicast()
             unicastNbrs.insert(ip);
 
         // Update configs of all unicast neighbors (OspfInterface::NEIGHBOR has IgnoreCompare wrappers)
-        ifaceConfigs.get<config::OspfInterface::NEIGHBOR>().withRead([&](const auto& nbrs)
+        iface.configs.get<config::OspfInterface::NEIGHBOR>().withRead([&](const auto& nbrs)
         {
             for (const auto& entry : nbrs)
             {
@@ -46,7 +47,7 @@ void NeighborTable::syncUnicast()
         });
 
         // Ospf::NEIGHBORS uses double-nesting (ListField<vector<tuple<...>>>)
-        iface.getArea().process().getConfigs().get<config::Ospf::NEIGHBORS>().withRead([&](const auto& nbrsList)
+        iface.getProcessConfigs().get<config::Ospf::NEIGHBORS>().withRead([&](const auto& nbrsList)
         {
             for (const auto& nbrs : nbrsList)
                 for (const auto& [ip, cost, dbfilter, pollIntv, priority] : nbrs)
@@ -113,6 +114,18 @@ void NeighborTable::clearUnicast()
     }
 }
 
+void NeighborTable::resetNeighbors()
+{
+    for (auto it = neighbors.begin(); it != neighbors.end();)
+    {
+        tmgr.cancleInactiveTimer(it->second);
+        auto next = std::next(it);
+        Neighbor& nbr = it->second;
+        nbr.setState(Neighbor::State::DOWN);
+        it = next;
+    }
+}
+
 Neighbor* NeighborTable::createNeighbor(uint32_t rid, const types::IPAddress& ipAddress, bool isUnicast)
 {
     auto it = neighbors.find(rid);
@@ -121,7 +134,7 @@ Neighbor* NeighborTable::createNeighbor(uint32_t rid, const types::IPAddress& ip
 
     // Neighbor constructor takes types::IPAddress& (non-const), so make a mutable copy
     types::IPAddress ip = ipAddress;
-    auto [ins, ok] = neighbors.try_emplace(rid, iface, iface.getTimers(), rid, ip, isUnicast);
+    auto [ins, ok] = neighbors.try_emplace(rid, iface, tmgr, rid, ip, isUnicast);
     return &ins->second;
 }
 
@@ -164,9 +177,13 @@ std::optional<size_t> NeighborTable::addNeighborList(uint8_t* buf, size_t maxSiz
     return off;
 }
 
-void NeighborTable::cancelAllInactiveTimers()
+std::vector<uint32_t> NeighborTable::getNeighborRIDs() const
 {
-    for (auto& [_, nbr] : neighbors)
-        iface.getTimers().cancleInactiveTimer(nbr);
+    std::vector<uint32_t> rids;
+    rids.reserve(neighbors.size() + 1);
+    rids.push_back(iface.process.getRouterId());
+    for (const auto& [rid, _] : neighbors)
+        rids.push_back(rid);
+    return rids;
 }
 } // namespace routing

@@ -9,13 +9,19 @@
 #include <cstdint>
 #include <optional>
 #include <unordered_map>
+#include <vector>
+#include "Neighbor.h"
 
 namespace types { struct IPAddress; }
 
 namespace routing::ospf
 {
 class OspfInterface;
+class InterfaceTimers;
 class Neighbor;
+struct DrCandidate;
+struct FloodInfo;
+struct LsaRecordRef;
 
 /**
  * @brief Maintains the set of OSPF neighbors discovered on one interface.
@@ -60,7 +66,7 @@ public:
      *
      * @param iface  The owning OSPF interface.
      */
-    explicit NeighborTable(OspfInterface& iface);
+    explicit NeighborTable(OspfInterface& iface, InterfaceTimers& tmgr);
 
     /**
      * @brief Reconciles the live neighbor table against the unicast configuration.
@@ -77,6 +83,17 @@ public:
      * Used when the unicast neighbor list is cleared from configuration.
      */
     void clearUnicast();
+
+    /**
+     * @brief Drops every neighbor back to the Down state.
+     *
+     * Cancels each neighbor's inactivity timer first so no dead-interval
+     * callback fires mid-reset, then runs the Down transition (which tears
+     * down the adjacency and clears exchange/retransmission state).  Entries
+     * are kept in the table; adjacencies re-form through the normal Hello
+     * exchange.  Used during area and process resets.
+     */
+    void resetNeighbors();
 
     /**
      * @brief Creates a new `Neighbor` entry for the given Router ID and address.
@@ -142,6 +159,42 @@ public:
      */
     std::optional<size_t> addNeighborList(uint8_t* buf, size_t maxSize);
 
+    // ITERATION
+
+    /**
+     * @brief Invokes `fn(rid, neighbor)` for every neighbor in the table.
+     *
+     * Iteration wrapper so callers never touch the underlying map.  `fn`
+     * must not create or delete neighbors during iteration; collect keys and
+     * use @ref deleteNeighbor after the loop instead.
+     */
+    template <typename Fn>
+    void forEach(Fn&& fn);
+
+    /**
+     * @brief Const overload of @ref forEach for read-only traversal.
+     */
+    template <typename Fn>
+    void forEach(Fn&& fn) const;
+
+
+    /**
+     * @brief Returns the number of neighbors currently in the table, in any state.
+     */
+    size_t size() const { return neighbors.size(); }
+
+    // HELPERS
+
+    /**
+     * @brief Returns the local Router ID followed by every neighbor's Router ID.
+     *
+     * Used when originating this segment's Network LSA, whose body must list
+     * all routers attached to the network (RFC 2328 §12.4.2) — the DR itself
+     * plus each neighbor on the segment.
+     */
+    std::vector<uint32_t> getNeighborRIDs() const;
+
+private:
     std::unordered_map<uint32_t, Neighbor> neighbors; ///< Live neighbors keyed by Router ID.
 
     /**
@@ -158,11 +211,24 @@ public:
         uint8_t priority{0};                        ///< Router priority to advertise to this neighbor.
     };
 
-private:
     std::unordered_map<types::IPAddress, UnicastConfigs> unicast; ///< Statically configured unicast neighbors.
     OspfInterface& iface;
+    InterfaceTimers& tmgr;
 };
 
+template <typename Fn>
+void NeighborTable::forEach(Fn&& fn)
+{
+    for (auto& [rid, nbr] : neighbors)
+        fn(rid, nbr);
+}
+
+template <typename Fn>
+void NeighborTable::forEach(Fn&& fn) const
+{
+    for (const auto& [rid, nbr] : neighbors)
+        fn(rid, nbr);
+}
 } // namespace routing::ospf
 
 #endif // OSPF_NEIGHBOR_TABLE_H

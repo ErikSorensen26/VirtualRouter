@@ -60,6 +60,7 @@ public:
      * @param iface Owning EIGRP interface; must outlive this object.
      */
     NeighborTable(EigrpInterface& iface);
+    ~NeighborTable();
 
     /**
      * @brief Creates and registers a new neighbor entry for the given IP address.
