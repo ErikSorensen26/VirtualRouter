@@ -3,8 +3,8 @@
 #include <TimeManager.h>
 
 #include "FloodManager.h"
-#include "Area.h"
-#include "ospf/OspfProcess.h"
+#include "ospf/area/Area.h"
+#include "configs/registry/router/OspfRegistry.h"
 #include "ospf/interface/OspfInterface.h"
 
 namespace routing::ospf
@@ -36,11 +36,11 @@ void FloodManager::startFloodTimer()
     if (timerActive.load(std::memory_order_relaxed))
         return;
 
-    uint32_t pacingMs = area.process().getConfigs().get<config::Ospf::FLOOD_PACING>().load();
+    uint32_t pacingMs = area.getProcessConfigs().get<config::Ospf::FLOOD_PACING>().load();
 
     auto fireTime = std::chrono::steady_clock::now() + std::chrono::milliseconds(pacingMs);
 
-    timerId = area.getScheduler().postAfter(fireTime, [this](uint32_t) {
+    timerId = area.scheduler.postAfter(fireTime, [this](uint32_t) {
         onFloodTimer();
     });
 }
@@ -56,17 +56,6 @@ void FloodManager::runFlood()
     if (batch.empty())
         return;
 
-    auto& ifaceMgr = area.process().getIfaceMgr();
-
-    for (auto& [id, iface] : ifaceMgr.ospfInterfaceList)
-    {
-        if (id.area !=  area.areaId)
-            continue;
-
-        if (iface.getConfigs().get<config::OspfInterface::DATABASE_FILTER>().load())
-            continue;
-
-        area.send(iface, batch);
-    }
+    area.send(batch);
 }
 } // namespace routing

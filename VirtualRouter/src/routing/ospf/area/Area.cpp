@@ -2,79 +2,87 @@
 
 #include <RCU.hpp>
 #include <variant>
-#include <limits>
 #include <Global.h>
 #include <VirtualRouter.h>
 
 #include "Area.h"
+#include "IntraOriginator.h"
+#include "ospf/OspfProcess.h"
 #include "ospf/OspfTypes.hpp"
 #include "ospf/neighbor/Neighbor.h"
 #include "ospf/neighbor/NeighborTable.h"
-#include "ospf/topology/RouteManager.h"
 #include "configs/registry/router/OspfRegistry.h"
 #include "ospf/transmission/PacketDispatcher.h"
-#include "ospf/ospfv2/area/OriginatorV2.h"
-#include "ospf/ospfv3/area/OriginatorV3.h"
 
 namespace routing::ospf
 {
-Area::Area(OspfProcess& base, uint32_t id, std::pmr::memory_resource* mr)
-    : mr(mr ? mr : std::pmr::get_default_resource()),
-      configs(base.getConfigs().get<config::Ospf::AREA_CONFIGS>().emplaceBack(id)),
-      db(mr),
-      base(base),
-      spfMgr(*this),
+Area::Area(OspfProcess& base, uint32_t id)
+    : process(base),
+      areaId(id),
+      spfMgr(*this, process.rib),
       flags(base.isV3),
       floodMgr(*this),
-      scheduler(base.getSchedulerQueue().ref()),
-      originator(base.isV3
-          ? *static_cast<Originator*>(new OriginatorV3(*this))
-          : *static_cast<Originator*>(new OriginatorV2(*this))
-      ),
-      type(configs.get<config::OspfArea::AREA_TYPE>().load()),
-      areaId(id)
+      scheduler(base.schedulerMgr.ref()),
+      originContext(*this),
+      originator(IntraOriginator::create(originContext)),
+      routeManager(*this),
+      configs(base.configs.get<config::Ospf::AREA_CONFIGS>().emplaceBack(id)),
+      priv(*this)
 {
-    bool isStub = (type == config::ospf::AreaType::STUB ||
-                   type == config::ospf::AreaType::TOTALLY_STUB);
-    bool isNssa = (type == config::ospf::AreaType::NSSA ||
-                   type == config::ospf::AreaType::TOTALLY_NSSA);
+    priv.type = configs.get<config::OspfArea::AREA_TYPE>().load();
+
+    bool isStub = (priv.type == config::ospf::AreaType::STUB ||
+                   priv.type == config::ospf::AreaType::TOTALLY_STUB);
+    bool isNssa = (priv.type == config::ospf::AreaType::NSSA ||
+                   priv.type == config::ospf::AreaType::TOTALLY_NSSA);
     flags.setExternalRouting(!isStub);
     flags.setNssa(isNssa);
 
     configs.context().set(this);
-    startAgingTimer();
+    priv.startAgingTimer();
 }
+
+Area::Private::Private(Area& a)
+    : area(a)
+{}
 
 Area::~Area()
 {
-    if (ignoreTid != 0)
-        scheduler.cancel(ignoreTid);
-    if (resetTid != 0)
-        scheduler.cancel(resetTid);
-    if (agingTimerId != 0)
-        scheduler.cancel(agingTimerId);
-    base.getConfigs().get<config::Ospf::AREA_CONFIGS>().erase(areaId);
+    if (priv.ignoreTid != 0)
+        scheduler.cancel(priv.ignoreTid);
+    if (priv.resetTid != 0)
+        scheduler.cancel(priv.resetTid);
+    if (priv.agingTimerId != 0)
+        scheduler.cancel(priv.agingTimerId);
+    process.configs.get<config::Ospf::AREA_CONFIGS>().erase(areaId);
     delete &originator;
 }
 
-void Area::initializeReset()
+void Area::enqueueReset()
 {
     scheduler.post([this] {
         reset();
     });
 }
 
+void Area::enqueueSyncRanges()
+{
+    scheduler.post([this] {
+        syncRangeConfig();
+    });
+}
+
 void Area::reloadType()
 {
     auto newType = configs.get<config::OspfArea::AREA_TYPE>().load();
-    if (newType == type) return;
+    if (newType == priv.type) return;
 
-    type = newType;
+    priv.type.store(newType, std::memory_order_release);
 
-    bool isStub = (type == config::ospf::AreaType::STUB ||
-                   type == config::ospf::AreaType::TOTALLY_STUB);
-    bool isNssa = (type == config::ospf::AreaType::NSSA ||
-                   type == config::ospf::AreaType::TOTALLY_NSSA);
+    bool isStub = (priv.type == config::ospf::AreaType::STUB ||
+                   priv.type == config::ospf::AreaType::TOTALLY_STUB);
+    bool isNssa = (priv.type == config::ospf::AreaType::NSSA ||
+                   priv.type == config::ospf::AreaType::TOTALLY_NSSA);
 
     flags.setExternalRouting(!isStub);
     flags.setNssa(isNssa);
@@ -85,82 +93,34 @@ void Area::reset()
     reloadType();
 
     // Reset all neighbors on all interfaces in this area
-    auto& ifaceMgr = base.getIfaceMgr();
-    for (auto& [ifId, iface] : ifaceMgr.ospfInterfaceList)
-    {
-        if (iface.getAreaId() != areaId) continue;
-        for (auto& [rid, nbr] : iface.getNTable().neighbors)
-            nbr.setState(Neighbor::State::DOWN);
-    }
+    process.ifaceMgr.resetNeighbors();
 
     // Flush and clear LSDB
     // MaxAge-flood all LSAs so neighbors know we're resetting
-    for (auto& [key, record] : db.getIterableLSDB())
+    for (auto& [key, record] : lsdb.getIterableLSDB())
     {
         record.header.age = OSPF_MAX_AGE;
         FloodInfo info{FloodReason::FLUSH};
         floodMgr.enqueueFlood(LsaRecordRef{key, record}, info);
     }
-    db.clear();
+    lsdb.clear();
 
     // Re-originate all self-originated LSAs
     originator.fullRefresh();
-}
-
-void Area::startAgingTimer()
-{
-    agingTimerId = 0;
-    auto nextFire = std::chrono::steady_clock::now() + std::chrono::seconds(1);
-    agingTimerId = scheduler.postAfter(nextFire, [this](uint32_t) {
-        agingTimerId = 0;
-        onAgingTick();
-    });
-}
-
-void Area::onAgingTick()
-{
-    // Increment all LSA ages by 1 second, find how many hit MaxAge
-    size_t expired = db.ageAll(1, OSPF_MAX_AGE, false);
-
-    if (expired > 0)
-    {
-        // Collect MaxAge LSAs, flood them, then purge
-        std::vector<std::pair<LsaKey, LsaRecord*>> maxAgeLsas;
-        for (auto& [key, record] : db.getIterableLSDB())
-        {
-            if (record.header.age >= OSPF_MAX_AGE)
-                maxAgeLsas.push_back({key, &record});
-        }
-
-        for (auto& [key, record] : maxAgeLsas)
-        {
-            FloodInfo info{FloodReason::FLUSH};
-            floodMgr.enqueueFlood(LsaRecordRef{key, *record}, info);
-        }
-
-        db.purgeExpired(OSPF_MAX_AGE);
-
-        if (base.isV3)
-            spfMgr.requestSpf<PolicyV3>();
-        else
-            spfMgr.requestSpf<PolicyV2>();
-    }
-
-    startAgingTimer();
 }
 
 void Area::flushNeighborLsas(uint32_t neighborRid)
 {
     // Collect all LSA keys originated by this neighbor
     std::vector<LsaKey> toFlush;
-    db.forEach([&](const LsaKey& key, const LsaRecord&) {
+    lsdb.forEach([&](const LsaKey& key, const LsaRecord&) {
         if (key.advertisingRouter == neighborRid)
             toFlush.push_back(key);
     });
 
     for (const auto& key : toFlush)
     {
-        LsaRecord* record = db.find(key);
+        LsaRecord* record = lsdb.find(key);
         if (!record) continue;
 
         record->header.age = OSPF_MAX_AGE;
@@ -170,81 +130,46 @@ void Area::flushNeighborLsas(uint32_t neighborRid)
 
     if (!toFlush.empty())
     {
-        if (base.isV3)
-            spfMgr.requestSpf<PolicyV3>();
-        else
-            spfMgr.requestSpf<PolicyV2>();
+        spfMgr.requestSpf();
     }
 }
 
 void Area::clear()
 {
-    db.clear();
+    lsdb.clear();
 }
 
 void Area::releaseMemory()
 {
-    db.releaseMemory();
+    lsdb.releaseMemory();
 }
 
 void Area::runDCIntegrityScan()
 {
-    bool enabled = db.runDCIntegrityScan();
-    bool old = dcCompatible.exchange(enabled, std::memory_order_acq_rel);
+    bool enabled = lsdb.runDCIntegrityScan();
+    bool old = priv.dcCompatible.exchange(enabled, std::memory_order_acq_rel);
     if (old != enabled)
     {
-        auto& ifaceMgr = base.getIfaceMgr();
-        for (auto& [id, iface] : ifaceMgr.ospfInterfaceList)
-        {
-            auto& ifaceConfigs = iface.getConfigs();
-            if ((ifaceConfigs.get<config::OspfInterface::DEMAND_CIRCUIT>().load() ||
-                ifaceConfigs.get<config::OspfInterface::FLOOD_REDUCTION>().load()) &&
-                iface.floodReduction != enabled)
-            {
-                iface.floodReduction = enabled;
-
-                // Re-announce the updated DC bit to neighbors and re-originate
-                // this interface's router-LSA contribution with the new options.
-                iface.getTimers().scheduleHello();
-                iface.getArea().getOriginator().updateInterface(iface.id.interfaceId);
-            }
-        }
-    }
-}
-
-void Area::setFloodReduction(OspfInterface& iface)
-{
-    auto& ifaceConfigs = iface.getConfigs();
-    const bool enableFloodReduction =
-        dcCompatible.load(std::memory_order_relaxed) && (
-            ifaceConfigs.get<config::OspfInterface::FLOOD_REDUCTION>().load() ||
-            ifaceConfigs.get<config::OspfInterface::DEMAND_CIRCUIT>().load()
-        );
-
-    if (iface.floodReduction != enableFloodReduction)
-    {
-        iface.floodReduction = enableFloodReduction;
-        iface.getTimers().scheduleHello();
-        iface.getArea().getOriginator().updateInterface(iface.id.interfaceId);
+        process.ifaceMgr.runDCIntegrityScan(enabled);
     }
 }
 
 bool Area::isValidForwardAddress(const types::IPAddress& addr) const
 {
-    if ((type == config::ospf::AreaType::NSSA || type == config::ospf::AreaType::TOTALLY_NSSA) &&
+    if ((priv.type == config::ospf::AreaType::NSSA || priv.type == config::ospf::AreaType::TOTALLY_NSSA) &&
         configs.get<config::OspfArea::NSSA_SUPPRESS_FA>().load())
         return false;
 
-    if (base.getConfigs().get<config::Ospf::LRC_FORWARDING_ADDRESS>().load())
+    if (process.configs.get<config::Ospf::LRC_FORWARDING_ADDRESS>().load())
     {
         utils::RCU::Guard g;
         return addr.isIPv6()
-            ? base.routingInstance->getRib().lookup(addr.v6(), g) != nullptr
-            : base.routingInstance->getRib().lookup(addr.v4(), g) != nullptr;
+            ? process.routingInstance->getRib().lookup(addr.v6(), g) != nullptr
+            : process.routingInstance->getRib().lookup(addr.v4(), g) != nullptr;
     }
     else
     {
-        return base.getRib().lpmLookup(addr, areaId);
+        return process.rib.lpmLookup(addr, areaId);
     }
 }
 
@@ -252,33 +177,30 @@ void Area::syncRangeConfig()
 {
     auto cfgRanges = configs.get<config::OspfArea::RANGE>();
     std::unordered_set<types::IPPrefix> activeRanges;
-    rangePrefixes.clear();
+    priv.rangePrefixes.clear();
 
     cfgRanges.withRead([&](const auto& tsList)
     {
         for (const auto& t : tsList)
         {
             const auto& [pfx, noAdv, cost] = t;
-            rangePrefixes.insert(pfx);
+            priv.rangePrefixes.insert(pfx);
 
-            auto& r = ranges[pfx];
+            auto& r = priv.ranges[pfx];
             r.notAdvertise = noAdv;
             r.costOverride = cost;
         }
     });
 
-    for (auto it = ranges.begin(); it != ranges.end();)
+    for (auto it = priv.ranges.begin(); it != priv.ranges.end();)
     {
-        if (rangePrefixes.find(it->first) == rangePrefixes.end())
-        {
-            it = ranges.erase(it);
-            rangePrefixes.erase(it->first);
-        }
+        if (priv.rangePrefixes.find(it->first) == priv.rangePrefixes.end())
+            it = priv.ranges.erase(it);
         else
             ++it;
     }
 
-    for (const auto& [r, _] : ranges)
+    for (const auto& [r, _] : priv.ranges)
         activeRanges.insert(r);
 
     syncRangeSuppression(activeRanges);
@@ -286,21 +208,21 @@ void Area::syncRangeConfig()
 
 void Area::syncRangeSuppression(const std::unordered_set<types::IPPrefix>& activeRanges, bool abrChange)
 {
-    bool isABR = base.isABR();
+    bool isABR = process.isABR();
 
     auto changes = isABR
-        ? base.getRib().refreshIntraRangeSuppression(areaId, activeRanges)
-        : base.getRib().refreshIntraRangeSuppression(areaId, {});
+        ? process.rib.refreshIntraRangeSuppression(areaId, activeRanges)
+        : process.rib.refreshIntraRangeSuppression(areaId, {});
 
-    if (base.isV3)
-        base.reoriginateSummaries<PolicyV3>(*this, changes);
+    if (process.isV3)
+        process.interOriginator.reoriginateSummaries<PolicyV3>(originContext, changes);
     else
-        base.reoriginateSummaries<PolicyV2>(*this, changes);
+        process.interOriginator.reoriginateSummaries<PolicyV2>(originContext, changes);
 
     if (isABR || abrChange)
     {
         std::vector<std::pair<types::IPPrefix, OspfPath>> intra = isABR
-            ? base.getRib().getIntraAreaRoutes(areaId)
+            ? process.rib.getIntraAreaRoutes(areaId)
             : std::vector<std::pair<types::IPPrefix, OspfPath>>{};
 
         syncRangeRuntime(intra, abrChange);
@@ -327,12 +249,12 @@ void Area::syncRangeRuntime(const std::vector<std::pair<types::IPPrefix, OspfPat
     std::vector<DiscardAction> discardActions;
 
     // If not ABR: withdraw any previously originated range summaries + discards, but do NOT just clear silently.
-    if (!base.isABR())
+    if (!process.isABR())
     {
         if (!abrChange) return;
 
         // Build withdrawals from existing runtime state
-        for (auto& [pfx, r] : ranges)
+        for (auto& [pfx, r] : priv.ranges)
         {
             if (r.summary.has_value())
             {
@@ -353,9 +275,9 @@ void Area::syncRangeRuntime(const std::vector<std::pair<types::IPPrefix, OspfPat
     else
     {
         // ABR case: compute contributors and update runtime state
-        auto rcs = computeRangeContributors(intraRoutes, ranges);
+        auto rcs = computeRangeContributors(intraRoutes, priv.ranges);
 
-        for (auto& [pfx, r] : ranges)
+        for (auto& [pfx, r] : priv.ranges)
         {
             auto it = rcs.find(pfx);
             uint32_t count = 0;
@@ -375,8 +297,8 @@ void Area::syncRangeRuntime(const std::vector<std::pair<types::IPPrefix, OspfPat
             // Summary
             if (!r.summary.has_value() && shouldAdvertise)
             {
-                const uint32_t lsid = base.isV3
-                    ? base.monotonicIntraId.fetch_add(1, std::memory_order_release)
+                const uint32_t lsid = process.isV3
+                    ? getInterOriginator().fetchAddMonotonicIntraId()
                     : pfx.v4();
 
                 r.summary = lsid;
@@ -413,23 +335,25 @@ void Area::syncRangeRuntime(const std::vector<std::pair<types::IPPrefix, OspfPat
         }
     }
 
-    // Execute actions OUTSIDE rangeMu
     for (const auto& a : summaryActions)
-        originator.originateSummary(a.lsid, a.pfx, a.metric, a.flush);
+    {
+        process.isV3
+            ? getInterOriginator().originateSummary<PolicyV3>(originContext, a.lsid, a.pfx, a.metric, a.flush)
+            : getInterOriginator().originateSummary<PolicyV2>(originContext, a.lsid, a.pfx, a.metric, a.flush);
+    }
 
-    auto& rib = base.getRib();
-    if (base.getConfigs().get<config::Ospf::DISCARD_INTERNAL>().load())
+    if (process.configs.get<config::Ospf::DISCARD_INTERNAL>().load())
     {
         for (const auto& d : discardActions)
         {
             if (d.install)
             {
-                const uint8_t ad = base.getConfigs().get<config::Ospf::DISCARD_INTERNAL_DISTANCE>().load();
-                rib.installDiscardRoute({ d.pfx, areaId }, d.metric, ad);
+                const uint8_t ad = process.configs.get<config::Ospf::DISCARD_INTERNAL_DISTANCE>().load();
+                process.rib.installDiscardRoute({ d.pfx, areaId }, d.metric, ad);
             }
             else
             {
-                rib.withdrawDiscardRoute({ d.pfx, areaId });
+                process.rib.withdrawDiscardRoute({ d.pfx, areaId });
             }
         }
     }
@@ -437,16 +361,18 @@ void Area::syncRangeRuntime(const std::vector<std::pair<types::IPPrefix, OspfPat
 
 const std::unordered_set<types::IPPrefix>& Area::getRanges() const
 {
-    return rangePrefixes;
+    return priv.rangePrefixes;
 }
 
-void Area::suppressInterAreaPrefix(const types::IPPrefix& prefix) const
+void Area::suppressInterAreaPrefix(const types::IPPrefix& prefix)
 {
-    auto it = ranges.find(prefix);
-    if (it == ranges.end() || !it->second.summary.has_value())
+    auto it = priv.ranges.find(prefix);
+    if (it == priv.ranges.end() || !it->second.summary.has_value())
         return;
 
-    originator.originateSummary(it->second.summary.value(), prefix, 0, true);
+    process.isV3
+        ? getInterOriginator().originateSummary<PolicyV3>(originContext, it->second.summary.value(), prefix, 0, true)
+        : getInterOriginator().originateSummary<PolicyV2>(originContext, it->second.summary.value(), prefix, 0, true);
 }
 
 std::unordered_map<types::IPPrefix, std::pair<uint32_t, uint32_t>> Area::computeRangeContributors(
@@ -473,34 +399,20 @@ std::unordered_map<types::IPPrefix, std::pair<uint32_t, uint32_t>> Area::compute
     return rcs;
 }
 
-void Area::send(OspfInterface& iface, std::vector<std::pair<FloodInfo, LsaRecordRef>>& records)
+void Area::send(std::vector<std::pair<FloodInfo, LsaRecordRef>>& records)
 {
-    auto& ntable = iface.getNTable();
-    auto& dispatcher = iface.getDispatcher();
-
-    if (iface.getConfigs().get<config::OspfInterface::NETWORK>().load() == config::ospf::NetworkType::BROADCAST)
-    {
-        dispatcher.sendReliableLSUpdate(nullptr, records);
-    }
-    else
-    {
-        for (auto& [rid, nbr] : ntable.neighbors)
-        {
-            dispatcher.sendReliableLSUpdate(&nbr, records);
-        }
-    }
+    process.ifaceMgr.broadcastLsu(*this, records);
 }
 
 template <typename Policy>
 std::optional<Area::Result> Area::processLsa(IncomingLsaContext& ctx, LsaBody& body)
 {
-    if (!preProcess<Policy>(ctx, body)) return std::nullopt;
-    auto result = process(ctx, body);
+    if (!priv.preProcess<Policy>(ctx, body)) return std::nullopt;
+    auto result = priv.process(ctx, body);
 
-    installLsa(result, ctx, body);
-    evaluateDecision<Policy>(result, ctx);
-
-    postProcess<Policy>(result, ctx, body);
+    priv.installLsa(result, ctx, body);
+    priv.evaluateDecision(result, ctx);
+    priv.postProcess<Policy>(result, ctx, body);
 
     return result;
 }
@@ -508,18 +420,114 @@ std::optional<Area::Result> Area::processLsa(IncomingLsaContext& ctx, LsaBody& b
 template <typename Policy>
 std::optional<Area::Result> Area::processLsa(IncomingLsaContext& ctx, const LsaBody& body)
 {
-    preProcess<Policy>(ctx, body);
-    auto result = process(ctx, body);
+    priv.preProcess<Policy>(ctx, body);
+    auto result = priv.process(ctx, body);
 
-    evaluateDecision<Policy>(result, ctx);
-
-    postProcess<Policy>(result, ctx, body);
+    priv.evaluateDecision(result, ctx);
+    priv.postProcess<Policy>(result, ctx, body);
 
     return result;
 }
 
 template <typename Policy>
-bool Area::preProcess(IncomingLsaContext& ctx, const LsaBody& body)
+void Area::processSummaries(std::unordered_map<LsaKey, LsaBody>& summaries)
+{
+    lsdb.forEachInType(Policy::InterNetworkType, [&](const LsaKey& key, const LsaRecord& record) {
+        if (!summaries.contains(key))
+            originContext.originateLsa<Policy>(key, record.body, true);
+    });
+
+    for (auto& [key, body] : summaries)
+    {
+        originContext.originateLsa<Policy>(key, body, false);
+    }
+}
+
+template <typename Policy>
+void Area::processExternalLsa(IncomingLsaContext& ctx, const LsaBody& body)
+{
+    if (!priv.preProcess<Policy>(ctx, body)) return;
+
+    bool expire = ctx.header.age == OSPF_MAX_AGE;
+    LsaBody bodyCopy = body;
+
+    auto& external = std::get<typename Policy::ExternalLsa>(bodyCopy);
+    if constexpr (std::is_same_v<Policy, PolicyV2>)
+    {
+        if (external.forwardingAddress != 0 && !isValidForwardAddress(types::IPAddress(external.forwardingAddress)))
+            external.forwardingAddress = 0;
+    }
+    else
+    {
+        if (external.forwardingAddress.has_value() && !isValidForwardAddress(external.forwardingAddress.value()))
+            external.forwardingAddress = std::nullopt;
+    }
+
+    // Manage type 4 if needed
+    if (priv.type.load(std::memory_order_relaxed) == config::ospf::AreaType::NORMAL)
+        getInterOriginator().addExternal<Policy>(originContext, ctx.key.advertisingRouter, ctx.key.linkStateId, expire);
+
+    auto result = priv.process(ctx, body);
+    priv.installLsa(result, ctx, body);
+    priv.evaluateDecision(result, ctx);
+}
+
+bool Area::compareLSASummary(const LsaHeader& hdr, const LsaKey& key) const
+{
+    const LsaRecord* existing = lsdb.find(key);
+
+    // We don't have this LSA at all — need to request it
+    if (!existing)
+        return true;
+
+    // Neighbor has a newer version — need to request it
+    const LsaCompareResult cmp = priv.compareLsaHeaders(hdr, existing->header);
+    return cmp == LsaCompareResult::NEWER;
+}
+
+LsaRecordFlags Area::makeFlags(const IncomingLsaContext& ctx) noexcept
+{
+    LsaRecordFlags f = LsaRecordFlags::NONE;
+    if (ctx.selfOriginatedKey) f |= LsaRecordFlags::SELF_ORIGINATED;
+    if (ctx.checksumValid) f |= LsaRecordFlags::CHECKSUM_VALID;
+    return f;
+}
+
+InterOriginator& Area::getInterOriginator()
+{
+    return process.interOriginator;
+}
+
+ExternalOriginator& Area::getExternalOriginator()
+{
+    return process.externalOriginator;
+}
+
+TopologyTable& Area::getTopoTable()
+{
+    return process.table;
+}
+
+const config::OspfRegistry& Area::getProcessConfigs() const
+{
+    return process.configs;
+}
+
+const InterfaceManager& Area::getIfaceMgr() const
+{
+    return process.ifaceMgr;
+}
+
+void Area::Private::evaluateDecision(Result& result, const IncomingLsaContext& ctx)
+{
+    if (result.decision.shouldFlood && result.record)
+        area.floodMgr.enqueueFlood(LsaRecordRef{ctx.key, *result.record}, ctx.info);
+    if (result.decision.affectsSpfGraph && result.decision.topologyChanged)
+        area.spfMgr.requestSpf();
+}
+
+template <typename Policy>
+bool Area::Private::preProcess(IncomingLsaContext& ctx, const LsaBody& body)
 {
     bool isNssa = type == config::ospf::AreaType::NSSA || type == config::ospf::AreaType::TOTALLY_NSSA;
     if (std::holds_alternative<typename Policy::InterNetworkLsa>(body) &&
@@ -545,7 +553,7 @@ bool Area::preProcess(IncomingLsaContext& ctx, const LsaBody& body)
 }
 
 template <typename Policy>
-void Area::postProcess(Result& result, IncomingLsaContext& ctx, const LsaBody& body)
+void Area::Private::postProcess(Result& result, IncomingLsaContext& ctx, const LsaBody& body)
 {
     if (result.decision.action != InstallAction::REJECT_INVALID &&
         result.decision.action != InstallAction::IGNORE_OLDER &&
@@ -555,33 +563,33 @@ void Area::postProcess(Result& result, IncomingLsaContext& ctx, const LsaBody& b
         if (std::holds_alternative<typename Policy::RouterLsa>(body) ||
             std::holds_alternative<typename Policy::NetworkLsa>(body))
         {
-            runDCIntegrityScan();
+            area.runDCIntegrityScan();
         }
 
         if (std::holds_alternative<typename Policy::ExternalLsa>(body))
         {
-            base.distributeExternalLsa<Policy>(*this, ctx, body);
+            area.getExternalOriginator().distributeExternalLsa<Policy>(area.originContext, ctx, body);
         }
         else if (std::holds_alternative<typename Policy::InterNetworkLsa>(body))
         {
-            auto res = routemanager::deriveInterAreaNetwork<Policy>(*this, ctx.key, ctx.header, body);
-            auto changes = base.getRib().replaceRoute(*this, res);
-            if (!changes.empty()) base.reoriginateSummaries<Policy>(*this, changes);
+            auto res = area.process.interRouteManager.deriveInterAreaNetwork<Policy>(area, ctx.key, ctx.header, body);
+            auto changes = area.process.rib.replaceRoute(area, res);
+            if (!changes.empty()) area.getInterOriginator().reoriginateSummaries<Policy>(area.originContext, changes);
         }
         else if (std::holds_alternative<typename Policy::InterRouterLsa>(body))
         {
-            routemanager::deriveInterAreaRouter<Policy>(*this, ctx.key, ctx.header, body);
+            area.process.interRouteManager.deriveInterAreaRouter<Policy>(area, ctx.key, ctx.header, body);
         }
     }
 }
 
-Area::Result Area::process(IncomingLsaContext& ctx, const LsaBody& body)
+Area::Result Area::Private::process(IncomingLsaContext& ctx, const LsaBody& body)
 {
     Result out{};
 
-    LsaRecord* existing = db.find(ctx.key);
+    LsaRecord* existing = area.lsdb.find(ctx.key);
 
-    out.decision = evaluateIncomingLsa(existing, ctx, body);
+    out.decision = area.priv.evaluateIncomingLsa(existing, ctx, body);
 
     if (out.decision.action == InstallAction::REJECT_INVALID ||
         out.decision.action == InstallAction::IGNORE_OLDER)
@@ -598,7 +606,7 @@ Area::Result Area::process(IncomingLsaContext& ctx, const LsaBody& body)
     {
         if (out.decision.shouldUpdateAgeOnly)
         {
-            if (auto* r = db.find(ctx.key))
+            if (auto* r = area.lsdb.find(ctx.key))
             {
                 r->header.age = out.decision.newStoredAge;
                 r->lastRefreshTime = std::chrono::steady_clock::now();
@@ -606,9 +614,9 @@ Area::Result Area::process(IncomingLsaContext& ctx, const LsaBody& body)
                 out.record = r;
             }
         }
-        else if (db.touchRefresh(ctx.key))
+        else if (area.lsdb.touchRefresh(ctx.key))
         {
-            if (auto* r = db.find(ctx.key))
+            if (auto* r = area.lsdb.find(ctx.key))
             {
                 r->flags = out.flags;
                 out.record = r;
@@ -620,14 +628,14 @@ Area::Result Area::process(IncomingLsaContext& ctx, const LsaBody& body)
     return out;
 }
 
-void Area::installLsa(Result& result, const IncomingLsaContext& ctx, LsaBody& body)
+void Area::Private::installLsa(Result& result, const IncomingLsaContext& ctx, LsaBody& body)
 {
     if (result.decision.newLsa && !onNewLsa())
         if (!ctx.selfOriginatedKey) return;
 
     if (result.decision.action == InstallAction::FIGHT_BACK_SELF)
     {
-        LsaRecord& rec = db.upsertMeta(ctx, result.flags);
+        LsaRecord& rec = area.lsdb.upsertMeta(ctx, result.flags);
         rec.body = std::move(body);
         result.record = &rec;
         result.decision.shouldFightBack = true;
@@ -635,20 +643,20 @@ void Area::installLsa(Result& result, const IncomingLsaContext& ctx, LsaBody& bo
     else if (result.decision.action == InstallAction::FLUSH_MAX_AGE ||
         result.decision.shouldStoreReplace)
     {
-        LsaRecord& rec = db.upsertMeta(ctx, result.flags);
+        LsaRecord& rec = area.lsdb.upsertMeta(ctx, result.flags);
         rec.body = std::move(body);
         result.record = &rec;
     }
 }
 
-void Area::installLsa(Result& result, const IncomingLsaContext& ctx, const LsaBody& body)
+void Area::Private::installLsa(Result& result, const IncomingLsaContext& ctx, const LsaBody& body)
 {
     if (result.decision.newLsa && !onNewLsa())
         if (!ctx.selfOriginatedKey) return;
 
     if (result.decision.action == InstallAction::FIGHT_BACK_SELF)
     {
-        LsaRecord& rec = db.upsertMeta(ctx, result.flags);
+        LsaRecord& rec = area.lsdb.upsertMeta(ctx, result.flags);
         rec.body = body;
         result.record = &rec;
         result.decision.shouldFightBack = true;
@@ -656,28 +664,65 @@ void Area::installLsa(Result& result, const IncomingLsaContext& ctx, const LsaBo
     else if (result.decision.action == InstallAction::FLUSH_MAX_AGE ||
         result.decision.shouldStoreReplace)
     {
-        LsaRecord& rec = db.upsertMeta(ctx, result.flags);
+        LsaRecord& rec = area.lsdb.upsertMeta(ctx, result.flags);
         rec.body = body;
         result.record = &rec;
     }
 }
 
-bool Area::onNewLsa()
+void Area::Private::startAgingTimer()
 {
-    auto& processConfigs = base.getConfigs();
+    agingTimerId = 0;
+    auto nextFire = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    agingTimerId = area.scheduler.postAfter(nextFire, [this](uint32_t) {
+        agingTimerId = 0;
+        onAgingTick();
+    });
+}
 
-    auto maxLsa = processConfigs.get<config::Ospf::MAX_LSA>();
+void Area::Private::onAgingTick()
+{
+    // Increment all LSA ages by 1 second, find how many hit MaxAge
+    size_t expired = area.lsdb.ageAll(1, OSPF_MAX_AGE, false);
+
+    if (expired > 0)
+    {
+        // Collect MaxAge LSAs, flood them, then purge
+        std::vector<std::pair<LsaKey, LsaRecord*>> maxAgeLsas;
+        for (auto& [key, record] : area.lsdb.getIterableLSDB())
+        {
+            if (record.header.age >= OSPF_MAX_AGE)
+                maxAgeLsas.push_back({key, &record});
+        }
+
+        for (auto& [key, record] : maxAgeLsas)
+        {
+            FloodInfo info{FloodReason::FLUSH};
+            area.floodMgr.enqueueFlood(LsaRecordRef{key, *record}, info);
+        }
+
+        area.lsdb.purgeExpired(OSPF_MAX_AGE);
+
+        area.spfMgr.requestSpf();
+    }
+
+    startAgingTimer();
+}
+
+bool Area::Private::onNewLsa()
+{
+    auto maxLsa = area.process.configs.get<config::Ospf::MAX_LSA>();
     if (!maxLsa.hasValue())
         return true;
 
-    float maxThresholdPercent = static_cast<float>(processConfigs.get<config::Ospf::MAX_LSA_THRESHOLD>().load() / 100.0f) ;
+    float maxThresholdPercent = static_cast<float>(area.process.configs.get<config::Ospf::MAX_LSA_THRESHOLD>().load() / 100.0f) ;
     uint32_t maxThreshold = static_cast<uint32_t>(maxThresholdPercent * static_cast<float>(maxLsa.load()));
-    if (maxThreshold <= db.size())
+    if (maxThreshold <= area.lsdb.size())
     {
         // TODO: warning
     }
 
-    if (maxLsa.load() <= db.size())
+    if (maxLsa.load() <= area.lsdb.size())
     {
         ignoreLsa();
         return false;
@@ -685,121 +730,47 @@ bool Area::onNewLsa()
     return true;
 }
 
-void Area::ignoreLsa()
+void Area::Private::ignoreLsa()
 {
-    auto& processConfigs = base.getConfigs();
     ignoreSize++;
 
     // Ignore count
-    uint32_t maxSize = processConfigs.get<config::Ospf::MAX_LSA_IGNORE_COUNT>().load();
+    uint32_t maxSize = area.process.configs.get<config::Ospf::MAX_LSA_IGNORE_COUNT>().load();
     if (ignoreSize >= maxSize)
-        base.initiateReset();
+        area.process.enqueueReset();
 
     // Ignore timer
     startIgnoreTimer();
 }
 
-void Area::startIgnoreTimer()
+void Area::Private::startIgnoreTimer()
 {
     if (ignoreTid != 0) return;
-    uint16_t timeout = base.getConfigs().get<config::Ospf::MAX_LSA_IGNORE_TIME>().load();
+    uint16_t timeout = area.process.configs.get<config::Ospf::MAX_LSA_IGNORE_TIME>().load();
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::minutes(timeout);
-    ignoreTid = scheduler.postAfter(expirationTime, [this](uint32_t)
+    ignoreTid = area.scheduler.postAfter(expirationTime, [this](uint32_t)
     {
         startResetTimer();
     });
 }
 
-void Area::startResetTimer()
+void Area::Private::startResetTimer()
 {
     if (resetTid != 0) return;
-    uint16_t timeout = base.getConfigs().get<config::Ospf::MAX_LSA_RESET_TIME>().load();
+    uint16_t timeout = area.process.configs.get<config::Ospf::MAX_LSA_RESET_TIME>().load();
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::minutes(timeout);
-    resetTid = scheduler.postAfter(expirationTime, [this](uint32_t)
+    resetTid = area.scheduler.postAfter(expirationTime, [this](uint32_t)
     {
-        base.initiateReset();
+        area.process.enqueueReset();
     });
 }
 
-template <typename Policy>
-void Area::processSummaries(std::unordered_map<LsaKey, LsaBody>& summaries)
-{
-    db.forEachInType(Policy::InterNetworkType, [&](const LsaKey& key, const LsaRecord& record) {
-        if (!summaries.contains(key))
-            originator.originateLsa<Policy>(key, record.body, true);
-    });
-
-    for (auto& [key, body] : summaries)
-    {
-        originator.originateLsa<Policy>(key, body, false);
-    }
-}
-
-template <typename Policy>
-void Area::processExternalLsa(IncomingLsaContext& ctx, const LsaBody& body)
-{
-    if (!preProcess<Policy>(ctx, body)) return;
-
-    bool expire = ctx.header.age == OSPF_MAX_AGE;
-    LsaBody bodyCopy = body;
-
-    auto& external = std::get<typename Policy::ExternalLsa>(bodyCopy);
-    if constexpr (std::is_same_v<Policy, PolicyV2>)
-    {
-        if (external.forwardingAddress != 0 && !isValidForwardAddress(types::IPAddress(external.forwardingAddress)))
-            external.forwardingAddress = 0;
-    }
-    else
-    {
-        if (external.forwardingAddress.has_value() && !isValidForwardAddress(external.forwardingAddress.value()))
-            external.forwardingAddress = std::nullopt;
-    }
-
-    // Manage type 4 if needed
-    if (type == config::ospf::AreaType::NORMAL)
-        originator.addExternal(ctx.key.advertisingRouter, ctx.key.linkStateId, expire);
-
-    auto result = process(ctx, body);
-    installLsa(result, ctx, body);
-    evaluateDecision<Policy>(result, ctx);
-}
-
-template <typename Policy>
-void Area::evaluateDecision(Result& result, const IncomingLsaContext& ctx)
-{
-    if (result.decision.shouldFlood && result.record)
-        floodMgr.enqueueFlood(LsaRecordRef{ctx.key, *result.record}, ctx.info);
-    if (result.decision.affectsSpfGraph && result.decision.topologyChanged)
-        spfMgr.requestSpf<Policy>();
-}
-
-bool Area::compareLSASummary(const LsaHeader& hdr, const LsaKey& key) const
-{
-    const LsaRecord* existing = db.find(key);
-
-    // We don't have this LSA at all — need to request it
-    if (!existing)
-        return true;
-
-    // Neighbor has a newer version — need to request it
-    const LsaCompareResult cmp = compareLsaHeaders(hdr, existing->header);
-    return cmp == LsaCompareResult::NEWER;
-}
-
-LsaRecordFlags Area::makeFlags(const IncomingLsaContext& ctx) noexcept
-{
-    LsaRecordFlags f = LsaRecordFlags::NONE;
-    if (ctx.selfOriginatedKey) f |= LsaRecordFlags::SELF_ORIGINATED;
-    if (ctx.checksumValid) f |= LsaRecordFlags::CHECKSUM_VALID;
-    return f;
-}
-
-InstallResult Area::evaluateIncomingLsa(const LsaRecord* existing, IncomingLsaContext& ctx, const LsaBody& body)
+InstallResult Area::Private::evaluateIncomingLsa(const LsaRecord* existing, IncomingLsaContext& ctx, const LsaBody& body)
 {
     InstallResult out{};
 
     // Determine which LSA types affect the SPF graph topology
-    if (base.isV3)
+    if (area.process.isV3)
     {
         const uint16_t t = ctx.key.lsaType;
         out.affectsSpfGraph = (t == OSPFV3_LSA_ROUTER ||
@@ -859,7 +830,7 @@ InstallResult Area::evaluateIncomingLsa(const LsaRecord* existing, IncomingLsaCo
         case LsaCompareResult::NEWER:
         {
             // MinLSArrival check (RFC 2328 §13 step 5b) — rate-limit acceptance
-            auto minArrivalMs = base.getConfigs().get<config::Ospf::LSA_ARRIVAL>().load();
+            auto minArrivalMs = area.process.configs.get<config::Ospf::LSA_ARRIVAL>().load();
             auto minArrival = existing->lastRefreshTime + std::chrono::milliseconds(minArrivalMs);
             if (std::chrono::steady_clock::now() < minArrival)
             {
@@ -907,7 +878,7 @@ InstallResult Area::evaluateIncomingLsa(const LsaRecord* existing, IncomingLsaCo
     }
 }
 
-LsaCompareResult Area::compareLsaHeaders(const LsaHeader& a, const LsaHeader& b) const
+LsaCompareResult Area::Private::compareLsaHeaders(const LsaHeader& a, const LsaHeader& b) const
 {
     if (a.sequence != b.sequence)
         return (a.sequence > b.sequence) ? LsaCompareResult::NEWER : LsaCompareResult::OLDER;
@@ -928,7 +899,7 @@ LsaCompareResult Area::compareLsaHeaders(const LsaHeader& a, const LsaHeader& b)
     return LsaCompareResult::SAME;
 }
 
-bool Area::compareLsaBody(const LsaBody& a, const LsaBody& b)
+bool Area::Private::compareLsaBody(const LsaBody& a, const LsaBody& b)
 {
     if (a.index() != b.index())
         return true;
@@ -951,14 +922,11 @@ template std::optional<Area::Result> Area::processLsa<PolicyV3>(IncomingLsaConte
 template std::optional<Area::Result> Area::processLsa<PolicyV2>(IncomingLsaContext&, const LsaBody&);
 template std::optional<Area::Result> Area::processLsa<PolicyV3>(IncomingLsaContext&, const LsaBody&);
 
-template void Area::evaluateDecision<PolicyV2>(Result&, const IncomingLsaContext&);
-template void Area::evaluateDecision<PolicyV3>(Result&, const IncomingLsaContext&);
+template void Area::Private::postProcess<PolicyV2>(Result&, IncomingLsaContext&, const LsaBody&);
+template void Area::Private::postProcess<PolicyV3>(Result&, IncomingLsaContext&, const LsaBody&);
 
-template void Area::postProcess<PolicyV2>(Result&, IncomingLsaContext&, const LsaBody&);
-template void Area::postProcess<PolicyV3>(Result&, IncomingLsaContext&, const LsaBody&);
-
-template bool Area::preProcess<PolicyV2>(IncomingLsaContext&, const LsaBody&);
-template bool Area::preProcess<PolicyV3>(IncomingLsaContext&, const LsaBody&);
+template bool Area::Private::preProcess<PolicyV2>(IncomingLsaContext&, const LsaBody&);
+template bool Area::Private::preProcess<PolicyV3>(IncomingLsaContext&, const LsaBody&);
 
 template void Area::processSummaries<PolicyV2>(std::unordered_map<LsaKey, LsaBody>&);
 template void Area::processSummaries<PolicyV3>(std::unordered_map<LsaKey, LsaBody>&);

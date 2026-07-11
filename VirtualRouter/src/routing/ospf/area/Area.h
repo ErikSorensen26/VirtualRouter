@@ -1,32 +1,36 @@
 /**
  * @file Area.h
- * @brief OSPF area object: owns the LSDB, SPF manager, flood manager, and originator for one area.
+ * @brief OSPF area object: owns the LSDB, SPF manager, flood manager, and intra-area originator for one area.
  */
 
 /**
  * @defgroup OSPF_AREA OSPF Area
  * @ingroup OSPF
- * @brief Area object, flood manager, flood queue/types, flag manager, and originator.
+ * @brief Area object, origination context, intra-area originator, and intra-area route manager.
  */
 
 #ifndef OSPF_AREA_H
 #define OSPF_AREA_H
 
-#include <memory_resource>
 
-#include "configs/registry/router/OspfRegistry.h"
 #include "ospf/database/LsdbTable.h"
 #include "ospf/spf/SpfManager.h"
-#include "FloodTypes.hpp"
-#include "FlagManager.h"
-#include "Originator.h"
-#include "FloodManager.h"
+#include "ospf/FlagManager.hpp"
+#include "IntraRouteManager.h"
+#include "ospf/flooding/FloodManager.h"
+#include "OriginatorContext.h"
+
+namespace config::ospf { enum class AreaType; }
+namespace config { struct OspfInterfaceRegistry; }
 
 namespace routing::ospf
 {
 struct OspfPath;
+struct RouteManagerUtility;
 class OspfProcess;
 class OspfInterface;
+class OspfRib;
+class TopologyTable;
 
 /**
  * @brief Returns true if the LSA has reached or exceeded MaxAge.
@@ -125,10 +129,8 @@ CalcResults runLsaCalculations(const LsaHeader& hdr, const LsaKey& key, const Ls
  * LSAs do not cross area boundaries except via ABR summary origination.
  *
  * ## Lifecycle & Ownership
- * Constructed and destroyed by OspfProcess.  The optional `mr` parameter lets
- * the owner supply a PMR arena (e.g., a pool resource) for the LSDB to avoid
- * per-record heap allocations.  Construction registers an aging timer;
- * destruction cancels all timers before the LSDB is torn down.
+ * Constructed and destroyed by OspfProcess.  Construction registers an aging
+ * timer; destruction cancels all timers before the LSDB is torn down.
  *
  * ## Concurrency Model
  * All mutable Area state is accessed on the owning OspfProcess scheduler
@@ -138,13 +140,58 @@ CalcResults runLsaCalculations(const LsaHeader& hdr, const LsaKey& key, const Ls
  *
  * @warning `releaseMemory()` must only be called when the LSDB is quiescent
  * (no outstanding LsaRecordRef objects held by flood or retransmission queues).
- * Releasing the PMR pool while live references exist causes undefined behavior.
+ * Releasing storage while live references exist causes undefined behavior.
  *
- * @see OspfProcess, LsdbTable, SpfManager, FloodManager, Originator
+ * @see OspfProcess, LsdbTable, SpfManager, FloodManager, IntraOriginator, OriginatorContext
  */
 class Area
 {
 public:
+
+    /**
+     * @brief Constructs an OSPF area.
+     * @ingroup OSPF_AREA
+     *
+     * Initializes the LSDB, SPF manager, flood manager, origination context,
+     * and intra-area originator, then starts the LSA aging timer.
+     *
+     * @param base  Owning OspfProcess.
+     * @param area  32-bit area identifier (host byte order).
+     */
+    Area(OspfProcess& base, uint32_t area);
+
+    /**
+     * @brief Destroys the area.
+     *
+     * Cancels all pending timers (aging, ignore, reset) before tearing down
+     * the LSDB and flood manager to prevent timer callbacks from firing on
+     * already-freed state.
+     */
+    ~Area();
+
+    // PUBLIC GETTERS
+
+    config::ospf::AreaType getType() const { return priv.type.load(std::memory_order_relaxed); }
+    bool isDcCompatible() const { return priv.dcCompatible.load(std::memory_order_relaxed); }
+
+    // ENQUEUE
+
+    /**
+     * @brief Prepares the area for a graceful reset without destroying it.
+     *
+     * Schedules a reset timer; the actual reset runs asynchronously so
+     * in-flight LSA processing can complete first.
+     */
+    void enqueueReset();
+
+    /**
+     * @brief Schedules `syncRangeConfig()` on the process queue.
+     *
+     * Config-change entry point: called when the area's `range` configuration
+     * changes so the summarization state is rebuilt on the scheduler thread.
+     */
+    void enqueueSyncRanges();
+
     /**
      * @brief Aggregated result returned after processing an incoming LSA.
      * @ingroup OSPF_AREA
@@ -160,44 +207,17 @@ public:
         LsaRecord* record{nullptr};    ///< Pointer into the LSDB for the installed or existing record.
     };
 
-    /**
-     * @brief Constructs an OSPF area.
-     * @ingroup OSPF_AREA
-     *
-     * Initializes the LSDB (using `mr` for storage if PMR is enabled), the
-     * SPF manager, flood manager, and originator, then starts the LSA aging
-     * timer.
-     *
-     * @param base  Owning OspfProcess.
-     * @param area  32-bit area identifier (host byte order).
-     * @param mr    Memory resource for LSDB storage; defaults to the global
-     *              default_resource() if not supplied.
-     */
-    explicit Area(OspfProcess& base, uint32_t area, std::pmr::memory_resource* mr = std::pmr::get_default_resource());
+    OspfProcess& process; ///< Reference pointing to the root process.
+    const uint32_t areaId; ///< 32-bit OSPF area identifier (host byte order); immutable after construction.
 
-    /**
-     * @brief Destroys the area.
-     *
-     * Cancels all pending timers (aging, ignore, reset) before tearing down
-     * the LSDB and flood manager to prevent timer callbacks from firing on
-     * already-freed state.
-     */
-    ~Area();
-
-    // Getters
-    LsdbTable& lsdb() noexcept { return db; }
-    const LsdbTable& lsdb() const noexcept { return db; }
-    const OspfProcess& process() const noexcept { return base; }
-    OspfProcess& process() { return base; }
-    config::OspfAreaRegistry& getConfigs() { return configs; }
-    const config::OspfAreaRegistry& getConfigs() const noexcept { return configs; }
-    AreaFlagManager& getFlags() { return flags; }
-    const AreaFlagManager& getFlags() const noexcept { return flags; }
-    const SpfManager& getSpfManager() const noexcept { return spfMgr; }
-    FloodManager& getFloodManager() noexcept { return floodMgr; }
-    Originator& getOriginator() { return originator; }
-    core::ProcessQueueRef& getScheduler() { return scheduler; }
-    const core::ProcessQueueRef& getScheduler() const { return scheduler; }
+private:
+    friend class OspfRib;
+    friend class OspfProcess;
+    friend class OspfInterface;
+    friend class FloodManager;
+    friend class SpfManager;
+    friend class OriginatorContext;
+    friend struct RouteManagerUtility;
 
     // FLOODING
 
@@ -207,7 +227,7 @@ public:
      * @param iface   Interface to send from.
      * @param records Batch of (FloodInfo, LsaRecordRef) pairs to transmit.
      */
-    void send(OspfInterface& iface, std::vector<std::pair<FloodInfo, LsaRecordRef>>& records);
+    void send(std::vector<std::pair<FloodInfo, LsaRecordRef>>& records);
 
     // LSA PROCESSING
 
@@ -224,8 +244,7 @@ public:
      */
     template <typename Policy>
     std::optional<Result> processLsa(IncomingLsaContext& ctx, LsaBody& body);
-
-    /**
+/**
      * @brief Processes a received (const body) LSA against the area LSDB.
      *
      * Const overload for callers that cannot give up body ownership.
@@ -259,19 +278,6 @@ public:
      */
     template <typename Policy>
     void processExternalLsa(IncomingLsaContext& ctx, const LsaBody& body);
-
-    /**
-     * @brief Determines the flood disposition for an already-installed LSA.
-     *
-     * Called after @ref processLsa to fill in the `reason` and flood signals
-     * in `decision` based on context flags (self-originated, MaxAge, etc.).
-     *
-     * @tparam Policy   PolicyV2 or PolicyV3.
-     * @param[out] decision  Result struct to update with flood reasoning.
-     * @param ctx       Context for the incoming LSA.
-     */
-    template <typename Policy>
-    void evaluateDecision(Result& decision, const IncomingLsaContext& ctx);
 
     /**
      * @brief Checks whether an incoming LSA header is newer than the stored instance.
@@ -320,7 +326,7 @@ public:
      *
      * @param prefix The aggregate prefix whose summary should be suppressed.
      */
-    void suppressInterAreaPrefix(const types::IPPrefix& prefix) const;
+    void suppressInterAreaPrefix(const types::IPPrefix& prefix);
 
     /**
      * @brief Returns the set of configured range prefixes for this area.
@@ -339,14 +345,6 @@ public:
     bool isValidForwardAddress(const types::IPAddress& h) const;
 
     // RESET & LIFECYCLE
-
-    /**
-     * @brief Prepares the area for a graceful reset without destroying it.
-     *
-     * Schedules a reset timer; the actual reset runs asynchronously so
-     * in-flight LSA processing can complete first.
-     */
-    void initializeReset();
 
     /**
      * @brief Performs a full area reset: flushes all self-originated LSAs and clears neighbor state.
@@ -371,7 +369,7 @@ public:
     void clear();
 
     /**
-     * @brief Returns LSDB PMR pool memory to the upstream allocator.
+     * @brief Releases all LSDB storage (records and indexes) in bulk.
      *
      * @warning Must only be called when no @ref LsaRecordRef objects are alive
      * that point into this area's LSDB.  Violating this causes use-after-free.
@@ -387,16 +385,6 @@ public:
     void runDCIntegrityScan();
 
     /**
-     * @brief Configures flood-reduction mode for the specified interface.
-     *
-     * Sets the DoNotAge bit on all self-originated LSAs flooded out of `iface`
-     * when flood reduction is enabled (RFC 2328 Appendix B).
-     *
-     * @param iface Interface on which flood reduction should be applied.
-     */
-    void setFloodReduction(OspfInterface& iface);
-
-    /**
      * @brief Flushes all LSAs originated by the given neighbor Router ID.
      *
      * Called when a neighbor drops from FULL state so that stale information
@@ -406,21 +394,6 @@ public:
      */
     void flushNeighborLsas(uint32_t neighborRid);
 
-    /**
-     * @brief Starts the periodic LSA aging timer.
-     *
-     * The timer fires every second and increments the age field of every LSA
-     * in the LSDB.  LSAs reaching MaxAge are flushed via the flood path.
-     */
-    void startAgingTimer();
-
-    /**
-     * @brief Callback invoked on each aging timer tick to advance LSA ages.
-     *
-     * Ages all records in the LSDB by one second and enqueues MaxAge LSAs
-     * for flushing.
-     */
-    void onAgingTick();
 
     /**
      * @brief Computes the @ref LsaRecordFlags to assign to a newly installed LSA.
@@ -432,18 +405,6 @@ public:
      * @return Packed flags for the LSDB record.
      */
     static LsaRecordFlags makeFlags(const IncomingLsaContext& ctx) noexcept;
-
-protected:
-    std::pmr::memory_resource* mr{nullptr}; ///< PMR pool backing the LSDB; null means default allocator.
-
-    std::atomic<uint8_t> options; ///< Area options byte advertised in Hello and DD packets; updated atomically.
-
-    size_t ignoreSize{0};       ///< LSDB size threshold below which the ignore timer is suppressed.
-    uint32_t ignoreTid{0};      ///< Timer handle for the LSA-ignore rate-limiting timer.
-    uint32_t resetTid{0};       ///< Timer handle for the deferred area-reset timer.
-    uint32_t agingTimerId{0};   ///< Timer handle for the one-second LSA aging tick.
-
-    config::OspfAreaRegistry& configs; ///< Area-level OSPF configuration reference.
 
     /**
      * @brief Runtime state for a configured `area range` inter-area summarization prefix.
@@ -466,50 +427,207 @@ protected:
         bool discardPresent = false;                    ///< True if a discard (null-route) has been installed in the RIB for this range.
     };
 
-    std::unordered_map<types::IPPrefix, AreaRange> ranges; ///< Active area-range entries keyed by aggregate prefix.
-    std::unordered_set<types::IPPrefix> rangePrefixes;     ///< Fast-lookup set of all configured range prefixes.
-
-    LsdbTable db;          ///< Link-state database for this area.
-    OspfProcess& base;     ///< Owning OSPF process.
+    LsdbTable lsdb;          ///< Link-state database for this area.
     SpfManager spfMgr;     ///< Dijkstra SPF engine for this area.
     AreaFlagManager flags;  ///< Tracks area-type flags (stub, NSSA, etc.) and propagates changes.
     FloodManager floodMgr; ///< Manages reliable LSA flooding within this area.
-private:
-    bool onNewLsa();
-    void ignoreLsa();
-    void startIgnoreTimer();
-    void startResetTimer();
 
-    void installLsa(Result& result, const IncomingLsaContext& ctx, LsaBody& body);
-    void installLsa(Result& result, const IncomingLsaContext& ctx, const LsaBody& body);
+    // RANGES
 
-    Result process(IncomingLsaContext& ctx, const LsaBody& body);
-    template <typename Policy>
-    bool preProcess(IncomingLsaContext& ctx, const LsaBody& body);
-    template <typename Policy>
-    void postProcess(Result& result, IncomingLsaContext& ctx, const LsaBody& body);
+    std::unordered_map<types::IPPrefix, std::pair<uint32_t, uint32_t>> computeRangeContributors(
+        const std::vector<std::pair<types::IPPrefix, OspfPath>>& intraAreaRoutes,
+        const std::unordered_map<types::IPPrefix, AreaRange>& ranges
+    );
 
-    // Ranges
-    std::unordered_map<types::IPPrefix, std::pair<uint32_t, uint32_t>> computeRangeContributors(const std::vector<std::pair<types::IPPrefix, OspfPath>>& intraAreaRoutes, const std::unordered_map<types::IPPrefix, AreaRange>& ranges);
-    template <typename Policy>
-    void applyRange(AreaRange& r);
-    template <typename Policy>
-    void withdrawRange(AreaRange& r);
-
-    InstallResult evaluateIncomingLsa(const LsaRecord* existing, IncomingLsaContext& ctx, const LsaBody& body);
-    LsaCompareResult compareLsaHeaders(const LsaHeader& a, const LsaHeader& b) const;
-    bool compareLsaBody(const LsaBody& a, const LsaBody& b);
-
-public:
     core::ProcessQueueRef scheduler; ///< Reference to the owning process scheduler; all area work is serialized through this.
-    Originator& originator; ///< LSA originator shared with the owning process (Router LSA, Network LSA, etc.).
+    OriginatorContext originContext; ///< Origination mechanism: throttle back-off, group-paced refresh, and the LSDB install path.
+    IntraOriginator& originator; ///< Version-specific intra-area originator (Router/Network LSAs); heap-allocated by IntraOriginator::create(), deleted in ~Area().
+    IntraRouteManager routeManager; ///< Derives this area's intra-area prefix routes from SPF results.
 
-    config::ospf::AreaType type;          ///< Area type (backbone, stub, NSSA, etc.); updated via reloadType().
-    const uint32_t areaId;               ///< 32-bit OSPF area identifier (host byte order); immutable after construction.
+    const config::OspfAreaRegistry& configs; ///< Area-level OSPF configuration reference.
 
-    std::atomic<bool> dcCompatible{true}; ///< True while all routers in the area support Demand Circuit operation (RFC 1793).
+    // ORIGINATOR HELPERS
+
+    InterOriginator& getInterOriginator();
+    ExternalOriginator& getExternalOriginator();
+    TopologyTable& getTopoTable();
+    const config::OspfRegistry& getProcessConfigs() const;
+    const InterfaceManager& getIfaceMgr() const;
+
+private:
+    struct Private
+    {
+    private:
+        friend class Area;
+
+        Private(Area& area);
+
+        /**
+         * @brief Enforces the `max-lsa` database limit on a newly arriving LSA.
+         *
+         * Returns true if the LSA may be installed.  When the configured
+         * ceiling is reached the LSA is ignored and the ignore/reset
+         * escalation (RFC-style database overload protection) is started.
+         */
+        bool onNewLsa();
+
+        /**
+         * @brief Records one ignored LSA and escalates if the ignore count exceeds its limit.
+         *
+         * Bumps `ignoreSize`, requests a process reset once
+         * `max-lsa ignore-count` is exceeded, and arms the ignore timer.
+         */
+        void ignoreLsa();
+
+        /**
+         * @brief Arms the `max-lsa ignore-time` timer if not already running.
+         *
+         * When it fires, the reset timer is started, deferring the area reset
+         * until `max-lsa reset-time` has also elapsed.
+         */
+        void startIgnoreTimer();
+
+        /**
+         * @brief Arms the `max-lsa reset-time` timer if not already running.
+         *
+         * When it fires, a full process reset is enqueued to recover from
+         * sustained database overload.
+         */
+        void startResetTimer();
+
+        size_t ignoreSize{0};       ///< LSDB size threshold below which the ignore timer is suppressed.
+        uint32_t ignoreTid{0};      ///< Timer handle for the LSA-ignore rate-limiting timer.
+        uint32_t resetTid{0};       ///< Timer handle for the deferred area-reset timer.
+        uint32_t agingTimerId{0};   ///< Timer handle for the one-second LSA aging tick.
+
+        // LSA PROCESSING
+
+        /**
+         * @brief Writes the LSA into the LSDB according to the install decision (move overload).
+         *
+         * Applies the `max-lsa` gate via `onNewLsa()`, then upserts the record
+         * for INSTALL/FLUSH/FIGHT_BACK actions, moving `body` into storage.
+         *
+         * @param result Install decision from `process()`; `record` is filled in.
+         * @param ctx    Incoming LSA context.
+         * @param body   Decoded body; ownership is transferred to the LSDB.
+         */
+        void installLsa(Result& result, const IncomingLsaContext& ctx, LsaBody& body);
+
+        /**
+         * @brief Writes the LSA into the LSDB according to the install decision (copy overload).
+         *
+         * Same as the move overload but copies `body` for callers that retain
+         * ownership.
+         */
+        void installLsa(Result& result, const IncomingLsaContext& ctx, const LsaBody& body);
+
+        /**
+         * @brief Evaluates an incoming LSA against the stored instance and computes the install decision.
+         *
+         * Runs `evaluateIncomingLsa` (RFC 2328 §13 comparison) and handles the
+         * duplicate/age-refresh bookkeeping; does not write a new body — that
+         * is `installLsa`'s job.
+         *
+         * @param ctx  Incoming LSA context.
+         * @param body Decoded body (used for topology-change comparison).
+         * @return Result carrying the decision and a pointer to the stored record.
+         */
+        Result process(IncomingLsaContext& ctx, const LsaBody& body);
+
+        /**
+         * @brief Area-type admission filter run before any LSDB work (RFC 2328 / RFC 3101).
+         *
+         * Rejects summaries in totally-stubby areas, external LSAs in
+         * stub/NSSA areas that must not carry them, and NSSA LSAs in normal
+         * areas.
+         *
+         * @tparam Policy PolicyV2 or PolicyV3.
+         * @return True if the LSA is admissible in this area.
+         */
+        template <typename Policy>
+        bool preProcess(IncomingLsaContext& ctx, const LsaBody& body);
+
+        /**
+         * @brief Post-install reactions to an accepted LSA.
+         *
+         * On topology-affecting installs: re-checks Demand-Circuit
+         * compatibility (Router/Network LSAs), triggers NSSA translation
+         * (external LSAs), and re-derives inter-area routes / summaries
+         * (Type-3/Type-4 LSAs).
+         *
+         * @tparam Policy PolicyV2 or PolicyV3.
+         */
+        template <typename Policy>
+        void postProcess(Result& result, IncomingLsaContext& ctx, const LsaBody& body);
+
+        /**
+         * @brief Determines the flood disposition for an already-installed LSA.
+         *
+         * Called after @ref processLsa to fill in the `reason` and flood signals
+         * in `decision` based on context flags (self-originated, MaxAge, etc.).
+         *
+         * @tparam Policy   PolicyV2 or PolicyV3.
+         * @param[out] decision  Result struct to update with flood reasoning.
+         * @param ctx       Context for the incoming LSA.
+         */
+        void evaluateDecision(Result& decision, const IncomingLsaContext& ctx);
+
+
+        /**
+         * @brief Arms the one-second LSA aging tick.
+         */
+        void startAgingTimer();
+
+        /**
+         * @brief One-second aging tick: ages all LSAs, floods and purges MaxAge entries.
+         *
+         * Any expiry triggers an SPF request.  Re-arms the aging timer at the
+         * end of every tick.
+         */
+        void onAgingTick();
+
+
+        /**
+         * @brief Full RFC 2328 §13 install decision for one incoming LSA.
+         *
+         * Handles checksum rejection, missing-entry install, MaxAge flush,
+         * MinLSArrival rate limiting, self-origination fight-back, and
+         * newer/older/duplicate comparison against `existing`.
+         *
+         * @param existing Stored record for the same key, or nullptr.
+         * @param ctx      Incoming LSA context.
+         * @param body     Decoded body (compared to detect topology changes).
+         * @return The computed install action and flood/SPF signals.
+         */
+        InstallResult evaluateIncomingLsa(const LsaRecord* existing, IncomingLsaContext& ctx, const LsaBody& body);
+
+        /**
+         * @brief RFC 2328 §13.1 header comparison: sequence, checksum, then age.
+         *
+         * @return NEWER if `a` is more recent than `b`, OLDER if less recent,
+         *         SAME if they are indistinguishable.
+         */
+        LsaCompareResult compareLsaHeaders(const LsaHeader& a, const LsaHeader& b) const;
+
+        /**
+         * @brief Returns true if the two decoded bodies differ (topology changed).
+         *
+         * Falls back to "changed" when the active alternatives differ or the
+         * body type provides no equality operator.
+         */
+        bool compareLsaBody(const LsaBody& a, const LsaBody& b);
+
+        std::atomic<uint8_t> options; ///< Area options byte advertised in Hello and DD packets; updated atomically.
+        std::atomic<config::ospf::AreaType> type;        ///< Area type (backbone, stub, NSSA, etc.); updated via reloadType().
+        std::unordered_map<types::IPPrefix, AreaRange> ranges; ///< Active area-range entries keyed by aggregate prefix.
+        std::unordered_set<types::IPPrefix> rangePrefixes;     ///< Fast-lookup set of all configured range prefixes.
+        std::atomic<bool> dcCompatible{true}; ///< True while all routers in the area support Demand Circuit operation (RFC 1793).
+
+        Area& area;
+    } priv;
 };
 } // namespace routing
 
-#endif // OSPF_LSA_FLOODING_ENGINE_H
+#endif // OSPF_AREA_H
 

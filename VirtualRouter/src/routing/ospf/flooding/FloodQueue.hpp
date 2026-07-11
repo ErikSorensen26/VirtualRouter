@@ -12,8 +12,8 @@
 #include <utility>
 #include <vector>
 
-#include "ospf/area/FloodTypes.hpp"
-#include "ospf/database/LSDB.hpp"
+#include "FloodTypes.hpp"
+#include "ospf/database/LsdbTypes.hpp"
 
 namespace routing::ospf
 {
