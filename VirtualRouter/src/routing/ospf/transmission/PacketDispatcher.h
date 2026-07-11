@@ -13,13 +13,14 @@
 #define PACKET_DISPATCHER_H
 
 #include "configs/registry/router/OspfInterfaceRegistry.h"
-#include "ospf/database/LSDB.hpp"
-#include "ospf/neighbor/RetransmissionList.hpp"
+#include "ospf/database/LsdbTypes.hpp"
+#include "ospf/neighbor/RetransmissionList.h"
+#include "ospf/interface/OspfInterface.h"
+#include "ospf/area/Area.h"
 
 namespace processing { class PacketBuilder; }
 namespace types { struct IPAddress; }
 class Internal_OspfTest;
-
 namespace routing::ospf
 {
 class UnicastPacket;
@@ -94,7 +95,7 @@ public:
      *
      * @param nbr Neighbor that has just entered ExStart state.
      */
-    virtual void sendInitDBD(Neighbor& nbr) = 0;
+    virtual void sendInitDbd(Neighbor& nbr) = 0;
 
     /**
      * @brief Sends the next DD packet in the database description exchange.
@@ -102,7 +103,7 @@ public:
      * @param nbr  Neighbor in the Exchange state.
      * @return True if there are more DD packets to send, false if this was the last.
      */
-    virtual bool sendDBD(Neighbor& nbr) = 0;
+    virtual bool sendDbd(Neighbor& nbr) = 0;
 
     /**
      * @brief Sends LS Acknowledgements for a set of received LSAs.
@@ -111,7 +112,7 @@ public:
      * @param records LSA records to acknowledge.
      * @return True if the packet was sent successfully.
      */
-    virtual bool sendLSAck(Neighbor& nbr, std::vector<LsaRecordRef>& ) = 0;
+    virtual bool sendLsAck(Neighbor& nbr, std::vector<LsaRecordRef>& ) = 0;
 
     /**
      * @brief Enqueues LSRs for reliable delivery and sends the first burst.
@@ -119,7 +120,7 @@ public:
      * @param nbr  Target neighbor.
      * @param dbds Keys of LSAs the neighbor has that we need.
      */
-    void sendReliableLSRequest(Neighbor& nbr, const std::vector<LsaKey>& dbds);
+    void sendReliableLsr(Neighbor& nbr, const std::vector<LsaKey>& dbds);
 
     /**
      * @brief Enqueues LSUs for reliable delivery and sends the first burst.
@@ -127,7 +128,7 @@ public:
      * @param nbr  Target neighbor (null = flood to all Full neighbors).
      * @param keys LSA records to flood with associated flood-control metadata.
      */
-    void sendReliableLSUpdate(Neighbor* nbr, std::vector<std::pair<FloodInfo, LsaRecordRef>>& keys);
+    void sendReliableLsu(Neighbor* nbr, std::vector<std::pair<FloodInfo, LsaRecordRef>>& keys);
 
     /**
      * @brief Called when the DD retransmission timer fires for a neighbor.
@@ -163,6 +164,25 @@ public:
      * @param nbr Target neighbor.
      */
     void onLsrPacingTimer(Neighbor& nbr);
+    
+    /**
+     * @brief Enqueues a flood batch onto a reliable-delivery list and starts its paced burst.
+     *
+     * Adds each record to @p lsuList (keyed by LsaKey, so a newer instance of
+     * an LSA replaces its queued predecessor), then kicks off the
+     * retransmit burst that sends and re-sends until each entry is
+     * acknowledged.  Entries are skipped entirely when
+     * `database-filter all out` is configured, and pure refreshes
+     * (`FloodReason::REFRESH`) are skipped while flood reduction (DoNotAge)
+     * is active, since DoNotAge LSAs need no periodic re-flood.
+     *
+     * @param lsuList Target retransmission list — a neighbor's unicast list
+     *                or this interface's multicast list.
+     * @param keys    Batch of (flood reason, LSA record reference) pairs from
+     *                the flood manager.
+     */
+    void addLsaRetransmissions(RetransmissionList<LsaKey, LsaRecordRef>& lsuList,
+                               std::vector<std::pair<FloodInfo, LsaRecordRef>>& keys);
 
     /// Returns the multicast LSU retransmission list for this interface.
     RetransmissionList<LsaKey, LsaRecordRef>& getMulticastLsu() { return multicastLsus; }
@@ -174,7 +194,7 @@ protected:
      * @param nbr Neighbor to request from.
      * @return True if the packet was sent.
      */
-    virtual bool sendLSRequest(Neighbor& nbr) = 0;
+    virtual bool sendLsr(Neighbor& nbr) = 0;
 
     /**
      * @brief Sends an LS Update packet, unicast to a neighbor or multicast if null.
@@ -182,7 +202,7 @@ protected:
      * @param nbr Target neighbor, or null to multicast to all Full neighbors.
      * @return True if at least one LSA was included in the update.
      */
-    virtual bool sendLSUpdate(Neighbor* nbr) = 0;
+    virtual bool sendLsu(Neighbor* nbr) = 0;
 
     /**
      * @brief Transmits a finalized packet via the underlying interface.
@@ -191,18 +211,6 @@ protected:
      * @param dest Destination IP address, or null to send to the OSPF multicast address.
      */
     virtual void transmit(processing::PacketBuilder& pkt, const types::IPAddress* dest) = 0;
-
-    /**
-     * @brief Validates and applies received OSPF options for a neighbor.
-     *
-     * Called when a Hello or DD packet is received. Returns false if the options
-     * are incompatible and the packet should be dropped.
-     *
-     * @param options Options bitmask from the received packet.
-     * @param nbr     Neighbor the packet was received from.
-     * @return False if the options mismatch makes the packet invalid.
-     */
-    virtual bool processOptions(uint32_t options, Neighbor& nbr) = 0;
 
     /**
      * @brief Computes the LSA age to advertise, respecting the DoNotAge bit for flood reduction.
@@ -228,6 +236,19 @@ protected:
      * @param buf Pointer to the start of the LLS Data Block (two-byte checksum field first).
      */
     void addLinkLocalChecksum(uint8_t* buf);
+
+    /**
+     * @brief Validates and applies received OSPF options for a neighbor.
+     *
+     * Called when a Hello or DD packet is received. Returns false if the options
+     * are incompatible and the packet should be dropped.
+     *
+     * @param options Options bitmask from the received packet.
+     * @param nbr     Neighbor the packet was received from.
+     * @return False if the options mismatch makes the packet invalid.
+     */
+    template <typename Policy>
+    bool processOptions(uint32_t options, Neighbor& nbr);
 
     /**
      * @brief Cursor into a @ref processing::PacketBuilder used while assembling OSPF packets.
@@ -291,6 +312,35 @@ protected:
     OspfInterface& iface;    ///< Owning OSPF interface.
     NeighborTable& ntable;   ///< Neighbor table for this interface.
     types::AddressFamily af; ///< Address family (IPv4 or IPv6) of this interface.
+
+protected:
+
+    // HELPERS
+
+    // INTERFACE STATE
+    InterfaceTimers& getTmgr() { return iface.tmgr; }
+    NeighborTable& getNTable() { return iface.ntable; }
+    const LsdbTable& getLsdb() const { return iface.getLsdb(); }
+    bool getFloodReduction() const { return iface.floodReduction; }
+    bool getOpacheEnabled() const { return iface.opaqueEnabled.load(std::memory_order_relaxed); }
+    uint16_t getHelloInterval() const { return static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(iface.getHelloInterval()).count()); }
+    uint16_t getDeadInterval() const { return static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(iface.getDeadInterval()).count()); }
+    uint32_t getIfaceFlags() const { return iface.flags.getFlags(); }
+    std::optional<__uint128_t> getAuthKey() { return iface.getAuthKey(); }
+    std::optional<uint8_t> getAuthKeyId() { return iface.getAuthKeyId(); }
+
+    // CONFIG REGISTRIES
+    const config::OspfInterfaceBaseRegistry& getIfaceBaseConfigs() const { return iface.baseConfigs; }
+    const config::OspfInterfaceRegistry& getIfaceConfigs() const { return iface.configs; }
+    const config::OspfAreaRegistry& getAreaConfigs() const { return iface.getAreaConfigs(); }
+    const config::OspfRegistry& getProcessConfigs() const { return iface.getProcessConfigs(); }
+
+    // AREA / LSDB OPERATIONS
+    void runDrElection() { iface.election(); }
+    bool compareLSASummary(const LsaHeader& hdr, const LsaKey& key) const { return iface.compareLSASummary(hdr, key); }
+    template <typename Policy>
+    std::optional<Area::Result> processLsa(IncomingLsaContext& ctx, LsaBody& body) { return iface.processLsa<Policy>(ctx, body); }
+    void runDCIntegrityScan() { iface.runAreaDCIntegrityScan(); }
 };
 } // namespace routing
 

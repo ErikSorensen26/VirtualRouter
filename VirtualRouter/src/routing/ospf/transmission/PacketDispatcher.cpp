@@ -13,9 +13,48 @@
 namespace routing::ospf
 {
 PacketDispatcher::PacketDispatcher(OspfInterface& iface)
-    : multicastLsus(iface.getProcess(), iface), iface(iface), ntable(iface.getNTable()), af(iface.getProcess().getAF()) {}
+    : multicastLsus(iface, iface.getProcessConfigs()), iface(iface), ntable(iface.ntable), af(iface.area.process.af) {}
 
 PacketDispatcher::~PacketDispatcher() = default;
+
+template <typename Policy>
+bool PacketDispatcher::processOptions(uint32_t options, Neighbor& nbr)
+{
+    (void)nbr; // For OSPFV3
+
+    uint32_t flags = iface.flags.getFlags();
+
+    bool ignore = getIfaceBaseConfigs().get<config::OspfInterfaceBase::BASE>().get().get<config::OspfInterface::DEMAND_CIRCUIT_IGNORE>().load();
+    if (iface.demandCircuit == OspfInterface::DcDecision::UNDECIDED && !ignore)
+    {
+        if (InterfaceFlagManager::getDemandCircuits(options) && InterfaceFlagManager::getDemandCircuits(flags) &&
+            iface.configs.get<config::OspfInterface::NETWORK>().load() == config::ospf::NetworkType::POINT_TO_POINT)
+            iface.demandCircuit = OspfInterface::DcDecision::ENABLED;
+        else
+            iface.demandCircuit = OspfInterface::DcDecision::DISABLED;
+    }
+
+    if (AreaFlagManager::getExternalRouting(flags) != AreaFlagManager::getExternalRouting(options))
+        return false;
+    if (AreaFlagManager::getNssa(flags) != AreaFlagManager::getNssa(options))
+        return false;
+
+    if constexpr (std::is_same_v<Policy, PolicyV2>)
+    {
+        // Disable opaque if neighbor does not advertise O-bit support
+        if (iface.opaqueEnabled.load(std::memory_order_relaxed) && !AreaFlagManager::getOpaque(options))
+            iface.opaqueEnabled.store(false, std::memory_order_relaxed);
+        if (AreaFlagManager::getAddressFamilySupport(flags) != AreaFlagManager::getAddressFamilySupport(options) && iface.area.process.af == types::AddressFamily::IPv4)
+            return false;
+    }
+    else if constexpr (std::is_same_v<Policy, PolicyV3>)
+    {
+        if (auto r = AreaFlagManager::getRouterBit(options); r != nbr.isTransit.load(std::memory_order_relaxed))
+            nbr.isTransit.store(r, std::memory_order_release);
+    }
+
+    return true;
+}
 
 uint16_t PacketDispatcher::calculateAge(bool floodReduction, const LsaRecord& record)
 {
@@ -33,7 +72,7 @@ uint16_t PacketDispatcher::calculateAge(bool floodReduction, const LsaRecord& re
         age = (record.header.age & 0x7FFF) + delta;
     }
 
-    age += iface.getConfigs().get<config::OspfInterface::TRANSMIT_DELAY>().load();
+    age += iface.configs.get<config::OspfInterface::TRANSMIT_DELAY>().load();
 
     if (age > OSPF_MAX_AGE) age = OSPF_MAX_AGE;
 
@@ -67,7 +106,7 @@ void PacketDispatcher::addLinkLocalChecksum(uint8_t* buf)
     utils::writeU16(buf, check.finalize());
 }
 
-void PacketDispatcher::sendReliableLSRequest(Neighbor& nbr, const std::vector<LsaKey>& dbds)
+void PacketDispatcher::sendReliableLsr(Neighbor& nbr, const std::vector<LsaKey>& dbds)
 {
     auto lsrs = nbr.getRtr().lsrs();
     for (auto& key : dbds)
@@ -77,9 +116,9 @@ void PacketDispatcher::sendReliableLSRequest(Neighbor& nbr, const std::vector<Ls
     onLsrPacingTimer(nbr);
 }
 
-void PacketDispatcher::sendReliableLSUpdate(Neighbor* nbr, std::vector<std::pair<FloodInfo, LsaRecordRef>>& updates)
+void PacketDispatcher::sendReliableLsu(Neighbor* nbr, std::vector<std::pair<FloodInfo, LsaRecordRef>>& updates)
 {
-    bool filter = iface.getConfigs().get<config::OspfInterface::DATABASE_FILTER>().load();
+    bool filter = iface.configs.get<config::OspfInterface::DATABASE_FILTER>().load();
     bool floodReduction = iface.floodReduction;
 
     if (nbr)
@@ -101,17 +140,11 @@ void PacketDispatcher::sendReliableLSUpdate(Neighbor* nbr, std::vector<std::pair
         }
         multicastLsus.beginRetransmitBurst();
 
-        for (auto& [_, neighbor] : iface.getNTable().neighbors)
-        {
-            auto& lsus = neighbor.getRtr().lsus();
-            for (const auto& [info, record] : updates)
-            {
-                if (!(filter || (floodReduction && info.reason == FloodReason::REFRESH)))
-                    lsus.add(record.key, record);
-            }
-            lsus.beginRetransmitBurst();
-            iface.getTimers().startLsuRetransmissionTimer(neighbor);
-        }
+        // Add lsu updates to neighbors
+        iface.ntable.forEach([this, &updates](uint32_t, Neighbor& nbr) {
+            addLsaRetransmissions(nbr.getRtr().lsus(), updates);
+            iface.tmgr.startLsuRetransmissionTimer(nbr);
+        });
     }
 
     onLsuPacingTimer(nbr);
@@ -122,7 +155,7 @@ void PacketDispatcher::onLsuRetransmissionTimer(Neighbor& nbr)
     auto& list = nbr.getRtr().lsus();
     list.beginRetransmitBurst();
     if (list.getActive())
-        iface.getTimers().startLsuRetransmissionTimer(nbr);
+        iface.tmgr.startLsuRetransmissionTimer(nbr);
     onLsuPacingTimer(&nbr);
 }
 
@@ -131,7 +164,7 @@ void PacketDispatcher::onLsrRetransmissionTimer(Neighbor& nbr)
     auto& list = nbr.getRtr().lsrs();
     list.beginRetransmitBurst();
     if (list.getActive())
-        iface.getTimers().startLsrRetransmissionTimer(nbr);
+        iface.tmgr.startLsrRetransmissionTimer(nbr);
     onLsrPacingTimer(nbr);
 }
 
@@ -139,19 +172,35 @@ void PacketDispatcher::onLsuPacingTimer(Neighbor* nbr)
 {
     auto list = nbr ? nbr->getRtr().lsus() : multicastLsus;
 
-    sendLSUpdate(nbr);
+    sendLsu(nbr);
 
     if (list.burstActive()) 
-        iface.getTimers().startLsuPacingTimer(nbr);
+        iface.tmgr.startLsuPacingTimer(nbr);
 }
 
 void PacketDispatcher::onLsrPacingTimer(Neighbor& nbr)
 {
     auto list = nbr.getRtr().lsrs();
 
-    sendLSRequest(nbr);
+    sendLsr(nbr);
 
     if (list.burstActive()) 
-        iface.getTimers().startLsrPacingTimer(nbr);
+        iface.tmgr.startLsrPacingTimer(nbr);
 }
+
+void PacketDispatcher::addLsaRetransmissions(RetransmissionList<LsaKey, LsaRecordRef>& lsuList, std::vector<std::pair<FloodInfo, LsaRecordRef>>& updates)
+{
+    bool filter = iface.configs.get<config::OspfInterface::DATABASE_FILTER>().load();
+    bool floodReduction = iface.floodReduction;
+
+    for (const auto& [info, record] : updates)
+    {
+        if (!(filter || (floodReduction && info.reason == FloodReason::REFRESH)))
+            lsuList.add(record.key, record);
+    }
+    lsuList.beginRetransmitBurst();
+}
+
+template bool PacketDispatcher::processOptions<PolicyV2>(uint32_t, Neighbor&);
+template bool PacketDispatcher::processOptions<PolicyV3>(uint32_t, Neighbor&);
 } // namespace routing

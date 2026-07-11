@@ -18,7 +18,7 @@
 
 #include "packet/headers/Ospfv3Header.hpp"
 #include "ospf/interface/OspfInterface.h"
-#include "ospf/database/LSDB.hpp"
+#include "ospf/database/LsdbTypes.hpp"
 #include "ospf/transmission/PacketDispatcher.h"
 
 namespace processing { class PacketBuilder; }
@@ -101,7 +101,7 @@ public:
      *
      * @param nbr The neighbor to which the DBD is sent.
      */
-    void sendInitDBD(Neighbor& nbr) override;
+    void sendInitDbd(Neighbor& nbr) override;
 
     /**
      * @brief Sends a DBD packet to a neighbor.
@@ -112,7 +112,7 @@ public:
      * @param nbr The neighbor to send the DBD to.
      * @return True if DBD transmission succeeds.
      */
-    bool sendDBD(Neighbor& nbr) override;
+    bool sendDbd(Neighbor& nbr) override;
 
     /**
      * @brief Sends an LSAck message to a neighbor.
@@ -124,7 +124,7 @@ public:
      * @param records Vector of LSA records being acknowledged.
      * @return True if transmission succeeds.
      */
-    bool sendLSAck(Neighbor& nbr, std::vector<LsaRecordRef>& records) override;
+    bool sendLsAck(Neighbor& nbr, std::vector<LsaRecordRef>& records) override;
 
     /**
      * @brief Sends an LSRequest message to a neighbor.
@@ -134,7 +134,7 @@ public:
      * @param nbr The neighbor to request LSAs from.
      * @return True if transmission succeeds.
      */
-    bool sendLSRequest(Neighbor& nbr) override;
+    bool sendLsr(Neighbor& nbr) override;
 
     /**
      * @brief Sends an LSUpdate message to a neighbor or flood list.
@@ -144,7 +144,7 @@ public:
      * @param nbr Optional neighbor to send unicast; nullptr for flood.
      * @return True if transmission succeeds.
      */
-    bool sendLSUpdate(Neighbor* nbr) override;
+    bool sendLsu(Neighbor* nbr) override;
 
     /**
      * @brief Handles DBD retransmission timer expiration for a neighbor.
@@ -159,7 +159,6 @@ public:
 private:
     // Internal helpers and builders...
     void transmit(processing::PacketBuilder& pkt, const types::IPAddress* dest = nullptr) override;
-    bool processOptions(uint32_t options, Neighbor& nbr) override;
 
     void finalizeHeader(packet::Ospfv3Header& hdr, OspfBuilder& builder, bool lls = false);
     void transmitReliable(processing::PacketBuilder& pkt, Neighbor* neighbor, packet::Ospfv3Header& header);
@@ -180,7 +179,7 @@ private:
     size_t addLSAcks(OspfBuilder& builder, std::span<LsaRecordRef>& acks);
 
     void buildDescriptions(OspfBuilder& builder, Neighbor& nbr);
-    bool buildLSABody(OspfBuilder& builder, LsaRecord& body, uint8_t type);
+    bool buildLSABody(OspfBuilder& builder, const LsaRecord& body, uint8_t type);
 
     void processHello(HeaderInfo& info, bool unicast);
     void processDBD(HeaderInfo& info);

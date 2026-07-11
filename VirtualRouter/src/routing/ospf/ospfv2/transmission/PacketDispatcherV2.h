@@ -14,7 +14,7 @@
 
 #include "packet/headers/Ospfv2Header.hpp"
 #include "ospf/interface/OspfInterface.h"
-#include "ospf/database/LSDB.hpp"
+#include "ospf/database/LsdbTypes.hpp"
 #include "ospf/transmission/PacketDispatcher.h"
 
 namespace processing { class PacketBuilder; }
@@ -76,18 +76,17 @@ public:
 
     void sendHello() override;
     void sendUnicastHello(Neighbor& nbr) override;
-    void sendInitDBD(Neighbor& nbr) override;
-    bool sendDBD(Neighbor& nbr) override;
-    bool sendLSAck(Neighbor& nbr, std::vector<LsaRecordRef>& records) override;
+    void sendInitDbd(Neighbor& nbr) override;
+    bool sendDbd(Neighbor& nbr) override;
+    bool sendLsAck(Neighbor& nbr, std::vector<LsaRecordRef>& records) override;
 
-    bool sendLSRequest(Neighbor& nbr) override;
-    bool sendLSUpdate(Neighbor* nbr) override;
+    bool sendLsr(Neighbor& nbr) override;
+    bool sendLsu(Neighbor* nbr) override;
 
     void onDbdRetransmissionTimer(Neighbor& nbr) override;
 
 private:
     void transmit(processing::PacketBuilder& pkt, const types::IPAddress* dest = nullptr) override;
-    bool processOptions(uint32_t options, Neighbor& nbr) override;
 
     /**
      * @brief Finalizes the OSPFv2 common header: sets length, authentication, and checksum.
@@ -145,7 +144,7 @@ private:
     /// Fills the DD summary list into the builder for the neighbor's current exchange page.
     void buildDescriptions(OspfBuilder& builder, Neighbor& nbr);
     /// Serializes the body of an LSA record into the builder based on its type byte.
-    bool buildLSABody(OspfBuilder& builder, LsaRecord& body, uint8_t type);
+    bool buildLSABody(OspfBuilder& builder, const LsaRecord& body, uint8_t type);
 
 private:
     // RECEIVE PATH

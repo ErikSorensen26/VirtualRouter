@@ -4,7 +4,7 @@
 
 #include "PacketDispatcherV3.h"
 #include "ospf/neighbor/Neighbor.h"
-#include "ospf/area/Area.h"
+#include "ospf/OspfProcess.h"
 #include "packet/headers/embedded/ospf/Ospfv3DBDHeader.hpp"
 #include "processing/PacketBuilder.hpp"
 #include "infrastructure/IPPacket.h"
@@ -19,10 +19,10 @@ PacketDispatcherV3::PacketDispatcherV3(OspfInterface& iface)
 
 config::OspfInterfaceBaseRegistry& PacketDispatcherV3::getConfigs()
 {
-    auto& ifCfgs = iface.getIface().configs.getConfigs();
-    if (iface.getProcess().isV3)
+    auto& ifCfgs = iface.iface.configs.getConfigs();
+    if (iface.area.process.isV3)
     {
-        auto& afReg = ifCfgs.get<config::Interface::OSPFV3>().emplaceBack(iface.getProcess().getProcId());
+        auto& afReg = ifCfgs.get<config::Interface::OSPFV3>().emplaceBack(iface.area.process.procId);
         return afReg.get<config::OspfInterfaceAf::IPV6>().get();
     }
     else
@@ -33,12 +33,12 @@ config::OspfInterfaceBaseRegistry& PacketDispatcherV3::getConfigs()
 
 void PacketDispatcherV3::transmit(processing::PacketBuilder& pkt, const types::IPAddress* dest)
 {
-    auto* interface = &iface.getIface();
+    auto* interface = &iface.iface;
 
     types::IPAddress destination;
     if (!dest)
     {
-        if (iface.isDr.load(std::memory_order_relaxed))
+        if (iface.getIsDr())
             destination = types::IPAddress(OSPFV3_ALL_SPF_ROUTERS, types::AddressFamily::IPv6);
         else
             destination = types::IPAddress(OSPFV3_ALL_D_ROUTERS, types::AddressFamily::IPv6);
@@ -65,7 +65,7 @@ bool PacketDispatcherV3::setupDbd(Neighbor& neighbor, packet::Ospfv3Header& pkt)
 {
     Retransmission& rtr = neighbor.getRtr();
     if (rtr.getDbdActive())
-        iface.getTimers().startDbdRetransmissionTimer(neighbor);
+        getTmgr().startDbdRetransmissionTimer(neighbor);
 
     packet::Ospfv3DBDHeader dbd;
     dbd.setBuffer(pkt.getTrailData());
@@ -80,21 +80,21 @@ bool PacketDispatcherV3::setupDbd(Neighbor& neighbor, packet::Ospfv3Header& pkt)
             neighbor.ipAddress
         };
         rtr.dbdPacket.sequence = seqNum;
-        iface.getTimers().startDbdRetransmissionTimer(neighbor);
+        getTmgr().startDbdRetransmissionTimer(neighbor);
     }
     return true;
 }
 
 void PacketDispatcherV3::onDbdRetransmissionTimer(Neighbor& nbr)
 {
-    processing::PacketBuilder retransmissionPacket(&iface.getIface());
+    processing::PacketBuilder retransmissionPacket(&iface.iface);
     af == types::AddressFamily::IPv4
         ? infrastructure::ippacket::reserveIpv4(retransmissionPacket)
         : infrastructure::ippacket::reserveIpv6(retransmissionPacket);
     auto* hdr = retransmissionPacket.addHeader(nbr.getRtr().dbdPacket.packet, packet::HeaderType::OSPFV3);
     if (!hdr) return;
 
-    auto* interface = &iface.getIface();
+    auto* interface = &iface.iface;
     infrastructure::ippacket::BuildIP build = {
         .iface = interface,
         .packetInfo = retransmissionPacket,

@@ -16,17 +16,17 @@ PacketDispatcherV2::PacketDispatcherV2(OspfInterface& iface)
 
 config::OspfInterfaceBaseRegistry& PacketDispatcherV2::getConfigs()
 {
-    return iface.getIface().configs.getConfigs().get<config::Interface::IP_OSPF>().get();
+    return iface.iface.configs.getConfigs().get<config::Interface::IP_OSPF>().get();
 }
 
 void PacketDispatcherV2::transmit(processing::PacketBuilder& pkt, const types::IPAddress* dest)
 {
-    auto* interface = &iface.getIface();
+    auto* interface = &iface.iface;
 
     types::IPAddress destination;
     if (!dest)
     {
-        if (iface.isDr.load(std::memory_order_relaxed))
+        if (iface.getIsDr())
             destination = types::IPAddress(OSPFV2_ALL_SPF_ROUTERS, types::AddressFamily::IPv4);
         else
             destination = types::IPAddress(OSPFV2_ALL_D_ROUTERS, types::AddressFamily::IPv4);
@@ -51,7 +51,7 @@ bool PacketDispatcherV2::setupDbd(Neighbor& neighbor, packet::Ospfv2Header& pkt)
 {
     Retransmission& rtr = neighbor.getRtr();
     if (rtr.getDbdActive())
-        iface.getTimers().startDbdRetransmissionTimer(neighbor);
+        getTmgr().startDbdRetransmissionTimer(neighbor);
 
     packet::Ospfv2DBDHeader dbd;
     dbd.setBuffer(pkt.getTrailData());
@@ -66,19 +66,19 @@ bool PacketDispatcherV2::setupDbd(Neighbor& neighbor, packet::Ospfv2Header& pkt)
             neighbor.ipAddress
         };
         rtr.dbdPacket.sequence = seqNum;
-        iface.getTimers().startDbdRetransmissionTimer(neighbor);
+        getTmgr().startDbdRetransmissionTimer(neighbor);
     }
     return true;
 }
 
 void PacketDispatcherV2::onDbdRetransmissionTimer(Neighbor& nbr)
 {
-    processing::PacketBuilder retransmissionPacket(&iface.getIface());
+    processing::PacketBuilder retransmissionPacket(&iface.iface);
     infrastructure::ippacket::reserveIpv4(retransmissionPacket);
     auto* hdr = retransmissionPacket.addHeader(nbr.getRtr().dbdPacket.packet, packet::HeaderType::OSPFV2);
     if (!hdr) return;
 
-    auto* interface = &iface.getIface();
+    auto* interface = &iface.iface;
     infrastructure::ippacket::BuildIP build = {
         .iface = interface,
         .packetInfo = retransmissionPacket,

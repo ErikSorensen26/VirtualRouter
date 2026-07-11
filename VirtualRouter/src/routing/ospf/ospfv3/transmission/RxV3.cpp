@@ -6,7 +6,7 @@
 #include "ospf/interface/InterfaceTimers.h"
 #include "ospf/neighbor/Neighbor.h"
 #include "ospf/area/Area.h"
-#include "ospf/area/FlagManager.h"
+#include "ospf/FlagManager.hpp"
 
 #include "packet/headers/embedded/ospf/Ospfv3HelloHeader.hpp"
 #include "packet/headers/embedded/ospf/Ospfv3DBDHeader.hpp"
@@ -34,16 +34,16 @@ static bool verifyOspfFletcher(const uint8_t* lsa, uint16_t len)
 
 void PacketDispatcherV3::handleIncoming(const packet::Ospfv3Header& ospfHeader, const uint8_t* neighborIp, bool multicast)
 {
-    types::IPAddress neigIp(neighborIp, iface.getProcess().getAF());
+    types::IPAddress neigIp(neighborIp, iface.area.process.af);
     uint32_t rid = ospfHeader.getRouterID();
 
     // Check if 
-    auto ntype = iface.getConfigs().get<config::OspfInterface::NETWORK>().load();
+    auto ntype = getIfaceConfigs().get<config::OspfInterface::NETWORK>().load();
     if (multicast && (ntype == config::ospf::NetworkType::NON_BROADCAST || ntype == config::ospf::NetworkType::POINT_TO_MULTIPOINT))
         return;
 
     // Check passive
-    if (iface.getConfigs().get<config::OspfInterface::PASSIVE>().load())
+    if (getIfaceConfigs().get<config::OspfInterface::PASSIVE>().load())
         return;
 
     // Validate version
@@ -59,7 +59,7 @@ void PacketDispatcherV3::handleIncoming(const packet::Ospfv3Header& ospfHeader, 
 
     HeaderInfo info(ospfHeader.getTrail().data(), packetSize,
         static_cast<uint16_t>(ospfHeader.getPacketLen() - packet::Ospfv3Header::fixedSize), 0, neigIp, rid);
-    info.neighbor = iface.getNTable().lookup(rid);
+    info.neighbor = getNTable().lookup(rid);
 
     {
         // Process Checksum
@@ -71,7 +71,7 @@ void PacketDispatcherV3::handleIncoming(const packet::Ospfv3Header& ospfHeader, 
             return; // Invalid checksum
     }
     // RFC 5340 §4.4.1: discard packets sourced by this router itself
-    if (ospfHeader.getRouterID() == iface.getProcess().getRouterId())
+    if (ospfHeader.getRouterID() == iface.area.process.getRouterId())
         return;
 
     // Discard unrecognised packet types (valid range: 1–5)
@@ -79,7 +79,7 @@ void PacketDispatcherV3::handleIncoming(const packet::Ospfv3Header& ospfHeader, 
         return;
 
     // RFC 5340 §4.4.1: instance ID must match the interface's configured instance
-    if (ospfHeader.getInstanceID() != iface.getBaseConfigs().get<config::OspfInterfaceBase::INSTANCE_ID>().load())
+    if (ospfHeader.getInstanceID() != getIfaceBaseConfigs().get<config::OspfInterfaceBase::INSTANCE_ID>().load())
         return;
 
     if (ospfHeader.getType() == OSPFV3_TYPE_HELLO)
@@ -108,43 +108,19 @@ void PacketDispatcherV3::handleIncoming(const packet::Ospfv3Header& ospfHeader, 
     }
 }
 
-bool PacketDispatcherV3::processOptions(uint32_t options, Neighbor& nbr)
-{
-    auto& flags = iface.getFlags();
-    auto& areaFlags = iface.getArea().getFlags();
-
-    bool ignore = iface.getConfigs().get<config::OspfInterface::DEMAND_CIRCUIT_IGNORE>().load();
-    if (iface.demandCircuit == OspfInterface::DcDecision::UNDECIDED && !ignore)
-    {
-        if (InterfaceFlagManager::getDemandCircuits(options) && flags.getDemandCircuits() &&
-            iface.getConfigs().get<config::OspfInterface::NETWORK>().load() == config::ospf::NetworkType::POINT_TO_POINT)
-            iface.demandCircuit = OspfInterface::DcDecision::ENABLED;
-        else
-            iface.demandCircuit = OspfInterface::DcDecision::DISABLED;
-    }
-    if (auto r = AreaFlagManager::getRouterBit(options); r != nbr.isTransit.load(std::memory_order_relaxed))
-        nbr.isTransit.store(r, std::memory_order_release);
-    if (areaFlags.getExternalRouting() != AreaFlagManager::getExternalRouting(options))
-        return false;
-    if (areaFlags.getNssa() != AreaFlagManager::getNssa(options))
-        return false;
-    return true;
-}
-
 void PacketDispatcherV3::processHello(PacketDispatcher::HeaderInfo& info, bool unicast)
 {
     packet::Ospfv3HelloHeader hdr;
     hdr.setBuffer(info.payload);
 
-    auto& ifaceConfigs = iface.getConfigs();
+    auto& ifaceConfigs = getIfaceConfigs();
 
     info.offset += packet::Ospfv3HelloHeader::fixedSize;
     if (info.offset > info.payloadSize)
         return;
 
     // Validate timers — if mismatch, tear down an existing neighbor; for unknown neighbors just drop
-    if (hdr.getHelloInterval() != static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(iface.helloTime).count()) ||
-        hdr.getDeadInterval() != static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(iface.deadTime).count()))
+    if (hdr.getHelloInterval() != getHelloInterval() || hdr.getDeadInterval() != getDeadInterval())
     {
         if (info.neighbor)
             info.neighbor->setState(Neighbor::State::DOWN);
@@ -168,7 +144,7 @@ void PacketDispatcherV3::processHello(PacketDispatcher::HeaderInfo& info, bool u
     }
 
     // Validate options — neighbor is guaranteed non-null from here on
-    if (info.neighbor->getState() != Neighbor::State::FULL && !processOptions(static_cast<uint32_t>(hdr.getOptions()), *info.neighbor))
+    if (info.neighbor->getState() != Neighbor::State::FULL && !processOptions<PolicyV3>(static_cast<uint32_t>(hdr.getOptions()), *info.neighbor))
     {
         info.neighbor->setState(Neighbor::State::DOWN);
         return;
@@ -184,7 +160,7 @@ void PacketDispatcherV3::processHello(PacketDispatcher::HeaderInfo& info, bool u
         bool ridFound = false;
         for (size_t i = 0; i < listSize; i += 4)
         {
-            if (utils::readU32(neighborList + i) == iface.getProcess().getRouterId())
+            if (utils::readU32(neighborList + i) == iface.area.process.getRouterId())
             {
                 ridFound = true;
                 break;
@@ -209,7 +185,7 @@ void PacketDispatcherV3::processHello(PacketDispatcher::HeaderInfo& info, bool u
         info.neighbor->setState(Neighbor::State::TWOWAY);
     }
 
-    iface.getTimers().startInactiveTimer(*info.neighbor);
+    getTmgr().startInactiveTimer(*info.neighbor);
 
     // Update neighbor variables
     if (info.neighbor->priority.load(std::memory_order_relaxed) != hdr.getRouterPriority())
@@ -227,25 +203,23 @@ void PacketDispatcherV3::processHello(PacketDispatcher::HeaderInfo& info, bool u
         info.neighbor->dr.store(newDr, std::memory_order_relaxed);
         info.neighbor->bdr.store(newBdr, std::memory_order_relaxed);
 
-        uint32_t currentDr = iface.dr.rid.load(std::memory_order_relaxed);
-        uint32_t currentBdr = iface.bdr.rid.load(std::memory_order_relaxed);
+        uint32_t currentDr = iface.getDrRid();
+        uint32_t currentBdr = iface.getDrRid();
 
         const bool election = (newPriority == 0 &&
             (info.neighbor->routerID == currentBdr ||
              info.neighbor->routerID == currentDr)) ||
             (info.neighbor->getState() == Neighbor::State::TWOWAY &&
-            ((iface.dr.rid.load(std::memory_order_relaxed) == 0) ||
-            (iface.bdr.rid.load(std::memory_order_relaxed) == 0)));
+            ((iface.getDrRid() == 0) ||
+            (iface.getBdrRid() == 0)));
 
         if (election)
-            iface.election();
+            runDrElection();
     }
 }
 
 void PacketDispatcherV3::processDBD(PacketDispatcher::HeaderInfo& info)
 {
-    Area& area = iface.getArea();
-
     auto state = info.neighbor->getState();
     if (state < Neighbor::State::EXSTART) return;
 
@@ -261,14 +235,14 @@ void PacketDispatcherV3::processDBD(PacketDispatcher::HeaderInfo& info)
         return;
 
     uint32_t options = hdr.getOptions();
-    if (!processOptions(options, *info.neighbor))
+    if (!processOptions<PolicyV3>(options, *info.neighbor))
     {
         info.neighbor->setState(Neighbor::State::DOWN);
         return;
     }
 
     // Verify MTU
-    if (iface.getConfigs().get<config::OspfInterface::MTU_IGNORE>().load() && info.neighbor->mtu != hdr.getMtu())
+    if (getIfaceConfigs().get<config::OspfInterface::MTU_IGNORE>().load() && info.neighbor->mtu != hdr.getMtu())
     {
         info.neighbor->setState(Neighbor::State::DOWN);
         return;
@@ -288,7 +262,7 @@ void PacketDispatcherV3::processDBD(PacketDispatcher::HeaderInfo& info)
         if (info.offset != info.payloadSize)
             return;
 
-        Neighbor::Role role = info.neighbor->routerID > iface.getProcess().getRouterId()
+        Neighbor::Role role = info.neighbor->routerID > iface.area.process.getRouterId()
             ? Neighbor::Role::SLAVE
             : Neighbor::Role::MASTER;
         info.neighbor->setRole(role);
@@ -303,7 +277,7 @@ void PacketDispatcherV3::processDBD(PacketDispatcher::HeaderInfo& info)
         if (role == Neighbor::Role::SLAVE) // SLAVE
         {
             // Ack MASTERs init, move to EXCHANGE, and await MASTER.
-            sendInitDBD(*info.neighbor);
+            sendInitDbd(*info.neighbor);
             info.neighbor->setState(Neighbor::State::EXCHANGE);
         }
         else if (ack) // MASTER and Ack received, move to EXCHANGE.
@@ -333,7 +307,7 @@ void PacketDispatcherV3::processDBD(PacketDispatcher::HeaderInfo& info)
                 .age = lsaHdr.getAge()
             };
 
-            if (area.compareLSASummary(lsa, key))
+            if (compareLSASummary(lsa, key))
                 rtr.lsrs().add(key, key);
         }
 
@@ -342,7 +316,7 @@ void PacketDispatcherV3::processDBD(PacketDispatcher::HeaderInfo& info)
         // Slave must ack every Master DBD, including the final empty one.
         // Master only needs to reply while it still has more to describe.
         if (info.neighbor->getRole() == Neighbor::Role::SLAVE || info.neighbor->currentDbd.has_value())
-            sendDBD(*info.neighbor);
+            sendDbd(*info.neighbor);
 
         if (!peerHasMore && !info.neighbor->currentDbd.has_value())
         {
@@ -396,7 +370,7 @@ void PacketDispatcherV3::processLSRequest(PacketDispatcher::HeaderInfo& info)
 
     // Process request
     std::vector<std::pair<FloodInfo, LsaRecordRef>> records;
-    auto& lsdb = iface.getArea().lsdb();
+    auto& lsdb = getLsdb();
     while (info.offset < info.payloadSize)
     {
         packet::Ospfv3LSRHeader lsrHdr;
@@ -407,18 +381,17 @@ void PacketDispatcherV3::processLSRequest(PacketDispatcher::HeaderInfo& info)
             return;
 
         LsaKey key(static_cast<uint16_t>(lsrHdr.getType()), lsrHdr.getLsID(), lsrHdr.getAdvRouter());
-        if (LsaRecord* record = lsdb.find(key); record)
+        if (const LsaRecord* record = lsdb.find(key); record)
         {
             records.push_back({{FloodReason::UPDATE}, {key, *record}});
         }
     }
 
-    sendReliableLSUpdate(info.neighbor, records);
+    sendReliableLsu(info.neighbor, records);
 }
 
 void PacketDispatcherV3::processLSUpdate(PacketDispatcher::HeaderInfo& info)
 {
-    auto& area = iface.getArea();
     if (info.payloadSize < 4)
         return;
 
@@ -426,7 +399,7 @@ void PacketDispatcherV3::processLSUpdate(PacketDispatcher::HeaderInfo& info)
         return;
 
     uint32_t lsuSize = utils::readU32(info.payload);
-    uint32_t routerId = iface.getProcess().getRouterId();
+    uint32_t routerId = iface.area.process.getRouterId();
 
     info.offset += 4;
 
@@ -482,13 +455,13 @@ void PacketDispatcherV3::processLSUpdate(PacketDispatcher::HeaderInfo& info)
             info.neighbor->routerID
         };
 
-        auto result = area.processLsa<PolicyV3>(context, body.value());
+        auto result = processLsa<PolicyV3>(context, body.value());
         if (result.has_value() && result->decision.shouldAck)
             acks.push_back({context.key, *result->record});
     }
 
     if (!acks.empty())
-        sendLSAck(*info.neighbor, acks);
+        sendLsAck(*info.neighbor, acks);
 }
 
 void PacketDispatcherV3::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
@@ -546,7 +519,7 @@ void PacketDispatcherV3::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
         return;
 
     // Trigger DC integrity scan so flood-reduction state stays current
-    iface.getArea().runDCIntegrityScan();
+    runDCIntegrityScan();
 }
 
 std::optional<LsaBody> PacketDispatcherV3::buildLsaBody(uint16_t type, const uint8_t* buf, uint16_t len)
