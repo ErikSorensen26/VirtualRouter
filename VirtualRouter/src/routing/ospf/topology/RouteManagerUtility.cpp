@@ -28,6 +28,11 @@ ExternalOriginator& RouteManagerUtility::getExtOriginator(OspfProcess& proc)
     return proc.externalOriginator;
 }
 
+const InterfaceManager& RouteManagerUtility::getIfaceMgr(OspfProcess& proc)
+{
+    return proc.ifaceMgr;
+}
+
 std::optional<OspfNextHop> RouteManagerUtility::resolveDirectNextHop(Area& area, const Vertex& v, const ParentRef& pref)
 {
     // Get RID of destination router.

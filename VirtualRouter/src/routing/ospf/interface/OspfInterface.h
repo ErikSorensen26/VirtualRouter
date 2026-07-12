@@ -98,6 +98,7 @@ struct DrCandidate
  */
 class OspfInterface
 {
+    friend class ::Internal_OspfTest;
 public:
 
     /**
@@ -279,16 +280,6 @@ private:
     void syncDigestKey();
 
     /**
-     * @brief Enables or disables passive mode on this interface.
-     *
-     * A passive interface sends Hello packets but does not form adjacencies.
-     * When transitioning to passive, all existing neighbors are torn down.
-     *
-     * @param passive  True to enable passive mode, false to disable.
-     */
-    void setPassiveMode(bool passive);
-
-    /**
      * @brief Configures flood-reduction mode for the specified interface.
      *
      * Sets the DoNotAge bit on all self-originated LSAs flooded out of `iface`
@@ -444,6 +435,7 @@ private:
     {
     private:
         friend class OspfInterface;
+        friend class ::Internal_OspfTest;
 
         std::atomic<uint16_t> cost;            ///< Current interface cost in OSPF metric units.
         std::chrono::seconds helloTime;        ///< Configured Hello interval.

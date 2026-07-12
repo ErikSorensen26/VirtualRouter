@@ -54,6 +54,7 @@ Ndp::Ndp(interface::Interface& interface)
 
 Ndp::~Ndp()
 {
+    scheduler.release();
     clear();
 }
 

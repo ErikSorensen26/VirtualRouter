@@ -146,6 +146,7 @@ CalcResults runLsaCalculations(const LsaHeader& hdr, const LsaKey& key, const Ls
  */
 class Area
 {
+    friend class ::Internal_OspfTest;
 public:
 
     /**

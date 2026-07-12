@@ -59,6 +59,7 @@ void Arp::initiateArp()
 // Destructor
 Arp::~Arp()
 {
+    scheduler.release();
     clear();
 }
 

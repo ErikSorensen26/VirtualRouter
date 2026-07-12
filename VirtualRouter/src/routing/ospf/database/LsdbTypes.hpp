@@ -126,7 +126,7 @@ constexpr inline LsaRecordFlags operator&(LsaRecordFlags a, LsaRecordFlags b) no
 {
     return static_cast<LsaRecordFlags>(static_cast<uint8_t>(a) & static_cast<uint8_t>(b));
 }
-constexpr inline LsaRecordFlags operator|=(LsaRecordFlags a, LsaRecordFlags b) noexcept
+constexpr inline LsaRecordFlags& operator|=(LsaRecordFlags& a, LsaRecordFlags b) noexcept
 {
     a = (a | b);
     return a;

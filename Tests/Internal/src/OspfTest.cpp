@@ -22,6 +22,7 @@
 #include <ospf/neighbor/Neighbor.h>
 #include <ospf/neighbor/NeighborTable.h>
 #include <ospf/area/Area.h>
+#include <ospf/area/IntraOriginator.h>
 #include <ospf/database/LsdbTable.h>
 #include <ospf/OspfTypes.hpp>
 #include <ospf/transmission/PacketDispatcher.h>
@@ -101,25 +102,28 @@ protected:
 
         // OSPFv2 process (IPv4)
         ospfInstance = &vrf->addOspf(1);
+        ospfInstance->configs.get<config::Ospf::LSA_THROTTLE_HOLD>().set(0);
+        ospfInstance->configs.get<config::Ospf::LSA_THROTTLE_MAX>().set(0);
+        ospfInstance->configs.get<config::Ospf::LSA_ARRIVAL>().set(0);
         ospfInstance->calculateRID();
-        ospfInstance->getScheduler().post([this]
+        ospfInstance->scheduler.post([this]
         {
             ospfInstance->insureArea(0);
-            ospfInterface = &ospfInstance->getIfaceMgr().createInterface(
+            ospfInterface = &ospfInstance->ifaceMgr.createInterface(
                 *mockInterface, routing::ospf::OspfInterfaceId(ipIntv4.addr, 0));
         });
-        ospfInstance->getSchedulerQueue().waitIdle();
+        ospfInstance->schedulerMgr.waitIdle();
 
         // OSPFv3 process (IPv6)
         ospfv3Instance = &vrf->addOspfv3(2, types::AddressFamily::IPv6);
         ospfv3Instance->calculateRID();
-        ospfv3Instance->getScheduler().post([this]
+        ospfv3Instance->scheduler.post([this]
         {
             ospfv3Instance->insureArea(0);
-            ospfv3Interface = &ospfv3Instance->getIfaceMgr().createInterface(
+            ospfv3Interface = &ospfv3Instance->ifaceMgr.createInterface(
                 *mockInterface, routing::ospf::OspfInterfaceId(ipIntv4.addr, 0));
         });
-        ospfv3Instance->getSchedulerQueue().waitIdle();
+        ospfv3Instance->schedulerMgr.waitIdle();
     }
 
     void TearDown() override
@@ -143,12 +147,12 @@ protected:
 
     routing::ospf::NeighborTable& getNTable(routing::ospf::OspfInterface* iface = nullptr)
     {
-        return (iface ? iface : ospfInterface)->getNTable();
+        return (iface ? iface : ospfInterface)->ntable;
     }
 
     routing::ospf::LsdbTable& getLsdb(uint32_t areaId = 0, routing::ospf::OspfProcess* proc = nullptr)
     {
-        return getArea(areaId, proc).lsdb();
+        return getArea(areaId, proc).lsdb;
     }
 
     // Helper: set IPv4 address on an interface.
@@ -193,17 +197,17 @@ protected:
                                           bool unicast = false)
     {
         routing::ospf::OspfInterface* ifacePtr = iface ? iface : ospfInterface;
-        routing::ospf::Neighbor* nbr = ifacePtr->getNTable().createNeighbor(routerId, ip, unicast);
+        routing::ospf::Neighbor* nbr = ifacePtr->ntable.createNeighbor(routerId, ip, unicast);
 
         if (ip.isIPv6())
         {
             types::Mac neighborMac = 0x112233445566;
-            ifacePtr->getIface().ndp.addNdpEntry(ip.v6(), neighborMac);
+            ifacePtr->iface.ndp.addNdpEntry(ip.v6(), neighborMac);
         }
         else
         {
             types::Mac neighborMac = 0x112233445566;
-            ifacePtr->getIface().arp.addArpEntry(ip.v4(), neighborMac);
+            ifacePtr->iface.arp.addArpEntry(ip.v4(), neighborMac);
         }
 
         // Drive through the FSM in order; setState() guards on oldState so
@@ -229,7 +233,7 @@ protected:
 
     routing::ospf::Neighbor* getNeighbor(uint32_t routerId, routing::ospf::OspfInterface* iface = nullptr)
     {
-        return (iface ? iface : ospfInterface)->getNTable().lookup(routerId);
+        return (iface ? iface : ospfInterface)->ntable.lookup(routerId);
     }
 
     // Packet header extraction
@@ -263,7 +267,7 @@ protected:
 
     routing::ospf::PacketDispatcherV2& getDispatcherV2(routing::ospf::OspfInterface* iface = nullptr)
     {
-        return static_cast<routing::ospf::PacketDispatcherV2&>((iface ? iface : ospfInterface)->getDispatcher());
+        return static_cast<routing::ospf::PacketDispatcherV2&>((iface ? iface : ospfInterface)->dispatcher);
     }
 
     void finalizeOspfV2Checksum(uint8_t* buf, uint16_t packetLen)
@@ -495,7 +499,7 @@ protected:
 
     routing::ospf::PacketDispatcherV3& getDispatcherV3(routing::ospf::OspfInterface* iface = nullptr)
     {
-        return static_cast<routing::ospf::PacketDispatcherV3&>((iface ? iface : ospfv3Interface)->getDispatcher());
+        return static_cast<routing::ospf::PacketDispatcherV3&>((iface ? iface : ospfv3Interface)->dispatcher);
     }
 
     void finalizeOspfV3Checksum(uint8_t* buf, uint16_t packetLen)
@@ -710,25 +714,119 @@ protected:
         return packetLen;
     }
 
+    config::OspfRegistry& getConfigs(routing::ospf::OspfProcess& proc)
+    {
+        return *const_cast<config::OspfRegistry*>(
+            reinterpret_cast<volatile config::OspfRegistry*>(
+                const_cast<config::OspfRegistry*>(&proc.configs)
+            )
+        );
+    }
+
+    config::OspfInterfaceBaseRegistry& getIfaceBaseConfigs(routing::ospf::OspfInterface& iface)
+    {
+        return *const_cast<config::OspfInterfaceBaseRegistry*>(
+            reinterpret_cast<volatile config::OspfInterfaceBaseRegistry*>(
+                const_cast<config::OspfInterfaceBaseRegistry*>(&iface.baseConfigs)
+            )
+        );
+    }
+
+    const config::OspfInterfaceRegistry& getIfaceConfigs(routing::ospf::OspfInterface& iface)
+    {
+        return *const_cast<config::OspfInterfaceRegistry*>(
+            reinterpret_cast<volatile config::OspfInterfaceRegistry*>(
+                const_cast<config::OspfInterfaceRegistry*>(&iface.configs)
+            )
+        );
+    }
+
+    routing::ospf::InterfaceManager& getIfaceMgr(routing::ospf::OspfProcess& proc)
+    {
+        return proc.ifaceMgr;
+    }
+
     bool processOptions(uint32_t options, routing::ospf::Neighbor& nbr)
     {
-        return ospfInterface->getDispatcher().processOptions(options, nbr);
+        if (nbr.getIface().process.isV3)
+            return ospfInterface->dispatcher.processOptions<routing::ospf::PolicyV3>(options, nbr);
+        else
+            return ospfInterface->dispatcher.processOptions<routing::ospf::PolicyV2>(options, nbr);
+    }
+
+    void calculateCost(routing::ospf::OspfInterface& iface)
+    {
+        return iface.calculateCost();
+    }
+
+    routing::ospf::Area& getIfaceArea(routing::ospf::OspfInterface& iface)
+    {
+        return iface.area;
+    }
+
+    uint16_t getIfaceHelloInterval(routing::ospf::OspfInterface& iface)
+    {
+        return static_cast<uint16_t>(iface.getHelloInterval().count());
+    }
+
+    uint16_t getIfaceDeadInterval(routing::ospf::OspfInterface& iface)
+    {
+        return static_cast<uint16_t>(iface.getDeadInterval().count());
     }
 
     void addNetworkLsa(routing::ospf::Area& area, const routing::ospf::OspfInterface& iface, bool refresh)
     {
-        area.getOriginator().addNetworkLsa(iface, refresh);
+        area.originator.addNetworkLsa(iface, refresh);
+    }
+
+    void setIfaceDCEnabled(routing::ospf::OspfInterface& iface)
+    {
+        iface.demandCircuit = routing::ospf::OspfInterface::DcDecision::ENABLED;
+    }
+
+    void setIfaceDCDisabled(routing::ospf::OspfInterface& iface)
+    {
+        iface.demandCircuit = routing::ospf::OspfInterface::DcDecision::DISABLED;
+    }
+
+    void setIfaceDCUndecided(routing::ospf::OspfInterface& iface)
+    {
+        iface.demandCircuit = routing::ospf::OspfInterface::DcDecision::UNDECIDED;
+    }
+
+    void runIfaceElection(routing::ospf::OspfInterface& iface)
+    {
+        iface.election();
+    }
+
+    void setIsDr(bool isDr, routing::ospf::OspfInterface& iface)
+    {
+        iface.priv.isDr = isDr;
+    }
+
+    void setIsBdr(bool isBdr, routing::ospf::OspfInterface& iface)
+    {
+        iface.priv.isBdr = isBdr;
+    }
+
+    void setDrRid(uint32_t rid, routing::ospf::OspfInterface& iface)
+    {
+        iface.dr.rid = rid;    
+    }
+
+    void setBdrRid(uint32_t rid, routing::ospf::OspfInterface& iface)
+    {
+        iface.bdr.rid = rid;
     }
 };
 
 #pragma region NeighborStateMachine
 
-/*
 // Test: Neighbor_SetState_Returns_True_When_State_Changes
 TEST_F(Internal_OspfTest, Neighbor_SetState_Returns_True_When_State_Changes)
 {
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
-    auto* nbr = ospfInterface->getNTable().createNeighbor(neighborRouterId, nbrIp);
+    auto* nbr = getNTable(ospfInterface).createNeighbor(neighborRouterId, nbrIp);
 
     EXPECT_TRUE(nbr->setState(routing::ospf::Neighbor::State::INIT));
 }
@@ -737,7 +835,7 @@ TEST_F(Internal_OspfTest, Neighbor_SetState_Returns_True_When_State_Changes)
 TEST_F(Internal_OspfTest, Neighbor_SetState_Returns_False_When_State_Unchanged)
 {
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
-    auto* nbr = ospfInterface->getNTable().createNeighbor(neighborRouterId, nbrIp);
+    auto* nbr = getNTable(ospfInterface).createNeighbor(neighborRouterId, nbrIp);
 
     ASSERT_TRUE(nbr->setState(routing::ospf::Neighbor::State::INIT));
     EXPECT_FALSE(nbr->setState(routing::ospf::Neighbor::State::INIT));
@@ -747,7 +845,7 @@ TEST_F(Internal_OspfTest, Neighbor_SetState_Returns_False_When_State_Unchanged)
 TEST_F(Internal_OspfTest, Neighbor_ResetDbExchange_Clears_Seq_And_Dbd_Key)
 {
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
-    auto* nbr = ospfInterface->getNTable().createNeighbor(neighborRouterId, nbrIp);
+    auto* nbr = getNTable(ospfInterface).createNeighbor(neighborRouterId, nbrIp);
 
     nbr->resetDbExchange();
 
@@ -759,7 +857,7 @@ TEST_F(Internal_OspfTest, Neighbor_ResetDbExchange_Clears_Seq_And_Dbd_Key)
 TEST_F(Internal_OspfTest, Neighbor_TwoWay_Stays_TwoWay_When_Neither_Dr_Nor_Bdr_On_Broadcast)
 {
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
-    auto* nbr = ospfInterface->getNTable().createNeighbor(neighborRouterId, nbrIp);
+    auto* nbr = getNTable(ospfInterface).createNeighbor(neighborRouterId, nbrIp);
 
     // Network type defaults to BROADCAST; with dr/bdr both 0 (no election yet)
     // and routerID != 0, neither isDr() nor isBdr() will be true.
@@ -773,7 +871,7 @@ TEST_F(Internal_OspfTest, Neighbor_TwoWay_Stays_TwoWay_When_Neither_Dr_Nor_Bdr_O
 TEST_F(Internal_OspfTest, Neighbor_TwoWay_To_ExStart_When_Neighbor_Is_Dr)
 {
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
-    auto* nbr = ospfInterface->getNTable().createNeighbor(neighborRouterId, nbrIp);
+    auto* nbr = getNTable(ospfInterface).createNeighbor(neighborRouterId, nbrIp);
 
     // Neighbor declares itself as DR in its Hello.
     nbr->dr.store(neighborRouterId, std::memory_order_relaxed);
@@ -788,7 +886,7 @@ TEST_F(Internal_OspfTest, Neighbor_TwoWay_To_ExStart_When_Neighbor_Is_Dr)
 TEST_F(Internal_OspfTest, Neighbor_ExStart_Does_Not_Reenter_On_Repeated_SetState)
 {
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
-    auto* nbr = ospfInterface->getNTable().createNeighbor(neighborRouterId, nbrIp);
+    auto* nbr = getNTable(ospfInterface).createNeighbor(neighborRouterId, nbrIp);
     nbr->dr.store(neighborRouterId, std::memory_order_relaxed);
 
     nbr->setState(routing::ospf::Neighbor::State::INIT);
@@ -805,7 +903,7 @@ TEST_F(Internal_OspfTest, Neighbor_ExStart_Does_Not_Reenter_On_Repeated_SetState
 TEST_F(Internal_OspfTest, Neighbor_ExStart_To_Exchange_Master_Sends_Dbd)
 {
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
-    auto* nbr = ospfInterface->getNTable().createNeighbor(neighborRouterId, nbrIp);
+    auto* nbr = getNTable(ospfInterface).createNeighbor(neighborRouterId, nbrIp);
     nbr->dr.store(neighborRouterId, std::memory_order_relaxed);
 
     nbr->setState(routing::ospf::Neighbor::State::INIT);
@@ -823,7 +921,7 @@ TEST_F(Internal_OspfTest, Neighbor_ExStart_To_Exchange_Master_Sends_Dbd)
 TEST_F(Internal_OspfTest, Neighbor_ExStart_To_Exchange_Slave_Does_Not_Proactively_Send)
 {
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
-    auto* nbr = ospfInterface->getNTable().createNeighbor(neighborRouterId, nbrIp);
+    auto* nbr = getNTable(ospfInterface).createNeighbor(neighborRouterId, nbrIp);
     nbr->dr.store(neighborRouterId, std::memory_order_relaxed);
 
     nbr->setState(routing::ospf::Neighbor::State::INIT);
@@ -843,7 +941,7 @@ TEST_F(Internal_OspfTest, Neighbor_ExStart_To_Exchange_Slave_Does_Not_Proactivel
 TEST_F(Internal_OspfTest, Neighbor_Exchange_To_Loading_With_Empty_LSR_Goes_To_Full)
 {
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
-    auto* nbr = ospfInterface->getNTable().createNeighbor(neighborRouterId, nbrIp);
+    auto* nbr = getNTable(ospfInterface).createNeighbor(neighborRouterId, nbrIp);
     nbr->dr.store(neighborRouterId, std::memory_order_relaxed);
 
     nbr->setState(routing::ospf::Neighbor::State::INIT);
@@ -863,7 +961,7 @@ TEST_F(Internal_OspfTest, Neighbor_Exchange_To_Loading_With_Empty_LSR_Goes_To_Fu
 TEST_F(Internal_OspfTest, Neighbor_Full_Reached_From_Exchange_Directly)
 {
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
-    auto* nbr = ospfInterface->getNTable().createNeighbor(neighborRouterId, nbrIp);
+    auto* nbr = getNTable(ospfInterface).createNeighbor(neighborRouterId, nbrIp);
     nbr->dr.store(neighborRouterId, std::memory_order_relaxed);
 
     nbr->setState(routing::ospf::Neighbor::State::INIT);
@@ -880,7 +978,7 @@ TEST_F(Internal_OspfTest, Neighbor_Full_Reached_From_Exchange_Directly)
 TEST_F(Internal_OspfTest, Neighbor_Full_Not_Reached_Directly_From_TwoWay)
 {
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
-    auto* nbr = ospfInterface->getNTable().createNeighbor(neighborRouterId, nbrIp);
+    auto* nbr = getNTable(ospfInterface).createNeighbor(neighborRouterId, nbrIp);
 
     // No DR/BDR declared, so TWOWAY does not progress to EXSTART.
     nbr->setState(routing::ospf::Neighbor::State::INIT);
@@ -897,10 +995,10 @@ TEST_F(Internal_OspfTest, Neighbor_Full_Not_Reached_Directly_From_TwoWay)
 TEST_F(Internal_OspfTest, Neighbor_Full_With_DemandCircuit_Enabled_Stops_Hello)
 {
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
-    auto* nbr = ospfInterface->getNTable().createNeighbor(neighborRouterId, nbrIp);
+    auto* nbr = getNTable(ospfInterface).createNeighbor(neighborRouterId, nbrIp);
     nbr->dr.store(neighborRouterId, std::memory_order_relaxed);
 
-    ospfInterface->demandCircuit = routing::ospf::OspfInterface::DcDecision::ENABLED;
+    setIfaceDCEnabled(*ospfInterface);
 
     nbr->setState(routing::ospf::Neighbor::State::INIT);
     nbr->setState(routing::ospf::Neighbor::State::TWOWAY);
@@ -910,14 +1008,14 @@ TEST_F(Internal_OspfTest, Neighbor_Full_With_DemandCircuit_Enabled_Stops_Hello)
 
     EXPECT_EQ(nbr->getState(), routing::ospf::Neighbor::State::FULL);
 
-    ospfInterface->demandCircuit = routing::ospf::OspfInterface::DcDecision::UNDECIDED;
+    setIfaceDCUndecided(*ospfInterface);
 }
 
 // Test: Neighbor_Down_Clears_Retransmission_Lists
 TEST_F(Internal_OspfTest, Neighbor_Down_Clears_Retransmission_Lists)
 {
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
-    auto* nbr = ospfInterface->getNTable().createNeighbor(neighborRouterId, nbrIp);
+    auto* nbr = getNTable(ospfInterface).createNeighbor(neighborRouterId, nbrIp);
 
     nbr->setState(routing::ospf::Neighbor::State::INIT);
     nbr->setState(routing::ospf::Neighbor::State::DOWN);
@@ -930,7 +1028,7 @@ TEST_F(Internal_OspfTest, Neighbor_Down_Clears_Retransmission_Lists)
 TEST_F(Internal_OspfTest, Neighbor_Down_Flushes_Originated_LSAs)
 {
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
-    auto* nbr = ospfInterface->getNTable().createNeighbor(neighborRouterId, nbrIp);
+    auto* nbr = getNTable(ospfInterface).createNeighbor(neighborRouterId, nbrIp);
 
     auto& lsdb = getLsdb();
 
@@ -981,12 +1079,12 @@ TEST_F(Internal_OspfTest, Neighbor_Down_Flushes_Originated_LSAs)
 TEST_F(Internal_OspfTest, Neighbor_Destructor_Cancels_Inactivity_Timer)
 {
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
-    auto* nbr = ospfInterface->getNTable().createNeighbor(neighborRouterId, nbrIp);
+    auto* nbr = getNTable(ospfInterface).createNeighbor(neighborRouterId, nbrIp);
     nbr->setState(routing::ospf::Neighbor::State::INIT);
 
     // Destroying the neighbor must not crash even with an active inactivity
     // timer registered.
-    ospfInterface->getNTable().deleteNeighbor(neighborRouterId, false);
+    getNTable(ospfInterface).deleteNeighbor(neighborRouterId, false);
 
     EXPECT_EQ(getNeighbor(neighborRouterId), nullptr);
 }
@@ -995,7 +1093,7 @@ TEST_F(Internal_OspfTest, Neighbor_Destructor_Cancels_Inactivity_Timer)
 TEST_F(Internal_OspfTest, Neighbor_IsDr_IsBdr_Reflect_Last_Hello_Declaration)
 {
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
-    auto* nbr = ospfInterface->getNTable().createNeighbor(neighborRouterId, nbrIp);
+    auto* nbr = getNTable(ospfInterface).createNeighbor(neighborRouterId, nbrIp);
 
     EXPECT_FALSE(nbr->isDr());
     EXPECT_FALSE(nbr->isBdr());
@@ -1014,8 +1112,8 @@ TEST_F(Internal_OspfTest, Neighbor_IsDr_IsBdr_Reflect_Last_Hello_Declaration)
 TEST_F(Internal_OspfTest, NeighborTable_CreateNeighbor_Is_Idempotent_For_Existing_Rid)
 {
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
-    auto* first = ospfInterface->getNTable().createNeighbor(neighborRouterId, nbrIp);
-    auto* second = ospfInterface->getNTable().createNeighbor(neighborRouterId, nbrIp);
+    auto* first = getNTable(ospfInterface).createNeighbor(neighborRouterId, nbrIp);
+    auto* second = getNTable(ospfInterface).createNeighbor(neighborRouterId, nbrIp);
 
     EXPECT_EQ(first, second);
 }
@@ -1035,8 +1133,8 @@ TEST_F(Internal_OspfTest, Hello_Creates_New_Neighbor_Entry)
 {
     ASSERT_EQ(getNeighbor(neighborRouterId), nullptr);
 
-    uint16_t helloInterval = static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(ospfInterface->helloTime).count());
-    uint16_t deadInterval = static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(ospfInterface->deadTime).count());
+    uint16_t helloInterval = getIfaceHelloInterval(*ospfInterface);
+    uint16_t deadInterval = getIfaceDeadInterval(*ospfInterface);
     uint32_t mask = ospfInterface->interfaceAddress.getMask();
 
     buildHelloV2(testPacket, neighborRouterId, ospfInterface->getAreaId(),
@@ -1052,8 +1150,8 @@ TEST_F(Internal_OspfTest, Hello_Creates_New_Neighbor_Entry)
 // Test: Hello_Init_To_TwoWay_When_RID_Present_In_Hello
 TEST_F(Internal_OspfTest, Hello_Init_To_TwoWay_When_RID_Present_In_Hello)
 {
-    uint16_t helloInterval = static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(ospfInterface->helloTime).count());
-    uint32_t deadInterval = static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(ospfInterface->deadTime).count());
+    uint16_t helloInterval = getIfaceHelloInterval(*ospfInterface);
+    uint16_t deadInterval = getIfaceDeadInterval(*ospfInterface);
     uint32_t mask = ospfInterface->interfaceAddress.getMask();
     uint32_t selfRid = ospfInstance->getRouterId();
 
@@ -1078,8 +1176,8 @@ TEST_F(Internal_OspfTest, Hello_Init_To_TwoWay_When_RID_Present_In_Hello)
 // Test: Hello_Mismatched_HelloInterval_Tears_Down_Existing_Neighbor
 TEST_F(Internal_OspfTest, Hello_Mismatched_HelloInterval_Tears_Down_Existing_Neighbor)
 {
-    uint16_t helloInterval = static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(ospfInterface->helloTime).count());
-    uint32_t deadInterval = static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(ospfInterface->deadTime).count());
+    uint16_t helloInterval = getIfaceHelloInterval(*ospfInterface);
+    uint16_t deadInterval = getIfaceDeadInterval(*ospfInterface);
     uint32_t mask = ospfInterface->interfaceAddress.getMask();
 
     // Establish the neighbor first.
@@ -1101,8 +1199,8 @@ TEST_F(Internal_OspfTest, Hello_Mismatched_HelloInterval_Tears_Down_Existing_Nei
 // Test: Hello_Mismatched_DeadInterval_Tears_Down_Existing_Neighbor
 TEST_F(Internal_OspfTest, Hello_Mismatched_DeadInterval_Tears_Down_Existing_Neighbor)
 {
-    uint16_t helloInterval = static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(ospfInterface->helloTime).count());
-    uint32_t deadInterval = static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(ospfInterface->deadTime).count());
+    uint16_t helloInterval = getIfaceHelloInterval(*ospfInterface);
+    uint16_t deadInterval = getIfaceDeadInterval(*ospfInterface);
     uint32_t mask = ospfInterface->interfaceAddress.getMask();
 
     buildHelloV2(testPacket, neighborRouterId, ospfInterface->getAreaId(),
@@ -1122,8 +1220,8 @@ TEST_F(Internal_OspfTest, Hello_Mismatched_DeadInterval_Tears_Down_Existing_Neig
 // Test: Hello_Mismatched_AreaId_Dropped_No_Neighbor_Created
 TEST_F(Internal_OspfTest, Hello_Mismatched_AreaId_Dropped_No_Neighbor_Created)
 {
-    uint16_t helloInterval = static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(ospfInterface->helloTime).count());
-    uint32_t deadInterval = static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(ospfInterface->deadTime).count());
+    uint16_t helloInterval = getIfaceHelloInterval(*ospfInterface);
+    uint16_t deadInterval = getIfaceDeadInterval(*ospfInterface);
     uint32_t mask = ospfInterface->interfaceAddress.getMask();
 
     // Wrong area ID (interface is in area 0).
@@ -1137,8 +1235,8 @@ TEST_F(Internal_OspfTest, Hello_Mismatched_AreaId_Dropped_No_Neighbor_Created)
 // Test: Hello_Mismatched_Netmask_Tears_Down_Existing_Neighbor_On_Broadcast
 TEST_F(Internal_OspfTest, Hello_Mismatched_Netmask_Tears_Down_Existing_Neighbor_On_Broadcast)
 {
-    uint16_t helloInterval = static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(ospfInterface->helloTime).count());
-    uint32_t deadInterval = static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(ospfInterface->deadTime).count());
+    uint16_t helloInterval = getIfaceHelloInterval(*ospfInterface);
+    uint16_t deadInterval = getIfaceDeadInterval(*ospfInterface);
     uint32_t mask = ospfInterface->interfaceAddress.getMask();
 
     buildHelloV2(testPacket, neighborRouterId, ospfInterface->getAreaId(),
@@ -1159,8 +1257,8 @@ TEST_F(Internal_OspfTest, Hello_Mismatched_Netmask_Tears_Down_Existing_Neighbor_
 // Test: Hello_Refreshes_Inactivity_Timer_On_Receipt
 TEST_F(Internal_OspfTest, Hello_Refreshes_Inactivity_Timer_On_Receipt)
 {
-    uint16_t helloInterval = static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(ospfInterface->helloTime).count());
-    uint32_t deadInterval = static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(ospfInterface->deadTime).count());
+    uint16_t helloInterval = getIfaceHelloInterval(*ospfInterface);
+    uint16_t deadInterval = getIfaceDeadInterval(*ospfInterface);
     uint32_t mask = ospfInterface->interfaceAddress.getMask();
 
     buildHelloV2(testPacket, neighborRouterId, ospfInterface->getAreaId(),
@@ -1176,8 +1274,8 @@ TEST_F(Internal_OspfTest, Hello_Refreshes_Inactivity_Timer_On_Receipt)
 // Test: Hello_Updates_Neighbor_Priority
 TEST_F(Internal_OspfTest, Hello_Updates_Neighbor_Priority)
 {
-    uint16_t helloInterval = static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(ospfInterface->helloTime).count());
-    uint32_t deadInterval = static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(ospfInterface->deadTime).count());
+    uint16_t helloInterval = getIfaceHelloInterval(*ospfInterface);
+    uint16_t deadInterval = getIfaceDeadInterval(*ospfInterface);
     uint32_t mask = ospfInterface->interfaceAddress.getMask();
 
     buildHelloV2(testPacket, neighborRouterId, ospfInterface->getAreaId(),
@@ -1192,8 +1290,8 @@ TEST_F(Internal_OspfTest, Hello_Updates_Neighbor_Priority)
 // Test: Hello_Updates_Neighbor_Dr_Bdr_Declaration
 TEST_F(Internal_OspfTest, Hello_Updates_Neighbor_Dr_Bdr_Declaration)
 {
-    uint16_t helloInterval = static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(ospfInterface->helloTime).count());
-    uint32_t deadInterval = static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(ospfInterface->deadTime).count());
+    uint16_t helloInterval = getIfaceHelloInterval(*ospfInterface);
+    uint16_t deadInterval = getIfaceDeadInterval(*ospfInterface);
     uint32_t mask = ospfInterface->interfaceAddress.getMask();
 
     buildHelloV2(testPacket, neighborRouterId, ospfInterface->getAreaId(),
@@ -1209,8 +1307,8 @@ TEST_F(Internal_OspfTest, Hello_Updates_Neighbor_Dr_Bdr_Declaration)
 // Test: Hello_From_Self_Router_Id_Is_Discarded
 TEST_F(Internal_OspfTest, Hello_From_Self_Router_Id_Is_Discarded)
 {
-    uint16_t helloInterval = static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(ospfInterface->helloTime).count());
-    uint32_t deadInterval = static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(ospfInterface->deadTime).count());
+    uint16_t helloInterval = getIfaceHelloInterval(*ospfInterface);
+    uint16_t deadInterval = getIfaceDeadInterval(*ospfInterface);
     uint32_t mask = ospfInterface->interfaceAddress.getMask();
     uint32_t selfRid = ospfInstance->getRouterId();
 
@@ -1225,8 +1323,8 @@ TEST_F(Internal_OspfTest, Hello_From_Self_Router_Id_Is_Discarded)
 // Test: Hello_Duplicate_From_Same_Neighbor_No_State_Regression
 TEST_F(Internal_OspfTest, Hello_Duplicate_From_Same_Neighbor_No_State_Regression)
 {
-    uint16_t helloInterval = static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(ospfInterface->helloTime).count());
-    uint32_t deadInterval = static_cast<uint16_t>(std::chrono::duration_cast<std::chrono::seconds>(ospfInterface->deadTime).count());
+    uint16_t helloInterval = getIfaceHelloInterval(*ospfInterface);
+    uint16_t deadInterval = getIfaceDeadInterval(*ospfInterface);
     uint32_t mask = ospfInterface->interfaceAddress.getMask();
     uint32_t selfRid = ospfInstance->getRouterId();
 
@@ -1255,16 +1353,16 @@ TEST_F(Internal_OspfTest, Election_Single_Router_Becomes_DR_By_Default)
 {
     uint32_t selfRid = ospfInstance->getRouterId();
 
-    ospfInterface->election();
+    runIfaceElection(*ospfInterface);
 
-    EXPECT_TRUE(ospfInterface->isDr.load());
-    EXPECT_EQ(ospfInterface->dr.rid.load(), selfRid);
+    EXPECT_TRUE(ospfInterface->getIsDr());
+    EXPECT_EQ(ospfInterface->getDrRid(), selfRid);
 }
 
 // Test: Election_Higher_Priority_Neighbor_Wins_Dr
 TEST_F(Internal_OspfTest, Election_Higher_Priority_Neighbor_Wins_Dr)
 {
-    uint8_t selfPrio = ospfInterface->getConfigs().get<config::OspfInterface::PRIORITY>().load();
+    uint8_t selfPrio = getIfaceConfigs(*ospfInterface).get<config::OspfInterface::PRIORITY>().load();
 
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
     auto* nbr = addNeighbor(neighborRouterId, nbrIp, routing::ospf::Neighbor::State::TWOWAY);
@@ -1273,17 +1371,17 @@ TEST_F(Internal_OspfTest, Election_Higher_Priority_Neighbor_Wins_Dr)
     nbr->dr.store(neighborRouterId);
     nbr->bdr.store(0);
 
-    ospfInterface->election();
+    runIfaceElection(*ospfInterface);
 
-    EXPECT_EQ(ospfInterface->dr.rid.load(), neighborRouterId);
-    EXPECT_FALSE(ospfInterface->isDr.load());
+    EXPECT_EQ(ospfInterface->getDrRid(), neighborRouterId);
+    EXPECT_FALSE(ospfInterface->getIsDr());
 }
 
 // Test: Election_Tie_Broken_By_Highest_RouterId
 TEST_F(Internal_OspfTest, Election_Tie_Broken_By_Highest_RouterId)
 {
     uint32_t selfRid = ospfInstance->getRouterId();
-    uint8_t selfPrio = ospfInterface->getConfigs().get<config::OspfInterface::PRIORITY>().load();
+    uint8_t selfPrio = getIfaceConfigs(*ospfInterface).get<config::OspfInterface::PRIORITY>().load();
 
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
     auto* nbr = addNeighbor(neighborRouterId, nbrIp, routing::ospf::Neighbor::State::TWOWAY);
@@ -1291,11 +1389,11 @@ TEST_F(Internal_OspfTest, Election_Tie_Broken_By_Highest_RouterId)
     nbr->dr.store(neighborRouterId);
     nbr->bdr.store(0);
 
-    ospfInterface->election();
+    runIfaceElection(*ospfInterface);
 
     // Higher router ID wins the tie.
     uint32_t expectedDr = std::max(selfRid, neighborRouterId);
-    EXPECT_EQ(ospfInterface->dr.rid.load(), expectedDr);
+    EXPECT_EQ(ospfInterface->getDrRid(), expectedDr);
 }
 
 // Test: Election_Priority_Zero_Excludes_Router_From_Election
@@ -1307,13 +1405,12 @@ TEST_F(Internal_OspfTest, Election_Priority_Zero_Excludes_Router_From_Election)
     nbr->dr.store(neighborRouterId);
     nbr->bdr.store(0);
 
-    ospfInterface->getConfigs().get<config::OspfInterface::PRIORITY>().set(0);
+    getIfaceConfigs(*ospfInterface).get<config::OspfInterface::PRIORITY>().set(0);
 
-    ospfInterface->election();
+    runIfaceElection(*ospfInterface);
 
-    // Neither candidate has nonzero priority -> no DR/BDR elected.
-    EXPECT_EQ(ospfInterface->dr.rid.load(), 0u);
-    EXPECT_EQ(ospfInterface->bdr.rid.load(), 0u);
+    EXPECT_EQ(ospfInterface->getDrRid(), 0u);
+    EXPECT_EQ(ospfInterface->getBdrRid(), 0u);
 }
 
 // Test: Election_Existing_DR_Not_Displaced_By_Higher_Priority_New_Router
@@ -1322,31 +1419,31 @@ TEST_F(Internal_OspfTest, Election_Existing_DR_Not_Displaced_By_Higher_Priority_
     uint32_t selfRid = ospfInstance->getRouterId();
 
     // Self becomes DR with no competitors.
-    ospfInterface->election();
-    ASSERT_EQ(ospfInterface->dr.rid.load(), selfRid);
-    ASSERT_TRUE(ospfInterface->isDr.load());
+    runIfaceElection(*ospfInterface);
+    ASSERT_EQ(ospfInterface->getDrRid(), selfRid);
+    ASSERT_TRUE(ospfInterface->getIsDr());
 
     // A new neighbor with higher priority appears, but does not claim DR itself.
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
     auto* nbr = addNeighbor(neighborRouterId, nbrIp, routing::ospf::Neighbor::State::TWOWAY);
-    uint8_t selfPrio = ospfInterface->getConfigs().get<config::OspfInterface::PRIORITY>().load();
+    uint8_t selfPrio = getIfaceConfigs(*ospfInterface).get<config::OspfInterface::PRIORITY>().load();
     nbr->priority.store(static_cast<uint8_t>(selfPrio + 1));
     nbr->dr.store(0);
     nbr->bdr.store(0);
 
-    ospfInterface->election();
+    runIfaceElection(*ospfInterface);
 
     // RFC 2328 §9.4: existing DR is not displaced just because a higher
     // priority router appears that does not itself claim DR.
-    EXPECT_EQ(ospfInterface->dr.rid.load(), selfRid);
-    EXPECT_TRUE(ospfInterface->isDr.load());
+    EXPECT_EQ(ospfInterface->getDrRid(), selfRid);
+    EXPECT_TRUE(ospfInterface->getIsDr());
 }
 
 // Test: Election_BDR_Promoted_To_DR_When_DR_Disappears
 TEST_F(Internal_OspfTest, Election_BDR_Promoted_To_DR_When_DR_Disappears)
 {
     uint32_t selfRid = ospfInstance->getRouterId();
-    uint8_t selfPrio = ospfInterface->getConfigs().get<config::OspfInterface::PRIORITY>().load();
+    uint8_t selfPrio = getIfaceConfigs(*ospfInterface).get<config::OspfInterface::PRIORITY>().load();
 
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
     auto* nbr = addNeighbor(neighborRouterId, nbrIp, routing::ospf::Neighbor::State::TWOWAY);
@@ -1354,8 +1451,9 @@ TEST_F(Internal_OspfTest, Election_BDR_Promoted_To_DR_When_DR_Disappears)
     nbr->dr.store(neighborRouterId);
     nbr->bdr.store(0);
 
-    ospfInterface->election();
-    ASSERT_EQ(ospfInterface->dr.rid.load(), std::max(selfRid, neighborRouterId));
+    runIfaceElection(*ospfInterface);
+
+    ASSERT_EQ(ospfInterface->getDrRid(), std::max(selfRid, neighborRouterId));
 
     // Now the higher-RID neighbor declares itself BDR rather than DR.
     nbr->dr.store(0);
@@ -1363,13 +1461,13 @@ TEST_F(Internal_OspfTest, Election_BDR_Promoted_To_DR_When_DR_Disappears)
 
     // Manually demote self from DR claim to allow re-election to find a new DR
     // (simulating the original DR going down on this segment).
-    ospfInterface->dr.rid.store(0);
+    setDrRid(0, *ospfInterface);
 
-    ospfInterface->election();
+    runIfaceElection(*ospfInterface);
 
     // BDR candidate (neighbor) should now be elected DR if it is the highest
     // priority/RID among remaining eligible candidates declaring/falling back.
-    EXPECT_NE(ospfInterface->dr.rid.load(), 0u);
+    EXPECT_NE(ospfInterface->getDrRid(), 0u);
 }
 
 // Test: Election_Rerun_On_Neighbor_TwoWay_Transition
@@ -1378,21 +1476,21 @@ TEST_F(Internal_OspfTest, Election_Rerun_On_Neighbor_TwoWay_Transition)
     uint32_t selfRid = ospfInstance->getRouterId();
 
     // Self is DR with no competitors initially.
-    ospfInterface->election();
-    ASSERT_EQ(ospfInterface->dr.rid.load(), selfRid);
+    runIfaceElection(*ospfInterface);
+    ASSERT_EQ(ospfInterface->getDrRid(), selfRid);
 
     // A neighbor reaches TWOWAY and claims DR with higher priority+RID.
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
     uint32_t higherRid = selfRid + 1;
     auto* nbr = addNeighbor(higherRid, nbrIp, routing::ospf::Neighbor::State::TWOWAY);
-    uint8_t selfPrio = ospfInterface->getConfigs().get<config::OspfInterface::PRIORITY>().load();
+    uint8_t selfPrio = getIfaceConfigs(*ospfInterface).get<config::OspfInterface::PRIORITY>().load();
     nbr->priority.store(static_cast<uint8_t>(selfPrio + 1));
     nbr->dr.store(higherRid);
     nbr->bdr.store(0);
 
-    ospfInterface->election();
+    runIfaceElection(*ospfInterface);
 
-    EXPECT_EQ(ospfInterface->dr.rid.load(), higherRid);
+    EXPECT_EQ(ospfInterface->getDrRid(), higherRid);
 }
 
 // Test: Election_Change_Triggers_TwoWay_Neighbors_To_ExStart
@@ -1401,14 +1499,14 @@ TEST_F(Internal_OspfTest, Election_Change_Triggers_TwoWay_Neighbors_To_ExStart)
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
     uint32_t higherRid = ospfInstance->getRouterId() + 1;
     auto* nbr = addNeighbor(higherRid, nbrIp, routing::ospf::Neighbor::State::TWOWAY);
-    uint8_t selfPrio = ospfInterface->getConfigs().get<config::OspfInterface::PRIORITY>().load();
+    uint8_t selfPrio = getIfaceConfigs(*ospfInterface).get<config::OspfInterface::PRIORITY>().load();
     nbr->priority.store(static_cast<uint8_t>(selfPrio + 1));
     nbr->dr.store(higherRid);
     nbr->bdr.store(0);
 
     ASSERT_EQ(nbr->getState(), routing::ospf::Neighbor::State::TWOWAY);
 
-    ospfInterface->election();
+    runIfaceElection(*ospfInterface);
 
     // The election result changed (new DR = nbr), so a TWOWAY neighbor that
     // is now DR-eligible transitions to EXSTART.
@@ -1421,24 +1519,24 @@ TEST_F(Internal_OspfTest, Election_NoChange_Leaves_TwoWay_Neighbors_Unaffected)
     uint32_t selfRid = ospfInstance->getRouterId();
 
     // Self elected DR with no competitors.
-    ospfInterface->election();
-    ASSERT_EQ(ospfInterface->dr.rid.load(), selfRid);
-    ASSERT_TRUE(ospfInterface->isDr.load());
+    runIfaceElection(*ospfInterface);
+    ASSERT_EQ(ospfInterface->getDrRid(), selfRid);
+    ASSERT_TRUE(ospfInterface->getIsDr());
 
     // A low-priority DROther neighbor reaches TWOWAY but does not change the
     // election outcome (it does not claim DR/BDR and has lower priority).
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
     auto* nbr = addNeighbor(neighborRouterId, nbrIp, routing::ospf::Neighbor::State::TWOWAY);
-    uint8_t selfPrio = ospfInterface->getConfigs().get<config::OspfInterface::PRIORITY>().load();
+    uint8_t selfPrio = getIfaceConfigs(*ospfInterface).get<config::OspfInterface::PRIORITY>().load();
     nbr->priority.store(selfPrio > 0 ? static_cast<uint8_t>(selfPrio - 1) : 0);
     nbr->dr.store(0);
     nbr->bdr.store(0);
 
     // Re-run election: self is still DR (unchanged), so no transition occurs
     // for nbr beyond what addNeighbor already drove it to.
-    ospfInterface->election();
+    runIfaceElection(*ospfInterface);
 
-    EXPECT_EQ(ospfInterface->dr.rid.load(), selfRid);
+    EXPECT_EQ(ospfInterface->getDrRid(), selfRid);
 }
 
 #pragma endregion Election
@@ -1448,7 +1546,7 @@ TEST_F(Internal_OspfTest, Election_NoChange_Leaves_TwoWay_Neighbors_Unaffected)
 // Test: Interface_Creation_Registers_In_InterfaceManager
 TEST_F(Internal_OspfTest, Interface_Creation_Registers_In_InterfaceManager)
 {
-    auto* found = ospfInstance->getIfaceMgr().getInterface(ospfInterface->id);
+    auto* found = getIfaceMgr(*ospfInstance).getInterface(ospfInterface->id);
     EXPECT_EQ(found, ospfInterface);
 }
 
@@ -1456,7 +1554,7 @@ TEST_F(Internal_OspfTest, Interface_Creation_Registers_In_InterfaceManager)
 TEST_F(Internal_OspfTest, Interface_GetInterfaceByAddress_Finds_Primary_Address)
 {
     types::IPAddress addr(types::IPv4Address{ipIntv4});
-    auto* found = ospfInstance->getIfaceMgr().getInterfaceByAddress(addr);
+    auto* found = getIfaceMgr(*ospfInstance).getInterfaceByAddress(addr);
     EXPECT_EQ(found, ospfInterface);
 }
 
@@ -1464,44 +1562,44 @@ TEST_F(Internal_OspfTest, Interface_GetInterfaceByAddress_Finds_Primary_Address)
 TEST_F(Internal_OspfTest, Interface_GetArea_Resolves_To_Configured_Area)
 {
     EXPECT_EQ(ospfInterface->getAreaId(), 0u);
-    EXPECT_EQ(&ospfInterface->getArea(), &getArea(0));
+    EXPECT_EQ(getIfaceArea(*ospfInterface), &getArea(0));
 }
 
 // Test: Interface_CalculateCost_From_Bandwidth_When_No_Override
 TEST_F(Internal_OspfTest, Interface_CalculateCost_From_Bandwidth_When_No_Override)
 {
     // No COST override configured -> derived from REFERENCE_BANDWIDTH / interface bandwidth.
-    ASSERT_FALSE(ospfInterface->getConfigs().get<config::OspfInterface::COST>().hasValue());
+    ASSERT_FALSE(getIfaceConfigs(*ospfInterface).get<config::OspfInterface::COST>().hasValue());
 
-    uint32_t referenceBw = ospfInstance->getConfigs().get<config::Ospf::REFERENCE_BANDWIDTH>().load();
+    uint32_t referenceBw = getConfigs(*ospfInstance).get<config::Ospf::REFERENCE_BANDWIDTH>().load();
     uint32_t interfaceBw = mockInterface->configs.getBandwidth();
     uint16_t expectedCost = static_cast<uint16_t>(referenceBw / interfaceBw);
 
-    ospfInterface->calculateCost();
+    calculateCost(*ospfInterface);
 
-    EXPECT_EQ(ospfInterface->cost, expectedCost);
+    EXPECT_EQ(ospfInterface->getCost(), expectedCost);
 }
 
 // Test: Interface_CalculateCost_Override_Respected
 TEST_F(Internal_OspfTest, Interface_CalculateCost_Override_Respected)
 {
-    ospfInterface->getConfigs().get<config::OspfInterface::COST>().set(42);
+    getIfaceConfigs(*ospfInterface).get<config::OspfInterface::COST>().set(42);
 
-    ospfInterface->calculateCost();
+    calculateCost(*ospfInterface);
 
-    EXPECT_EQ(ospfInterface->cost, 42);
+    EXPECT_EQ(ospfInterface->getCost(), 42);
 }
 
 // Test: Interface_CalculateCost_Change_Triggers_Originator_Update
 TEST_F(Internal_OspfTest, Interface_CalculateCost_Change_Triggers_Originator_Update)
 {
-    uint16_t oldCost = ospfInterface->cost;
-    ospfInterface->getConfigs().get<config::OspfInterface::COST>().set(static_cast<uint16_t>(oldCost + 100));
+    uint16_t oldCost = ospfInterface->getCost();
+    getIfaceConfigs(*ospfInterface).get<config::OspfInterface::COST>().set(static_cast<uint16_t>(oldCost + 100));
 
     // Should not throw/crash; updateInterface is invoked on the area's originator.
-    ospfInterface->calculateCost();
+    calculateCost(*ospfInterface);
 
-    EXPECT_NE(ospfInterface->cost, oldCost);
+    EXPECT_NE(ospfInterface->getCost(), oldCost);
 }
 
 // Test: Interface_SetDr_Fails_For_Unknown_RouterId
@@ -2972,7 +3070,6 @@ TEST_F(Internal_OspfTest, TxV2_SendHello_Bounded_By_Interface_Mtu)
     EXPECT_GT(packetLen, 0u);
     EXPECT_LE(packetLen, ifaceMtu);
 }
-*/
 
 #pragma endregion PacketRxTxV2
 

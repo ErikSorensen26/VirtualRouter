@@ -419,20 +419,6 @@ void OspfInterface::syncDigestKey()
     });
 }
 
-void OspfInterface::setPassiveMode(bool passive)
-{
-    configs.get<config::OspfInterface::PASSIVE>().load();
-    if (passive)
-    {
-        ntable.resetNeighbors();
-        tmgr.stopHello();
-    }
-    else
-    {
-        tmgr.startHello();
-    }
-}
-
 void OspfInterface::setFloodReduction()
 {
     const bool enableFloodReduction =

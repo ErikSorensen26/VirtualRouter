@@ -22,7 +22,6 @@ IntraOriginator::IntraOriginator(OriginatorContext& ctx)
 IntraOriginator::~IntraOriginator()
 {}
 
-//void Originator::addRouterLink(LsaBody& router, const OspfInterface& iface, bool refresh, bool attemptNetLsa)
 void IntraOriginator::addRouterLink(LsaBody& router, const OspfInterface& iface, bool refresh, bool attemptNetLsa)
 {
     if (iface.getAreaId() != context.area.areaId) return;
@@ -98,6 +97,10 @@ void IntraOriginator::addRouterLink(LsaBody& router, const OspfInterface& iface,
                     return;
                 }
             }
+        }
+        else if (!prefixSuppression)
+        {
+            addStubLink(router, iface);
         }
 
         return;

@@ -129,6 +129,7 @@ struct OspfInterfaceInstance
  */
 class OspfProcess
 {
+    friend ::Internal_OspfTest;
 public:
 
     /**

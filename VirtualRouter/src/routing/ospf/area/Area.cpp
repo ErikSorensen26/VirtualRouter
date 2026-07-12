@@ -55,6 +55,7 @@ Area::~Area()
     if (priv.agingTimerId != 0)
         scheduler.cancel(priv.agingTimerId);
     process.configs.get<config::Ospf::AREA_CONFIGS>().erase(areaId);
+    scheduler.release();
     delete &originator;
 }
 

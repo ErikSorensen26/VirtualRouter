@@ -43,6 +43,45 @@ void IntraRouteManager::deriveIntraAreaRoutes(const SpfResult& spf, std::vector<
         return prefixes;
     };
 
+    if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::RouterLsa>, RouterLsaV2>)
+    {
+        const uint32_t selfRid = area.process.getRouterId();
+        const LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
+        auto* selfRec = lsdb.find(selfKey);
+
+        if (selfRec && std::holds_alternative<RouterLsaV2>(selfRec->body))
+        {
+            auto& ifmgr = RouteManagerUtility::getIfaceMgr(area.process);
+            for (const auto& link : std::get<RouterLsaV2>(selfRec->body).links)
+            {
+                if (link.type != OSPFV2_LINK_STUB) continue;
+                
+                const OspfInterface* owner = nullptr;
+                ifmgr.forEach([this, &owner, &link](OspfInterfaceId id, const OspfInterface& iface) {
+                    if (id.area != area.areaId) return false;
+                    if (iface.interfaceAddress.v4() == link.linkId)
+                    {
+                        owner = &iface;
+                        return true;
+                    }
+                    return false;
+                });
+                if (!owner) continue;
+
+                const uint8_t plen = static_cast<uint8_t>(std::popcount(link.linkData));
+                const types::IPPrefix prefix(link.linkId, plen);
+
+                std::vector<OspfNextHop> nextHop{ OspfNextHop{owner->interfaceId, types::IPAddress{}} };
+
+                out.emplace_back(prefix, makePath(
+                    area.areaId, 0,
+                    adminDistance, link.metric,
+                    std::move(nextHop), OspfRouteType::INTRA_AREA
+                ));
+            }
+        }
+    }
+
     for (const Vertex& v : spf.confirmedOrder)
     {
         if (v == spf.root)

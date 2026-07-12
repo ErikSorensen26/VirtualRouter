@@ -21,6 +21,7 @@ class OspfProcess;
 class TopologyTable;
 class LsdbTable;
 class ExternalOriginator;
+class InterfaceManager;
 
 /**
  * @brief Access- and next-hop-resolution helpers shared by the three route managers.
@@ -50,6 +51,7 @@ private:
     static const config::OspfRegistry& getProcessConfigs(OspfProcess& proc);
     static LsdbTable& getLsdb(Area& area);
     static ExternalOriginator& getExtOriginator(OspfProcess& proc);
+    static const InterfaceManager& getIfaceMgr(OspfProcess& proc);
 
     // NEXT-HOP RESOLUTION
 

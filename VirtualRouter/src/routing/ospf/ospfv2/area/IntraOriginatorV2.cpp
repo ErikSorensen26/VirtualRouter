@@ -43,7 +43,7 @@ void IntraOriginatorV2::addRouterLsa(std::optional<uint32_t> ifaceId, bool refre
     LsaKey key(OSPFV2_LSA_ROUTER, rid, rid);
 
     auto& info = context.originationState[key];
-    LsaBody lsa = info.body;
+    LsaBody& lsa = info.body;
     RouterLsaV2 oldLsa = std::holds_alternative<std::monostate>(lsa)
         ? RouterLsaV2{} : std::get<RouterLsaV2>(lsa);
     lsa = RouterLsaV2{};
@@ -59,7 +59,6 @@ void IntraOriginatorV2::addRouterLsa(std::optional<uint32_t> ifaceId, bool refre
     uniqueLinks(router.links);
 
     info.refresh = refresh;
-    info.expire = router.links.empty();
 
     if (!refresh && router == oldLsa)
         return;
