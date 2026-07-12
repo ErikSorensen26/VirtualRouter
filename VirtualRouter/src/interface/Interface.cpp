@@ -36,18 +36,24 @@ Interface::Interface(const InterfaceCreation& cfgs)
     threadsRunning(false)
 {
     // TODO add configs
-    cfgs.vrf.getGlobal().txMgr.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
-    cfgs.vrf.getGlobal().rxMgr.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
-    cfgs.vrf.getGlobal().engine.hwManager.registerInterface(&configs.hwInfo, this);
+    if (!debug)
+    {
+        cfgs.vrf.getGlobal().txMgr.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
+        cfgs.vrf.getGlobal().rxMgr.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
+        cfgs.vrf.getGlobal().engine.hwManager.registerInterface(&configs.hwInfo, this);
+    }
 }
 
 Interface::~Interface()
 {
     cleanupInterface();
-    core::VirtualRouter* vrf = getVRF();
-    vrf->getGlobal().txMgr.removeInterface(*this);
-    vrf->getGlobal().rxMgr.removeInterface(*this);
-    vrf->getGlobal().engine.hwManager.unregisterInterface(&configs.hwInfo, this);
+    if (!debug)
+    {
+        core::VirtualRouter* vrf = getVRF();
+        vrf->getGlobal().txMgr.removeInterface(*this);
+        vrf->getGlobal().rxMgr.removeInterface(*this);
+        vrf->getGlobal().engine.hwManager.unregisterInterface(&configs.hwInfo, this);
+    }
 }
 
 void Interface::cleanupInterface()

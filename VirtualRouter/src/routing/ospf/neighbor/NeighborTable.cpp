@@ -148,6 +148,15 @@ void NeighborTable::deleteNeighbor(uint32_t rid, bool /*unicast*/)
     neighbors.erase(it);
 }
 
+void NeighborTable::cancelAllInactiveTimers()
+{
+    for (auto& [rid, nbr] : neighbors)
+    {
+        if (nbr.getState() != Neighbor::State::FULL)
+            tmgr.cancleInactiveTimer(nbr);
+    }
+}
+
 Neighbor* NeighborTable::lookup(uint32_t rid)
 {
     auto it = neighbors.find(rid);

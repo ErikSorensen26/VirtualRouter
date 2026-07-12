@@ -12,6 +12,9 @@
 #include <dhcp/dhcpv4/DhcpClient.h>
 #include <VirtualRouter.h>
 #include <Global.h>
+#include "hardware/egress/NullEgress.h"
+#include "qos/egress/TxQueue.hpp"
+#include "qos/egress/TxDistributor.h"
 
 static hardware::HwIfaceInfo defaultHwInfo = { hardware::ifnametoindex("lo"), "lo", 0x010203040506, 1000000000 };
 
@@ -31,6 +34,19 @@ public:
     {
         shutdownFlag = false;
         arp.refresh();
+        state.opts.ifname = configs.hwInfo.ifname;
+        state.egress = new hardware::egress::NullEgress(*this, state.opts);
+        state.queue = qos::egress::txqueuefactory::create(
+            qos::egress::TxQueueType::FIFO,
+            hardware::ceilPow2(state.egress->getFrameCount()),
+            *state.egress
+        );
+        state.queue->start();
+
+        array = new qos::egress::QueueState*[1]{ &state };
+        dist = new qos::egress::TxDistributor(array, 1);
+        tx = dist;
+
         getVRF()->getInterfaceManager().add(this, configs.key);
         getVRF()->getInterfaceManager().notify(StateChange::IF_READY, *this);
     }
@@ -38,6 +54,12 @@ public:
     // Destructor
     ~MockInterface() override 
     {
+        delete dist;
+        state.queue->stop();
+        delete state.queue;
+        delete state.egress;
+        delete[] array;
+
         Interface::cleanupInterface();
         Interface::stopThreads();
     }
@@ -119,6 +141,10 @@ public:
     }
 
     bool blocked = false;
+
+    qos::egress::TxDistributor* dist = nullptr;
+    qos::egress::QueueState state;
+    qos::egress::QueueState** array = nullptr;
 };
 }
 
