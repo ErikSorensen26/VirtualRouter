@@ -97,6 +97,13 @@ void OspfInterface::enqueueSyncDemandCircuit()
     });
 }
 
+void OspfInterface::enqueueSyncPassive()
+{
+    process.scheduler.post([this] {
+        syncPassive();
+    });
+}
+
 void OspfInterface::enqueueSyncDigestKey()
 {
     process.scheduler.post([this] {
@@ -419,6 +426,21 @@ void OspfInterface::syncDigestKey()
     });
 }
 
+void OspfInterface::syncPassive()
+{
+    bool passive = configs.get<config::OspfInterface::PASSIVE>().load();
+
+    if (passive)
+    {
+        ntable.resetNeighbors();
+        tmgr.stopHello();
+    }
+    else
+    {
+        tmgr.startHello();
+    }
+}
+
 void OspfInterface::setFloodReduction()
 {
     const bool enableFloodReduction =
@@ -460,6 +482,9 @@ std::optional<Area::Result> OspfInterface::processLsa(IncomingLsaContext& ctx, L
 {
     return area.processLsa<Policy>(ctx, body);
 }
+
+template std::optional<Area::Result> OspfInterface::processLsa<PolicyV2>(IncomingLsaContext&, LsaBody&);
+template std::optional<Area::Result> OspfInterface::processLsa<PolicyV3>(IncomingLsaContext&, LsaBody&);
 
 void OspfInterface::runAreaDCIntegrityScan()
 {

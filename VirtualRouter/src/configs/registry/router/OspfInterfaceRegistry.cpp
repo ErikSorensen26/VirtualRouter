@@ -31,6 +31,12 @@ void OspfInterfaceDemandCircuit(void* ifacePtr)
     iface.enqueueSyncDemandCircuit();
 }
 
+void OspfInterfaceSyncPassive(void* ifacePtr)
+{
+    auto& iface = *static_cast<routing::ospf::OspfInterface*>(ifacePtr);
+    iface.enqueueSyncPassive();
+}
+
 void OspfInterfaceBaseUpdateDigestKey(void* ifacePtr)
 {
     auto& iface = *static_cast<routing::ospf::OspfInterface*>(ifacePtr);

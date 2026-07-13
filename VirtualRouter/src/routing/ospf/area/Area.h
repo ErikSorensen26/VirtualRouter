@@ -22,6 +22,7 @@
 
 namespace config::ospf { enum class AreaType; }
 namespace config { struct OspfInterfaceRegistry; }
+class Internal_OspfTest;
 
 namespace routing::ospf
 {
@@ -460,6 +461,7 @@ private:
     {
     private:
         friend class Area;
+        friend class ::Internal_OspfTest;
 
         Private(Area& area);
 

@@ -168,6 +168,16 @@ public:
     void enqueueSyncDemandCircuit();
 
     /**
+     * @brief Schedules `syncPassive()` on the process queue.
+     *
+     * Config-change entry point for `passive-interface`.  Drops all
+     * neighbors and stops the Hello timer when the interface becomes
+     * passive, or restarts Hello when it becomes active, all on the
+     * scheduler thread.
+     */
+    void enqueueSyncPassive();
+
+    /**
      * @brief Schedules `syncDigestKey()` on the process queue.
      *
      * Config-change entry point for authentication configuration.  Reloads
@@ -278,6 +288,14 @@ private:
      * Called on interface bring-up and whenever the key-chain changes.
      */
     void syncDigestKey();
+
+    /**
+     * @brief Loads the passive state for the interface.
+     *
+     * Reads the passive state of the interface and updates accordingly.
+     * May need to reset the neighbor if passive is enabled/disabled.
+     */
+    void syncPassive();
 
     /**
      * @brief Configures flood-reduction mode for the specified interface.

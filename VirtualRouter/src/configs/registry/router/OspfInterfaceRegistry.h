@@ -103,6 +103,7 @@ void OspfInterfaceSyncTimers(void* iface);
 void OspfInterfaceSyncNeighbors(void* iface);
 void OspfInterfaceSyncNetworkType(void* iface);
 void OspfInterfaceDemandCircuit(void* iface);
+void OspfInterfaceSyncPassive(void* iface);
 
 struct OspfInterfaceFields : FieldTuple<
     AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::BFD)>, // TODO
@@ -132,7 +133,8 @@ struct OspfInterfaceFields : FieldTuple<
     AtomicField<ospf::NetworkType CONFIG_INDEX_ARG(OspfInterface::NETWORK),
         OspfInterfaceSyncNetworkType>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(OspfInterface::PRIORITY)>,
-    AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::PASSIVE)>,
+    AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::PASSIVE),
+        OspfInterfaceSyncPassive>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(OspfInterface::RETRANSMIT_INTERVAL)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(OspfInterface::TRANSMIT_DELAY)>,
     OptionalAtomicField<bool CONFIG_INDEX_ARG(OspfInterface::TTL_SEC)>, // XXX:
