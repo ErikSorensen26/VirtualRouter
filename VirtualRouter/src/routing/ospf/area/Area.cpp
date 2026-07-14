@@ -2,6 +2,7 @@
 
 #include <RCU.hpp>
 #include <variant>
+#include <algorithm>
 #include <Global.h>
 #include <VirtualRouter.h>
 
@@ -54,6 +55,7 @@ Area::~Area()
         scheduler.cancel(priv.resetTid);
     if (priv.agingTimerId != 0)
         scheduler.cancel(priv.agingTimerId);
+    floodMgr.cancel();
     process.configs.get<config::Ospf::AREA_CONFIGS>().erase(areaId);
     scheduler.release();
     delete &originator;
@@ -388,11 +390,15 @@ std::unordered_map<types::IPPrefix, std::pair<uint32_t, uint32_t>> Area::compute
 
     for (const auto& [pfx, path] : intraAreaRoutes)
     {
-        if (path.suppressed || path.discard || path.type != OspfRouteType::INTRA_AREA) continue;
-        if (!activeRanges.contains(pfx))
+        if (path.discard || path.type != OspfRouteType::INTRA_AREA) continue;
+
+        types::IPAddress pfxAddr(pfx.addr, pfx.prefixLength);
+        auto rangeIt = std::find_if(activeRanges.begin(), activeRanges.end(),
+            [&](const auto& kv) { return kv.first.contains(pfxAddr); });
+        if (rangeIt == activeRanges.end())
             continue;
 
-        auto& r = rcs[pfx];
+        auto& r = rcs[rangeIt->first];
         r.first++;
         r.second = std::min(r.second, static_cast<uint32_t>(path.cost));
     }
@@ -421,9 +427,10 @@ std::optional<Area::Result> Area::processLsa(IncomingLsaContext& ctx, LsaBody& b
 template <typename Policy>
 std::optional<Area::Result> Area::processLsa(IncomingLsaContext& ctx, const LsaBody& body)
 {
-    priv.preProcess<Policy>(ctx, body);
+    if (!priv.preProcess<Policy>(ctx, body)) return std::nullopt;
     auto result = priv.process(ctx, body);
 
+    priv.installLsa(result, ctx, body);
     priv.evaluateDecision(result, ctx);
     priv.postProcess<Policy>(result, ctx, body);
 
@@ -532,7 +539,8 @@ bool Area::Private::preProcess(IncomingLsaContext& ctx, const LsaBody& body)
 {
     bool isNssa = type == config::ospf::AreaType::NSSA || type == config::ospf::AreaType::TOTALLY_NSSA;
     if (std::holds_alternative<typename Policy::InterNetworkLsa>(body) &&
-        (type == config::ospf::AreaType::TOTALLY_STUB || type == config::ospf::AreaType::TOTALLY_NSSA))
+        (type == config::ospf::AreaType::TOTALLY_STUB || type == config::ospf::AreaType::TOTALLY_NSSA) &&
+        ctx.key.linkStateId != 0) // RFC 3101 §2.1: the default-route summary is still admitted
         return false;
     if (std::holds_alternative<typename Policy::InterRouterLsa>(body) && type != config::ospf::AreaType::NORMAL)
         return true;

@@ -36,6 +36,8 @@ void FloodManager::startFloodTimer()
     if (timerActive.load(std::memory_order_relaxed))
         return;
 
+    timerActive.store(true, std::memory_order_relaxed);
+
     uint32_t pacingMs = area.getProcessConfigs().get<config::Ospf::FLOOD_PACING>().load();
 
     auto fireTime = std::chrono::steady_clock::now() + std::chrono::milliseconds(pacingMs);
@@ -47,6 +49,8 @@ void FloodManager::startFloodTimer()
 
 void FloodManager::onFloodTimer()
 {
+    timerActive.store(false, std::memory_order_relaxed);
+    timerId = 0;
     runFlood();
 }
 
@@ -57,5 +61,15 @@ void FloodManager::runFlood()
         return;
 
     area.send(batch);
+}
+
+void FloodManager::cancel()
+{
+    if (timerId != 0)
+    {
+        area.scheduler.cancel(timerId);
+        timerId = 0;
+    }
+    timerActive.store(false, std::memory_order_relaxed);
 }
 } // namespace routing

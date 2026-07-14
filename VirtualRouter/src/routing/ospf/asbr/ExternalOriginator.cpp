@@ -74,6 +74,8 @@ void ExternalOriginator::originateExternal(ExternalOriginateContext& ctx, bool e
     if (expire) ctx.metric = 0x00FFFFFF;
     auto key = buildExternalKey<Policy>(ctx, false);
     LsaBody& lsa = externalDb[key].second;
+    if (!std::holds_alternative<typename Policy::ExternalLsa>(lsa))
+        lsa = typename Policy::ExternalLsa{};
     buildExternalBody<Policy>(ctx, std::get<typename Policy::ExternalLsa>(lsa), false);
 
     process.forEachOriginCtx([&ctx, expire, &lsa, &key](uint32_t, OriginatorContext& areaCtx) {
@@ -103,6 +105,8 @@ void ExternalOriginator::originateExternals(std::vector<std::pair<ExternalOrigin
     {
         LsaKey key = buildExternalKey<Policy>(ctx, false);
         LsaBody& body = externalDb[key].second;
+        if (!std::holds_alternative<typename Policy::ExternalLsa>(body))
+            body = typename Policy::ExternalLsa{};
         auto& external = std::get<typename Policy::ExternalLsa>(body);
         buildExternalBody<Policy>(ctx, external, false);
 

@@ -200,7 +200,7 @@ uint32_t IntraOriginatorV3::findNextPrefixLsid()
         prefixLsidQueue.pop_front();
         return id;
     }
-    return ++maxPrefixLsid;
+    return maxPrefixLsid++;
 }
 
 uint32_t IntraOriginatorV3::findNextRouterLsid()
@@ -211,7 +211,7 @@ uint32_t IntraOriginatorV3::findNextRouterLsid()
         routerLsidQueue.pop_front();
         return id;
     }
-    return ++maxRouterLsid;
+    return maxRouterLsid++;
 }
 
 void IntraOriginatorV3::expire(LsaKey& key)
@@ -554,7 +554,7 @@ void IntraOriginatorV3::addP2PLink(LsaBody& router, const OspfInterface& iface, 
     std::get<RouterLsaV3>(router).links.push_back(RouterLinkV3{
         .type = OSPFV3_LINK_P2P,
         .metric = iface.getCost(),
-        .interfaceId = iface.iface.configs.key.getId(),
+        .interfaceId = iface.id.interfaceId,
         .neighborInterfaceId = neighbor.neighborInterfaceId,
         .neighborRouterId = neighbor.routerID
     });
@@ -569,7 +569,7 @@ void IntraOriginatorV3::addStubLink(LsaBody& router, const OspfInterface& iface,
     std::get<RouterLsaV3>(router).links.push_back(RouterLinkV3{
         .type = OSPFV3_LINK_STUB,
         .metric = metric,
-        .interfaceId = iface.iface.configs.key.getId(),
+        .interfaceId = iface.id.interfaceId,
         .neighborInterfaceId = 0,
         .neighborRouterId = 0
     });
@@ -580,7 +580,7 @@ void IntraOriginatorV3::addVirtualLink(LsaBody& router, const OspfInterface& ifa
     std::get<RouterLsaV3>(router).links.push_back(RouterLinkV3{
         .type = OSPFV3_LINK_VIRTUAL,
         .metric = iface.getCost(),
-        .interfaceId = iface.iface.configs.key.getId(),
+        .interfaceId = iface.id.interfaceId,
         .neighborInterfaceId = vNbr.neighborInterfaceId,
         .neighborRouterId = vNbr.routerID
     });

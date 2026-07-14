@@ -37,7 +37,7 @@ void PacketDispatcherV3::handleIncoming(const packet::Ospfv3Header& ospfHeader, 
     types::IPAddress neigIp(neighborIp, iface.area.process.af);
     uint32_t rid = ospfHeader.getRouterID();
 
-    // Check if 
+    // Check if
     auto ntype = getIfaceConfigs().get<config::OspfInterface::NETWORK>().load();
     if (multicast && (ntype == config::ospf::NetworkType::NON_BROADCAST || ntype == config::ospf::NetworkType::POINT_TO_MULTIPOINT))
         return;
@@ -64,8 +64,8 @@ void PacketDispatcherV3::handleIncoming(const packet::Ospfv3Header& ospfHeader, 
     {
         // Process Checksum
         ChecksumFletcher check;
-        check.addBytes(ospfHeader.buffer, 8); // Up to checksum field
-        check.addBytes(ospfHeader.buffer + 10, ospfHeader.getPacketLen() - 10); // To end of header
+        check.addBytes(ospfHeader.buffer, 12); // Up to checksum field
+        check.addBytes(ospfHeader.buffer + 14, ospfHeader.getPacketLen() - 14); // To end of header
         uint16_t checksum = check.finalize();
         if (checksum != ospfHeader.getChecksum())
             return; // Invalid checksum

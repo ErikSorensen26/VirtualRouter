@@ -18,7 +18,7 @@ NullEgress::NullEgress(interface::Interface& iface, const qos::egress::TxQueueOp
     : EgressBase(iface, opts)
 {
     frameCount = opts.frameCount ? opts.frameCount : 64;
-    const size_t rawPerFrame = packetSize ? opts.frameCount : 64;
+    const size_t rawPerFrame = packetSize + MTU_PADDING + (alignof(PacketSlot) - 1) + sizeof(PacketSlot);
 
     frameStride = alignUp(rawPerFrame, 64);
 

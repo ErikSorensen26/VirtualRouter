@@ -179,7 +179,7 @@ private:
     size_t addLSAcks(OspfBuilder& builder, std::span<LsaRecordRef>& acks);
 
     void buildDescriptions(OspfBuilder& builder, Neighbor& nbr);
-    bool buildLSABody(OspfBuilder& builder, const LsaRecord& body, uint8_t type);
+    bool buildLSABody(OspfBuilder& builder, const LsaRecord& body, uint16_t type);
 
     void processHello(HeaderInfo& info, bool unicast);
     void processDBD(HeaderInfo& info);

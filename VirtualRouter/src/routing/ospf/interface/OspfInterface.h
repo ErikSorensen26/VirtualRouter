@@ -201,6 +201,7 @@ public:
     const uint32_t interfaceId;    ///< Hardware interface index, mirrored from id.interfaceId.
     const types::IPPrefix interfaceAddress; ///< Primary IP prefix (address + mask) assigned to this interface.
     interface::Interface& iface;   ///< Physical Interface that resides under this.
+    OspfProcess& process;           ///< Owning process; must be initialized before `dispatcher`, which reads `getProcessConfigs()` during construction.
     const bool isVirtual = false;  ///< True for OSPFv3 virtual links.
 
     // GETTERS
@@ -431,8 +432,6 @@ private:
 
     InterfaceFlagManager flags; ///< Event flags (e.g. DR changed, neighbor state changed).
     InterfaceFlagManager lsaFlags; ///< LSA dirty flags driving re-origination decisions.
-
-    OspfProcess& process;
 
     const config::OspfInterfaceBaseRegistry& baseConfigs; ///< Base (version-agnostic) interface config.
     const config::OspfInterfaceRegistry& configs;         ///< Version-specific interface config.

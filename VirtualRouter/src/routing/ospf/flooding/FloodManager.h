@@ -51,6 +51,14 @@ public:
      */
     void enqueueFlood(LsaRecordRef&& record, const FloodInfo& info);
 
+    /**
+     * @brief Cancel the coalescing flood timer, if armed.
+     *
+     * Called from ~Area() so no flood-timer callback can fire (and touch
+     * this area's LSDB/interfaces) after the area starts tearing down.
+     */
+    void cancel();
+
 private:
     /** @brief Arm the coalescing flood timer if not already active. */
     void startFloodTimer();

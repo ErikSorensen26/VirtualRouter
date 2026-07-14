@@ -330,7 +330,18 @@ inline size_t LsdbTable::purgeIf(Pred&& pred)
     {
         if (pred(it->first, *it->second))
         {
+            LsaKey key = it->first;
             it = db.erase(it);
+
+            auto& adv = advDb[key];
+            adv.erase(key.linkStateId);
+            if (adv.empty()) advDb.erase(key);
+
+            auto& type = typeDb[key.lsaType];
+            type.erase(key);
+            if (type.empty()) typeDb.erase(key.lsaType);
+
+            dbStorage.erase(key);
             ++removed;
         }
         else

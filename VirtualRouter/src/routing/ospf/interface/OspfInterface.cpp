@@ -37,6 +37,7 @@ OspfInterface::OspfInterface(OspfProcess& proc, interface::Interface& iface, con
       interfaceId(iface.configs.key.getId()),
       interfaceAddress(getIfaceAddr(iface, proc.af)),
       iface(iface),
+      process(proc),
       dispatcher(proc.isV3
           ? *static_cast<PacketDispatcher*>(new PacketDispatcherV3(*this))
           : *static_cast<PacketDispatcher*>(new PacketDispatcherV2(*this))),
@@ -44,7 +45,6 @@ OspfInterface::OspfInterface(OspfProcess& proc, interface::Interface& iface, con
       ntable(*this, tmgr),
       flags(area.flags),
       lsaFlags(area.flags),
-      process(proc),
       baseConfigs(dispatcher.getConfigs()),
       configs(baseConfigs.get<config::OspfInterfaceBase::BASE>().get())
 {

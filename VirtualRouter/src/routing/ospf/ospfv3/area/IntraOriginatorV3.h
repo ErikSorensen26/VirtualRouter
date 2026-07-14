@@ -140,8 +140,8 @@ protected:
     /**
      * @brief Allocates the next available Intra-Area-Prefix LS-ID.
      *
-     * Returns the front of `prefixLsidQueue` if non-empty; otherwise increments
-     * and returns `maxPrefixLsid`.
+     * Returns the front of `prefixLsidQueue` if non-empty; otherwise returns
+     * `maxPrefixLsid` and increments it (first allocation is LS-ID 0).
      */
     uint32_t findNextPrefixLsid();
 
@@ -151,8 +151,8 @@ protected:
     /**
      * @brief Allocates the next available Router-LSA fragment LS-ID.
      *
-     * Returns the front of `routerLsidQueue` if non-empty; otherwise increments
-     * and returns `maxRouterLsid`.
+     * Returns the front of `routerLsidQueue` if non-empty; otherwise returns
+     * `maxRouterLsid` and increments it (first allocation is LS-ID 0).
      */
     uint32_t findNextRouterLsid();
 

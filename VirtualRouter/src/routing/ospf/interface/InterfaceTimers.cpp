@@ -11,7 +11,6 @@ namespace routing::ospf
 InterfaceTimers::InterfaceTimers(OspfInterface& iface, core::ProcessQueueRef&& s)
     : scheduler(std::move(s)), iface(iface)
 {
-    stopHello();
 }
 
 void InterfaceTimers::scheduleHello()

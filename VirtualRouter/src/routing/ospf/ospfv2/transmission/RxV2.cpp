@@ -345,7 +345,7 @@ void PacketDispatcherV2::processDBD(PacketDispatcher::HeaderInfo& info)
         }
     }
 
-    if (AreaFlagManager::getExternalAttribute(options))
+    if (AreaFlagManager::getLBitV2(options))
         processLLSDataBlock(info);
 }
 

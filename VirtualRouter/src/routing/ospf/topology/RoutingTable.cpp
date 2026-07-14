@@ -305,8 +305,6 @@ std::vector<std::pair<types::IPPrefix, OspfPath>> OspfRib::getIntraAreaRoutes(ui
             continue;
         if (!state.selected.area.has_value() || state.selected.area.value() != area)
             continue;
-        if (state.selected.suppressed)
-            continue;
 
         areaRoutes.push_back({prefix, state.selected.paths.front()});
     }

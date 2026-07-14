@@ -109,7 +109,7 @@ struct LinkLsa
      */
     bool buildBody(uint8_t* buf, uint16_t len) const
     {
-        if (len < 20) return false;
+        if (len < 21) return false;
 
         buf[0] = priority;
         utils::writeU24(buf + 1, options);
@@ -141,7 +141,7 @@ struct LinkLsa
      */
     inline uint16_t size() const
     {
-        uint16_t len = 20;
+        uint16_t len = 21;
         for (const auto& link : prefixes)
         {
             len += 2 + ((link.prefix.prefixLength + 7) / 8);

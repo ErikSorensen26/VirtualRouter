@@ -24,7 +24,7 @@
 #define OSPFV2_AUTH_CRYPTO  0x0002 ///< OSPFv2 Auth Type Cryptographicc (MD5/SHA) (2).
 
 constexpr uint8_t OSPFV2_ALL_SPF_ROUTERS[4] = { 0xE0, 0x00, 0x00, 0x05 };
-constexpr uint8_t OSPFV2_ALL_D_ROUTERS[4] = { 0x0E, 0x00, 0x00, 0x06 };
+constexpr uint8_t OSPFV2_ALL_D_ROUTERS[4] = { 0xE0, 0x00, 0x00, 0x06 };
 
 namespace packet
 {

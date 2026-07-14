@@ -13,6 +13,7 @@
 #include "ospf/database/LsdbTypes.hpp"
 #include "ospf/area/Area.h"
 #include "ospf/transmission/OspfFletcher.hpp"
+#include "ospf/FlagManager.hpp"
 
 #include "packet/headers/embedded/ospf/Ospfv2HelloHeader.hpp"
 #include "packet/headers/embedded/ospf/Ospfv2DBDHeader.hpp"
@@ -50,7 +51,9 @@ void PacketDispatcherV2::finalizeHeader(packet::Ospfv2Header& hdr, OspfBuilder& 
 
             if (lls)
             {
-                uint16_t size = addLinkLocalExtension(builder.getBuf(), false);
+                uint8_t* llsBase = builder.getBuf();
+                uint16_t size = addLinkLocalExtension(llsBase, false);
+                builder.offset += size;
                 if (!buildLLSAuthentication(builder, size, seq, secret))
                     return;
             }
@@ -329,9 +332,9 @@ std::optional<packet::Ospfv2HelloHeader> PacketDispatcherV2::buildHello(OspfBuil
     hello.setMask(iface.interfaceAddress.getMask());
     hello.setHelloInterval(getHelloInterval());
 
-    uint8_t options = static_cast<uint8_t>(getIfaceFlags());
-    if (lls) options |= 0x10;
-    hello.setOptions(options);
+    uint32_t options = getIfaceFlags();
+    if (lls) AreaFlagManager::setLBitV2(options, true);
+    hello.setOptions(static_cast<uint8_t>(options));
 
     hello.setPriority(getIfaceConfigs().get<config::OspfInterface::PRIORITY>().load());
     hello.setDeadInterval(getDeadInterval());
@@ -359,9 +362,9 @@ std::optional<packet::Ospfv2DBDHeader> PacketDispatcherV2::buildDBD(OspfBuilder&
     dbd.setBuffer(builder.getBuf());
     builder.offset += packet::Ospfv2DBDHeader::fixedSize;
 
-    uint8_t options = static_cast<uint8_t>(getIfaceFlags());
-    if (lls) options |= 0x10;
-    dbd.setOptions(options);
+    uint32_t options = getIfaceFlags();
+    if (lls) AreaFlagManager::setLBitV2(options, true);
+    dbd.setOptions(static_cast<uint8_t>(options));
 
     dbd.setMtu(iface.iface.configs.ipv4.mtu.load(std::memory_order_relaxed));
     dbd.setSequence(nbr.currentSeq.load(std::memory_order_relaxed));
@@ -508,17 +511,20 @@ void PacketDispatcherV2::buildDescriptions(OspfBuilder& builder, Neighbor& nbr)
 
 bool PacketDispatcherV2::buildLLSAuthentication(OspfBuilder& info, uint16_t llsSize, uint32_t seq, uint8_t* secret)
 {
-    if (info.offset + llsSize + 24 > info.maxSize) return false;
-    uint8_t* lls = info.getBuf() + info.offset;
-    utils::writeU16(lls + 2, llsSize + 24/*Auth tlv size*/);
+    if (info.offset + 24 > info.maxSize) return false;
+    uint8_t* llsBase = info.getBuf() - llsSize; // Start of the LLS Data Block (EO-TLV header)
+    uint8_t* auth = info.getBuf();
 
-    utils::writeU16(lls, 0x0002);
-    utils::writeU16(lls + 2, 0x0014);
-    utils::writeU32(lls + 4, seq);
-    
-    security::authentication::generateHMAC(lls + 8, lls, llsSize + 8, secret, 16, security::authentication::HmacType::MD5);
+    // Total LLS Data Block length, in 32-bit words, including this Auth TLV.
+    utils::writeU16(llsBase + 2, (llsSize + 24) / 4);
 
-    info.offset += llsSize + 24;
+    utils::writeU16(auth, 0x0002);
+    utils::writeU16(auth + 2, 0x0014);
+    utils::writeU32(auth + 4, seq);
+
+    security::authentication::generateHMAC(auth + 8, llsBase, llsSize + 8, secret, 16, security::authentication::HmacType::MD5);
+
+    info.offset += 24;
     return true;
 }
 
@@ -538,7 +544,10 @@ bool PacketDispatcherV2::buildOspfCryptoAuthentication(OspfBuilder& info, packet
     auth[2] = id;
     auth[3] = 0x10;
     utils::writeU32(auth + 4, seq);
-    security::authentication::generateHMAC(info.getBuf() + info.offset, info.getBuf(), info.offset, secret, 16, security::authentication::HmacType::MD5);
+
+    uint16_t packetLen = static_cast<uint16_t>(info.offset + packet::Ospfv2Header::fixedSize);
+    security::authentication::generateHMAC(hdr.buffer + packetLen, hdr.buffer, packetLen, secret, 16, security::authentication::HmacType::MD5);
+    info.offset += 16;
     return true;
 }
 

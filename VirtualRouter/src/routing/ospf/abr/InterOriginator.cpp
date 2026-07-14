@@ -137,7 +137,7 @@ void InterOriginator::reoriginateSummaries(OriginatorContext& ctx, std::vector<O
         {
             process.forEachOriginCtx([&](uint32_t id, OriginatorContext& context) {
                 if (id == 0) return;
-                if (!AreaFlagManager::getExternalRouting(ctx.getAreaFlags()))
+                if (!AreaFlagManager::getExternalRouting(context.getAreaFlags()))
                     return;
                 processLsas(context);
             });
@@ -206,7 +206,7 @@ void InterOriginator::reoriginateSummary(OriginatorContext& ctx, OspfRouteChange
             processLsa(ctx);
         });
     }
-    else if (auto* originCtx = process.getOriginCtx(1); originCtx) // Normal areas reoriginate to Transit area.
+    else if (auto* originCtx = process.getOriginCtx(0); originCtx) // Normal areas reoriginate to Transit area.
     {
         processLsa(*originCtx);
     }

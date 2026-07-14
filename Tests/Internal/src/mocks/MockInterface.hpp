@@ -29,7 +29,7 @@ public:
                   const hardware::HwIfaceInfo& hwInfo = defaultHwInfo,
                   float interfaceId = 0,
                   core::VirtualRouter* vrf = nullptr,
-                  bool debug = false)
+                  bool debug = true)
         : Interface({interfaceType, interfaceId, vrf ? *vrf : *global.getRoutingInstance("default"), hwInfo, debug})
     {
         shutdownFlag = false;
@@ -52,16 +52,17 @@ public:
     }
 
     // Destructor
-    ~MockInterface() override 
+    ~MockInterface() override
     {
+        Interface::cleanupInterface();
+        Interface::stopThreads();
+        getScheduler().waitIdle();
+
         delete dist;
         state.queue->stop();
         delete state.queue;
         delete state.egress;
         delete[] array;
-
-        Interface::cleanupInterface();
-        Interface::stopThreads();
     }
 
     // Mocking virtual methods

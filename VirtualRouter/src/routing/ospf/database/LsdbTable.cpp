@@ -80,7 +80,7 @@ LsaRecord& LsdbTable::upsertMeta(const IncomingLsaContext& lsa, LsaRecordFlags f
 
     // Single lookup + in-place default construction if missing.
     auto [it, inserted] = dbStorage.try_emplace(lsa.key);
-    if (inserted) 
+    if (inserted)
     {
         db[lsa.key] = &it->second;
         advDb[lsa.key][lsa.key.linkStateId] = &it->second;

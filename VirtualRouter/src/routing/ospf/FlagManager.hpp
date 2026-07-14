@@ -153,7 +153,7 @@ class AreaFlagManager
     enum class V2Option : uint8_t
     {
         MULTI_TOPOLOGY = 0, ///< MT-bit: multi-topology routing support.
-        EXTERNAL_ATTR = 4,  ///< EA-bit: external-attributes LSA support.
+        L_BIT = 4,          ///< EA-bit position, repurposed by RFC 5613 as the L-bit: LLS data present.
         OPAQUE = 6          ///< O-bit: opaque LSA support (RFC 5250).
     };
 
@@ -207,14 +207,13 @@ public:
 
     void setMultiTopology(bool val)
         { if (!isV3) flagmanager::setOption(flags, static_cast<uint8_t>(V2Option::MULTI_TOPOLOGY), val); }
-    void setExternalAttribute(bool val)
-        { if (!isV3) flagmanager::setOption(flags, static_cast<uint8_t>(V2Option::EXTERNAL_ATTR), val); }
     void setOpaque(bool val)
         { if (!isV3) flagmanager::setOption(flags, static_cast<uint8_t>(V2Option::OPAQUE), val); }
     static void setMultiTopology(uint32_t& fgs, bool val)
         { flagmanager::setOption(fgs, static_cast<uint8_t>(V2Option::MULTI_TOPOLOGY), val); }
-    static void setExternalAttribute(uint32_t& fgs, bool val)
-        { flagmanager::setOption(fgs, static_cast<uint8_t>(V2Option::EXTERNAL_ATTR), val); }
+    /// @brief Sets the OSPFv2 L-bit (RFC 5613): LLS data block follows the packet.
+    static void setLBitV2(uint32_t& fgs, bool val)
+        { flagmanager::setOption(fgs, static_cast<uint8_t>(V2Option::L_BIT), val); }
     static void setOpaque(uint32_t& fgs, bool val)
         { flagmanager::setOption(fgs, static_cast<uint8_t>(V2Option::OPAQUE), val); }
 
@@ -250,14 +249,13 @@ public:
 
     bool getMultiTopology() const
         { return flagmanager::testOption(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(V2Option::MULTI_TOPOLOGY)); }
-    bool getExternalAttribute() const
-        { return flagmanager::testOption(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(V2Option::EXTERNAL_ATTR)); }
     bool getOpaque() const
         { return flagmanager::testOption(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(V2Option::OPAQUE)); }
     static bool getMultiTopology(uint32_t fgs)
         { return flagmanager::testOption(fgs, static_cast<uint8_t>(V2Option::MULTI_TOPOLOGY)); }
-    static bool getExternalAttribute(uint32_t fgs)
-        { return flagmanager::testOption(fgs, static_cast<uint8_t>(V2Option::EXTERNAL_ATTR)); }
+    /// @brief Tests the OSPFv2 L-bit (RFC 5613): LLS data block follows the packet.
+    static bool getLBitV2(uint32_t fgs)
+        { return flagmanager::testOption(fgs, static_cast<uint8_t>(V2Option::L_BIT)); }
     static bool getOpaque(uint32_t fgs)
         { return flagmanager::testOption(fgs, static_cast<uint8_t>(V2Option::OPAQUE)); }
 
