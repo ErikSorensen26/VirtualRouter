@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <atomic>
+#include <barrier>
 #include <chrono>
 #include <thread>
 #include <vector>
@@ -54,8 +55,13 @@ TEST_F(Internal_ThreadPoolTest, MultipleTasksAllRun)
     constexpr int kTasks = 200;
     std::atomic<int> counter{0};
 
+    // The ring is smaller than kTasks; enqueue() returning false is documented
+    // backpressure, so retry until the workers make room.
     for (int i = 0; i < kTasks; ++i)
-        ASSERT_TRUE(pool.enqueue([&]{ counter.fetch_add(1, std::memory_order_relaxed); }));
+    {
+        while (!pool.enqueue([&]{ counter.fetch_add(1, std::memory_order_relaxed); }))
+            std::this_thread::yield();
+    }
 
     ASSERT_TRUE(waitFor([&]{ return counter.load() == kTasks; }));
 }
@@ -253,8 +259,6 @@ TEST_F(Internal_TimeManagerTest, RecurringTimerStopsAfterCancel)
 TEST_F(Internal_TimeManagerTest, CancelDuringExecutionFromOtherThreadBlocksAndPreventsReschedule)
 {
     // Cancelling a recurring timer from another thread while its callback is
-    // currently executing must block until that callback finishes, return
-    // true, and prevent any further reschedule.
     std::atomic<int> count{0};
 
     uint32_t id = tm.addRecurringTimer(10ms, [&](uint32_t){
@@ -417,10 +421,6 @@ TEST_F(Internal_TimeManagerTest, CancelDuringExecutionFromOtherThreadWaitsForCom
     EXPECT_TRUE(callbackFinished.load(std::memory_order_acquire));
 }
 
-// =====================================================================================
-// ControlScheduler / ProcessQueue — basic post()
-// =====================================================================================
-
 class Internal_ControlSchedulerTest : public ::testing::Test
 {
 protected:
@@ -432,7 +432,7 @@ protected:
 TEST_F(Internal_ControlSchedulerTest, PostRunsTask)
 {
     ProcessQueue q = scheduler.create();
-    ProcessQueueRef ref = q.ref();
+    ProcessQueue ref = q.ref();
     std::atomic<bool> ran{false};
 
     ASSERT_TRUE(ref.post([&]{ ran.store(true, std::memory_order_release); }));
@@ -443,7 +443,7 @@ TEST_F(Internal_ControlSchedulerTest, PostRunsTask)
 TEST_F(Internal_ControlSchedulerTest, PostPreservesFifoOrderPerSubQueue)
 {
     ProcessQueue q = scheduler.create();
-    ProcessQueueRef ref = q.ref();
+    ProcessQueue ref = q.ref();
     std::mutex m;
     std::vector<int> order;
 
@@ -469,7 +469,7 @@ TEST_F(Internal_ControlSchedulerTest, PostPreservesFifoOrderPerSubQueue)
 TEST_F(Internal_ControlSchedulerTest, OnlyOneThreadDrainsAtATime)
 {
     ProcessQueue q = scheduler.create();
-    ProcessQueueRef ref = q.ref();
+    ProcessQueue ref = q.ref();
     std::atomic<int> concurrent{0};
     std::atomic<int> maxConcurrent{0};
     std::atomic<int> completed{0};
@@ -491,41 +491,10 @@ TEST_F(Internal_ControlSchedulerTest, OnlyOneThreadDrainsAtATime)
     EXPECT_EQ(maxConcurrent.load(), 1);
 }
 
-TEST_F(Internal_ControlSchedulerTest, LabeledSubQueuesRouteIndependently)
-{
-    constexpr ControlScheduler::Label kHigh = 1;
-    constexpr ControlScheduler::Label kLow  = 2;
-
-    ProcessQueue q = scheduler.create(16, {
-        ControlScheduler::SubQueueConfig{kHigh, 16},
-        ControlScheduler::SubQueueConfig{kLow, 16},
-    });
-    ProcessQueueRef ref = q.ref();
-
-    std::mutex m;
-    std::vector<std::string> order;
-
-    ASSERT_TRUE(ref.post(kHigh, [&]{ std::lock_guard<std::mutex> lk(m); order.push_back("high"); }));
-    ASSERT_TRUE(ref.post(kLow,  [&]{ std::lock_guard<std::mutex> lk(m); order.push_back("low"); }));
-    ASSERT_TRUE(ref.post([&]{ std::lock_guard<std::mutex> lk(m); order.push_back("default"); }));
-
-    ASSERT_TRUE(waitFor([&]{
-        std::lock_guard<std::mutex> lk(m);
-        return order.size() == 3;
-    }));
-}
-
-TEST_F(Internal_ControlSchedulerTest, PostToUnknownLabelFails)
-{
-    ProcessQueue q = scheduler.create();
-    ProcessQueueRef ref = q.ref();
-    EXPECT_FALSE(ref.post(static_cast<ControlScheduler::Label>(123), [](){}));
-}
-
 TEST_F(Internal_ControlSchedulerTest, WaitIdleBlocksUntilAllTasksComplete)
 {
     ProcessQueue q = scheduler.create();
-    ProcessQueueRef ref = q.ref();
+    ProcessQueue ref = q.ref();
     std::atomic<int> completed{0};
 
     constexpr int kCount = 30;
@@ -553,7 +522,7 @@ TEST_F(Internal_ControlSchedulerTest, WaitIdleOnEmptyQueueReturnsImmediately)
 TEST_F(Internal_ControlSchedulerTest, ResetDiscardsUnstartedTasks)
 {
     ProcessQueue q = scheduler.create();
-    ProcessQueueRef ref = q.ref();
+    ProcessQueue ref = q.ref();
     std::atomic<int> ran{0};
 
     // Block the queue with a long-running first task so subsequent posts are
@@ -571,15 +540,13 @@ TEST_F(Internal_ControlSchedulerTest, ResetDiscardsUnstartedTasks)
     release.store(true, std::memory_order_release);
     q.reset();
 
-    // The first task ran (it was already executing); subsequent ones may or may
-    // not have, but reset() must return without hanging and without a crash.
     SUCCEED();
 }
 
 TEST_F(Internal_ControlSchedulerTest, PostAfterResetIsRejected)
 {
     ProcessQueue q = scheduler.create();
-    ProcessQueueRef ref = q.ref();
+    ProcessQueue ref = q.ref();
     q.reset();
 
     EXPECT_FALSE(ref.post([](){}));
@@ -614,14 +581,11 @@ TEST_F(Internal_ControlSchedulerTest, GenerationPreventsStaleQueueReuse)
     EXPECT_TRUE(q2.ref().post([](){}));
 }
 
-// =====================================================================================
-// ControlScheduler — schedule()/cancel() (delayed tasks)
-// =====================================================================================
 
 TEST_F(Internal_ControlSchedulerTest, ScheduleFiresAfterDelay)
 {
     ProcessQueue q = scheduler.create();
-    ProcessQueueRef ref = q.ref();
+    ProcessQueue ref = q.ref();
     std::atomic<bool> fired{false};
 
     uint32_t handle = ref.postAfter(std::chrono::steady_clock::now() + 20ms, [&](uint32_t){
@@ -635,7 +599,7 @@ TEST_F(Internal_ControlSchedulerTest, ScheduleFiresAfterDelay)
 TEST_F(Internal_ControlSchedulerTest, ScheduleDoesNotFireBeforeDelay)
 {
     ProcessQueue q = scheduler.create();
-    ProcessQueueRef ref = q.ref();
+    ProcessQueue ref = q.ref();
     std::atomic<bool> fired{false};
 
     ref.postAfter(std::chrono::steady_clock::now() + 300ms, [&](uint32_t){
@@ -651,7 +615,7 @@ TEST_F(Internal_ControlSchedulerTest, ScheduleDoesNotFireBeforeDelay)
 TEST_F(Internal_ControlSchedulerTest, CancelBeforeFirePreventsExecution)
 {
     ProcessQueue q = scheduler.create();
-    ProcessQueueRef ref = q.ref();
+    ProcessQueue ref = q.ref();
     std::atomic<bool> fired{false};
 
     uint32_t handle = ref.postAfter(std::chrono::steady_clock::now() + 200ms, [&](uint32_t){
@@ -667,7 +631,7 @@ TEST_F(Internal_ControlSchedulerTest, CancelBeforeFirePreventsExecution)
 TEST_F(Internal_ControlSchedulerTest, CancelAfterFireReturnsFalse)
 {
     ProcessQueue q = scheduler.create();
-    ProcessQueueRef ref = q.ref();
+    ProcessQueue ref = q.ref();
     std::atomic<bool> fired{false};
 
     uint32_t handle = ref.postAfter(std::chrono::steady_clock::now() + 10ms, [&](uint32_t){
@@ -682,7 +646,7 @@ TEST_F(Internal_ControlSchedulerTest, CancelAfterFireReturnsFalse)
 TEST_F(Internal_ControlSchedulerTest, CancelInvalidHandleReturnsFalse)
 {
     ProcessQueue q = scheduler.create();
-    ProcessQueueRef ref = q.ref();
+    ProcessQueue ref = q.ref();
     EXPECT_FALSE(ref.cancel(0));
     EXPECT_FALSE(ref.cancel(0xFFFFFFFFu));
 }
@@ -690,7 +654,7 @@ TEST_F(Internal_ControlSchedulerTest, CancelInvalidHandleReturnsFalse)
 TEST_F(Internal_ControlSchedulerTest, CancelTwiceSecondCallReturnsFalse)
 {
     ProcessQueue q = scheduler.create();
-    ProcessQueueRef ref = q.ref();
+    ProcessQueue ref = q.ref();
     uint32_t handle = ref.postAfter(std::chrono::steady_clock::now() + 200ms, [](uint32_t){});
 
     EXPECT_TRUE(ref.cancel(handle));
@@ -700,7 +664,7 @@ TEST_F(Internal_ControlSchedulerTest, CancelTwiceSecondCallReturnsFalse)
 TEST_F(Internal_ControlSchedulerTest, ScheduleCallbackReceivesItsOwnHandle)
 {
     ProcessQueue q = scheduler.create();
-    ProcessQueueRef ref = q.ref();
+    ProcessQueue ref = q.ref();
     std::atomic<uint32_t> receivedHandle{0};
 
     uint32_t handle = ref.postAfter(std::chrono::steady_clock::now() + 10ms, [&](uint32_t h){
@@ -714,7 +678,7 @@ TEST_F(Internal_ControlSchedulerTest, ScheduleCallbackReceivesItsOwnHandle)
 TEST_F(Internal_ControlSchedulerTest, MultipleScheduledTasksAllFire)
 {
     ProcessQueue q = scheduler.create();
-    ProcessQueueRef ref = q.ref();
+    ProcessQueue ref = q.ref();
     constexpr int kCount = 20;
     std::atomic<int> fired{0};
 
@@ -731,7 +695,7 @@ TEST_F(Internal_ControlSchedulerTest, MultipleScheduledTasksAllFire)
 TEST_F(Internal_ControlSchedulerTest, ScheduleOnClosedQueueReturnsZero)
 {
     ProcessQueue q = scheduler.create();
-    ProcessQueueRef ref = q.ref();
+    ProcessQueue ref = q.ref();
     q.reset();
 
     uint32_t handle = ref.postAfter(std::chrono::steady_clock::now() + 10ms, [](uint32_t){});
@@ -741,7 +705,7 @@ TEST_F(Internal_ControlSchedulerTest, ScheduleOnClosedQueueReturnsZero)
 TEST_F(Internal_ControlSchedulerTest, ScheduledTaskRunsOnQueueSerializedWithPosts)
 {
     ProcessQueue q = scheduler.create();
-    ProcessQueueRef ref = q.ref();
+    ProcessQueue ref = q.ref();
     std::mutex m;
     std::vector<std::string> order;
 
@@ -766,30 +730,24 @@ TEST_F(Internal_ControlSchedulerTest, ScheduledTaskRunsOnQueueSerializedWithPost
     EXPECT_EQ(order.size(), 2u);
 }
 
-// Exhausting the delayed-timer slot pool: with maxDelayedTimers == 0, schedule()
-// must always fail gracefully rather than crash.
-TEST(Internal_ControlSchedulerNoDelayedTest, ScheduleWithZeroDelayedSlotsAlwaysFails)
+TEST_F(Internal_ControlSchedulerTest, ScheduleWithZeroDelayedSlotsAlwaysFails)
 {
     ThreadPool pool(2, 64);
     TimeManager tm(pool);
     ControlScheduler scheduler(pool, tm, 16, 0);
 
     ProcessQueue q = scheduler.create();
-    ProcessQueueRef ref = q.ref();
+    ProcessQueue ref = q.ref();
     uint32_t handle = ref.postAfter(std::chrono::steady_clock::now() + 10ms, [](uint32_t){});
     EXPECT_EQ(handle, 0u);
 
     EXPECT_FALSE(ref.cancel(1));
 }
 
-// =====================================================================================
-// ProcessQueueRef — lifetime-safe posting
-// =====================================================================================
-
 TEST_F(Internal_ControlSchedulerTest, RefPostRunsTask)
 {
     ProcessQueue q = scheduler.create();
-    ProcessQueueRef ref = q.ref();
+    ProcessQueue ref = q.ref();
 
     std::atomic<bool> ran{false};
     ASSERT_TRUE(ref.post([&]{ ran.store(true, std::memory_order_release); }));
@@ -800,7 +758,7 @@ TEST_F(Internal_ControlSchedulerTest, RefPostRunsTask)
 TEST_F(Internal_ControlSchedulerTest, RefPostAfterRunsAfterDelay)
 {
     ProcessQueue q = scheduler.create();
-    ProcessQueueRef ref = q.ref();
+    ProcessQueue ref = q.ref();
 
     std::atomic<bool> fired{false};
     uint32_t handle = ref.postAfter(std::chrono::steady_clock::now() + 20ms, [&](uint32_t){
@@ -817,13 +775,13 @@ TEST_F(Internal_ControlSchedulerTest, RefPostDroppedAfterReleaseEvenIfQueueAlive
     std::atomic<bool> ran{false};
 
     {
-        ProcessQueueRef ref = q.ref();
+        ProcessQueue ref = q.ref();
         // ref destroyed (released) at end of this scope.
     }
 
     // ref destroyed (released) above; queue itself still alive via q.
     // A fresh ref should still work, demonstrating the queue wasn't affected.
-    ProcessQueueRef ref2 = q.ref();
+    ProcessQueue ref2 = q.ref();
     ASSERT_TRUE(ref2.post([&]{ ran.store(true, std::memory_order_release); }));
     ASSERT_TRUE(waitFor([&]{ return ran.load(std::memory_order_acquire); }));
 }
@@ -835,7 +793,7 @@ TEST_F(Internal_ControlSchedulerTest, RefDestructorBlocksUntilPendingTasksFinish
     std::atomic<bool> taskFinished{false};
 
     {
-        ProcessQueueRef ref = q.ref();
+        ProcessQueue ref = q.ref();
         ASSERT_TRUE(ref.post([&]{
             taskStarted.store(true, std::memory_order_release);
             std::this_thread::sleep_for(50ms);
@@ -855,7 +813,7 @@ TEST_F(Internal_ControlSchedulerTest, RefScheduledTimerNotFiredAfterRefReleased)
     std::atomic<bool> fired{false};
 
     {
-        ProcessQueueRef ref = q.ref();
+        ProcessQueue ref = q.ref();
         ref.postAfter(std::chrono::steady_clock::now() + 100ms, [&](uint32_t){
             fired.store(true, std::memory_order_release);
         });
@@ -869,7 +827,7 @@ TEST_F(Internal_ControlSchedulerTest, RefScheduledTimerNotFiredAfterRefReleased)
 TEST_F(Internal_ControlSchedulerTest, RefCancelOwnTimer)
 {
     ProcessQueue q = scheduler.create();
-    ProcessQueueRef ref = q.ref();
+    ProcessQueue ref = q.ref();
 
     std::atomic<bool> fired{false};
     uint32_t handle = ref.postAfter(std::chrono::steady_clock::now() + 200ms, [&](uint32_t){
@@ -882,34 +840,14 @@ TEST_F(Internal_ControlSchedulerTest, RefCancelOwnTimer)
     EXPECT_FALSE(fired.load(std::memory_order_acquire));
 }
 
-TEST_F(Internal_ControlSchedulerTest, RefPostToLabeledSubQueue)
-{
-    constexpr ControlScheduler::Label kLabel = 7;
-    ProcessQueue q = scheduler.create(16, { ControlScheduler::SubQueueConfig{kLabel, 16} });
-    ProcessQueueRef ref = q.ref();
-
-    std::atomic<bool> ran{false};
-    ASSERT_TRUE(ref.post(kLabel, [&]{ ran.store(true, std::memory_order_release); }));
-
-    ASSERT_TRUE(waitFor([&]{ return ran.load(std::memory_order_acquire); }));
-}
-
-TEST_F(Internal_ControlSchedulerTest, RefPostToUnknownLabelFails)
-{
-    ProcessQueue q = scheduler.create();
-    ProcessQueueRef ref = q.ref();
-
-    EXPECT_FALSE(ref.post(static_cast<ControlScheduler::Label>(99), [](){}));
-}
-
 TEST_F(Internal_ControlSchedulerTest, MultipleRefsToSameQueueIndependentLifetimes)
 {
     ProcessQueue q = scheduler.create();
     std::atomic<int> ranCount{0};
 
-    ProcessQueueRef ref1 = q.ref();
+    ProcessQueue ref1 = q.ref();
     {
-        ProcessQueueRef ref2 = q.ref();
+        ProcessQueue ref2 = q.ref();
         ASSERT_TRUE(ref2.post([&]{ ranCount.fetch_add(1, std::memory_order_relaxed); }));
     } // ref2 released, but ref1 and the queue remain alive
 
@@ -921,7 +859,7 @@ TEST_F(Internal_ControlSchedulerTest, MultipleRefsToSameQueueIndependentLifetime
 TEST_F(Internal_ControlSchedulerTest, RefOutlivesQueueDestructionPostsAreDropped)
 {
     ProcessQueue placeholder = scheduler.create();
-    ProcessQueueRef ref = placeholder.ref();
+    ProcessQueue ref = placeholder.ref();
     {
         ProcessQueue q = scheduler.create();
         ref = q.ref();
@@ -941,7 +879,7 @@ TEST_F(Internal_ControlSchedulerTest, RefMoveAssignmentReleasesPreviousState)
     ProcessQueue q1 = scheduler.create();
     ProcessQueue q2 = scheduler.create();
 
-    ProcessQueueRef ref = q1.ref();
+    ProcessQueue ref = q1.ref();
     std::atomic<bool> ran1{false};
     ASSERT_TRUE(ref.post([&]{ ran1.store(true, std::memory_order_release); }));
     ASSERT_TRUE(waitFor([&]{ return ran1.load(std::memory_order_acquire); }));
@@ -956,33 +894,19 @@ TEST_F(Internal_ControlSchedulerTest, RefMoveAssignmentReleasesPreviousState)
 TEST_F(Internal_ControlSchedulerTest, DefaultConstructedRefPostFails)
 {
     ProcessQueue defaultQueue; // not created via scheduler.create()
-    ProcessQueueRef ref = defaultQueue.ref();
+    ProcessQueue ref = defaultQueue.ref();
 
     EXPECT_FALSE(ref.post([](){}));
     EXPECT_EQ(ref.postAfter(std::chrono::steady_clock::now() + 10ms, [](uint32_t){}), 0u);
     EXPECT_FALSE(ref.cancel(1));
 }
 
-// =====================================================================================
-// ProcessQueueRef — race vs. direct (non-posted) access to shared state
-//
-// These tests reproduce the pattern behind a real EIGRP use-after-free:
-// `Eigrp::selfRef.post([e]{ e->refreshInterfaceList(); })` runs on a worker
-// thread and iterates `eigrpInterfaceList`, while `Eigrp::shutdown()` (called
-// directly by tests/destructors, NOT posted through selfRef) clears/destroys
-// that same container on the calling thread. `ProcessQueueRef` only
-// serializes work posted *through* it (via `alive`/`pending`); it provides
-// no exclusion against a direct, synchronous caller touching the same state.
-// =====================================================================================
-
 TEST_F(Internal_ControlSchedulerTest, PostedTaskRacesWithDirectClearOfSharedContainer)
 {
     ProcessQueue q = scheduler.create();
-    ProcessQueueRef ref = q.ref();
+    ProcessQueue ref = q.ref();
 
     // Stand-in for Eigrp::ifaceMgr.eigrpInterfaceList: heap-allocated container
-    // that a posted task will iterate, exactly like refreshInterfaceList()
-    // iterates eigrpInterfaceList via EigrpTopology::synchronizeConnected().
     auto* shared = new std::vector<int>{1, 2, 3, 4, 5};
     std::atomic<bool> taskRan{false};
     std::atomic<long> sum{0};
@@ -996,55 +920,38 @@ TEST_F(Internal_ControlSchedulerTest, PostedTaskRacesWithDirectClearOfSharedCont
         taskRan.store(true, std::memory_order_release);
     });
 
-    // Analogous to: eigrpInstance->shutdown() -> ifaceMgr.deactivateAll()
-    // -> eigrpInterfaceList.clear() -- a DIRECT, unposted mutation on this
-    // thread with NO synchronization against the post() above.
     shared->clear();
     shared->shrink_to_fit();
 
     ASSERT_TRUE(waitFor([&]{ return taskRan.load(std::memory_order_acquire); }));
 
-    // No correctness assertion on `sum` -- the point is that ref.post()
-    // provided no exclusion: the posted task and the direct clear() above
-    // can interleave in either order, and under ASan/TSan this is flagged
-    // as a data race / use-after-clear on *shared.
     delete shared;
 }
 
 TEST_F(Internal_ControlSchedulerTest, DirectDeleteRacesWithPendingPostedAccess)
 {
     ProcessQueue q = scheduler.create();
-    ProcessQueueRef ref = q.ref();
+    ProcessQueue ref = q.ref();
 
     struct Node { int value; };
     auto* node = new Node{42};
     std::atomic<bool> taskRan{false};
 
-    // Analogous to: e->selfRef.post([e]{ e->refreshInterfaceList(); }), which
-    // (transitively, via synchronizeConnected) calls EigrpInterface::getIface()
-    // on a node owned by eigrpInterfaceList.
     ref.post([&, node]{
         volatile int v = node->value; // read of *node; may run after delete below
         (void)v;
         taskRan.store(true, std::memory_order_release);
     });
 
-    // Analogous to: eigrpInstance->shutdown() -> ifaceMgr.deactivateAll()
-    // -> eigrpInterfaceList.clear(), which destroys the EigrpInterface the
-    // posted task is about to dereference. selfRef provides NO protection
-    // here: alive/pending only gate posting, not direct deletes.
     delete node;
 
     ASSERT_TRUE(waitFor([&]{ return taskRan.load(std::memory_order_acquire); }));
-    // Reaching here without an ASan abort is itself non-deterministic --
-    // this test documents the race; under ASan it may abort the process,
-    // which is the bug being exploited/demonstrated.
 }
 
 TEST_F(Internal_ControlSchedulerTest, WaitIdleBeforeDirectMutationAvoidsRace)
 {
     ProcessQueue q = scheduler.create();
-    ProcessQueueRef ref = q.ref();
+    ProcessQueue ref = q.ref();
 
     auto* shared = new std::vector<int>{1, 2, 3, 4, 5};
     std::atomic<bool> taskRan{false};
@@ -1065,10 +972,6 @@ TEST_F(Internal_ControlSchedulerTest, WaitIdleBeforeDirectMutationAvoidsRace)
     delete shared;
 }
 
-// =====================================================================================
-// Cross-cutting: scheduler destruction with in-flight work
-// =====================================================================================
-
 TEST(Internal_ControlSchedulerLifecycleTest, DestroyingSchedulerWithPendingTimersIsSafe)
 {
     ThreadPool pool(2, 64);
@@ -1077,7 +980,7 @@ TEST(Internal_ControlSchedulerLifecycleTest, DestroyingSchedulerWithPendingTimer
     {
         ControlScheduler scheduler(pool, tm, 16, 16);
         ProcessQueue q = scheduler.create();
-        ProcessQueueRef ref = q.ref();
+        ProcessQueue ref = q.ref();
 
         // Schedule several timers that won't fire before the scheduler is destroyed.
         for (int i = 0; i < 5; ++i)
@@ -1097,7 +1000,7 @@ TEST(Internal_ControlSchedulerLifecycleTest, DestroyingSchedulerWithRefTimersIsS
     {
         ControlScheduler scheduler(pool, tm, 16, 16);
         ProcessQueue q = scheduler.create();
-        ProcessQueueRef ref = q.ref();
+        ProcessQueue ref = q.ref();
 
         for (int i = 0; i < 5; ++i)
             ref.postAfter(std::chrono::steady_clock::now() + 5s, [](uint32_t){});
@@ -1117,10 +1020,352 @@ TEST(Internal_ControlSchedulerLifecycleTest, ManyQueuesCreateAndDestroy)
     for (int i = 0; i < 100; ++i)
     {
         ProcessQueue q = scheduler.create();
-        ProcessQueueRef ref = q.ref();
+        ProcessQueue ref = q.ref();
         std::atomic<bool> ran{false};
         ASSERT_TRUE(ref.post([&]{ ran.store(true, std::memory_order_release); }));
         ASSERT_TRUE(waitFor([&]{ return ran.load(std::memory_order_acquire); }));
         // ref and q destroyed here, slot recycled for next iteration.
     }
+}
+
+TEST_F(Internal_ControlSchedulerTest, OwnerHandlePostsDirectly)
+{
+    ProcessQueue q = scheduler.create();
+    std::atomic<bool> ran{false};
+
+    ASSERT_TRUE(q.post([&]{ ran.store(true, std::memory_order_release); }));
+    ASSERT_TRUE(waitFor([&]{ return ran.load(std::memory_order_acquire); }));
+
+    uint32_t h = q.postAfter(std::chrono::steady_clock::now() + 5ms, [](uint32_t){});
+    EXPECT_NE(h, 0u);
+}
+
+TEST_F(Internal_ControlSchedulerTest, BorrowingFromABorrowerWorks)
+{
+    ProcessQueue q = scheduler.create();
+    ProcessQueue ref = q.ref();
+    ProcessQueue ref2 = ref.ref(); // borrow from a borrower
+
+    std::atomic<bool> ran{false};
+    ASSERT_TRUE(ref2.post([&]{ ran.store(true, std::memory_order_release); }));
+    ASSERT_TRUE(waitFor([&]{ return ran.load(std::memory_order_acquire); }));
+}
+
+TEST_F(Internal_ControlSchedulerTest, OwnerReleaseRejectsFurtherOwnPostsButKeepsQueue)
+{
+    ProcessQueue q = scheduler.create();
+    ProcessQueue ref = q.ref();
+
+    q.release(); // gives up the owner's own posting lifetime only
+
+    EXPECT_FALSE(q.post([](){}));
+
+    // Queue is still alive: borrowing handles keep working.
+    std::atomic<bool> ran{false};
+    ASSERT_TRUE(ref.post([&]{ ran.store(true, std::memory_order_release); }));
+    ASSERT_TRUE(waitFor([&]{ return ran.load(std::memory_order_acquire); }));
+}
+
+TEST_F(Internal_ControlSchedulerTest, ReleaseFromInsideOwnTaskDoesNotDeadlock)
+{
+    ProcessQueue q = scheduler.create();
+    auto* ref = new ProcessQueue(q.ref());
+    std::atomic<bool> done{false};
+
+    for (int i = 0; i < 8; ++i)
+        ASSERT_TRUE(ref->post([]{}));
+    ref->postAfter(std::chrono::steady_clock::now() + 10s, [](uint32_t){});
+
+    ASSERT_TRUE(ref->post([&, ref]{
+        ref->release(); // pumps remaining tasks inline, cancels the timer
+        done.store(true, std::memory_order_release);
+    }));
+
+    ASSERT_TRUE(waitFor([&]{ return done.load(std::memory_order_acquire); }, 5000ms));
+    delete ref;
+}
+
+TEST_F(Internal_ControlSchedulerTest, ResetFromInsideOwnTaskDoesNotDeadlock)
+{
+    for (int iter = 0; iter < 50; ++iter)
+    {
+        ProcessQueue q = scheduler.create();
+        ProcessQueue ref = q.ref();
+        std::atomic<bool> done{false};
+
+        ProcessQueue* qp = &q;
+        ASSERT_TRUE(ref.post([&, qp]{
+            qp->reset(); // deferDestroy path, from the queue's own drain thread
+            done.store(true, std::memory_order_release);
+        }));
+
+        ASSERT_TRUE(waitFor([&]{ return done.load(std::memory_order_acquire); }));
+        ref.release();
+        q.reset(); // no-op; already emptied by the task's reset
+    }
+}
+
+TEST_F(Internal_ControlSchedulerTest, PostersVsDestroyChurn)
+{
+    std::atomic<long> executed{0};
+
+    for (int iter = 0; iter < 400; ++iter)
+    {
+        ProcessQueue q = scheduler.create(64);
+        std::atomic<bool> quit{false};
+
+        std::vector<std::thread> posters;
+        for (int i = 0; i < 4; ++i)
+        {
+            posters.emplace_back([&, r = q.ref()]{
+                while (!quit.load(std::memory_order_relaxed))
+                    r.post([&]{ executed.fetch_add(1, std::memory_order_relaxed); });
+            });
+        }
+
+        std::this_thread::sleep_for(std::chrono::microseconds(200));
+        q.reset(); // destroy while posters are mid-post
+        quit = true;
+        for (auto& t : posters) t.join();
+    }
+    SUCCEED();
+}
+
+TEST_F(Internal_ControlSchedulerTest, WaitIdleVsDestroyChurn)
+{
+    ControlScheduler scheduler(pool, tm, 8, 16);
+
+    for (int iter = 0; iter < 2000; ++iter)
+    {
+        ProcessQueue q = scheduler.create(64);
+        ProcessQueue ref = q.ref();
+
+        std::thread waiter([w = q.ref()]{ w.waitIdle(); });
+
+        for (int i = 0; i < 8; ++i)
+            ref.post([]{});
+        ref.release();
+        q.reset();
+        waiter.join();
+    }
+    SUCCEED();
+}
+
+TEST_F(Internal_ControlSchedulerTest, DelayedFireCancelAccounting)
+{
+    ControlScheduler scheduler(pool, tm, 8, 8); // tiny pool -> heavy recycling
+
+    ProcessQueue q = scheduler.create(1u << 12);
+    ProcessQueue ref = q.ref();
+
+    std::atomic<long> fired{0}, cancelled{0}, scheduled{0};
+    std::atomic<bool> stop{false};
+
+    auto worker = [&]{
+        while (!stop.load(std::memory_order_relaxed))
+        {
+            uint32_t h = ref.postAfter(
+                std::chrono::steady_clock::now() + std::chrono::microseconds(50),
+                [&](uint32_t){ fired.fetch_add(1, std::memory_order_relaxed); });
+            if (h == 0)
+                continue;
+            scheduled.fetch_add(1, std::memory_order_relaxed);
+            if (ref.cancel(h))
+                cancelled.fetch_add(1, std::memory_order_relaxed);
+        }
+    };
+
+    std::vector<std::thread> ts;
+    for (int i = 0; i < 8; ++i) ts.emplace_back(worker);
+    std::this_thread::sleep_for(1s);
+    stop = true;
+    for (auto& t : ts) t.join();
+
+    q.waitIdle();
+
+    // Re-armed timers may straggle; the books must converge exactly.
+    ASSERT_TRUE(waitFor([&]{
+        return fired.load() + cancelled.load() == scheduled.load();
+    }, 5000ms)) << "lost or duplicated delayed task: fired=" << fired.load()
+                << " cancelled=" << cancelled.load()
+                << " scheduled=" << scheduled.load();
+}
+
+// Concurrent cancels of the same handle racing its fire: at most one winner,
+// and winner + fire must account for every handle.
+TEST_F(Internal_ControlSchedulerTest, ConcurrentCancelHasSingleWinner)
+{
+    ControlScheduler scheduler(pool, tm, 8, 512);
+
+    ProcessQueue q = scheduler.create(1u << 10);
+    ProcessQueue ref = q.ref();
+
+    std::atomic<long> winners{0}, fires{0}, handles{0};
+
+    constexpr int kIters = 1000;
+    std::barrier<> sync(3);
+    std::atomic<uint32_t> curHandle{0};
+    std::atomic<int> won{0};
+
+    auto canceller = [&]{
+        for (int i = 0; i < kIters; ++i)
+        {
+            sync.arrive_and_wait();
+            uint32_t h = curHandle.load(std::memory_order_acquire);
+            if (h != 0 && ref.cancel(h))
+                won.fetch_add(1, std::memory_order_acq_rel);
+            sync.arrive_and_wait();
+        }
+    };
+    std::thread c1(canceller), c2(canceller);
+
+    for (int iter = 0; iter < kIters; ++iter)
+    {
+        uint32_t h = ref.postAfter(
+            std::chrono::steady_clock::now() + std::chrono::microseconds(30),
+            [&](uint32_t){ fires.fetch_add(1, std::memory_order_relaxed); });
+        if (h != 0)
+            handles.fetch_add(1, std::memory_order_relaxed);
+
+        won.store(0, std::memory_order_release);
+        curHandle.store(h, std::memory_order_release);
+        sync.arrive_and_wait();
+        sync.arrive_and_wait();
+        ASSERT_LE(won.load(), 1) << "handle cancelled twice";
+        winners.fetch_add(won.load(), std::memory_order_relaxed);
+    }
+    c1.join();
+    c2.join();
+
+    q.waitIdle();
+    ASSERT_TRUE(waitFor([&]{
+        return winners.load() + fires.load() == handles.load();
+    }, 5000ms)) << "cancel/fire accounting broken: cancelled=" << winners.load()
+                << " fired=" << fires.load() << " handles=" << handles.load();
+}
+
+// Refs released while their short timers are firing: the node-refcount
+// protocol must neither leak, double-free, nor hang.
+TEST_F(Internal_ControlSchedulerTest, ReleaseVsFiringTimers)
+{
+    ControlScheduler scheduler(pool, tm, 8, 256);
+
+    ProcessQueue q = scheduler.create(1u << 10);
+
+    auto worker = [&]{
+        for (int i = 0; i < 500; ++i)
+        {
+            ProcessQueue ref = q.ref();
+            for (int k = 0; k < 4; ++k)
+            {
+                ref.postAfter(
+                    std::chrono::steady_clock::now() + std::chrono::microseconds(20 * k),
+                    [](uint32_t){});
+            }
+            // ref released here while timers are in flight / firing
+        }
+    };
+
+    std::vector<std::thread> ts;
+    for (int i = 0; i < 6; ++i) ts.emplace_back(worker);
+    for (auto& t : ts) t.join();
+    SUCCEED();
+}
+
+TEST_F(Internal_ControlSchedulerTest, StaleRefsOnRecycledSlotsNeverRun)
+{
+    std::atomic<bool> stop{false};
+    std::atomic<long> wrongRun{0};
+
+    std::thread churn([&]{
+        while (!stop.load(std::memory_order_relaxed))
+        {
+            ProcessQueue q = scheduler.create(64);
+            ProcessQueue r = q.ref();
+            r.post([]{});
+        }
+    });
+
+    std::thread stale([&]{
+        while (!stop.load(std::memory_order_relaxed))
+        {
+            ProcessQueue q = scheduler.create(64);
+            ProcessQueue r = q.ref();
+            q.reset(); // slot recycled by the churn thread
+            for (int i = 0; i < 100; ++i)
+                r.post([&]{ wrongRun.fetch_add(1, std::memory_order_relaxed); });
+        }
+    });
+
+    std::this_thread::sleep_for(1s);
+    stop = true;
+    churn.join();
+    stale.join();
+
+    EXPECT_EQ(wrongRun.load(), 0);
+}
+
+TEST_F(Internal_ControlSchedulerTest, SerializationAndExactlyOnceUnderStorm)
+{
+    ControlScheduler scheduler(pool, tm, 4, 16);
+
+    ProcessQueue q = scheduler.create(1u << 12);
+    std::atomic<long> posted{0}, ran{0};
+    std::atomic<int> inTask{0};
+    std::atomic<bool> stop{false};
+    std::atomic<bool> overlapped{false};
+
+    auto worker = [&]{
+        ProcessQueue ref = q.ref();
+        while (!stop.load(std::memory_order_relaxed))
+        {
+            bool ok = ref.post([&]{
+                if (inTask.fetch_add(1, std::memory_order_acq_rel) != 0)
+                    overlapped.store(true, std::memory_order_release);
+                ran.fetch_add(1, std::memory_order_relaxed);
+                inTask.fetch_sub(1, std::memory_order_acq_rel);
+            });
+            if (ok)
+                posted.fetch_add(1, std::memory_order_relaxed);
+        }
+    };
+
+    std::vector<std::thread> ts;
+    for (int i = 0; i < 8; ++i) ts.emplace_back(worker);
+    std::this_thread::sleep_for(1s);
+    stop = true;
+    for (auto& t : ts) t.join();
+
+    q.waitIdle();
+    EXPECT_FALSE(overlapped.load()) << "two tasks of one queue ran concurrently";
+    EXPECT_EQ(posted.load(), ran.load());
+}
+
+TEST_F(Internal_ControlSchedulerTest, TimerSurvivesFullRing)
+{
+    ControlScheduler scheduler(pool, tm, 4, 16);
+
+    ProcessQueue q = scheduler.create(2); // minimal ring
+    ProcessQueue ref = q.ref();
+
+    std::atomic<bool> release{false};
+    std::atomic<bool> fired{false};
+
+    // Occupy the drain with a long task, then fill the ring so the timer
+    // trampoline cannot be posted when it fires.
+    ASSERT_TRUE(ref.post([&]{
+        while (!release.load(std::memory_order_acquire))
+            std::this_thread::sleep_for(1ms);
+    }));
+    while (ref.post([]{})) {} // fill the ring to capacity
+
+    uint32_t h = ref.postAfter(std::chrono::steady_clock::now() + 5ms,
+                               [&](uint32_t){ fired.store(true, std::memory_order_release); });
+    ASSERT_NE(h, 0u);
+
+    std::this_thread::sleep_for(50ms); // timer fires against a full ring
+    release.store(true, std::memory_order_release);
+
+    ASSERT_TRUE(waitFor([&]{ return fired.load(std::memory_order_acquire); }, 5000ms))
+        << "timer was dropped instead of re-armed";
 }

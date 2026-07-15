@@ -302,7 +302,7 @@ protected:
         { (area ? area : &getArea(0))->priv.onAgingTick(); }
     bool calculateRID(OspfProcess* process = nullptr)
         { return (process ? process : ospfInstance)->calculateRID(); }
-    core::ProcessQueueRef& getScheduler(OspfProcess* process = nullptr)
+    core::ProcessQueue& getScheduler(OspfProcess* process = nullptr)
         { return (process ? process : ospfInstance)->scheduler; }
 
     // Helper: set IPv4 address on an interface.
@@ -6809,7 +6809,7 @@ TEST_F(Internal_OspfTest, VirtualLink_AddVirtualLink_Encoded_In_RouterLsa)
     ASSERT_EQ(nbr->getState(), Neighbor::State::FULL);
 
     area.getOriginator().fullRefresh();
-    ospfInstance->getSchedulerQueue().waitIdle();
+    ospfInstance->schedulerMgr.waitIdle();
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     LsaKey routerKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
