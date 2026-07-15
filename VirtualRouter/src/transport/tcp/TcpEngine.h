@@ -50,9 +50,9 @@ class Connection;
  * different thread after a send completes, but all other TcpEngine state is
  * unguarded.
  *
- * @warning Do not call any `TcpEngine` method from a callback that was itself
- * invoked by `pump()` — re-entrancy is not supported and will corrupt internal
- * iterator state.
+ * Calls made from inside pump()-invoked callbacks (write, flush, close,
+ * connect) are supported: the engine revalidates its lookups after every
+ * callback and the connection table never rehashes below maxConnections.
  *
  * @see Tcp
  * @see TxBufferPool
@@ -116,19 +116,6 @@ public:
      */
     void closeConnection(ConnId id) noexcept;
 
-    // Listener-owned connection opts
-
-    /**
-     * @brief Flushes pending TX data for a connection accepted by a listener.
-     *
-     * Used by @ref Listener::send() to push buffered bytes via the OS socket.
-     *
-     * @param lid Owning listener id.
-     * @param cid Accepted connection id.
-     * @return Number of bytes sent on this call.
-     */
-    size_t listenerFlush(ListenId lid, ConnId cid) noexcept;
-
     /**
      * @brief Closes an accepted connection owned by a listener.
      *
@@ -144,6 +131,15 @@ public:
      * @return Number of bytes sent on this call.
      */
     size_t flush(ConnId cid) noexcept;
+
+    /// Pull-mode receive for @p cid into @p out; returns bytes read (0 = nothing available / closed / error).
+    size_t read(ConnId cid, std::span<uint8_t> out) noexcept;
+
+    /// Shuts down one or both directions of @p cid; WRITE flushes pending TX before the FIN.
+    void shutdownConnection(ConnId cid, TcpShutdown how) noexcept;
+
+    /// Current RFC 793 state of @p cid's socket; CLOSED for unknown ids.
+    TcpState connectionState(ConnId cid) const noexcept;
 
     /**
      * @brief Initiates a graceful shutdown on an active connection.
@@ -276,20 +272,22 @@ private:
     /// Returns the current TCP state of @p fd by reading /proc or using getsockopt.
     TcpState linuxState(int fd) const;
 
-    /// Moves the accepted raw socket @p cfd into a new ConnectionState under @p lst and returns its ConnId.
-    ConnId adoptAcceptedSocket(ListenerState& lst, int cfd);
+    /// Moves the accepted raw socket @p cfd into a new ConnectionState under @p lst; returns its ConnId or 0 on failure (cfd closed).
+    ConnId adoptAcceptedSocket(ListenerState& lst, int cfd) noexcept;
 
     /**
-     * @brief Drains the accept queue for @p lst, producing events and/or invoking callbacks.
+     * @brief Drains the accept queue for listener @p lid, producing events and/or invoking callbacks.
      *
-     * @param lst              The listener whose fd is readable.
+     * The listener is re-looked-up each iteration so callbacks may safely close it.
+     *
+     * @param lid              The listener whose fd is readable.
      * @param tcp              Owning Tcp instance passed to AcceptCallback.
      * @param acceptEvents     Caller span for pull-mode event output.
      * @param produced         In/out counter of events written to @p acceptEvents.
      * @param invokeCallbacks  If true, AcceptCallback is called per accepted socket.
      * @return Number of sockets accepted this iteration.
      */
-    size_t acceptLoop(ListenerState& lst, Tcp* tcp, std::span<TcpEvent> acceptEvents, size_t& produced, bool invokeCallbacks) noexcept;
+    size_t acceptLoop(ListenId lid, Tcp* tcp, std::span<TcpEvent> acceptEvents, size_t& produced, bool invokeCallbacks) noexcept;
 
     /// Fires ConnCallback (if set) and queues a TcpEvent for a connect-complete or error on @p cid.
     void dispatchConnectEvent(Tcp& tcp, ConnId cid, TcpEventType t, TcpError e) noexcept;
@@ -333,6 +331,9 @@ private:
 
     std::vector<epoll_event> epScratch; ///< Reusable scratch buffer for epoll_wait output.
     std::vector<uint8_t> ioScratch;     ///< Reusable scratch buffer for recv() calls.
+
+    ConnId inCallbackCid{0};  ///< Connection whose recv callback is currently running; closes to it are deferred.
+    bool deferredClose{false}; ///< Set when a recv callback closed its own connection; applied after the callback returns.
 };
 } // namespace transport::tcp
 

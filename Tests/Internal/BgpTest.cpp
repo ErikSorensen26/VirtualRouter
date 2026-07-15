@@ -27,6 +27,7 @@
 #include <functional>
 
 #include <VirtualRouter.h>
+#include <Global.h>
 #include <MockFileSystem.hpp>
 #include <IPAddress.h>
 #include <interface/configs/InterfaceType.hpp>
@@ -55,6 +56,7 @@
 #include "bgp/af/AddressFamily.hpp"
 #include "bgp/af/Nlri.hpp"
 #include "packet/headers/BgpHeader.hpp"
+#include "packet/headers/embedded/bgp/BgpOpenHeader.hpp"
 #include "configs/registry/router/BgpRegistry.h"
 #include "tcp/Tcp.h"
 #include "tcp/Connection.h"
@@ -63,6 +65,7 @@
 using namespace routing::bgp;
 using namespace transport::tcp;
 using namespace std::chrono_literals;
+using routing::ExampleNlri;
 
 // =====================================================================
 // Shared fixture
@@ -115,8 +118,7 @@ protected:
                                                       NeighborAf* nbr = nullptr)
     {
         uint32_t pid = proc->getAttrMgr().acquire(attrs, path);
-        InboundRoute<types::IPv4Prefix> route(proc->getAttrMgr(), pid, nbr);
-        route.nlri = nlri;
+        InboundRoute<types::IPv4Prefix> route(proc->getAttrMgr(), pid, nlri, nbr);
         return route;
     }
 
@@ -442,7 +444,7 @@ TEST_F(Internal_BgpTest, AttrMgr_AcquireRetainRelease_RefCounting)
 
     // RouteBase ctor retains (refcount 2: acquire + retain).
     {
-        InboundRoute<types::IPv4Prefix> route(mgr, id, nullptr);
+        InboundRoute<types::IPv4Prefix> route(mgr, id, {});
         route.nlri = mkPrefix(0x0A000000, 24);
 
         ASSERT_TRUE(mgr.getAttributes(id).origin.has_value());
@@ -519,13 +521,13 @@ TEST_F(Internal_BgpTest, InboundRoute_CopyAndMove_RetainAndRelease)
     uint32_t id = mgr.acquire(attrs, path);
 
     {
-        InboundRoute<types::IPv4Prefix> a(mgr, id, nullptr);
+        InboundRoute<types::IPv4Prefix> a(mgr, id, {});
         a.nlri = mkPrefix(0x0A000000, 24);
 
         InboundRoute<types::IPv4Prefix> b(std::move(a));
         EXPECT_EQ(b.nlri.prefixLength, 24);
 
-        InboundRoute<types::IPv4Prefix> c(mgr, id, nullptr);
+        InboundRoute<types::IPv4Prefix> c(mgr, id, {});
         c.nlri = mkPrefix(0x0B000000, 16);
         // b and c both alive, each retaining id.
         EXPECT_EQ(mgr.get(id).attrs.origin, BGP_ORIGIN_IGP);
@@ -540,7 +542,7 @@ TEST_F(Internal_BgpTest, InboundRouteBase_LocallyOriginated)
     Path path = makePath(mkV4(0x0A000001));
     uint32_t id = mgr.acquire(attrs, path);
 
-    InboundRoute<types::IPv4Prefix> local(mgr, id, nullptr);
+    InboundRoute<types::IPv4Prefix> local(mgr, id, {});
     EXPECT_TRUE(local.locallyOriginated());
     EXPECT_EQ(local.weigth, 32768);
 
@@ -654,7 +656,7 @@ TEST_F(Internal_BgpTest, PerPeerInTable_InsertLookupRemove)
     Path path = makePath(mkV4(0x0A000001));
     uint32_t id = mgr.acquire(attrs, path);
 
-    InboundRoute<types::IPv4Prefix> route(mgr, id, nullptr);
+    InboundRoute<types::IPv4Prefix> route(mgr, id, {});
     route.nlri = prefix;
 
     auto [it, inserted] = table.emplace(key, std::move(route));
@@ -683,9 +685,9 @@ TEST_F(Internal_BgpTest, PerPeerInTable_MultiplePeersSamePrefix)
     uint32_t idA = mgr.acquire(attrsA, makePath(mkV4(0x0A000001)));
     uint32_t idB = mgr.acquire(attrsB, makePath(mkV4(0x0B000001)));
 
-    InboundRoute<types::IPv4Prefix> routeA(mgr, idA, nullptr);
+    InboundRoute<types::IPv4Prefix> routeA(mgr, idA, {});
     routeA.nlri = prefix;
-    InboundRoute<types::IPv4Prefix> routeB(mgr, idB, nullptr);
+    InboundRoute<types::IPv4Prefix> routeB(mgr, idB, {});
     routeB.nlri = prefix;
 
     NlriPath<types::IPv4Prefix> key{prefix, 0};
@@ -2337,30 +2339,6 @@ TEST_F(Internal_BgpTest, PeerSessionTemplate_InheritancePrecedence_OverPeerGroup
     EXPECT_EQ(remAs.load(), 65300u);
 }
 
-// =====================================================================
-// End of Section E
-// =====================================================================
-
-// =====================================================================
-// Section F - FSM (RFC 4271 six-state machine) + SessionTimers
-//
-// Session::fsm is private with no accessor, so transitions are driven via
-// the public, async Session::postEvent(FsmEvent) (posts to the neighbor's
-// ProcessQueueRef, which is a ref() onto BgpProcess::scheduler) and then
-// observed after draining that queue with proc->getSchedulerQueue().waitIdle().
-//
-// All entry points below are chosen to avoid any real TCP syscalls:
-//   - MANUAL_START_PASSIVE_TCP (IDLE->ACTIVE) does not call initiateConnection().
-//   - From ACTIVE, TCP_CR_ACKED/TCP_CONNECTION_CONFIRMED -> sendOpen() (no-op
-//     without a primaryConn) -> OPEN_SENT.
-//   - From OPEN_SENT, BGP_OPEN with session.holdTime/setPeerRid() set directly
-//     (mirroring what BgpRx::parseOpen does before calling onOpenReceived())
-//     drives the hold-time/keepalive negotiation -> OPEN_CONFIRMED.
-//   - From OPEN_CONFIRMED, KEEPALIVE_MSG -> ESTABLISHED.
-// closeAllConnections() and onSessionEstablished/onSessionDown are all
-// no-ops/safe with no real connections and no enabled address families.
-// =====================================================================
-
 namespace
 {
 bool waitForBgp(std::function<bool()> cond, std::chrono::milliseconds timeout = 2000ms)
@@ -2529,7 +2507,7 @@ TEST_F(Internal_BgpTest, Fsm_OpenSent_PeerHoldBelowMinimumHoldtime_RejectsToIdle
     ASSERT_NE(nbr, nullptr);
 
     // Configure MINIMUM_HOLDTIME on this neighbor's base transport config.
-    auto baseCfg = nbr->getConfigs().get<config::BgpNeighborSession::BGP_BASE>().get();
+    auto& baseCfg = nbr->getConfigs().get<config::BgpNeighborSession::BGP_BASE>().get();
     baseCfg.get<config::BgpTransportBase::MINIMUM_HOLDTIME>().set(60);
 
     proc->startPassiveSession(*nbr);
@@ -3229,7 +3207,7 @@ protected:
         entry->processId = 0;
         entry->adminDistance = 0;
         entry->metric = 0;
-        entry->addNextHopInterface(interface::InterfaceKey(interface::InterfaceType::GIGABIT_ETHERNET, 0));
+        entry->addNextHopInterface(interface::encodeInterfaceKey(interface::InterfaceType::GIGABIT_ETHERNET, 0));
         vrf->getRib().addRoute(entry);
         vrf->getRib().wait<uint32_t>();
     }

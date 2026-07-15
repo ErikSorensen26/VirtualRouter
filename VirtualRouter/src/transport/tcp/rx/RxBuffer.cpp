@@ -8,7 +8,10 @@
 namespace transport::tcp
 {
 RxBuffer::RxBuffer(uint64_t c, size_t recvSiz)
-    : cid(c), buf(recvSiz) {}
+    : cid(c)
+{
+    buf.reserve(recvSiz);
+}
 
 void RxBuffer::commit(size_t consumed)
 {
@@ -23,10 +26,11 @@ void RxBuffer::commit(size_t consumed)
         if (actualConsumed != raw.size())
         {
             mode = Mode::BUFFERED;
-            size_t unconsumed = actualConsumed - consumed;
+            size_t unconsumed = raw.size() - actualConsumed;
             buf.resize(unconsumed);
-            std::memcpy(buf.data(), raw.data() + consumed, unconsumed);
+            std::memcpy(buf.data(), raw.data() + actualConsumed, unconsumed);
         }
+        raw = {};
     }
 }
 

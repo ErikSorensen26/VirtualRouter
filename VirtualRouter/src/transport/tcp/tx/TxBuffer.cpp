@@ -43,6 +43,9 @@ std::span<uint8_t> TxBuffer::reserveSpan(size_t minBytes) noexcept
 
     const size_t blockSize = pool->blockSize();
 
+    // a contiguous span can never exceed one block: "at least minBytes or empty"
+    if (minBytes > blockSize) return {};
+
     if (!tail) appendNewBlock();
     if (!tail) return {};
 

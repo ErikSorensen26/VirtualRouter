@@ -140,6 +140,9 @@ public:
      */
     void close(ConnId id);
 
+    /// Pull-mode receive for a connection known only by id (e.g. from an ACCEPTED event); returns bytes read.
+    size_t read(ConnId id, std::span<uint8_t> out);
+
     /**
      * @brief Collects pending TCP events without driving sends.
      *

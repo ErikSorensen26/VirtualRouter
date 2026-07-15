@@ -99,7 +99,7 @@ TxBufferPool::Block* TxBufferPool::pop() noexcept
     b->next = nullptr;
     b->rd = 0;
     b->wr = 0;
-    return atomicPop(freeList);
+    return b;
 }
 
 void TxBufferPool::addRef(Block* b) noexcept

@@ -106,6 +106,21 @@ public:
      */
     std::span<uint8_t> reserveSpan(size_t minBytes) noexcept;
 
+    /// Commits @p n bytes written into the span from the most recent reserveSpan().
+    void commit(size_t n) noexcept;
+
+    /// Copies @p data into the TX buffer (reserve+commit); returns bytes buffered (may be short if the pool is dry).
+    size_t write(std::span<const uint8_t> data) noexcept;
+
+    /// Pull-mode receive into @p out; returns bytes read (0 = nothing available, peer closed, or error — see events).
+    size_t read(std::span<uint8_t> out) noexcept;
+
+    /// Shuts down one or both directions; WRITE flushes pending TX then sends FIN. The handle stays valid.
+    void shutdown(TcpShutdown how) noexcept;
+
+    /// Current RFC 793 state of the underlying socket; CLOSED if the connection is gone.
+    TcpState state() const noexcept;
+
     /**
      * @brief Transmits all committed bytes in the TX buffer.
      *
@@ -146,6 +161,9 @@ private:
 
     Connection(TcpEngine* e, ConnId cid, TxBuffer& bufTx)
         : bufferTx(bufTx), engine(e), id(cid) {}
+
+    /// Detaches the handle without closing; used by the accept path when the callback keeps ownership with the listener.
+    void release() noexcept { engine = nullptr; id = 0; }
 
     TxBuffer& bufferTx; ///< Reference into TcpEngine::ConnectionState::bufferTx — valid while engine is alive.
 

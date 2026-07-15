@@ -32,13 +32,51 @@ Connection& Connection::operator=(Connection&& other) noexcept
     id = other.id;
 
     other.engine = nullptr;
-    other.engine = 0;
+    other.id = 0;
     return *this;
 }
 
 std::span<uint8_t> Connection::reserveSpan(size_t minBytes) noexcept
 {
     return bufferTx.reserveSpan(minBytes);
+}
+
+void Connection::commit(size_t n) noexcept
+{
+    bufferTx.commit(n);
+}
+
+size_t Connection::write(std::span<const uint8_t> data) noexcept
+{
+    size_t buffered = 0;
+    while (buffered < data.size())
+    {
+        auto span = bufferTx.reserveSpan(1);
+        if (span.empty()) break; // pool exhausted
+        size_t n = std::min(span.size(), data.size() - buffered);
+        std::memcpy(span.data(), data.data() + buffered, n);
+        bufferTx.commit(n);
+        buffered += n;
+    }
+    return buffered;
+}
+
+size_t Connection::read(std::span<uint8_t> out) noexcept
+{
+    if (!engine || id == 0) return 0;
+    return engine->read(id, out);
+}
+
+void Connection::shutdown(TcpShutdown how) noexcept
+{
+    if (!engine || id == 0) return;
+    engine->shutdownConnection(id, how);
+}
+
+TcpState Connection::state() const noexcept
+{
+    if (!engine || id == 0) return TcpState::CLOSED;
+    return engine->connectionState(id);
 }
 
 size_t Connection::flush() noexcept

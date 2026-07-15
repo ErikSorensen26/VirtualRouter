@@ -29,10 +29,8 @@ namespace types
  * ## Lifecycle & Ownership
  * Each pushed value is heap-allocated in an internal `Node`. Popped values
  * transfer ownership back to the caller; nodes are deleted immediately after
- * the value is copied out. Any nodes still in the stack when the `AtomicStack`
- * is destroyed are leaked — the destructor is intentionally omitted to keep
- * the type trivially destructible in free-list use cases. Callers must drain
- * the stack before destruction if leak-free operation is required.
+ * the value is copied out. The destructor frees any remaining nodes; all
+ * concurrent access must have ceased before destruction.
  *
  * @warning The ABA problem is not mitigated. Do not use this stack when the
  * same pointer value can be reused across concurrent push/pop pairs without
@@ -52,6 +50,18 @@ private:
     std::atomic<Node*> head; ///< Top of the stack; null when empty.
 
 public:
+    /// Frees any remaining nodes; concurrent access must have ceased.
+    ~AtomicStack()
+    {
+        Node* n = head.load();
+        while (n)
+        {
+            Node* next = n->next;
+            delete n;
+            n = next;
+        }
+    }
+
     /**
      * @brief Pushes a value onto the top of the stack.
      *

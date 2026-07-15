@@ -418,12 +418,12 @@ IPPrefix::IPPrefix(const uint8_t* ip, uint8_t prefix, AddressFamily family, bool
     {
         if (family == AddressFamily::IPv4)
         {
-            addr = utils::readBytes<uint32_t>(ip, ((prefix + 7) / 8) * 8) | (__uint128_t{0xFFFF} << 32);
+            addr = utils::readBytes<uint32_t>(ip, (prefix + 7) / 8) | (__uint128_t{0xFFFF} << 32);
             addPrefixLen(prefix);
         }
         else
         {
-            addr = utils::readBytes<__uint128_t>(ip, ((prefix + 7) / 8) * 8);
+            addr = utils::readBytes<__uint128_t>(ip, (prefix + 7) / 8);
             addPrefixLen(prefix);
         }
     }
@@ -705,7 +705,7 @@ IPv4Prefix::IPv4Prefix(const uint8_t* bytes, uint8_t prefix, bool maintainAddres
     }
     else
     {
-        addr = utils::readBytes<uint32_t>(bytes, ((prefix + 7) / 8) * 8);
+        addr = utils::readBytes<uint32_t>(bytes, (prefix + 7) / 8);
         addPrefixLen(prefix);
     }
 }
@@ -879,7 +879,7 @@ IPv6Prefix::IPv6Prefix(const uint8_t* bytes, uint8_t prefix, bool maintainAddres
     }
     else
     {
-        addr = utils::readBytes<__uint128_t>(bytes, ((prefix + 7) / 8) * 8);
+        addr = utils::readBytes<__uint128_t>(bytes, (prefix + 7) / 8);
         addPrefixLen(prefix);
     }
 }

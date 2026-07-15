@@ -83,6 +83,11 @@ void Tcp::close(ConnId id)
     engine->closeConnection(id);
 }
 
+size_t Tcp::read(ConnId id, std::span<uint8_t> out)
+{
+    return engine->read(id, out);
+}
+
 size_t Tcp::pollEvents(std::span<TcpEvent> outEvents, uint32_t timeoutMs)
 {
     return engine->pollEvents(outEvents, timeoutMs);

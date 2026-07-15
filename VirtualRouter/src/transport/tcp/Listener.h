@@ -22,10 +22,9 @@ class TcpEngine;
  * removes it from the epoll instance, dropping any pending accepts in the
  * backlog.
  *
- * The `Listener` also acts as a write-side proxy for connections that were
- * accepted through it: `send()` and `disconnect()` are routed through the
- * engine's listener-owned connection table rather than through a standalone
- * @ref Connection handle.
+ * Accepted connections may be closed through `disconnect()` when no
+ * standalone @ref Connection handle was taken in the accept callback; data
+ * transfer always goes through a @ref Connection handle.
  *
  * ## Architectural Role
  * `Listener` is the caller-facing boundary for the server side of a TCP
@@ -94,26 +93,10 @@ public:
     ListenId getId() const noexcept { return id; }
 
     /**
-     * @brief Sends data to an accepted connection owned by this listener.
-     *
-     * Routes the write through @ref TcpEngine::listenerFlush, which pushes
-     * committed TX bytes for the accepted connection identified by @p cid.
-     *
-     * @param cid  @ref ConnId of the accepted connection to send to.
-     * @param data Byte span to transmit; the span must remain valid for the
-     *             duration of this call.
-     * @return Number of bytes accepted into the TX buffer and flushed.
-     *
-     * @note The return value may be less than `data.size()` if the send buffer
-     * is full. The caller is responsible for retrying on partial sends.
-     */
-    size_t send(ConnId cid, std::span<const uint8_t>& data) noexcept;
-
-    /**
      * @brief Closes the listening socket and removes it from the event loop.
      *
-     * After this call `ok()` returns false. Pending accepted connections
-     * are not automatically closed — the caller must disconnect them first.
+     * After this call `ok()` returns false. Accepted connections still owned
+     * by this listener are closed with it.
      */
     void shutdown() noexcept;
 

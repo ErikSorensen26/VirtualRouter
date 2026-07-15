@@ -170,17 +170,18 @@ TcpEngine::TcpEngine(core::VirtualRouter& v, const Config& c)
     connections.max_load_factor(0.70f);
 
     epScratch.reserve(256);
+    ioScratch.resize(64 * 1024);
 }
 
 TcpEngine::~TcpEngine()
 {
-    // Close listeners (also closes accepted)
-    for (auto& [lid, lst] : listeners)
-        closeListener(lid);
+    // Close listeners (also closes accepted); drain by key since closeListener erases from the map
+    while (!listeners.empty())
+        closeListener(listeners.begin()->first);
 
     // Close any remaining (outbound)
-    for (auto& [cid, c] : connections)
-        closeConnectionInternal(cid);
+    while (!connections.empty())
+        closeConnectionInternal(connections.begin()->first);
 
     if (epfd >= 0) ::close(epfd);
     epfd = -1;
@@ -299,26 +300,31 @@ Listener TcpEngine::createListener(const TcpEndpoint& local, const ListenOptions
     int fd = ::socket(af, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (fd < 0) throw std::runtime_error("Error while creating socket");
 
-    if (setNonBlocking(fd) != 0) throw std::runtime_error("Tcp erorr while setting nonblock.");
-
+    TcpSocketPolicy p{};
+    try
     {
-        int one = 1;
-        (void)setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
-    }
+        if (setNonBlocking(fd) != 0) throw std::runtime_error("Tcp error while setting nonblock.");
 
-    bindToDeviceIfRequested(fd, opt.bind);
+        {
+            int one = 1;
+            (void)setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+        }
 
-    const TcpSocketPolicy p = mergePolicy(cfg.defaults, opt.policy);
-    {
+        bindToDeviceIfRequested(fd, opt.bind);
+
+        p = mergePolicy(cfg.defaults, opt.policy);
         applyPolicy(fd, af, p);
+
+        if (!bindEndpoint(fd, local))
+            throw std::runtime_error("Tcp error while binding");
+
+        if (::listen(fd, static_cast<int>(opt.backlog)) != 0)
+            throw std::runtime_error("Tcp error while listening");
     }
-
-    bindEndpoint(fd, local);
-
-    if (::listen(fd, static_cast<int>(opt.backlog)) != 0)
+    catch (...)
     {
         ::close(fd);
-        throw std::runtime_error("Tcp error while listening");
+        throw;
     }
 
     ListenId id = nextListenId++;
@@ -330,6 +336,7 @@ Listener TcpEngine::createListener(const TcpEndpoint& local, const ListenOptions
     lst.local = local;
     lst.backlog = opt.backlog;
     lst.policyApplied = p;
+    lst.rxSize = opt.rxBufferSize;
 
     lst.onAccept = opt.onAccept;
     lst.onAcceptUser = opt.onAcceptUser;
@@ -358,69 +365,67 @@ Connection TcpEngine::createConnection(const TcpEndpoint& local, const TcpEndpoi
     int fd = ::socket(af, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (fd < 0) throw std::runtime_error("Tcp error when connecting to socket");
 
-    if (setNonBlocking(fd) != 0) throw std::runtime_error("Error when setting nonblocking");
-
-    bindToDeviceIfRequested(fd, opt.bind);
-
-    const TcpSocketPolicy p = mergePolicy(cfg.defaults, opt.policy);
-    {
-        applyPolicy(fd, af, p);
-    }
-
     TcpEndpoint bindEp = local;
-
-    if (bindEp.port == 0)
-    {
-        if (cfg.ephemeralMin > cfg.ephemeralMax)
-        {
-            ::close(fd);
-            throw std::runtime_error("Tcp out of ephemeral ports");
-        }
-
-        const uint32_t range = static_cast<uint32_t>(cfg.ephemeralMax - cfg.ephemeralMin + 1);
-        bool bound = false;
-
-        for (uint32_t i = 0; i < range; ++i)
-        {
-            bindEp.port = allocateEphemeral();
-            if (bindEndpoint(fd, bindEp))
-            {
-                bound = true;
-                break;
-            }
-        }
-
-        if (!bound)
-        {
-            ::close(fd);
-            throw std::runtime_error("No ephemeral ports open");
-        }
-    }
-    else
-    {
-        bindEndpoint(fd, bindEp);
-    }
-
-    sockaddr_storage rss{};
-    uint32_t rlen = 0;
-    TcpIpAdapter::writeSocketaddr(remote.address, remote.port, &rss, &rlen);
-
-    int rc = ::connect(fd, reinterpret_cast<sockaddr*>(&rss), static_cast<socklen_t>(rlen));
     bool pending = false;
 
-    if (rc != 0)
+    try
     {
-        if (errno != EINPROGRESS)
+        if (setNonBlocking(fd) != 0) throw std::runtime_error("Error when setting nonblocking");
+
+        bindToDeviceIfRequested(fd, opt.bind);
+
+        const TcpSocketPolicy p = mergePolicy(cfg.defaults, opt.policy);
+        applyPolicy(fd, af, p);
+
+        if (bindEp.port == 0)
         {
-            ::close(fd);
-            throw std::runtime_error("Tcp error while connecting");
+            if (cfg.ephemeralMin > cfg.ephemeralMax)
+                throw std::runtime_error("Tcp out of ephemeral ports");
+
+            const uint32_t range = static_cast<uint32_t>(cfg.ephemeralMax - cfg.ephemeralMin + 1);
+            bool bound = false;
+
+            for (uint32_t i = 0; i < range; ++i)
+            {
+                bindEp.port = allocateEphemeral();
+                if (bindEndpoint(fd, bindEp))
+                {
+                    bound = true;
+                    break;
+                }
+            }
+
+            if (!bound)
+                throw std::runtime_error("No ephemeral ports open");
         }
-        pending = true;
+        else
+        {
+            if (!bindEndpoint(fd, bindEp))
+                throw std::runtime_error("Tcp error while binding");
+        }
+
+        sockaddr_storage rss{};
+        uint32_t rlen = 0;
+        TcpIpAdapter::writeSocketaddr(remote.address, remote.port, &rss, &rlen);
+
+        int rc = ::connect(fd, reinterpret_cast<sockaddr*>(&rss), static_cast<socklen_t>(rlen));
+
+        if (rc != 0)
+        {
+            if (errno != EINPROGRESS)
+                throw std::runtime_error("Tcp error while connecting");
+            pending = true;
+        }
+    }
+    catch (...)
+    {
+        ::close(fd);
+        throw;
     }
 
     ConnId cid = nextConnId++;
 
-    auto cit = connections.try_emplace(cid, cid, bufferPool, size_t{2048});
+    auto cit = connections.try_emplace(cid, cid, bufferPool, opt.rxBufferSize);
     auto& c = cit.first->second;
 
     c.fd = fd;
@@ -448,15 +453,30 @@ Connection TcpEngine::createConnection(const TcpEndpoint& local, const TcpEndpoi
     return Connection(this, cid, c.bufferTx);
 }
 
-ConnId TcpEngine::adoptAcceptedSocket(ListenerState& lst, int cfd)
+ConnId TcpEngine::adoptAcceptedSocket(ListenerState& lst, int cfd) noexcept
 {
     if (connections.size() >= cfg.maxConnections)
     {
         ::close(cfd);
-        throw std::runtime_error("Tcp no resources");
+        return 0;
     }
 
-    applyPolicy(cfd, lst.af, lst.policyApplied);
+    try
+    {
+        applyPolicy(cfd, lst.af, lst.policyApplied);
+    }
+    catch (...)
+    {
+        ::close(cfd);
+        return 0;
+    }
+
+    TcpSocketKey k{};
+    if (!getLiveKey(cfd, k))
+    {
+        ::close(cfd);
+        return 0;
+    }
 
     ConnId cid = nextConnId++;
 
@@ -470,13 +490,7 @@ ConnId TcpEngine::adoptAcceptedSocket(ListenerState& lst, int cfd)
 
     c.recvCb = lst.recvCallback;
     c.recvUser = lst.recvUser;
-
-    {
-        TcpSocketKey k{};
-        if (!getLiveKey(cfd, k))
-            throw std::runtime_error("Tcp live key not found");
-        c.key = k;
-    }
+    c.key = k;
 
     connections.emplace(cid, std::move(c));
     lst.accepted.push_back(cid);
@@ -487,21 +501,26 @@ ConnId TcpEngine::adoptAcceptedSocket(ListenerState& lst, int cfd)
     return cid;
 }
 
-size_t TcpEngine::acceptLoop(ListenerState& lst, Tcp* tcp, std::span<TcpEvent> acceptEvents, size_t& produced, bool invokeCallbacks) noexcept
+size_t TcpEngine::acceptLoop(ListenId lid, Tcp* tcp, std::span<TcpEvent> acceptEvents, size_t& produced, bool invokeCallbacks) noexcept
 {
     size_t accepted = 0;
 
     while (true)
     {
+        // re-find each iteration: a callback below may have closed the listener
+        auto itl = listeners.find(lid);
+        if (itl == listeners.end()) break;
+        ListenerState& lst = itl->second;
+
         int cfd = ::accept4(lst.fd, nullptr, nullptr, SOCK_CLOEXEC | SOCK_NONBLOCK);
         if (cfd < 0)
         {
             if (errno == EINTR) continue;
-            if (errno == EAGAIN || errno == EWOULDBLOCK) break;
             break;
         }
 
         auto cid = adoptAcceptedSocket(lst, cfd);
+        if (cid == 0) continue;
 
         ++accepted;
 
@@ -510,22 +529,24 @@ size_t TcpEngine::acceptLoop(ListenerState& lst, Tcp* tcp, std::span<TcpEvent> a
 
         if (invokeCallbacks && tcp)
         {
-            auto itc = connections.find(cid);
-            if (itc != connections.end())
-            {
-                if (lst.onAccept)
-                {
-                    Connection conn = Connection{this, itc->second.id, itc->second.bufferTx};
-                    AcceptCallbackCtx ctx{lst.onAcceptUser, *tcp, lst.id, conn, itc->second.key};
-                    lst.onAccept(ctx);
-                }
+            const AcceptCallback onAccept = lst.onAccept;
+            void* const onAcceptUser = lst.onAcceptUser;
 
-                if (itc->second.cb)
-                {
-                    TcpEvent ev{ TcpEventType::ACCEPTED, itc->second.id, {} };
-                    ConnCallbackCtx ctx{itc->second.cbUser, *tcp, itc->second.id, ev, itc->second.key};
-                    itc->second.cb(ctx);
-                }
+            auto itc = connections.find(cid);
+            if (itc != connections.end() && onAccept)
+            {
+                Connection conn{this, cid, itc->second.bufferTx};
+                AcceptCallbackCtx ctx{onAcceptUser, *tcp, lid, conn, itc->second.key};
+                onAccept(ctx);
+                conn.release(); // if the callback didn't take the handle, the listener keeps ownership
+            }
+
+            itc = connections.find(cid); // the callback may have closed the connection
+            if (itc != connections.end() && itc->second.cb)
+            {
+                TcpEvent ev{ TcpEventType::ACCEPTED, cid, {} };
+                ConnCallbackCtx ctx{itc->second.cbUser, *tcp, cid, ev, itc->second.key};
+                itc->second.cb(ctx);
             }
         }
     }
@@ -593,16 +614,56 @@ size_t TcpEngine::flush(ConnId cid) noexcept
     return totalSent;
 }
 
-size_t TcpEngine::listenerFlush(ListenId lid, ConnId cid) noexcept
+size_t TcpEngine::read(ConnId cid, std::span<uint8_t> out) noexcept
 {
-    auto itl = listeners.find(lid);
-    if (itl == listeners.end())
+    auto c = getConnection(cid);
+    if (!c || out.empty()) return 0;
+
+    while (true)
+    {
+        ssize_t n = ::recv(c->fd, out.data(), out.size(), 0);
+        if (n > 0) return static_cast<size_t>(n);
+
+        if (n == 0)
+        {
+            c->peerClosed = true;
+            return 0;
+        }
+
+        if (errno == EINTR) continue;
+        if (errno == EAGAIN || errno == EWOULDBLOCK) return 0;
+
+        TcpError e = mapErrno(errno);
+        if (shouldStickify(e)) c->stickyError = e;
         return 0;
+    }
+}
 
-    auto c = getAcceptedConnectionChecked(lid, cid);
-    if (!c) return 0;
+void TcpEngine::shutdownConnection(ConnId cid, TcpShutdown how) noexcept
+{
+    auto c = getConnection(cid);
+    if (!c) return;
 
-    return flush(cid);
+    if (how != TcpShutdown::READ)
+        (void)flush(cid); // drain buffered TX before the FIN
+
+    const int flag = (how == TcpShutdown::READ)  ? SHUT_RD
+                   : (how == TcpShutdown::WRITE) ? SHUT_WR
+                                                 : SHUT_RDWR;
+    (void)::shutdown(c->fd, flag);
+}
+
+TcpState TcpEngine::connectionState(ConnId cid) const noexcept
+{
+    auto it = connections.find(cid);
+    if (it == connections.end()) return TcpState::CLOSED;
+
+    tcp_info info{};
+    socklen_t len = sizeof(info);
+    if (getsockopt(it->second.fd, IPPROTO_TCP, TCP_INFO, &info, &len) != 0)
+        return TcpState::CLOSED;
+
+    return mapLinuxTcpState(info.tcpi_state);
 }
 
 void TcpEngine::listenerDisconnect(ListenId lid, ConnId cid) noexcept
@@ -631,6 +692,13 @@ void TcpEngine::dropLocalConnections(const types::IPAddress& addr) noexcept
 
 void TcpEngine::closeConnectionInternal(ConnId cid) noexcept
 {
+    // a recv callback closing its own connection: defer until its RxConsumer is destroyed
+    if (cid != 0 && cid == inCallbackCid)
+    {
+        deferredClose = true;
+        return;
+    }
+
     auto it = connections.find(cid);
     if (it == connections.end()) return;
 
@@ -658,13 +726,6 @@ void TcpEngine::closeConnectionInternal(ConnId cid) noexcept
 
 void TcpEngine::closeConnection(ConnId cid) noexcept
 {
-    auto it = connections.find(cid);
-    if (it == connections.end()) return;
-
-    // outbound only
-    if (it->second.ownerListener != 0)
-        return;
-
     closeConnectionInternal(cid);
 }
 
@@ -723,11 +784,9 @@ size_t TcpEngine::pollEvents(std::span<TcpEvent> outEvents, uint32_t timeoutMs) 
         if (isListenerTag(tag))
         {
             ListenId lid = static_cast<ListenId>(unpackId(tag));
-            auto itl = listeners.find(lid);
-            if (itl == listeners.end()) continue;
 
             // Accept by default (no callbacks here).
-            acceptLoop(itl->second, nullptr, outEvents, produced, false);
+            acceptLoop(lid, nullptr, outEvents, produced, false);
             continue;
         }
 
@@ -812,66 +871,55 @@ size_t TcpEngine::pump(Tcp& tcp, uint32_t timeoutMs, size_t maxEvents) noexcept
         if (isListenerTag(tag))
         {
             ListenId lid = static_cast<ListenId>(unpackId(tag));
-            auto itl = listeners.find(lid);
-            if (itl == listeners.end()) continue;
 
             // Accept by default + invoke callbacks.
             size_t dummyProduced = 0;
             std::span<TcpEvent> noEvents{};
-            dispatched += acceptLoop(itl->second, &tcp, noEvents, dummyProduced, true);
+            dispatched += acceptLoop(lid, &tcp, noEvents, dummyProduced, true);
             continue;
         }
 
         ConnId cid = static_cast<ConnId>(unpackId(tag));
-        auto itc = connections.find(cid);
-        if (itc == connections.end()) continue;
+        ConnectionState* c = getConnection(cid);
+        if (!c) continue;
 
-        auto& c = itc->second;
-
-        if (c.connectPending && (e & (EPOLLOUT | EPOLLERR | EPOLLHUP)))
+        if (c->connectPending && (e & (EPOLLOUT | EPOLLERR | EPOLLHUP)))
         {
             int err = 0;
             socklen_t elen = sizeof(err);
-            if (getsockopt(c.fd, SOL_SOCKET, SO_ERROR, &err, &elen) == 0)
+            if (getsockopt(c->fd, SOL_SOCKET, SO_ERROR, &err, &elen) == 0 && err == 0)
             {
-                if (err == 0)
-                {
-                    c.connectPending = false;
-                    dispatchConnectEvent(tcp, cid, TcpEventType::CONNECTED, {});
-                    ++dispatched;
-                }
-                else
-                {
-                    c.stickyError = mapErrno(err);
-                    dispatchConnectEvent(tcp, cid, TcpEventType::ERROR, c.stickyError);
-                    ++dispatched;
-                    continue;
-                }
+                c->connectPending = false;
+                dispatchConnectEvent(tcp, cid, TcpEventType::CONNECTED, {});
+                ++dispatched;
             }
             else
             {
-                c.stickyError = mapErrno(errno);
-                dispatchConnectEvent(tcp, cid, TcpEventType::ERROR, c.stickyError);
+                c->stickyError = mapErrno(err != 0 ? err : errno);
+                dispatchConnectEvent(tcp, cid, TcpEventType::ERROR, c->stickyError);
                 ++dispatched;
                 continue;
             }
+
+            c = getConnection(cid); // the callback may have closed it
+            if (!c) continue;
         }
 
         if (e & EPOLLIN)
         {
             // If recvCb is set, we deliver bytes and DO NOT require public recv().
-            if (c.recvCb)
+            if (c->recvCb)
             {
                 while (true)
                 {
-                    ssize_t rn = ::recv(c.fd, ioScratch.data(), ioScratch.size(), 0);
+                    ssize_t rn = ::recv(c->fd, ioScratch.data(), ioScratch.size(), 0);
                     if (rn < 0)
                     {
                         if (errno == EINTR) continue;
                         if (errno == EAGAIN || errno == EWOULDBLOCK) break;
 
                         TcpError er = mapErrno(errno);
-                        if (shouldStickify(er)) c.stickyError = er;
+                        if (shouldStickify(er)) c->stickyError = er;
                         dispatchConnectEvent(tcp, cid, TcpEventType::ERROR, er);
                         ++dispatched;
                         break;
@@ -879,19 +927,33 @@ size_t TcpEngine::pump(Tcp& tcp, uint32_t timeoutMs, size_t maxEvents) noexcept
 
                     if (rn == 0)
                     {
-                        c.peerClosed = true;
+                        c->peerClosed = true;
                         dispatchConnectEvent(tcp, cid, TcpEventType::PEER_CLOSED, {});
                         ++dispatched;
                         break;
                     }
 
-                    //std::span<const uint8_t> data(ioScratch.data(), static_cast<size_t>(rn));
-                    RxConsumer consumer = c.bufferRx.consume(ioScratch);
-                    RecvCallbackCtx ctx{c.recvUser, tcp, cid, consumer, c.key};
-
-                    c.recvCb(ctx);
-
+                    // closes from inside the callback are deferred so the RxConsumer commits into live state
+                    inCallbackCid = cid;
+                    deferredClose = false;
+                    {
+                        RxConsumer consumer = c->bufferRx.consume(
+                            std::span<uint8_t>(ioScratch.data(), static_cast<size_t>(rn)));
+                        RecvCallbackCtx ctx{c->recvUser, tcp, cid, consumer, c->key};
+                        c->recvCb(ctx);
+                    }
+                    inCallbackCid = 0;
                     ++dispatched;
+
+                    if (deferredClose)
+                    {
+                        deferredClose = false;
+                        closeConnectionInternal(cid);
+                        break;
+                    }
+
+                    c = getConnection(cid);
+                    if (!c) break;
                 }
             }
             else
@@ -899,31 +961,40 @@ size_t TcpEngine::pump(Tcp& tcp, uint32_t timeoutMs, size_t maxEvents) noexcept
                 dispatchConnectEvent(tcp, cid, TcpEventType::READABLE, {});
                 ++dispatched;
             }
+
+            c = getConnection(cid); // callbacks above may have closed it
+            if (!c) continue;
         }
 
         if (e & EPOLLOUT)
         {
             dispatchConnectEvent(tcp, cid, TcpEventType::WRITABLE, {});
             ++dispatched;
+
+            c = getConnection(cid);
+            if (!c) continue;
         }
 
         if (e & EPOLLRDHUP)
         {
-            c.peerClosed = true;
+            c->peerClosed = true;
             dispatchConnectEvent(tcp, cid, TcpEventType::PEER_CLOSED, {});
             ++dispatched;
+
+            c = getConnection(cid);
+            if (!c) continue;
         }
 
         if (e & EPOLLERR)
         {
             int err = 0;
             socklen_t elen = sizeof(err);
-            if (getsockopt(c.fd, SOL_SOCKET, SO_ERROR, &err, &elen) == 0 && err != 0)
-                c.stickyError = mapErrno(err);
+            if (getsockopt(c->fd, SOL_SOCKET, SO_ERROR, &err, &elen) == 0 && err != 0)
+                c->stickyError = mapErrno(err);
             else
-                c.stickyError = TcpError{TcpErrc::SYSTEM_ERROR, 0};
+                c->stickyError = TcpError{TcpErrc::SYSTEM_ERROR, 0};
 
-            dispatchConnectEvent(tcp, cid, TcpEventType::ERROR, c.stickyError);
+            dispatchConnectEvent(tcp, cid, TcpEventType::ERROR, c->stickyError);
             ++dispatched;
         }
     }

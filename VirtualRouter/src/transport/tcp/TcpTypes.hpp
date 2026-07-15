@@ -357,7 +357,8 @@ struct ListenOptions final
     ListenOptions() {}
     TcpSocketPolicy policy{};
     TcpInterfaceBind bind{};
-    size_t backlog{128}; ///< Depth of the OS listen() backlog queue.
+    size_t backlog{128};        ///< Depth of the OS listen() backlog queue.
+    size_t rxBufferSize{2048};  ///< Initial RX buffer capacity for each accepted connection.
 
     AcceptCallback onAccept{nullptr};   ///< Called once per newly accepted connection.
     void* onAcceptUser{nullptr};        ///< Opaque user pointer passed to @ref onAccept.
@@ -378,6 +379,7 @@ struct ConnectOptions final
     ConnectOptions() {}
     TcpSocketPolicy policy{};
     TcpInterfaceBind bind{};
+    size_t rxBufferSize{2048}; ///< Initial RX buffer capacity for this connection.
 
     ConnCallback callback{nullptr};   ///< Called on connect completion, errors, and close.
     void* callbackUser{nullptr};      ///< Opaque user pointer passed to @ref callback.
@@ -439,7 +441,7 @@ struct TcpIpAdapter final
             sin.sin_family = AF_INET;
             sin.sin_port = htons(portIn);
 
-            sin.sin_addr.s_addr = ipIn.v4(); // v4() returns network-byte-order uint32_t
+            sin.sin_addr.s_addr = htonl(ipIn.v4()); // v4() returns host-byte-order uint32_t
 
             std::memcpy(ss, &sin, sizeof(sin));
             *socklenOut = sizeof(sockaddr_in);
