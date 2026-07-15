@@ -287,7 +287,7 @@ protected:
     void scheduleRequest(types::IPv4Address targetIp, ArpCacheEntry& entry);
 
     core::Global& global;           ///< Global configuration and routing-enabled flag.
-    core::ProcessQueueRef scheduler; ///< Control-plane scheduler; all cache mutations run here.
+    core::ProcessQueue scheduler; ///< Control-plane scheduler; all cache mutations run here.
 };
 } // namespace infrastructure
 

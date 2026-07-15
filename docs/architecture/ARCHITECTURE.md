@@ -555,73 +555,98 @@ can't enforce the boundary it depends on.
 
 #### Design Decision
 
-**Serialization via `scheduled` atomic CAS, not a dedicated thread.**
+**Serialization via a per-queue drain state machine, not a dedicated thread.**
 
-`ControlScheduler` has no thread of its own. Each `ProcessQueue` carries an
-atomic flag tracking whether a drain is already scheduled. When a producer posts
-a task, it atomically claims the flag. If it's the first to claim it, it submits
-a drain task to the ThreadPool — otherwise a drain is already in flight and will
-pick up the new item automatically.
+`ControlScheduler` has no thread of its own. Each queue carries one atomic
+`runState` word with four states — `IDLE`, `SCHEDULED`, `RUNNING`,
+`RESCHEDULED`. A poster publishes its task into the queue's ring, then reads
+`runState` **with an atomic RMW** and acts on what it sees: `IDLE` → claim
+`SCHEDULED` and submit one drain task to the ThreadPool; `RUNNING` → flag
+`RESCHEDULED` so the running drain loops again; `SCHEDULED`/`RESCHEDULED` →
+nothing, a pass that is obligated to see the item is already due. The drain
+claims `RUNNING` on entry, consumes until empty, and exits by CAS-ing back to
+`IDLE`; if a poster flagged `RESCHEDULED` in the meantime the CAS fails and the
+drain rescans instead of exiting.
 
-The drain runs on whichever ThreadPool worker picks it up, consuming tasks one
-at a time across sub-queues in round-robin order. When the queue appears empty,
-the drain clears the flag — but immediately checks again for items that arrived
-in the window between the last consume and the flag clear. If any are found, it
-reclaims the flag and continues rather than exiting. This double-check closes
-the race without any locking.
+Every transition on `runState` is a read-modify-write, never a plain load or
+store. This is load-bearing, not style: an RMW is required to read the latest
+value in the variable's modification order and to synchronize with the poster
+that published the item. Two lost-wakeup bugs were reproduced on x86 where a
+plain load (poster side) or a plain resume-store (drain side) let a fully
+published task strand in the ring with the queue idle — at frequencies around
+one in 10⁵–10⁶ posts. If you touch this protocol, keep every transition an RMW.
 
 At most one drain runs per queue at any moment. Tasks execute strictly one at a
-time in FIFO order within each sub-queue. The thread that runs the drain can
-change between cycles — the single-threaded invariant holds within a cycle,
-not across them.
+time in FIFO order. The thread that runs the drain can change between cycles —
+the single-threaded invariant holds within a cycle, not across them.
 
 Rejected alternative: A dedicated thread per queue or a single global scheduler
 thread. A dedicated thread per queue sits idle most of the time and costs OS
 resources proportional to how many protocol processes exist. A global scheduler
 thread becomes a serialization bottleneck for all queues simultaneously.
-Multiplexing over the shared `ThreadPool` via the `scheduled` CAS gets
-single-threaded-per-queue semantics with zero thread overhead for idle queues.
-Switching to mutex-based queues would reintroduce lock contention on every
-enqueue from hardware RX threads and the TCP engine, and on the egress free
-ring from every forwarding thread claiming a frame slot.
+Multiplexing over the shared `ThreadPool` gets single-threaded-per-queue
+semantics with zero thread overhead for idle queues. Switching to mutex-based
+queues would reintroduce lock contention on every enqueue from hardware RX
+threads and the TCP engine.
 
-**Sub-queue round-robin:** Up to 8 labeled sub-queues per `ProcessQueue` let
-callers separate work classes (e.g., TIMERS, RX, NOTIFICATIONS for BGP). The
-drain walks sub-queues in round-robin order, one task per sub-queue per pass. A
-burst of RX tasks can't starve TIMER tasks — each sub-queue gets a turn.
+Rejected alternative: Labeled sub-queues (up to 8 per queue, drained
+round-robin) existed for priority separation but never gained a production
+consumer. They were removed: each queue is exactly one task ring, which keeps
+every concurrency argument one-dimensional.
 
-**Timer integration:** `ProcessQueue::schedule()` registers a `DelayedSlot` with
-the `TimeManager`. When the timer fires, `onTimerFired` runs on the TimeManager
-thread and immediately posts the delayed task through the normal `post()` path.
-Timer callbacks arrive at the protocol process serialized with everything else —
-there's no separate timer execution context to worry about.
+**One handle class, two roles:** `ProcessQueue` is a single move-only handle
+covering both ownership and borrowing. The handle returned by
+`ControlScheduler::create()` owns the queue — its `reset()`/destructor closes
+it, discards pending tasks, and recycles the slot. `ref()` returns a borrowing
+`ProcessQueue` that can post but never destroys, and may safely outlive the
+queue (posts through a stale handle are dropped). There is no separate ref
+class; owner and borrower share one type and one lifetime protocol.
 
-**Generation counters:** Each `ProcessQueueSlot` carries a generation counter
-that increments on slot recycling. Posts to a slot whose generation has advanced
-are silently dropped, preventing ABA use-after-recycle errors when a queue is
-destroyed and its slot is immediately reused for a different process.
+**Handle lifetime safety:** Every handle carries an `alive` flag and a
+`pending` counter. `release()` (run by the destructor too) sets
+`alive = false`, cancels the handle's outstanding timers, and blocks until
+every task posted through it has executed or been discarded. After it returns,
+no lambda from this handle touches protocol code — every protocol destructor
+depends on this. Releasing from *inside* one of the handle's own tasks is
+supported: the current task is exempted from the wait and remaining queued work
+is pumped inline on the drain thread, so teardown-from-task cannot deadlock.
 
-**`ProcessQueueRef` lifetime safety:** A ref adds an `alive` flag and a `pending`
-counter on top of the base queue. Tasks posted through a ref capture the flag and
-check it before executing — if the ref has been released, the task is a no-op.
-`release()` sets `alive = false`, cancels outstanding timers, then blocks until
-`pending` reaches zero. After it returns, no lambda from this ref touches
-protocol code. Every protocol destructor depends on this guarantee.
+**Destruction safety:** Every thread touching a queue's ring memory (post,
+drain, waitIdle) holds the slot's `accessors` guard. Destruction claims the
+slot's generation with a single CAS — claim and invalidation are one atomic
+step — then waits for `accessors == 0` before freeing the ring. Ring memory is
+never reclaimed under a reader, and a stale handle can never post into a
+recycled slot.
+
+**Timer integration:** `ProcessQueue::postAfter()` registers a `DelayedSlot`
+with the `TimeManager`. When the timer fires, `onTimerFired` claims the slot
+and posts the delayed task through the normal `post()` path, so timer callbacks
+arrive at the protocol process serialized with everything else. Fire and cancel
+arbitrate through one atomic `genClaim` word — `(generation << 1) | claimed` —
+so claiming a slot for a specific generation is a single CAS and a stale
+`cancel()` can never hijack a slot that was freed and recycled in between. If a
+fired task's trampoline cannot be posted because the ring is momentarily full,
+the timer is re-armed a millisecond out rather than silently dropped. The
+delayed-slot free list is a tagged (ABA-proof) Treiber stack.
 
 #### Invariants
 
 - At most one drain task runs per `ProcessQueue` at any moment, enforced by the
-  `scheduled` CAS. Two concurrent drains would produce two execution contexts for
-  the same protocol process, requiring locks on all protocol state.
-- All tasks in a queue execute one at a time, strictly ordered within each
-  sub-queue. Protocol code that assumes this and has no internal locks is
-  correct by design — break this invariant and it needs locks everywhere.
+  `runState` state machine. Two concurrent drains would produce two execution
+  contexts for the same protocol process, requiring locks on all protocol state.
+- All tasks in a queue execute one at a time in FIFO order. Protocol code that
+  assumes this and has no internal locks is correct by design — break this
+  invariant and it needs locks everywhere.
+- Every `runState` transition is an atomic RMW. A plain load or store on this
+  variable reintroduces a lost-wakeup race that strands published tasks.
 - Timer callbacks arrive through the same `post()` path as all other events and
   are serialized with them. Any timer callback that bypasses the queue and calls
   protocol code directly is a race with the ProcessQueue consumer.
-- After `ProcessQueueRef::release()` returns, no task posted through that ref
-  executes any protocol code. Every protocol object that uses a ref to receive
-  events relies on this to safely destroy itself.
+- After `ProcessQueue::release()` returns, no task posted through that handle
+  executes any protocol code. Every protocol object that uses a borrowed handle
+  to receive events relies on this to safely destroy itself.
+- Queue ring memory is only freed after the generation is claimed and the
+  slot's accessor count is observed at zero.
 
 ---
 
@@ -650,7 +675,7 @@ design was built to eliminate.
 >
 > Constraint: Protocol state is single-threaded by design. The timer thread executing protocol code breaks that by creating a second thread for each process.
 >
-> Mechanism: The timer thread posts a closure to the target `ProcessQueueRef` and returns immediately. If a timer fires after cancellation is requested but before the cancel takes effect, the generation mismatch check in the callback catches it and exits without touching any protocol state.
+> Mechanism: The timer thread posts a closure to the target `ProcessQueue` handle and returns immediately. If a timer fires after cancellation is requested but before the cancel takes effect, the generation mismatch check in the callback catches it and exits without touching any protocol state.
 >
 > Trade-offs: Timer-driven reactions are delayed by one scheduler quantum instead of being immediate. Bounded timer thread latency is worth that — the alternative requires locks everywhere.
 

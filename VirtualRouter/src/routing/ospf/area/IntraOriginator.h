@@ -8,7 +8,6 @@
 
 #include "ospf/database/LsdbTypes.hpp"
 
-namespace core { class ProcessQueueRef; }
 namespace config { struct OspfAreaRegistry; struct OspfRegistry; struct OspfInterfaceBaseRegistry; }
 class Internal_OspfTest;
 

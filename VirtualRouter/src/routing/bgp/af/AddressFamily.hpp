@@ -50,12 +50,11 @@ struct AddressFamily;
 /// @cond DETAIL
 template <AfiSafi AF, typename T, typename... Rest>
 struct AddressFamily<AF, std::variant<T, Rest...>>
+    : std::conditional_t<(T::afi == AF),
+          std::type_identity<T>,
+          AddressFamily<AF, std::variant<Rest...>>>
 {
-    using type = std::conditional_t<
-        (T::afi == AF),
-        T,
-        typename detail::AddressFamily<AF, std::variant<Rest...>>::type
-    >;
+    // inheritance keeps the non-matching branch uninstantiated; conditional_t on ::type would recurse eagerly and hit the terminator's static_assert
 };
 
 template <AfiSafi AF>

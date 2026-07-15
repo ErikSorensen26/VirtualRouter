@@ -51,7 +51,7 @@ namespace routing::ospf
  *
  * ## Architectural Role
  * Owned by an @ref Area. All originations are serialized through the area's
- * `ProcessQueueRef`. The class does not transmit LSAs itself; once an LSA body is
+ * `ProcessQueue`. The class does not transmit LSAs itself; once an LSA body is
  * built it is handed to the base-class `originateLsa<Policy>()` which drives the
  * throttle / group-pacing machinery before flooding.
  *

@@ -179,7 +179,7 @@ private:
     std::unordered_map<WatchId, AddrWatchState> addrWatches; ///< Active address-level watches.
 
     Fib<Addr>&             fib;           ///< FIB reference used for re-resolution in address watches.
-    ProcessQueueRef        scheduler;     ///< Scheduler queue for serialising callback delivery.
+    ProcessQueue        scheduler;     ///< Scheduler queue for serialising callback delivery.
     std::atomic<WatchId>   nextId{1};     ///< Monotone counter for new watch IDs.
     types::AtomicStack<uint32_t> availableIds; ///< Recycled watch IDs.
 

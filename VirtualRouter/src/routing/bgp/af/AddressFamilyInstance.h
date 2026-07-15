@@ -2352,7 +2352,7 @@ private:
     {
         AddressFamilyInstance* self;
         types::IPAddress              nextHop;
-        core::ProcessQueueRef        bgpSched;
+        core::ProcessQueue        bgpSched;
     };
 
     /**
@@ -2635,7 +2635,7 @@ private:
     {
         AddressFamilyInstance* self;
         NlriT                  nlri;
-        core::ProcessQueueRef        bgpSched;
+        core::ProcessQueue        bgpSched;
     };
 
     /**

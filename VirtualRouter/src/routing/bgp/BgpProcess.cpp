@@ -14,7 +14,6 @@ BgpProcess::BgpProcess(uint32_t as, core::VirtualRouter* vrf)
     : routingInstance(vrf),
       asNumber(as),
       scheduler(vrf->getControlScheduler().create()),
-      selfRef(scheduler.ref()),
       ntable(*this),
       configs(vrf->getConfigs().get<config::Vrf::ROUTER_BGP>().get())
 {
@@ -40,11 +39,7 @@ BgpProcess::BgpProcess(uint32_t as, core::VirtualRouter* vrf)
 
 BgpProcess::~BgpProcess()
 {
-    // Release selfRef first: this blocks until any in-flight self-posted task
-    // (e.g. doEstablish() from onSessionEstablished, or scheduleScan()'s
-    // re-arming scan timer) finishes, and rejects any further posts, before
-    // ntable/attrMgr/addressFamilies/sessions are torn down below.
-    selfRef.release();
+    scheduler.release();
 }
 
 Session* BgpProcess::findSession(const types::IPAddress& addr)
@@ -125,7 +120,7 @@ void BgpProcess::onSessionEstablished(Session& session)
     {
         const types::IPAddress peerAddr = nbr.neighborAddress;
         const uint16_t delaySecs = delayField.load();
-        selfRef.postAfter(
+        scheduler.postAfter(
             std::chrono::steady_clock::now() + std::chrono::seconds(delaySecs),
             [doEstablish, peerAddr](uint32_t) mutable { doEstablish(peerAddr); });
     }
@@ -298,7 +293,7 @@ void BgpProcess::onReceiveCallback(transport::tcp::RecvCallbackCtx& ctx) noexcep
 void BgpProcess::scheduleScan()
 {
     uint8_t secs = configs.get<config::Bgp::BGP_SCAN_TIME>().load();
-    selfRef.postAfter(
+    scheduler.postAfter(
         std::chrono::steady_clock::now() + std::chrono::seconds(secs),
         [this](uint32_t) {
             for (auto& [afi, af] : addressFamilies)

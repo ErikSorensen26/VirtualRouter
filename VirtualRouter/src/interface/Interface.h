@@ -363,7 +363,7 @@ public:
      * @brief Returns the control-plane scheduler owned by this interface.
      *
      * All per-interface protocol work (ARP, NDP, EIGRP interface timers) is
-     * serialized through this queue. Callers obtain a @ref core::ProcessQueueRef
+     * serialized through this queue. Callers obtain a @ref core::ProcessQueue
      * from it via @c ref().
      */
     core::ProcessQueue& getScheduler() { return scheduler; }

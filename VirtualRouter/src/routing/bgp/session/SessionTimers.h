@@ -178,7 +178,7 @@ private:
     bool cancel(std::atomic<uint32_t>& timerId) noexcept;
 
     Session& session;                   ///< Owning session; receives FSM events when timers fire.
-    core::ProcessQueueRef& scheduler;   ///< Scheduler used to post timer-expiry events to the BGP thread.
+    core::ProcessQueue& scheduler;   ///< Scheduler used to post timer-expiry events to the BGP thread.
 
     std::atomic<uint32_t> connectionRetryTimerId{0}; ///< Scheduler token for the ConnectRetry timer; 0 = not running.
     std::atomic<uint32_t> holdTimerId{0};            ///< Scheduler token for the Hold timer; 0 = not running.

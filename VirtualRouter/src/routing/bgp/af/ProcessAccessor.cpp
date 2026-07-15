@@ -35,7 +35,7 @@ AttributeManager& ProcessAccessor::getAttrMgr(BgpProcess& proc)
     return proc.getAttrMgr();
 }
 
-core::ProcessQueueRef& ProcessAccessor::getScheduler(BgpProcess& proc)
+core::ProcessQueue& ProcessAccessor::getScheduler(BgpProcess& proc)
 {
     return proc.getScheduler();
 }

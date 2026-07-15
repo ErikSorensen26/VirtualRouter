@@ -190,7 +190,7 @@ private:
     Eigrp* base;                      ///< Owning EIGRP process (used to post work items).
     EigrpInterface& iface;            ///< The interface these timers belong to.
     core::ProcessQueue& scheduler;    ///< Scheduler used to register and cancel timers.
-    core::ProcessQueueRef ref;        ///< Lifetime-safe ref; gates and waits on in-flight timer callbacks.
+    core::ProcessQueue ref;        ///< Lifetime-safe ref; gates and waits on in-flight timer callbacks.
 };
 } // namespace routing::eigrp
 

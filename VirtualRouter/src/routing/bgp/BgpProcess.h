@@ -283,13 +283,7 @@ public:
      * `sessions` are torn down, so that no posted task can run against a
      * partially-destroyed `BgpProcess`.
      */
-    core::ProcessQueueRef& getScheduler() { return selfRef; }
-
-    /**
-     * @brief Returns the underlying scheduler queue, for subsystems (e.g.
-     *        @ref Neighbor) that mint their own `ProcessQueueRef`.
-     */
-    core::ProcessQueue& getSchedulerQueue() { return scheduler; }
+    core::ProcessQueue& getScheduler() { return scheduler; }
 
 private:
 
@@ -301,7 +295,6 @@ private:
     std::unordered_map<AfiSafi, AddressFamilyVariant> addressFamilies;   ///< Enabled AFI/SAFI instances.
 
     core::ProcessQueue scheduler; ///< Single-threaded event queue; all BGP FSM work runs here.
-    core::ProcessQueueRef selfRef; ///< Lifetime-safe ref for self-referencing posts; released first in ~BgpProcess().
     AttributeManager attrMgr;     ///< Flyweight store for path attributes shared across all sessions.
     NeighborTable ntable;         ///< Configured and dynamic neighbor registry.
 

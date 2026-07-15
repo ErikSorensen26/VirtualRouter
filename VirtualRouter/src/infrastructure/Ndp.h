@@ -362,7 +362,7 @@ private:
     std::atomic<bool> running;                                            ///< True while NDP is operational.
 
     core::Global&       global;                                           ///< Global configuration and routing state.
-    core::ProcessQueueRef scheduler;                                      ///< Control-plane scheduler; all mutations run here.
+    core::ProcessQueue scheduler;                                      ///< Control-plane scheduler; all mutations run here.
 
 protected:
 

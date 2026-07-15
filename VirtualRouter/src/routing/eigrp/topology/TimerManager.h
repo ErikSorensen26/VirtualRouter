@@ -90,7 +90,7 @@ public:
 private:
 
     Eigrp& base;                       ///< Owning process; provides SIA timeout configuration.
-    core::ProcessQueueRef scheduler;   ///< Lifetime-safe ref used for timer callback delivery.
+    core::ProcessQueue scheduler;   ///< Lifetime-safe ref used for timer callback delivery.
 };
 } // namespace routing::eigrp
 

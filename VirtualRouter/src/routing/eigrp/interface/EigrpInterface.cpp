@@ -21,7 +21,7 @@ EigrpInterface::EigrpInterface(Eigrp& eigrpSystem, config::EigrpInterfaceRegistr
     auth(ifaceReg, eigrpSystem.routingInstance->getGlobal().keyChainManager),
     metrics(*this),
     aggregator(*this),
-    tmgr(*this, eigrpSystem.getSchedulerQueue())
+    tmgr(*this, eigrpSystem.getScheduler())
 {
     configs.context().set(this);
 

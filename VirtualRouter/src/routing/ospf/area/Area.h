@@ -441,7 +441,7 @@ private:
         const std::unordered_map<types::IPPrefix, AreaRange>& ranges
     );
 
-    core::ProcessQueueRef scheduler; ///< Reference to the owning process scheduler; all area work is serialized through this.
+    core::ProcessQueue scheduler; ///< Reference to the owning process scheduler; all area work is serialized through this.
     OriginatorContext originContext; ///< Origination mechanism: throttle back-off, group-paced refresh, and the LSDB install path.
     IntraOriginator& originator; ///< Version-specific intra-area originator (Router/Network LSAs); heap-allocated by IntraOriginator::create(), deleted in ~Area().
     IntraRouteManager routeManager; ///< Derives this area's intra-area prefix routes from SPF results.

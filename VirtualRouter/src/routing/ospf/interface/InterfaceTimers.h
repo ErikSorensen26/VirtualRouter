@@ -70,7 +70,7 @@ public:
      *
      * @param iface  The owning OSPF interface.
      */
-    explicit InterfaceTimers(OspfInterface& iface, core::ProcessQueueRef&& scheduler);
+    explicit InterfaceTimers(OspfInterface& iface, core::ProcessQueue&& scheduler);
 
     /**
      * @brief Arms the Hello timer for a single future firing without starting
@@ -187,7 +187,7 @@ private:
 
     std::atomic<bool> runTimers = true; ///< Set to false during teardown to suppress in-flight callbacks.
 
-    core::ProcessQueueRef scheduler; ///< Scheduler used to post all timer callbacks.
+    core::ProcessQueue scheduler; ///< Scheduler used to post all timer callbacks.
 
     OspfInterface& iface; ///< The interface that owns this timer manager.
 };

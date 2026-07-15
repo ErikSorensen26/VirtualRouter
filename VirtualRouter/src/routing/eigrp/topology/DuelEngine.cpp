@@ -10,7 +10,7 @@
 
 namespace routing::eigrp
 {
-DuelEngine::DuelEngine(Eigrp& process) : base(process), topologyTable(process), tmgr(process, process.getSchedulerQueue()) {}
+DuelEngine::DuelEngine(Eigrp& process) : base(process), topologyTable(process), tmgr(process, process.getScheduler()) {}
 
 bool DuelEngine::isRouteAdvertised(const uint8_t* network, uint8_t mask)
 {

@@ -304,8 +304,7 @@ private:
 
     OspfRib rib; ///< SPF-computed routes awaiting installation into the global RIB.
     TopologyTable table; ///< Process-wide topology table used for SPF and route computation.
-    core::ProcessQueue schedulerMgr; ///< Serialization queue for all LSA/SPF/origination work.
-    core::ProcessQueueRef scheduler; ///< Lifetime-safe ref for self-referencing posts; released first in ~OspfProcess().
+    core::ProcessQueue scheduler; ///< Serialization queue for all LSA/SPF/origination work.
 
     InterOriginator interOriginator;       ///< ABR role: inter-area summary / ASBR-reachability origination.
     ExternalOriginator externalOriginator; ///< ASBR role: external LSA origination; owns the process-wide external LSDB.

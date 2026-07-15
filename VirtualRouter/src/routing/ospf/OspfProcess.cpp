@@ -19,8 +19,7 @@ OspfProcess::OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, co
       af(af),
       routingInstance(vrf),
       rib(*this),
-      schedulerMgr(vrf->getControlScheduler().create()),
-      scheduler(schedulerMgr.ref()),
+      scheduler(vrf->getControlScheduler().create()),
       interOriginator(*this),
       externalOriginator(*this),
       externalRouteManager(*this),
@@ -106,9 +105,6 @@ OspfProcess::~OspfProcess()
         ifMgr.unsubscribe(interface::InterfaceManager::IPv6EventMgr::Id{priv.ipDelId});
     }
 
-    // Release selfRef first: this blocks until any in-flight self-posted task
-    // (e.g. refreshInterfaceList() or initiateReset()'s area.reset()) finishes,
-    // and rejects any further posts, before ifaceMgr/areas are torn down below.
     scheduler.release();
 
     ifaceMgr.deactivateAll();

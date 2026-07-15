@@ -8,7 +8,7 @@
 
 namespace routing::ospf
 {
-InterfaceTimers::InterfaceTimers(OspfInterface& iface, core::ProcessQueueRef&& s)
+InterfaceTimers::InterfaceTimers(OspfInterface& iface, core::ProcessQueue&& s)
     : scheduler(std::move(s)), iface(iface)
 {
 }

@@ -293,19 +293,10 @@ public:
     inline void routerID(uint32_t id) { rid.id = id; rid.isStatic = true; }
 
     /**
-     * @brief Returns a lifetime-safe ref for posting self-referencing tasks
-     *        (e.g. config-change appliers that capture `this`).
-     *
-     * Released first in `~Eigrp()`, before any members are torn down, so that
-     * no posted task can run against a partially-destroyed `Eigrp`.
-     */
-    core::ProcessQueueRef& getScheduler() { return selfRef; }
-
-    /**
      * @brief Returns the underlying scheduler queue, for subsystems that mint
-     *        their own `ProcessQueueRef` (e.g. per-interface timers).
+     *        their own `ProcessQueue` (e.g. per-interface timers).
      */
-    core::ProcessQueue& getSchedulerQueue() { return scheduler; }
+    core::ProcessQueue& getScheduler() { return scheduler; }
 
     /**
      * @brief Blocks until the underlying scheduler queue has drained all
@@ -331,7 +322,6 @@ private:
     const types::AddressFamily addressFamily; ///< Address family (IPv4 or IPv6).
 
     core::ProcessQueue scheduler; ///< Serializes all EIGRP protocol work for this process.
-    core::ProcessQueueRef selfRef; ///< Lifetime-safe ref for self-referencing posts; released first in ~Eigrp().
 
     EigrpTopology topology;     ///< Topology table + DUAL engine.
     InterfaceManager ifaceMgr;  ///< Manages per-interface EIGRP state.

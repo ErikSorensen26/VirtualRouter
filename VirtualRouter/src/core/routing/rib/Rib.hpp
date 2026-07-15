@@ -83,7 +83,6 @@ class Rib
     std::atomic<size_t> siz{};
     std::unordered_map<PrefixKey<AddrType>, RibBucket<AddrType>*, PrefixHash<AddrType>> table; ///< Prefix-to-bucket map.
     ProcessQueue            scheduler;    ///< Serialises all RIB mutations.
-    ProcessQueueRef         selfRef;      ///< Lifetime-safe ref for self-referencing posts; released in ~Rib() after the final clear() completes.
     Fib<AddrType>           fib;          ///< Forwarding table updated after each best-path run.
     RouteWatcher<AddrType>  routeWatcher; ///< Subscription manager for route-change callbacks.
 
@@ -100,7 +99,7 @@ public:
      * @param s `ProcessQueue` used to serialise all state mutations.
      *          Must be created via `ControlScheduler::create()`.
      */
-    Rib(ProcessQueue&& s) : scheduler(std::move(s)), selfRef(scheduler.ref()), routeWatcher(fib, scheduler) {}
+    Rib(ProcessQueue&& s) : scheduler(std::move(s)), routeWatcher(fib, scheduler) {}
 
     Rib(const Rib&)            = delete;
     Rib& operator=(const Rib&) = delete;
@@ -115,7 +114,7 @@ public:
     ~Rib()
     {
         clear();
-        selfRef.release();
+        scheduler.release();
     }
 
     // ROUTE INSTALLATION
@@ -130,7 +129,7 @@ public:
      */
     void addRoutes(std::vector<RibEntry<AddrType>*>& es)
     {
-        selfRef.post([this, routes = std::move(es)]() {
+        scheduler.post([this, routes = std::move(es)]() {
             for (const auto* rt : routes)
                 installRoute(rt);
             if (siz.load(std::memory_order_relaxed) != table.size())
@@ -147,7 +146,7 @@ public:
      */
     void addRoute(const RibEntry<AddrType>* e)
     {
-        selfRef.post([this, e]() {
+        scheduler.post([this, e]() {
             installRoute(e);
             if (siz.load(std::memory_order_relaxed) != table.size())
                 siz.store(table.size(), std::memory_order_release);
@@ -165,7 +164,7 @@ public:
     template <types::IsIPPrefix Prefix>    
     void removeRoutes(std::vector<Prefix>& withdraws, RouteSource src, uint64_t pid = 0)
     {
-        selfRef.post([this, ws = std::move(withdraws), src, pid]() {
+        scheduler.post([this, ws = std::move(withdraws), src, pid]() {
             for (const auto& w : ws)
                 withdrawRoute(w.addr, w.prefixLength, src, pid);
         });
@@ -180,7 +179,7 @@ public:
      */
     void removeRoute(AddrType prefix, uint8_t length, RouteSource src, uint64_t pid = 0)
     {
-        selfRef.post([this, prefix, length, src, pid]() {
+        scheduler.post([this, prefix, length, src, pid]() {
             withdrawRoute(prefix, length, src, pid);
         });
     }
@@ -260,7 +259,7 @@ public:
      */
     void clear() noexcept
     {
-        selfRef.post([this]() {
+        scheduler.post([this]() {
             fib.clear();
 
             for (auto& kv : table)

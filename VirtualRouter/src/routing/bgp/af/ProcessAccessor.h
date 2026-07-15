@@ -12,7 +12,7 @@
 
 #include "configs/registry/router/BgpRegistry.h"
 
-namespace core { class VirtualRouter; class ProcessQueue; class ProcessQueueRef; }
+namespace core { class VirtualRouter; class ProcessQueue; }
 
 namespace routing::bgp
 {
@@ -94,11 +94,11 @@ public:
      *
      * @param proc  The `BgpProcess` to query.
      */
-    static core::ProcessQueueRef& getScheduler(BgpProcess& proc);
+    static core::ProcessQueue& getScheduler(BgpProcess& proc);
 
     /**
      * @brief Returns the underlying scheduler queue of `proc`, for minting
-     *        independent `ProcessQueueRef`s (e.g. for `Neighbor`, NHT/network
+     *        independent `ProcessQueue`s (e.g. for `Neighbor`, NHT/network
      *        watch contexts).
      *
      * @param proc  The `BgpProcess` to query.

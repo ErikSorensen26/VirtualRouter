@@ -130,8 +130,8 @@ public:
 
     NeighborConfigs& getConfigs() { return configs; }
     const NeighborConfigs& getConfigs() const { return configs; }
-    core::ProcessQueueRef& getScheduler() { return scheduler; }
-    const core::ProcessQueueRef& getScheduler() const { return scheduler; }
+    core::ProcessQueue& getScheduler() { return scheduler; }
+    const core::ProcessQueue& getScheduler() const { return scheduler; }
 
     /**
      * @brief Bitmasks describing per-attribute-type behavior during UPDATE parsing.
@@ -164,7 +164,7 @@ private:
     friend NeighborAf;
 
     BgpProcess& process;
-    core::ProcessQueueRef scheduler;
+    core::ProcessQueue scheduler;
 
     std::unordered_map<AfiSafi, NeighborAf> afNeighbors; ///< Per-AF state, keyed by AfiSafi.
 

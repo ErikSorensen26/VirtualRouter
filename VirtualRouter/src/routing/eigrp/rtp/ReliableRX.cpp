@@ -20,7 +20,10 @@ void ReliableTransport::handleIncoming(const uint8_t* ipStart, const packet::Eig
         return; // Version not valid
 
     RTPInfo hdrInfo(eigrpPacket, neighborIp);
-    parseEigrpOptions(eigrpPacket.getTrail().data(), eigrpPacket.getTrail().size(), hdrInfo.opts);
+    // A malformed TLV stream leaves opts holding a partial list; drop the packet
+    // rather than act on whatever parsed before the bad TLV.
+    if (!parseEigrpOptions(eigrpPacket.getTrail().data(), eigrpPacket.getTrail().size(), hdrInfo.opts))
+        return;
 
     const packet::TLV16Option* authOpt = nullptr;
     for (const auto& opt : hdrInfo.opts)
