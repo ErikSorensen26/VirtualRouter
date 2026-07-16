@@ -96,7 +96,7 @@ struct OspfInterfaceInstance
  * - A map of @ref Area objects, one per configured OSPF area.
  * - An @ref OspfRib holding SPF-computed routes before they are installed into
  *   the global routing table.
- * - An internal @ref core::ProcessQueue (`schedulerMgr`) that serializes all
+ * - An internal @ref core::ProcessQueue (`scheduler`) that serializes all
  *   LSA processing, SPF runs, and origination work.
  * - The process-scoped role objects: @ref InterOriginator /
  *   @ref InterRouteManager (ABR) and @ref ExternalOriginator /

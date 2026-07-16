@@ -134,7 +134,7 @@ struct EigrpHeader
         { utils::setBit(raw->flags, 28, val); }
 };
 
-inline bool parseEigrpOptions(const uint8_t* data, size_t size, std::vector<TLV16Option>& outOptions)
+[[nodiscard]] inline bool parseEigrpOptions(const uint8_t* data, size_t size, std::vector<TLV16Option>& outOptions)
 {
     size_t offset = 0;
     while (offset + 4 <= size)

@@ -47,7 +47,7 @@ public:
     // CONSTRUCTION
 
     RegistryContainer() { ptr = new T(); };
-    ~RegistryContainer() { if (delFn) delFn(ptr); }
+    ~RegistryContainer() { if (delFn) delFn(ptr); else delete ptr; }
 
     RegistryContainer(const RegistryContainer&) = delete;
     RegistryContainer& operator=(const RegistryContainer&) = delete;
@@ -57,6 +57,7 @@ public:
     const T& get() const noexcept { assert(ptr); return *ptr; }
 
     void init() {
+        delete ptr; // the ctor already allocated; don't orphan it
         delFn = [](T* p) { delete p; };
         ptr = new T();
     }

@@ -147,6 +147,9 @@ void NeighborTable::cancelAllHoldTimers()
 void NeighborTable::onDown(Neighbor& neighbor)
 {
     const types::IPAddress neighborIp = neighbor.ipAddress;
+    // The hold timer captures &neighbor; erasing below frees it, so a still-armed
+    // timer would fire against freed memory. Cancel before the erase.
+    iface.getTimers().cancelHoldTimer(neighbor);
     iface.getTopController().onNeighborDown(neighbor);
     iface.getBase().delGlobalNeighbor(neighborIp);
     unicast.erase(neighborIp);

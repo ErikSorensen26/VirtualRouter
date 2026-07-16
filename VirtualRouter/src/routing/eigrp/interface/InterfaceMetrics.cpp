@@ -24,7 +24,11 @@ void InterfaceMetrics::addRouteMetrics(std::vector<ReceivedRoute>& routes)
         else
         {
             route.reportedDistance = calculateCompositeMetric(route.load, route.reliability, route.delay, route.bandwidth);
-            route.feasibleDistance = route.reportedDistance + local;
+
+            // Adding the local cost must not wrap into the unreachable sentinel
+            const unsigned __int128 fd = static_cast<unsigned __int128>(route.reportedDistance) + local;
+            constexpr unsigned __int128 metricCeiling = std::numeric_limits<uint64_t>::max() - 1;
+            route.feasibleDistance = static_cast<uint64_t>(fd > metricCeiling ? metricCeiling : fd);
         }
     }
 }
@@ -66,11 +70,19 @@ uint64_t InterfaceMetrics::calculateCompositeMetric(uint8_t load, uint8_t reliab
     base += loadTerm;
     base += static_cast<unsigned __int128>(k.k3_Delay) * scaledDelay;
 
+    // Saturate below uint64_t::max(): that value is DUAL's unreachable sentinel,
+    // so a merely expensive route must never be encoded as it or the route gets
+    // discarded instead of used as a last resort.
+    constexpr unsigned __int128 metricCeiling = std::numeric_limits<uint64_t>::max() - 1;
+    auto clamp = [](unsigned __int128 v) -> uint64_t {
+        return static_cast<uint64_t>(v > metricCeiling ? metricCeiling : v);
+    };
+
     // Final metric
     uint64_t finalMetric;
     if (k.k5_MTU == 0)
     {
-        finalMetric = static_cast<uint64_t>(base);
+        finalMetric = clamp(base);
     }
     else
     {
@@ -80,7 +92,7 @@ uint64_t InterfaceMetrics::calculateCompositeMetric(uint8_t load, uint8_t reliab
 
         unsigned __int128 tmp = base * static_cast<unsigned __int128>(k.k5_MTU);
         tmp /= denominator;
-        finalMetric = static_cast<uint64_t>(tmp);
+        finalMetric = clamp(tmp);
     }
 
     return finalMetric;

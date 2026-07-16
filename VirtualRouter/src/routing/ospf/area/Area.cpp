@@ -23,7 +23,7 @@ Area::Area(OspfProcess& base, uint32_t id)
       spfMgr(*this, process.rib),
       flags(base.isV3),
       floodMgr(*this),
-      scheduler(base.schedulerMgr.ref()),
+      scheduler(base.scheduler.ref()),
       originContext(*this),
       originator(IntraOriginator::create(originContext)),
       routeManager(*this),

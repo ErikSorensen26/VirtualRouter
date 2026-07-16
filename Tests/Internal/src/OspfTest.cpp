@@ -116,7 +116,7 @@ protected:
             ospfInterface = &ospfInstance->ifaceMgr.createInterface(
                 *mockInterface, OspfInterfaceId(ipIntv4.addr, 0));
         });
-        ospfInstance->schedulerMgr.waitIdle();
+        ospfInstance->scheduler.waitIdle();
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
         // OSPFv3 process (IPv6)
@@ -131,15 +131,15 @@ protected:
             ospfv3Interface = &ospfv3Instance->ifaceMgr.createInterface(
                 *mockInterface, OspfInterfaceId(ipIntv4.addr, 0));
         });
-        ospfv3Instance->schedulerMgr.waitIdle();
+        ospfv3Instance->scheduler.waitIdle();
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
 
     void TearDown() override
     {
-        ospfInstance->schedulerMgr.waitIdle();
+        ospfInstance->scheduler.waitIdle();
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
-        ospfv3Instance->schedulerMgr.waitIdle();
+        ospfv3Instance->scheduler.waitIdle();
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
         mockInterface->blockEnqueues();
         vrf->removeOspf(1);
@@ -153,7 +153,7 @@ protected:
 
     void wait(OspfProcess* process = nullptr)
     {
-        (process ? process : ospfInstance)->schedulerMgr.waitIdle();
+        (process ? process : ospfInstance)->scheduler.waitIdle();
     }
 
     // Core accessors
@@ -166,7 +166,7 @@ protected:
 
         Area* created = nullptr;
         p->scheduler.post([p, areaId, &created] { created = &p->insureArea(areaId); });
-        p->schedulerMgr.waitIdle();
+        p->scheduler.waitIdle();
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
         return *created;
     }
@@ -213,7 +213,7 @@ protected:
         OspfProcess* p = proc ? proc : ospfInstance;
         OspfInterface* result = nullptr;
         p->scheduler.post([p, &iface, id, &result] { result = &p->ifaceMgr.createInterface(iface, id); });
-        p->schedulerMgr.waitIdle();
+        p->scheduler.waitIdle();
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
         return *result;
     }
@@ -221,7 +221,7 @@ protected:
     {
         OspfProcess* p = proc ? proc : ospfInstance;
         p->scheduler.post([p, id] { p->ifaceMgr.removeInterface(id); });
-        p->schedulerMgr.waitIdle();
+        p->scheduler.waitIdle();
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
     InterfaceFlagManager& getIfaceFlags(OspfInterface* iface = nullptr)
@@ -6809,7 +6809,7 @@ TEST_F(Internal_OspfTest, VirtualLink_AddVirtualLink_Encoded_In_RouterLsa)
     ASSERT_EQ(nbr->getState(), Neighbor::State::FULL);
 
     area.getOriginator().fullRefresh();
-    ospfInstance->schedulerMgr.waitIdle();
+    ospfInstance->scheduler.waitIdle();
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     LsaKey routerKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);

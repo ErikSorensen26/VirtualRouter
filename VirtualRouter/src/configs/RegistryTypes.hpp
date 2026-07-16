@@ -521,6 +521,9 @@ public:
     using type = T;
     CONFIG_INDEX_MEMBER
     void setMask(const ValueField* p) noexcept { mask = p; }
+
+    // value is a raw owning pointer; the last set() has no other owner to free it
+    ~ValueField() { delete value.load(std::memory_order_relaxed); }
 private:
     template <typename, typename, ApplyFn, typename>
     friend class SubRegistry;
@@ -540,6 +543,9 @@ public:
     using type = T;
     CONFIG_INDEX_MEMBER
     void setMask(const ValueField* p) noexcept { mask = p; }
+
+    // value is a raw owning pointer; the last set() has no other owner to free it
+    ~ValueField() { delete value.load(std::memory_order_relaxed); }
 private:
     template <typename, typename, ApplyFn, typename>
     friend class SubRegistry;
@@ -588,6 +594,9 @@ public:
     using type = std::vector<T>;
     using node = T;
     CONFIG_INDEX_MEMBER
+
+    // value is a raw owning pointer; the list withWrite() allocates has no other owner
+    ~ListField() { delete value.load(std::memory_order_relaxed); }
 private:
     template <typename, typename, ApplyFn, typename>
     friend class SubRegistry;
@@ -605,6 +614,9 @@ public:
     using type = std::vector<T>;
     using node = T;
     CONFIG_INDEX_MEMBER
+
+    // value is a raw owning pointer; the list withWrite() allocates has no other owner
+    ~ListField() { delete value.load(std::memory_order_relaxed); }
 private:
     template <typename, typename, ApplyFn, typename>
     friend class SubRegistry;

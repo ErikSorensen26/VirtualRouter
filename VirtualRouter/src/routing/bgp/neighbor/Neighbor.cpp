@@ -12,7 +12,7 @@ namespace routing::bgp
 Neighbor::Neighbor(const types::IPAddress& ipAddress, BgpProcess& proc)
     : neighborAddress(ipAddress),
       process(proc),
-      scheduler(proc.getSchedulerQueue().ref()),
+      scheduler(proc.getScheduler().ref()),
       configs([&proc, &ipAddress]() -> config::BgpNeighborSessionRegistry& {
           auto& procConfigs = proc.getConfigs();
           auto neighborConfigs = procConfigs.get<config::Bgp::NEIGHBOR>();

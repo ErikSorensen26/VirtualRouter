@@ -139,20 +139,28 @@ std::pair<bool, bool> RouteAggregator::calculateSummary(SummaryRoute& s)
     auto& entries = topology.getTopologies();
 
     const ReceivedRoute* bestRoute = nullptr;
+    const types::IPPrefix summaryPrefix = s.summaryEntry->prefix;
 
+    std::set<types::IPPrefix> covered;
     for (auto& [_, entry] : entries)
     {
-        if (s.summarizedRoutes.contains(entry.prefix))
+        if (entry.prefix == summaryPrefix) continue; // the summary's own entry
+        if (entry.prefix.prefixLength < summaryPrefix.prefixLength) continue;
+        if (!summaryPrefix.contains(types::IPAddress(entry.prefix.addr, entry.prefix.prefixLength)))
+            continue;
+
+        covered.insert(entry.prefix);
+
+        auto it = entry.routesBySource.find(entry.bestNeighbor);
+        if (it != entry.routesBySource.end())
         {
-            auto it = entry.routesBySource.find(entry.bestNeighbor);
-            if (it != entry.routesBySource.end())
-            {
-                const auto& rt = it->second.routeInfo;
-                if (!bestRoute || bestRoute->feasibleDistance > rt.feasibleDistance)
-                    bestRoute = &rt;
-            }
+            const auto& rt = it->second.routeInfo;
+            if (!bestRoute || bestRoute->feasibleDistance > rt.feasibleDistance)
+                bestRoute = &rt;
         }
     }
+
+    s.summarizedRoutes = std::move(covered);
 
     types::AddressFamily af = iface.getBase().getAF();
 

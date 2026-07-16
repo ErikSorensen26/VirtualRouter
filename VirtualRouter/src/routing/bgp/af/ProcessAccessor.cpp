@@ -42,6 +42,6 @@ core::ProcessQueue& ProcessAccessor::getScheduler(BgpProcess& proc)
 
 core::ProcessQueue& ProcessAccessor::getSchedulerQueue(BgpProcess& proc)
 {
-    return proc.getSchedulerQueue();
+    return proc.getScheduler();
 }
 } // namespace routing

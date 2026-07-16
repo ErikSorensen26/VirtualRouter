@@ -41,7 +41,7 @@ OspfInterface::OspfInterface(OspfProcess& proc, interface::Interface& iface, con
       dispatcher(proc.isV3
           ? *static_cast<PacketDispatcher*>(new PacketDispatcherV3(*this))
           : *static_cast<PacketDispatcher*>(new PacketDispatcherV2(*this))),
-      tmgr(*this, proc.schedulerMgr.ref()),
+      tmgr(*this, proc.scheduler.ref()),
       ntable(*this, tmgr),
       flags(area.flags),
       lsaFlags(area.flags),

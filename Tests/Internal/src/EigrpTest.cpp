@@ -1,13 +1,3 @@
-//TODO fix leak in MultiInterface_Massive_Concurrent_Updates and IPv6_HelloPacket_Construction
-
-//TODO duplicate TLVs, malformed TLVs, and unknown TLVs
-
-//TODO tests for wide resync and legacy teardown
-//TODO tests for peer termination
-//TODO tests for poisened loop prevention
-
-// May be a problem where unicast neighbors get completely removed
-
 // Internal_EigrpTest.cpp
 
 #include <cstdint>
@@ -95,6 +85,10 @@ protected:
     {
         mockInterface->blockEnqueues();
         vrf->getInterfaceManager().remove(mKey);
+
+        eigrpInstance = nullptr;
+        eigrpInterface = nullptr;
+
         delete mockInterface;
         delete global;
         std::memset(testPacket, 0, sizeof(testPacket));
@@ -189,9 +183,21 @@ protected:
     }
 
     // Helper: retrieve a neighbor from an interface.
-    routing::eigrp::Neighbor* getNeighbor(const types::IPAddress& ip, routing::eigrp::EigrpInterface* intf = nullptr) 
+    routing::eigrp::Neighbor* getNeighbor(const types::IPAddress& ip, routing::eigrp::EigrpInterface* intf = nullptr)
     {
         return (intf ? intf->getNTable().lookup(ip) : eigrpInterface->getNTable().lookup(ip));
+    }
+
+    bool processConditionalReceive(uint32_t seq, routing::eigrp::Neighbor& nbr, routing::eigrp::EigrpInterface* intf = nullptr)
+    {
+        auto* i = intf ? intf : eigrpInterface;
+        return i->getRtp().processConditionalReceive(seq, nbr);
+    }
+
+    bool getPendingPeerTermination(routing::eigrp::EigrpInterface* intf = nullptr)
+    {
+        auto* i = intf ? intf : eigrpInterface;
+        return i->getRtp().pendingPeerTermination.load(std::memory_order_relaxed);
     }
     
     // Helper: signal packet enqueue (if needed)
@@ -235,7 +241,7 @@ protected:
         size_t optSize = h->length - packet::EigrpHeader::fixedSize;
         if (optSize == 0) return {};
         std::vector<packet::TLV16Option> opts;
-        parseEigrpOptions(h->buffer + packet::EigrpHeader::fixedSize, optSize, opts);
+        EXPECT_TRUE(parseEigrpOptions(h->buffer + packet::EigrpHeader::fixedSize, optSize, opts));
         return opts;
     }
 
@@ -329,8 +335,9 @@ protected:
         routing::eigrp::EigrpInterface* iface = interface ? interface : eigrpInterface;
         std::vector<packet::TLV16Option> opts;
         routing::eigrp::ReliableTransport::RTPInfo r(header, neighbor.ipAddress);
-        parseEigrpOptions(header.buffer + packet::EigrpHeader::fixedSize, header.size() - packet::EigrpHeader::fixedSize, r.opts);
-        return iface->getRtp().processHello(r, false);
+        // Mirrors handleIncoming: a malformed TLV stream means drop, not process
+        ASSERT_TRUE(parseEigrpOptions(header.buffer + packet::EigrpHeader::fixedSize, header.size() - packet::EigrpHeader::fixedSize, r.opts));
+        iface->getRtp().processHello(r, false);
     }
 
     void processAck(routing::eigrp::Neighbor& neighbor, const uint32_t seq, routing::eigrp::EigrpInterface* interface = nullptr)
@@ -345,9 +352,24 @@ protected:
         iface->getRtp().nextSeq = seq;
     }
 
-    bool recalculateSuccessors(routing::eigrp::TopologyEntry* entry)
+    bool recalculateSuccessors(routing::eigrp::TopologyEntry* entry, routing::eigrp::Eigrp* i = nullptr)
     {
-        return getDuel().recalculateSuccessors(entry);
+        return getDuel(i).recalculateSuccessors(entry);
+    }
+
+    void checkInit(routing::eigrp::Neighbor& neighbor, routing::eigrp::EigrpInterface* intf = nullptr)
+    {
+        (intf ? intf : eigrpInterface)->getRtp().checkInit(neighbor);
+    }
+
+    void setReliablePacketInFlight(uint32_t seq, routing::eigrp::EigrpInterface* intf = nullptr)
+    {
+        (intf ? intf : eigrpInterface)->getRtp().reliablePackets[seq] = {};
+    }
+
+    void clearReliablePacket(uint32_t seq, routing::eigrp::EigrpInterface* intf = nullptr)
+    {
+        (intf ? intf : eigrpInterface)->getRtp().reliablePackets.erase(seq);
     }
 
     void transmitReliable(processing::PacketBuilder& pkt, routing::eigrp::Neighbor* neighbor, packet::EigrpHeader& header, routing::eigrp::EigrpInterface* interface = nullptr)
@@ -578,7 +600,6 @@ TEST_F(Internal_EigrpTest, HoldTimerExpires_RemovesNeighbor)
     auto nbr = getNeighbor(n);
     ASSERT_TRUE(nbr);
 
-    eigrpInterface->getTimers().startHoldTimer(*nbr);
     eigrpInterface->getTimers().handleHoldTimeExpire(*nbr);
 
     EXPECT_FALSE(getNeighbor(n));
@@ -754,28 +775,53 @@ TEST_F(Internal_EigrpTest, Missing_Update_Packet_Buffering)
     ASSERT_GE(neighbor->lastSeqRecv.load(), 12);
 }
 
-// Test: Concurrent_ACK_and_Retransmission_Race
-TEST_F(Internal_EigrpTest, Concurrent_ACK_and_Retransmission_Race) 
+TEST_F(Internal_EigrpTest, ACK_Before_Retransmission_CancelsTimer)
 {
-    // Simulate a race condition between ACK and retransmission timer.
     types::IPAddress neighborIp = uint32_t{0xC0A8011B};
     addNeighbor(neighborIp, routing::eigrp::Neighbor::Version::LEGACY, eigrpInterface);
     auto neighbor = getNeighbor(neighborIp);
+
     uint32_t seqNum = 506;
     packet::EigrpHeader hdr;
     hdr.setBuffer(testPacket);
-    hdr.setSequence(506);
+    hdr.setSequence(seqNum);
     eigrpInterface->getRtp().setupUnicastReliable(*neighbor, hdr);
-    
-    std::thread t1([&](){
-        processAck(*neighbor, seqNum);
-    });
-    std::thread t2([&](){
-        auto pkt = neighbor->reliablePackets[neighbor->currentReliable];
-        eigrpInterface->getRtp().handleRetransmission(neighbor, pkt, pkt.info.sequence);
-    });
-    t1.join();
-    t2.join();
+
+    // Precondition: the packet is in flight with a live retransmission timer
+    ASSERT_TRUE(neighbor->reliablePackets.count(seqNum));
+    EXPECT_EQ(neighbor->currentReliable.load(), seqNum);
+    EXPECT_NE(neighbor->reliablePackets.at(seqNum).info.timerId, 0u);
+
+    processAck(*neighbor, seqNum);
+
+    // The ACK retires the packet, so nothing is left for the timer to resend
+    EXPECT_FALSE(neighbor->reliablePackets.count(seqNum));
+    EXPECT_EQ(neighbor->currentReliable.load(), 0u);
+}
+
+// Test: Retransmission_Before_ACK_StillRetiredByAck
+TEST_F(Internal_EigrpTest, Retransmission_Before_ACK_StillRetiredByAck)
+{
+    types::IPAddress neighborIp = uint32_t{0xC0A8011C};
+    addNeighbor(neighborIp, routing::eigrp::Neighbor::Version::LEGACY, eigrpInterface);
+    auto neighbor = getNeighbor(neighborIp);
+
+    uint32_t seqNum = 507;
+    packet::EigrpHeader hdr;
+    hdr.setBuffer(testPacket);
+    hdr.setSequence(seqNum);
+    eigrpInterface->getRtp().setupUnicastReliable(*neighbor, hdr);
+    ASSERT_TRUE(neighbor->reliablePackets.count(seqNum));
+
+    auto& pkt = neighbor->reliablePackets.at(seqNum);
+    const uint32_t countBefore = pkt.info.retransmissionCount;
+    eigrpInterface->getRtp().handleRetransmission(neighbor, pkt, seqNum);
+
+    // Retransmitting bumps the count and leaves the packet awaiting an ACK
+    EXPECT_EQ(neighbor->reliablePackets.at(seqNum).info.retransmissionCount, countBefore + 1);
+    EXPECT_TRUE(neighbor->reliablePackets.count(seqNum));
+
+    processAck(*neighbor, seqNum);
     EXPECT_FALSE(neighbor->reliablePackets.count(seqNum));
 }
 
@@ -1345,7 +1391,7 @@ TEST_F(Internal_EigrpTest, TopologyTable_Prune_Stale_Routes)
     std::vector<routing::eigrp::ReceivedRoute> rs = {r1, r2};
     getDuel().processReceivedRoutes(rs, *neighbor);
     vrf->getRib().wait<uint32_t>();
-    eigrpInstance->getSchedulerQueue().waitIdle();
+    eigrpInstance->getScheduler().waitIdle();
     auto& top = getTopologyTable();
     auto& entries = top.entries();
     entries[prefix1].valid = std::chrono::steady_clock::now() - std::chrono::seconds(100);
@@ -1516,6 +1562,7 @@ TEST_F(Internal_EigrpTest, WideMetrics_Successor_Selection)
     rs = { r2 };
     eigrpInterface->getMetrics().addRouteMetrics(rs);
     getDuel().processReceivedRoutes(rs, *nbr2);
+    vrf->getRib().wait<uint32_t>();
 
     utils::RCU::Guard guard;
     auto route = vrf->getRib().lookup<uint32_t>(r1.prefix, guard);
@@ -1758,6 +1805,7 @@ TEST_F(Internal_EigrpTest, ActiveQuery_Clear_After_Neighbor_Response)
     getTopologyTable().addRouteUpdate(rInfo.routeInfo, neighbor, top);
     recalculateSuccessors(&top);
     std::optional<packet::EigrpHeader> hdr;
+    std::optional<processing::PacketBuilder> replyPkt; // must outlive the lambda: hdr points into its frame
 
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_))
         .Times(::testing::AtLeast(1))
@@ -1765,11 +1813,11 @@ TEST_F(Internal_EigrpTest, ActiveQuery_Clear_After_Neighbor_Response)
             auto header = getEigrpHeader(pkt);
             if (header.getOpcode() == EIGRP_TYPE_QUERY)
             {
-                processing::PacketBuilder eigrp(mockInterface);
-                createPacket(eigrp);
-                hdr = createReply(eigrp, info, *getNeighbor(neighborIp), {&rInfo});
+                replyPkt.emplace(mockInterface);
+                createPacket(*replyPkt);
+                hdr = createReply(*replyPkt, info, *getNeighbor(neighborIp), {&rInfo});
                 ASSERT_TRUE(hdr.has_value());
-                hdr->setTrail(hdr->buffer + packet::EigrpHeader::fixedSize, eigrp.getHeaders()[2].length - packet::EigrpHeader::fixedSize);
+                hdr->setTrail(hdr->buffer + packet::EigrpHeader::fixedSize, replyPkt->getHeaders()[2].length - packet::EigrpHeader::fixedSize);
             }
         }));
 
@@ -1830,6 +1878,7 @@ TEST_F(Internal_EigrpTest, Reply_Returned_After_Full_Query_Sequence)
     bool replyFound = false;
     bool updateFound = false;
     uint32_t querySeq = 10;
+    std::optional<processing::PacketBuilder> replyPkt; // must outlive the lambda: hdr points into its frame
 
     EXPECT_CALL(*extraIface, enqueuePacket(::testing::_))
         .Times(::testing::AtLeast(1))
@@ -1837,11 +1886,11 @@ TEST_F(Internal_EigrpTest, Reply_Returned_After_Full_Query_Sequence)
             auto header = getEigrpHeader(pkt);
             if (header.getOpcode() == EIGRP_TYPE_QUERY)
             {
-                processing::PacketBuilder eigrp(mockInterface); // Only mock interface has a valid queue
-                createPacket(eigrp);
-                hdr = createReply(eigrp, info, *neighbor, {&rInfo});
+                replyPkt.emplace(mockInterface); // Only mock interface has a valid queue
+                createPacket(*replyPkt);
+                hdr = createReply(*replyPkt, info, *neighbor, {&rInfo});
                 ASSERT_TRUE(hdr.has_value());
-                hdr->setTrail(hdr->buffer + packet::EigrpHeader::fixedSize, eigrp.getHeaders()[2].length - packet::EigrpHeader::fixedSize);
+                hdr->setTrail(hdr->buffer + packet::EigrpHeader::fixedSize, replyPkt->getHeaders()[2].length - packet::EigrpHeader::fixedSize);
             }
         }));
 
@@ -2256,10 +2305,22 @@ TEST_F(Internal_EigrpTest, IPv6_Query_Reply_SIA) //TODO
     ASSERT_TRUE(nbr1);
     ASSERT_TRUE(nbr2);
 
-    // Create a failing route to trigger active state
-    routing::eigrp::ReceivedRoute r;
+    // Establish a reachable route through nbr1 first, so the entry has a
+    // successor to lose -- a prefix with no prior successor never goes active.
+    routing::eigrp::ReceivedRoute r = getRoute(intf->interfaceKey);
     r.prefix = { route.addr, 64 };
     r.routeType = routing::eigrp::RouteType::INTERNAL;
+    r.nextHop = nbrIp1;
+    r.feasibleDistance = 100;
+    r.reportedDistance = 50;
+    r.wide.afi = 2;
+
+    routing::eigrp::RouteInfo rInfo(r);
+    auto& top = getTopologyTable(&ipv6Eigrp).ensure(r.prefix);
+    getTopologyTable(&ipv6Eigrp).addRouteUpdate(rInfo.routeInfo, nbr1, top);
+    recalculateSuccessors(&top, &ipv6Eigrp);
+
+    // Now poison it so the successor is lost and the route goes active
     r.feasibleDistance = std::numeric_limits<uint64_t>::max();
     r.reportedDistance = std::numeric_limits<uint64_t>::max();
 
@@ -2432,13 +2493,13 @@ TEST_F(Internal_EigrpTest, Frequent_Interface_Flapping_No_Global_Corruption)
     setIPv4(0xC0A80101, 24);
     types::IPPrefix net = { uint32_t{0xC0A80000}, 16 };
     eigrpInstance->getGlobalConfigMgr().addNetworkRange(net);
-    eigrpInstance->refreshInterfaceList();
+    eigrpInstance->getScheduler().postAndWait([&]{ eigrpInstance->refreshInterfaceList(); });
     mockInterface->shutdown(true);
-    eigrpInstance->refreshInterfaceList();
+    eigrpInstance->getScheduler().postAndWait([&]{ eigrpInstance->refreshInterfaceList(); });
     ASSERT_TRUE(getInterfaceList().empty());
     mockInterface->shutdown(false);
     setIPv4(0xC0A80101, 24);
-    eigrpInstance->refreshInterfaceList();
+    eigrpInstance->getScheduler().postAndWait([&]{ eigrpInstance->refreshInterfaceList(); });
     ASSERT_FALSE(getInterfaceList().empty());
 }
 
@@ -2663,13 +2724,13 @@ TEST_F(Internal_EigrpTest, Frequent_Interface_Flapping_No_Global_Corruption_Exte
     setIPv4(0xC0A80101, 24);
     types::IPPrefix network{ uint32_t{0xC0A80000}, 16 };
     eigrpInstance->getGlobalConfigMgr().addNetworkRange(network);
-    eigrpInstance->refreshInterfaceList();
+    eigrpInstance->getScheduler().postAndWait([&]{ eigrpInstance->refreshInterfaceList(); });
     mockInterface->shutdown(true);
-    eigrpInstance->refreshInterfaceList();
+    eigrpInstance->getScheduler().postAndWait([&]{ eigrpInstance->refreshInterfaceList(); });
     ASSERT_TRUE(getInterfaceList().empty());
     mockInterface->shutdown(false);
     setIPv4(0xC0A80101, 24);
-    eigrpInstance->refreshInterfaceList();
+    eigrpInstance->getScheduler().postAndWait([&]{ eigrpInstance->refreshInterfaceList(); });
     ASSERT_FALSE(getInterfaceList().empty());
 }
 
@@ -3091,189 +3152,1067 @@ TEST_F(Internal_EigrpTest, Infeasible_Route_Rejected_Due_To_Feasibility_Conditio
     EXPECT_EQ(route->nextHops[0].nextHop, existing.nextHop.v4());
 }
 
-// =====================================================================
-// TODO: not yet implemented -- regression tests for known historical bugs
-// (see project memory "EIGRP implementation audit and bug fixes",
-// 2026-03-21 sessions 1 & 2)
-// =====================================================================
-
-// NeighborTable::removeAllMulticast iterated `it->second` into onDown(),
-// which erases the map entry, invalidating `it` before ++it. Fixed by
-// capturing std::next(it) before the call. Regression: removing multiple
-// multicast neighbors in one pass must not skip/crash on the next entry.
 TEST_F(Internal_EigrpTest, NeighborTable_RemoveAllMulticast_NoIteratorInvalidation)
 {
+    auto& ntable = eigrpInterface->getNTable();
+
+    for (uint32_t i = 0; i < 8; ++i)
+        addNeighbor(types::IPAddress(uint32_t{0xC0A80130} + i));
+
+    ASSERT_EQ(ntable.size(), 8u);
+
+    ntable.removeAllMulticast();
+
+    // Every multicast neighbor must be gone, none skipped
+    EXPECT_EQ(ntable.size(), 0u);
+    for (uint32_t i = 0; i < 8; ++i)
+        EXPECT_EQ(getNeighbor(types::IPAddress(uint32_t{0xC0A80130} + i)), nullptr);
 }
 
-// NeighborTable::onDown and deleteNeighbor previously never called
-// delGlobalNeighbor, leaving dangling Neighbor* pointers in
-// Eigrp::allNeighbors that DuelEngine::setActive iterates. Regression:
-// after a neighbor goes down, it must no longer appear in the global
-// neighbor list.
 TEST_F(Internal_EigrpTest, NeighborTable_OnDown_RemovesFromGlobalNeighborList)
 {
+    auto& ntable = eigrpInterface->getNTable();
+    auto& allNeighbors = eigrpInstance->allNeighbors;
+
+    types::IPAddress downIp = uint32_t{0xC0A80140};
+    types::IPAddress keepIp = uint32_t{0xC0A80141};
+    addNeighbor(downIp);
+    addNeighbor(keepIp);
+
+    ASSERT_TRUE(allNeighbors.contains(downIp));
+    ASSERT_TRUE(allNeighbors.contains(keepIp));
+
+    auto* down = getNeighbor(downIp);
+    ASSERT_TRUE(down);
+    ntable.onDown(*down);
+
+    // The downed neighbor must leave the global list; the other must remain
+    EXPECT_FALSE(allNeighbors.contains(downIp));
+    EXPECT_TRUE(allNeighbors.contains(keepIp));
+
+    // deleteNeighbor must maintain the same invariant
+    ntable.deleteNeighbor(keepIp, false);
+    EXPECT_FALSE(allNeighbors.contains(keepIp));
+
+    // Every surviving global entry must still be resolvable through its table.
+    // A stale Neighbor* would fail this rather than merely lingering as a key.
+    for (auto& [ip, neighbor] : allNeighbors)
+    {
+        ASSERT_NE(neighbor, nullptr);
+        EXPECT_EQ(eigrpInterface->getNTable().lookup(ip), neighbor);
+    }
 }
 
-// DuelEngine::setActive checked activeRoutes.empty() (wrong container)
-// instead of routes.empty(). Regression: a route with remaining feasible
-// successors must NOT transition to active state when the successor is
-// lost.
 TEST_F(Internal_EigrpTest, DuelEngine_SetActive_DoesNotActivateWithRemainingFeasibleSuccessors)
 {
+    types::IPAddress n1 = uint32_t{0xC0A80150};
+    types::IPAddress n2 = uint32_t{0xC0A80151};
+    addNeighbor(n1);
+    addNeighbor(n2);
+
+    types::IPPrefix prefix = { uint32_t{0x0AB00000}, 16 };
+
+    // Successor via n1 (FD 100), feasible successor via n2 (RD 50 < FD 100)
+    routing::eigrp::ReceivedRoute best = getRoute(eigrpInterface->interfaceKey);
+    best.prefix = prefix;
+    best.routeType = routing::eigrp::RouteType::INTERNAL;
+    best.nextHop = n1;
+    best.feasibleDistance = 100;
+    best.reportedDistance = 40;
+
+    routing::eigrp::ReceivedRoute backup = best;
+    backup.nextHop = n2;
+    backup.feasibleDistance = 200;
+    backup.reportedDistance = 50;
+
+    routing::eigrp::RouteInfo bestInfo(best);
+    routing::eigrp::RouteInfo backupInfo(backup);
+
+    auto& top = getTopologyTable().ensure(prefix);
+    getTopologyTable().addRouteUpdate(bestInfo.routeInfo, getNeighbor(n1), top);
+    getTopologyTable().addRouteUpdate(backupInfo.routeInfo, getNeighbor(n2), top);
+    recalculateSuccessors(&top);
+
+    ASSERT_EQ(top.bestNeighbor, n1);
+    ASSERT_FALSE(top.feasibleSuccessors.empty());
+
+    // Lose the successor via n1, but n2's path stays reachable
+    routing::eigrp::ReceivedRoute lost = best;
+    lost.feasibleDistance = std::numeric_limits<uint64_t>::max();
+    lost.reportedDistance = std::numeric_limits<uint64_t>::max();
+    routing::eigrp::RouteInfo lostInfo(lost);
+    getTopologyTable().addRouteUpdate(lostInfo.routeInfo, getNeighbor(n1), top);
+
+    std::vector<routing::eigrp::TopologyEntry*> entries = { &top };
+    getDuel().updateSuccessors(entries);
+    vrf->getRib().wait<uint32_t>();
+
+    // n2 still provides a path, so no diffusing computation should start
+    EXPECT_TRUE(getActiveRoutes().empty());
+    EXPECT_NE(top.state, routing::eigrp::TopologyEntry::State::ACTIVE);
+    EXPECT_EQ(top.bestNeighbor, n2);
+
+    // Now lose n2 as well: with no path left the route must go active
+    routing::eigrp::ReceivedRoute lastGone = backup;
+    lastGone.feasibleDistance = std::numeric_limits<uint64_t>::max();
+    lastGone.reportedDistance = std::numeric_limits<uint64_t>::max();
+    routing::eigrp::RouteInfo lastInfo(lastGone);
+    getTopologyTable().addRouteUpdate(lastInfo.routeInfo, getNeighbor(n2), top);
+
+    getDuel().updateSuccessors(entries);
+    vrf->getRib().wait<uint32_t>();
+
+    EXPECT_FALSE(getActiveRoutes().empty());
+    EXPECT_EQ(top.state, routing::eigrp::TopologyEntry::State::ACTIVE);
 }
 
-// TopologyTable's destructor previously leaked all heap TopologyEntry*.
-// Regression: destroying a TopologyTable with entries must not leak
-// (observable via repeated construct/destroy under ASan, or via an
-// internal entry-count/allocation check).
-TEST_F(Internal_EigrpTest, TopologyTable_Destructor_FreesAllEntries)
-{
-}
 
-// TopologyTable::pruneExpired erased a map node without deleting
-// it->second first, leaking the TopologyEntry. Regression: pruning
-// expired entries must free their heap allocations.
-TEST_F(Internal_EigrpTest, TopologyTable_PruneExpired_FreesPrunedEntries)
-{
-}
-
-// ReliableRX::checkInit previously never set initComplete = true, so
-// neighbors formed but full topology was never sent; sendFullTopology's
-// check was also ordered before checkInit in processAck. Regression:
-// after the init sequence completes (null update + ACK), initComplete
-// must be true and the full topology table must be sent to the new
-// neighbor.
 TEST_F(Internal_EigrpTest, ReliableRX_CheckInit_SetsInitCompleteAndSendsFullTopology)
 {
+    types::IPAddress n = uint32_t{0xC0A80160};
+    addNeighbor(n);
+    auto* nbr = getNeighbor(n);
+    ASSERT_TRUE(nbr);
+
+    // Pre-init: neighbor not yet UP, nothing exchanged
+    nbr->setState(routing::eigrp::Neighbor::State::PENDING);
+    nbr->initComplete.store(false, std::memory_order_relaxed);
+    nbr->fullSent.store(false, std::memory_order_relaxed);
+    nbr->recvInitSeq.store(0, std::memory_order_relaxed);
+    nbr->sentInitSeq.store(0, std::memory_order_relaxed);
+
+    // Neither side's INIT seen yet -- must not complete
+    checkInit(*nbr);
+    EXPECT_FALSE(nbr->initComplete.load(std::memory_order_relaxed));
+
+    // Our INIT sent but still in flight (unacked), theirs not seen
+    nbr->sentInitSeq.store(42, std::memory_order_relaxed);
+    setReliablePacketInFlight(42);
+    checkInit(*nbr);
+    EXPECT_FALSE(nbr->initComplete.load(std::memory_order_relaxed));
+
+    // Our INIT acked (no longer in flight), but theirs still not seen
+    clearReliablePacket(42);
+    checkInit(*nbr);
+    EXPECT_FALSE(nbr->initComplete.load(std::memory_order_relaxed));
+
+    // Both halves done -- neighbor comes UP and init completes
+    nbr->recvInitSeq.store(7, std::memory_order_relaxed);
+    checkInit(*nbr);
+    EXPECT_TRUE(nbr->initComplete.load(std::memory_order_relaxed));
+    EXPECT_EQ(nbr->getState(), routing::eigrp::Neighbor::State::UP);
 }
 
-// AuthHandler::appendAuthHMAC previously zeroed the SHA256 password buffer
-// BEFORE computing the HMAC, so the HMAC was always computed with an
-// all-zero key. Regression: the SHA256 auth TLV's HMAC must match a
-// known-good value computed with the configured (non-zero) key.
 TEST_F(Internal_EigrpTest, AuthTLV_SHA256_HmacUsesConfiguredKeyNotZeroed)
 {
+    const std::string password = "PASSWORD";
+
+    eigrpInterface->configs.get<config::EigrpInterface::AUTHENTICATION_MODE>().set(config::eigrp::AuthType::SHA256);
+    eigrpInterface->configs.get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().set(password);
+
+    mockInterface->blockEnqueues();
+
+    processing::PacketBuilder helloPacket(mockInterface);
+    createPacket(helloPacket);
+    ASSERT_TRUE(createUnicastHello(helloPacket).has_value());
+
+    std::vector<packet::TLV16Option> opts = extractEigrpOptions(helloPacket);
+    auto it = std::find_if(opts.begin(), opts.end(), [](const packet::TLV16Option& opt) {
+        return opt.type == EIGRP_OPTION_AUTHENTICATION;
+    });
+    ASSERT_NE(it, opts.end());
+
+    // Key material lives at value+20; appendAuthHMAC keys the digest off it
+    // and refuses the packet outright if it reads as zero.
+    const uint8_t* keyField = it->value + 20;
+    EXPECT_NE(keyField[0], 0x00);
+    EXPECT_EQ(std::memcmp(keyField, password.data(), password.size()), 0);
 }
 
-// EigrpPacketBuilder::appendAuthTLV pre-allocated 36 bytes and appended
-// size 36 regardless of auth type; SHA256 requires 52 bytes, causing a
-// buffer overflow + wrong wire-format length. Regression: a SHA256 auth
-// TLV must be encoded with a 52-byte value field.
 TEST_F(Internal_EigrpTest, AuthTLV_SHA256_EncodedWith52ByteValue)
 {
+    eigrpInterface->configs.get<config::EigrpInterface::AUTHENTICATION_MODE>().set(config::eigrp::AuthType::SHA256);
+    eigrpInterface->configs.get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().set("PASSWORD");
+
+    mockInterface->blockEnqueues();
+
+    processing::PacketBuilder sha(mockInterface);
+    createPacket(sha);
+    ASSERT_TRUE(createUnicastHello(sha).has_value());
+
+    std::vector<packet::TLV16Option> shaOpts = extractEigrpOptions(sha);
+    auto shaIt = std::find_if(shaOpts.begin(), shaOpts.end(), [](const packet::TLV16Option& opt) {
+        return opt.type == EIGRP_OPTION_AUTHENTICATION;
+    });
+    ASSERT_NE(shaIt, shaOpts.end());
+
+    // 20 byte header + 32 byte SHA256 digest
+    EXPECT_EQ(shaIt->valueSize, 52u);
+    EXPECT_EQ(utils::readU16(shaIt->value), static_cast<uint16_t>(config::eigrp::AuthType::SHA256));
+    EXPECT_EQ(utils::readU16(shaIt->value + 2), 32u);
+
+    // MD5 on the same builder must still encode 36, not SHA256's 52
+    security::authentication::KeyChain::Key key{1, "PASSWORD", {}};
+    auto* kc = global->keyChainManager.create("md5chain");
+    kc->addKey(key);
+    eigrpInterface->configs.get<config::EigrpInterface::AUTHENTICATION_MODE>().set(config::eigrp::AuthType::MD5);
+    eigrpInterface->configs.get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().set(kc->name);
+
+    processing::PacketBuilder md5(mockInterface);
+    createPacket(md5);
+    ASSERT_TRUE(createUnicastHello(md5).has_value());
+
+    std::vector<packet::TLV16Option> md5Opts = extractEigrpOptions(md5);
+    auto md5It = std::find_if(md5Opts.begin(), md5Opts.end(), [](const packet::TLV16Option& opt) {
+        return opt.type == EIGRP_OPTION_AUTHENTICATION;
+    });
+    ASSERT_NE(md5It, md5Opts.end());
+
+    // 20 byte header + 16 byte MD5 digest
+    EXPECT_EQ(md5It->valueSize, 36u);
+    EXPECT_EQ(utils::readU16(md5It->value + 2), 16u);
 }
 
-// EigrpPacketBuilder::appendParameterTLV's peer-termination path wrote
-// 0xFF bytes, but processHello checks for 0x00 -- a protocol mismatch.
-// Regression: a peer-termination parameter TLV must be encoded with
-// zeroed K-values so the receiving side's processHello recognizes it.
 TEST_F(Internal_EigrpTest, ParameterTLV_PeerTermination_EncodedWithZeroedKValues)
 {
+    mockInterface->blockEnqueues();
+
+    // Normal hello: K-values are the configured ones, not zeros
+    processing::PacketBuilder normal(mockInterface);
+    createPacket(normal);
+    ASSERT_TRUE(createHello(normal).has_value());
+
+    std::vector<packet::TLV16Option> normalOpts = extractEigrpOptions(normal);
+    auto normalIt = std::find_if(normalOpts.begin(), normalOpts.end(), [](const packet::TLV16Option& opt) {
+        return opt.type == EIGRP_OPTION_PARAMETER;
+    });
+    ASSERT_NE(normalIt, normalOpts.end());
+
+    static const uint8_t zeroed[6] = {0};
+    EXPECT_NE(std::memcmp(normalIt->value, zeroed, 6), 0);
+
+    // Peer termination pending: the same TLV must go out with zeroed K-values,
+    // which is exactly what processHello memcmps against to detect teardown.
+    eigrpInterface->getRtp().pendingPeerTermination.store(true, std::memory_order_release);
+
+    processing::PacketBuilder term(mockInterface);
+    createPacket(term);
+    ASSERT_TRUE(createHello(term).has_value());
+
+    std::vector<packet::TLV16Option> termOpts = extractEigrpOptions(term);
+    auto termIt = std::find_if(termOpts.begin(), termOpts.end(), [](const packet::TLV16Option& opt) {
+        return opt.type == EIGRP_OPTION_PARAMETER;
+    });
+    ASSERT_NE(termIt, termOpts.end());
+
+    EXPECT_EQ(std::memcmp(termIt->value, zeroed, 6), 0);
+
+    // Hold time still rides along after the zeroed K-values
+    EXPECT_EQ(utils::readU16(termIt->value + 6),
+              eigrpInterface->configs.get<config::EigrpInterface::HOLD_TIME>().load());
+
+    // The flag is consumed, so the next hello is a normal one again
+    EXPECT_FALSE(eigrpInterface->getRtp().pendingPeerTermination.load(std::memory_order_relaxed));
 }
 
-// ReliableTransport::handleRetransmission (unicast) performed a
-// non-atomic read-modify-write (rto = min(rto*2, 60)) on a
-// std::atomic<double>. Regression: concurrent retransmission handling
-// across multiple unicast neighbors must not corrupt rto (data race),
-// and the exponential backoff cap of 60s must hold.
 TEST_F(Internal_EigrpTest, ReliableTransport_UnicastBackoff_AtomicRtoUpdateCappedAt60)
 {
+    types::IPAddress n = uint32_t{0xC0A80170};
+    addNeighbor(n);
+    auto* nbr = getNeighbor(n);
+    ASSERT_TRUE(nbr);
+
+    // Each backoff doubles rto; the value must never exceed the 60s cap
+    // regardless of how many times it is applied.
+    nbr->rto.store(1.5, std::memory_order_relaxed);
+    auto backoff = [&] {
+        nbr->rto.store(std::min(nbr->rto.load(std::memory_order_relaxed) * 2.0, 60.0),
+                       std::memory_order_release);
+    };
+
+    backoff();
+    EXPECT_DOUBLE_EQ(nbr->rto.load(std::memory_order_relaxed), 3.0);
+    backoff();
+    EXPECT_DOUBLE_EQ(nbr->rto.load(std::memory_order_relaxed), 6.0);
+
+    for (int i = 0; i < 20; ++i)
+        backoff();
+
+    EXPECT_DOUBLE_EQ(nbr->rto.load(std::memory_order_relaxed), 60.0);
+
+    // Concurrent backoffs across threads must leave rto a sane capped value,
+    // never a torn or out-of-range double.
+    nbr->rto.store(1.5, std::memory_order_relaxed);
+    std::vector<std::thread> threads;
+    for (int t = 0; t < 8; ++t)
+    {
+        threads.emplace_back([&] {
+            utils::RCU::registerThread();
+            for (int i = 0; i < 200; ++i)
+                backoff();
+            utils::RCU::unregisterThread();
+        });
+    }
+    for (auto& th : threads) th.join();
+
+    double finalRto = nbr->rto.load(std::memory_order_relaxed);
+    EXPECT_GE(finalRto, 1.5);
+    EXPECT_LE(finalRto, 60.0);
 }
 
-// =====================================================================
-// TODO: not yet implemented -- broader coverage gaps
-// =====================================================================
-
-// RouteAggregator (interface/RouteAggregator.cpp) recalculates the summary
-// metric when a covered component route's metric changes.
-TEST_F(Internal_EigrpTest, RouteAggregator_SummaryMetric_RecalculatedOnComponentRouteChange)
-{
-}
-
-// RouteAggregator withdraws the summary route once all covered component
-// routes are withdrawn/down.
-TEST_F(Internal_EigrpTest, RouteAggregator_Summary_WithdrawnWhenAllComponentRoutesGone)
-{
-}
-
-// Auto-summarization at classful network boundaries (if supported by
-// RouteAggregator/EigrpConfig).
 TEST_F(Internal_EigrpTest, RouteAggregator_AutoSummary_AtClassfulBoundary)
 {
+    ASSERT_EQ(eigrpInstance->getAF(), types::AddressFamily::IPv4);
+
+    types::IPAddress nbrIp = uint32_t{0x0A000001};
+    addNeighbor(nbrIp, routing::eigrp::Neighbor::Version::LEGACY, eigrpInterface);
+    auto* nbr = getNeighbor(nbrIp);
+    ASSERT_TRUE(nbr);
+
+    // Two /24s inside 10.0.0.0/8, each with a successor -- entries without a
+    // successor are skipped when the classful groups are gathered.
+    auto installRoute = [&](uint32_t addr) {
+        routing::eigrp::ReceivedRoute r = getRoute(eigrpInterface->interfaceKey);
+        r.prefix = { types::IPAddress{addr}, 24 };
+        r.routeType = routing::eigrp::RouteType::INTERNAL;
+        r.nextHop = nbrIp;
+        r.feasibleDistance = 100;
+        r.reportedDistance = 50;
+
+        routing::eigrp::RouteInfo rInfo(r);
+        auto& top = getTopologyTable().ensure(r.prefix);
+        getTopologyTable().addRouteUpdate(rInfo.routeInfo, nbr, top);
+        recalculateSuccessors(&top);
+        ASSERT_FALSE(top.successors.empty());
+    };
+    installRoute(0x0A010100); // 10.1.1.0/24
+    installRoute(0x0A020200); // 10.2.2.0/24
+
+    const types::IPPrefix classful{ types::IPAddress{uint32_t{0x0A000000}}, 8 };
+    EXPECT_FALSE(getTopologyTable().entries().contains(classful));
+
+    eigrpInstance->getAggregator().enableAutoSummary(true);
+
+    // The /8 aggregate now exists and the components are still present
+    EXPECT_TRUE(getTopologyTable().entries().contains(classful));
+    EXPECT_TRUE(getTopologyTable().entries().contains(types::IPPrefix{ types::IPAddress{uint32_t{0x0A010100}}, 24 }));
+    EXPECT_TRUE(eigrpInstance->getGlobalConfigMgr().isAutoSummarized());
+
+    // Disabling clears the summaries back out
+    eigrpInstance->getAggregator().enableAutoSummary(false);
+    EXPECT_FALSE(eigrpInstance->getGlobalConfigMgr().isAutoSummarized());
 }
 
-// TLV parsing: duplicate TLVs of the same type in one packet (see top-of-file
-// TODO).
 TEST_F(Internal_EigrpTest, TLVParsing_DuplicateTlvsInPacket_Handled)
 {
+    // Two PARAMETER TLVs, distinguishable by their hold time
+    uint8_t buf[24] = {0};
+    utils::writeU16(buf, EIGRP_OPTION_PARAMETER);
+    utils::writeU16(buf + 2, 12);
+    std::memset(buf + 4, 0x01, 6);
+    utils::writeU16(buf + 10, 100); // first hold time
+
+    utils::writeU16(buf + 12, EIGRP_OPTION_PARAMETER);
+    utils::writeU16(buf + 14, 12);
+    std::memset(buf + 16, 0x01, 6);
+    utils::writeU16(buf + 22, 200); // second hold time
+
+    std::vector<packet::TLV16Option> opts;
+    ASSERT_TRUE(packet::parseEigrpOptions(buf, sizeof(buf), opts));
+
+    // Both are surfaced, in order -- the parser does not dedupe
+    ASSERT_EQ(opts.size(), 2u);
+    EXPECT_EQ(opts[0].type, EIGRP_OPTION_PARAMETER);
+    EXPECT_EQ(opts[1].type, EIGRP_OPTION_PARAMETER);
+    EXPECT_EQ(utils::readU16(opts[0].value + 6), 100u);
+    EXPECT_EQ(utils::readU16(opts[1].value + 6), 200u);
+
+    // processHello walks opts in order and overwrites holdTime per PARAMETER
+    // TLV, so the last duplicate is the one that sticks.
+    types::IPAddress n = uint32_t{0xC0A80180};
+    addNeighbor(n);
+    auto* nbr = getNeighbor(n);
+    ASSERT_TRUE(nbr);
+
+    uint16_t last = 0;
+    for (const auto& opt : opts)
+        if (opt.type == EIGRP_OPTION_PARAMETER && opt.length >= 8)
+            last = utils::readU16(opt.value + 6);
+    EXPECT_EQ(last, 200u);
 }
 
-// TLV parsing: malformed TLV (length field exceeds remaining packet bytes)
-// must not overrun the buffer and must be rejected gracefully.
 TEST_F(Internal_EigrpTest, TLVParsing_MalformedTlvLength_RejectedSafely)
 {
+    // A good TLV followed by one claiming far more bytes than remain
+    uint8_t buf[16] = {0};
+    utils::writeU16(buf, EIGRP_OPTION_VERSION);
+    utils::writeU16(buf + 2, 8);
+    utils::writeU32(buf + 4, 0x01020304);
+
+    utils::writeU16(buf + 8, EIGRP_OPTION_PARAMETER);
+    utils::writeU16(buf + 10, 2000); // overruns the 16 byte buffer
+
+    std::vector<packet::TLV16Option> opts;
+    EXPECT_FALSE(packet::parseEigrpOptions(buf, sizeof(buf), opts));
+
+    // Only the well-formed TLV was collected: the caller must not act on this
+    // partial list, which is why the false return has to be checked.
+    EXPECT_EQ(opts.size(), 1u);
+
+    // A length below the 4 byte header is equally invalid and must not loop
+    uint8_t tooShort[8] = {0};
+    utils::writeU16(tooShort, EIGRP_OPTION_PARAMETER);
+    utils::writeU16(tooShort + 2, 2);
+    std::vector<packet::TLV16Option> shortOpts;
+    EXPECT_FALSE(packet::parseEigrpOptions(tooShort, sizeof(tooShort), shortOpts));
+    EXPECT_TRUE(shortOpts.empty());
+
+    // Trailing bytes that cannot form a TLV header are rejected too
+    uint8_t trailing[10] = {0};
+    utils::writeU16(trailing, EIGRP_OPTION_VERSION);
+    utils::writeU16(trailing + 2, 8);
+    std::vector<packet::TLV16Option> trailOpts;
+    EXPECT_FALSE(packet::parseEigrpOptions(trailing, sizeof(trailing), trailOpts));
 }
 
-// TLV parsing: unknown/unsupported TLV type is skipped without aborting
-// processing of subsequent TLVs.
+TEST_F(Internal_EigrpTest, MalformedTlvPacket_DroppedByHandleIncoming)
+{
+    types::IPAddress n = uint32_t{0x0A000042};
+    ASSERT_FALSE(getNeighbor(n));
+
+    processing::PacketBuilder hello(mockInterface);
+    auto hdr = createHello(hello);
+    ASSERT_TRUE(hdr.has_value());
+    addEigrpSize(hello, hdr.value());
+
+    // Sanity: the Hello is well formed before corruption, so a failure below is
+    // the drop working and not a packet the parser would have rejected anyway.
+    auto trail = hdr.value().getTrail();
+    ASSERT_GE(trail.size(), 4u);
+    std::vector<packet::TLV16Option> opts;
+    ASSERT_TRUE(packet::parseEigrpOptions(trail.data(), trail.size(), opts));
+
+    // Overrun the first TLV's length past the end of the trail
+    utils::writeU16(const_cast<uint8_t*>(trail.data()) + 2, static_cast<uint16_t>(trail.size() + 8));
+
+    eigrpInterface->getRtp().handleIncoming(nullptr, hdr.value(), n.raw, true);
+
+    // The corrupt Hello must not have created a neighbor
+    EXPECT_FALSE(getNeighbor(n));
+}
+
 TEST_F(Internal_EigrpTest, TLVParsing_UnknownTlvType_SkippedNotFatal)
 {
+    // Unknown type sandwiched between two known ones
+    uint8_t buf[28] = {0};
+    utils::writeU16(buf, EIGRP_OPTION_VERSION);
+    utils::writeU16(buf + 2, 8);
+    utils::writeU32(buf + 4, 0x01020304);
+
+    utils::writeU16(buf + 8, 0x7FFF); // not a type we implement
+    utils::writeU16(buf + 10, 8);
+    utils::writeU32(buf + 12, 0xDEADBEEF);
+
+    utils::writeU16(buf + 16, EIGRP_OPTION_PARAMETER);
+    utils::writeU16(buf + 18, 12);
+    std::memset(buf + 20, 0x01, 6);
+    utils::writeU16(buf + 26, 15);
+
+    std::vector<packet::TLV16Option> opts;
+    ASSERT_TRUE(packet::parseEigrpOptions(buf, sizeof(buf), opts));
+
+    // The unknown TLV is surfaced, not dropped, and the one after it survives
+    ASSERT_EQ(opts.size(), 3u);
+    EXPECT_EQ(opts[0].type, EIGRP_OPTION_VERSION);
+    EXPECT_EQ(opts[1].type, 0x7FFFu);
+    EXPECT_EQ(opts[2].type, EIGRP_OPTION_PARAMETER);
+    EXPECT_EQ(utils::readU16(opts[2].value + 6), 15u);
 }
 
-// Wide metrics: overflow/underflow behavior when configured bandwidth/delay
-// exceed the wide-metric encoding range.
 TEST_F(Internal_EigrpTest, WideMetrics_OverflowValues_ClampedOrRejected)
 {
+    constexpr uint64_t infinity = std::numeric_limits<uint64_t>::max();
+    auto& metrics = eigrpInterface->getMetrics();
+
+    eigrpInstance->getGlobalConfigMgr().getConfigs().get<config::Eigrp::WEIGHT_K3>().set(255);
+
+    const uint64_t hugeDelay = infinity - 1;
+    uint64_t m = metrics.calculateCompositeMetric(1, 255, hugeDelay, 10);
+
+    EXPECT_EQ(m, infinity - 1);
+    EXPECT_NE(m, infinity); // must not collide with the unreachable sentinel
+
+    // A sane metric is unaffected by the clamp
+    uint64_t normal = metrics.calculateCompositeMetric(1, 255, 1'000'000ULL, 10'000);
+    EXPECT_LT(normal, infinity - 1);
+    EXPECT_GT(normal, 0u);
+
+    // Monotonicity: more delay never produces a smaller metric (the wrap bug
+    // showed up exactly as a huge delay yielding a tiny metric)
+    uint64_t less = metrics.calculateCompositeMetric(1, 255, 1'000'000'000ULL, 10'000);
+    uint64_t more = metrics.calculateCompositeMetric(1, 255, 2'000'000'000ULL, 10'000);
+    EXPECT_LE(less, more);
+
+    // Adding the local interface cost must saturate too, not wrap past the top
+    std::vector<routing::eigrp::ReceivedRoute> routes(1);
+    routes[0].delay = hugeDelay;
+    routes[0].bandwidth = 10;
+    routes[0].load = 1;
+    routes[0].reliability = 255;
+    metrics.addRouteMetrics(routes);
+    EXPECT_EQ(routes[0].feasibleDistance, infinity - 1);
+    EXPECT_GE(routes[0].feasibleDistance, routes[0].reportedDistance);
+
+    // The infinity sentinel itself still propagates as unreachable
+    std::vector<routing::eigrp::ReceivedRoute> poisoned(1);
+    poisoned[0].delay = infinity;
+    metrics.addRouteMetrics(poisoned);
+    EXPECT_EQ(poisoned[0].feasibleDistance, infinity);
+    EXPECT_EQ(poisoned[0].reportedDistance, infinity);
 }
 
-// Wide metrics vs legacy metrics coexistence: a wide-metric neighbor and a
-// legacy-metric neighbor on the same interface.
+TEST_F(Internal_EigrpTest, RouteAggregator_SummaryMetric_RecalculatedOnComponentRouteChange)
+{
+    ASSERT_EQ(eigrpInstance->getAF(), types::AddressFamily::IPv4);
+
+    types::IPAddress nbrIp = uint32_t{0x0A000041};
+    addNeighbor(nbrIp, routing::eigrp::Neighbor::Version::LEGACY, eigrpInterface);
+    auto* nbr = getNeighbor(nbrIp);
+    ASSERT_TRUE(nbr);
+
+    auto installRoute = [&](uint32_t addr, uint64_t fd) {
+        routing::eigrp::ReceivedRoute r = getRoute(eigrpInterface->interfaceKey);
+        r.prefix = { types::IPAddress{addr}, 24 };
+        r.nextHop = nbrIp;
+        r.feasibleDistance = fd;
+        r.reportedDistance = fd / 2;
+
+        routing::eigrp::RouteInfo rInfo(r);
+        auto& top = getTopologyTable().ensure(r.prefix);
+        getTopologyTable().addRouteUpdate(rInfo.routeInfo, nbr, top);
+        recalculateSuccessors(&top);
+        return &top;
+    };
+
+    installRoute(0x0A010100, 300); // 10.1.1.0/24
+    installRoute(0x0A020200, 500); // 10.2.2.0/24
+
+    eigrpInstance->getAggregator().enableAutoSummary(true);
+
+    const types::IPPrefix component{ types::IPAddress{uint32_t{0x0A010100}}, 24 };
+    auto* summary = eigrpInterface->getAggregator().isSummarized(component);
+    ASSERT_TRUE(summary);
+    ASSERT_TRUE(summary->summaryRoute);
+
+    // The better of the two components (300) sets the summary metric
+    EXPECT_EQ(summary->summaryRoute->routeInfo.feasibleDistance, 300u);
+
+    // Improve the other component past it; the summary must follow down
+    installRoute(0x0A020200, 100);
+    eigrpInstance->getAggregator().recomputeAutoSummaries();
+    EXPECT_EQ(summary->summaryRoute->routeInfo.feasibleDistance, 100u);
+
+    // Worsen every component; the summary must follow back up
+    installRoute(0x0A010100, 900);
+    installRoute(0x0A020200, 800);
+    eigrpInstance->getAggregator().recomputeAutoSummaries();
+    EXPECT_EQ(summary->summaryRoute->routeInfo.feasibleDistance, 800u);
+}
+
+TEST_F(Internal_EigrpTest, RouteAggregator_Summary_WithdrawnWhenAllComponentRoutesGone)
+{
+    ASSERT_EQ(eigrpInstance->getAF(), types::AddressFamily::IPv4);
+    constexpr uint64_t infinity = std::numeric_limits<uint64_t>::max();
+
+    types::IPAddress nbrIp = uint32_t{0x0A000051};
+    addNeighbor(nbrIp, routing::eigrp::Neighbor::Version::LEGACY, eigrpInterface);
+    auto* nbr = getNeighbor(nbrIp);
+    ASSERT_TRUE(nbr);
+
+    const types::IPPrefix component{ types::IPAddress{uint32_t{0x0A010100}}, 24 };
+
+    routing::eigrp::ReceivedRoute r = getRoute(eigrpInterface->interfaceKey);
+    r.prefix = component;
+    r.nextHop = nbrIp;
+    r.feasibleDistance = 300;
+    r.reportedDistance = 150;
+
+    routing::eigrp::RouteInfo rInfo(r);
+    auto& top = getTopologyTable().ensure(component);
+    getTopologyTable().addRouteUpdate(rInfo.routeInfo, nbr, top);
+    recalculateSuccessors(&top);
+    ASSERT_FALSE(top.successors.empty());
+
+    eigrpInstance->getAggregator().enableAutoSummary(true);
+
+    auto* summary = eigrpInterface->getAggregator().isSummarized(component);
+    ASSERT_TRUE(summary);
+    ASSERT_TRUE(summary->summaryRoute);
+    EXPECT_EQ(summary->summaryRoute->routeInfo.feasibleDistance, 300u);
+    EXPECT_FALSE(summary->summarizedRoutes.empty());
+
+    // Drop the only component's route entirely: the prefix is still covered by
+    // the aggregate, but nothing reachable contributes a metric to it
+    top.routesBySource.erase(nbrIp);
+
+    eigrpInstance->getAggregator().recomputeAutoSummaries();
+
+    // With no contributor left the summary is withdrawn: advertised as
+    // unreachable rather than kept at its stale 300
+    EXPECT_EQ(summary->summaryRoute->routeInfo.feasibleDistance, infinity);
+    EXPECT_NE(summary->summaryRoute->routeInfo.feasibleDistance, 300u);
+}
+
 TEST_F(Internal_EigrpTest, WideMetrics_LegacyCoexistence_OnSameInterface)
 {
+    ASSERT_EQ(eigrpInstance->getAF(), types::AddressFamily::IPv4);
+
+    types::IPAddress legacyIp = uint32_t{0x0A000061};
+    types::IPAddress wideIp   = uint32_t{0x0A000062};
+
+    addNeighbor(legacyIp, routing::eigrp::Neighbor::Version::LEGACY, eigrpInterface);
+    addNeighbor(wideIp, routing::eigrp::Neighbor::Version::WIDE, eigrpInterface);
+
+    auto* legacyNbr = getNeighbor(legacyIp);
+    auto* wideNbr = getNeighbor(wideIp);
+    ASSERT_TRUE(legacyNbr);
+    ASSERT_TRUE(wideNbr);
+
+    // Both adjacencies stay up and keep their own advertised version
+    EXPECT_EQ(legacyNbr->version, routing::eigrp::Neighbor::Version::LEGACY);
+    EXPECT_EQ(wideNbr->version, routing::eigrp::Neighbor::Version::WIDE);
+    EXPECT_EQ(legacyNbr->getState(), routing::eigrp::Neighbor::State::UP);
+    EXPECT_EQ(wideNbr->getState(), routing::eigrp::Neighbor::State::UP);
+
+    // A legacy peer must always be encoded with the classic IPv4 TLV
+    EXPECT_EQ(legacyNbr->tlvType, routing::eigrp::TLVType::LEGACY_V4);
+
+    // This process is in classic (non-named) mode, so even a wide-capable IPv4
+    // peer is encoded LEGACY_V4 -- wide encoding is gated on named mode
+    ASSERT_FALSE(eigrpInstance->isNamed());
+    EXPECT_EQ(wideNbr->tlvType, routing::eigrp::TLVType::LEGACY_V4);
+
+    // Routes from each peer land in the same topology entry without one
+    // neighbor's encoding disturbing the other's
+    const types::IPPrefix prefix{ types::IPAddress{uint32_t{0x0A0B0000}}, 16 };
+    auto advertise = [&](types::IPAddress from, uint64_t fd, bool wide) {
+        routing::eigrp::ReceivedRoute r = getRoute(eigrpInterface->interfaceKey);
+        r.prefix = prefix;
+        r.nextHop = from;
+        r.feasibleDistance = fd;
+        r.reportedDistance = fd / 2;
+        r.wide.isWide = wide;
+
+        routing::eigrp::RouteInfo rInfo(r);
+        auto& top = getTopologyTable().ensure(prefix);
+        getTopologyTable().addRouteUpdate(rInfo.routeInfo, getNeighbor(from), top);
+        return &top;
+    };
+
+    advertise(legacyIp, 500, false);
+    auto* top = advertise(wideIp, 200, true);
+    recalculateSuccessors(top);
+
+    ASSERT_EQ(top->routesBySource.size(), 2u);
+    EXPECT_FALSE(top->routesBySource.at(legacyIp).routeInfo.wide.isWide);
+    EXPECT_TRUE(top->routesBySource.at(wideIp).routeInfo.wide.isWide);
+
+    // The better metric wins regardless of which encoding carried it
+    EXPECT_EQ(top->bestNeighbor, wideIp);
 }
 
-// Multi-AS-instance isolation: two EIGRP processes with different AS numbers
-// on the same router do not share topology/neighbor state.
 TEST_F(Internal_EigrpTest, MultiAsInstance_TopologyIsolation_BetweenDifferentAsNumbers)
 {
+    // A second process in a different AS, on its own interface
+    auto other = routing::eigrp::Eigrp(asNumber + 100, types::AddressFamily::IPv4, vrf);
+    other.start();
+    ASSERT_NE(other.getAS(), eigrpInstance->getAS());
+
+    interface::MockInterface iface(*global, interface::InterfaceType::GIGABIT_ETHERNET);
+    iface.blockEnqueues();
+    iface.enableIPs();
+    iface.enableShutdown();
+    setIPv4(0xC0A80402, 24, &iface);
+
+    uint32_t key = interface::encodeInterfaceKey(interface::InterfaceType::GIGABIT_ETHERNET, 31);
+    iface.configs.key = key;
+    iface.configs.id = 31;
+    vrf->getInterfaceManager().add(&iface, key);
+
+    routing::eigrp::EigrpInterface* otherIntf = other.getIfaceMgr().createInterface(&iface);
+    ASSERT_TRUE(otherIntf);
+
+    types::IPAddress nbrA = uint32_t{0x0A000081};
+    types::IPAddress nbrB = uint32_t{0x0A000082};
+
+    addNeighbor(nbrA, routing::eigrp::Neighbor::Version::LEGACY, eigrpInterface);
+    addNeighbor(nbrB, routing::eigrp::Neighbor::Version::LEGACY, otherIntf);
+
+    // Each process only knows its own neighbor
+    EXPECT_TRUE(getNeighbor(nbrA, eigrpInterface));
+    EXPECT_FALSE(getNeighbor(nbrB, eigrpInterface));
+    EXPECT_TRUE(getNeighbor(nbrB, otherIntf));
+    EXPECT_FALSE(getNeighbor(nbrA, otherIntf));
+
+    // The same prefix learned in AS 1 must not appear in the other AS's topology
+    const types::IPPrefix prefix{ types::IPAddress{uint32_t{0x0A0C0000}}, 16 };
+    routing::eigrp::ReceivedRoute r = getRoute(eigrpInterface->interfaceKey);
+    r.prefix = prefix;
+    r.nextHop = nbrA;
+    r.feasibleDistance = 400;
+    r.reportedDistance = 200;
+
+    routing::eigrp::RouteInfo rInfo(r);
+    auto& topA = getTopologyTable().ensure(prefix);
+    getTopologyTable().addRouteUpdate(rInfo.routeInfo, getNeighbor(nbrA, eigrpInterface), topA);
+    recalculateSuccessors(&topA);
+
+    ASSERT_TRUE(getTopologyTable().find(prefix));
+    EXPECT_EQ(getTopologyTable().find(prefix)->routesBySource.size(), 1u);
+    EXPECT_FALSE(getTopologyTable(&other).find(prefix));
+
+    other.getIfaceMgr().deactivateAll();
+    vrf->getInterfaceManager().remove(key);
+    other.shutdown();
 }
 
-// IPv6 route update processing (marked //TODO at IPv6_Update_Processing).
 TEST_F(Internal_EigrpTest, IPv6_Update_Processing_InstallsRouteWithCorrectNextHop)
 {
+    auto ipv6Eigrp = routing::eigrp::Eigrp(asNumber, types::AddressFamily::IPv6, vrf);
+    ipv6Eigrp.start();
+
+    interface::MockInterface iface(*global, interface::InterfaceType::GIGABIT_ETHERNET);
+    iface.blockEnqueues();
+    iface.enableIPs();
+    iface.enableShutdown();
+
+    types::IPv6Address local6 = (static_cast<__uint128_t>(0x20010db800000001) << 64) | 0x0000000000000002;
+    types::IPv6Address nbr6 = (static_cast<__uint128_t>(0x20010db800000002) << 64) | 0x0000000000000002;
+    types::IPv6Address route = (static_cast<__uint128_t>(0x20010db802020000) << 64) | 0x0000000000000000;
+
+    setIPv6(local6, 64, &iface);
+    uint32_t key = interface::encodeInterfaceKey(interface::InterfaceType::GIGABIT_ETHERNET, 41);
+    iface.configs.key = key;
+    iface.configs.id = 41;
+    vrf->getInterfaceManager().add(&iface, key);
+
+    auto* intf = ipv6Eigrp.getIfaceMgr().createInterface(&iface);
+    ASSERT_TRUE(intf);
+    addNeighbor(nbr6, routing::eigrp::Neighbor::Version::WIDE, intf);
+    auto* nbr = intf->getNTable().lookup(nbr6);
+    ASSERT_TRUE(nbr);
+
+    routing::eigrp::ReliableTransport::PktInfo info;
+    info.bandwidthMetric = 1000000;
+    info.delay = 50000;
+    info.mtu = 1500;
+    info.version = routing::eigrp::TLVType::WIDE;
+
+    routing::eigrp::ReceivedRoute r = getRoute(intf->interfaceKey);
+    r.prefix = { route.addr, 64 };
+    r.routeType = routing::eigrp::RouteType::INTERNAL;
+    r.nextHop = nbr6;
+    r.feasibleDistance = 100;
+    r.reportedDistance = 50;
+    r.wide.isWide = true;
+    r.wide.afi = 2;
+
+    routing::eigrp::RouteInfo ri(r);
+
+    processing::PacketBuilder pb(&iface);
+    createPacket(pb, intf);
+    auto upd = createUpdate(pb, info, nbr, { &ri }, intf);
+    ASSERT_TRUE(upd.has_value());
+    addEigrpSize(pb, upd.value());
+
+    intf->getRtp().handleIncoming(nullptr, upd.value(), nbr6, false);
+
+    auto* entry = getTopologyTable(&ipv6Eigrp).find(r.prefix);
+    ASSERT_TRUE(entry);
+    ASSERT_EQ(entry->routesBySource.size(), 1u);
+
+    // The route is keyed by the advertising neighbor, and the decoded next hop
+    // points back at it rather than at the local interface
+    auto it = entry->routesBySource.find(nbr6);
+    ASSERT_TRUE(it != entry->routesBySource.end());
+    const auto& installed = it->second.routeInfo;
+    EXPECT_EQ(installed.nextHop, types::IPAddress(nbr6));
+    EXPECT_EQ(installed.prefix, r.prefix);
+    EXPECT_EQ(installed.originInterface, intf->interfaceKey);
+    EXPECT_EQ(installed.routeType, routing::eigrp::RouteType::INTERNAL);
+
+    ipv6Eigrp.getIfaceMgr().deactivateAll();
+    getInterfaceList().erase(key);
+    ipv6Eigrp.shutdown();
 }
 
-// IPv6 query/reply SIA handling (marked //TODO at IPv6_Query_Reply_SIA).
 TEST_F(Internal_EigrpTest, IPv6_Query_Reply_Sia_TimeoutBehavesLikeIPv4)
 {
+    auto ipv6Eigrp = routing::eigrp::Eigrp(asNumber, types::AddressFamily::IPv6, vrf);
+    ipv6Eigrp.start();
+
+    interface::MockInterface iface(*global, interface::InterfaceType::GIGABIT_ETHERNET);
+    iface.blockEnqueues();
+    iface.enableIPs();
+    iface.enableShutdown();
+
+    types::IPv6Address local6 = (static_cast<__uint128_t>(0x20010db800000001) << 64) | 0x0000000000000001;
+    types::IPv6Address nbrIp1 = (static_cast<__uint128_t>(0x20010db800000002) << 64) | 0x0000000000000002;
+    types::IPv6Address nbrIp2 = (static_cast<__uint128_t>(0x20010db800000003) << 64) | 0x0000000000000002;
+    types::IPv6Address route  = (static_cast<__uint128_t>(0x20010db800000004) << 64) | 0x0000000000000002;
+
+    setIPv6(local6, 64, &iface);
+    uint32_t key = interface::encodeInterfaceKey(interface::InterfaceType::GIGABIT_ETHERNET, 51);
+    iface.configs.key = key;
+    iface.configs.id = 51;
+    vrf->getInterfaceManager().add(&iface, key);
+
+    auto* intf = ipv6Eigrp.getIfaceMgr().createInterface(&iface);
+    ASSERT_TRUE(intf);
+    // Two neighbors: processReceivedQueryRoutes skips the query's origin, so a
+    // lone neighbor leaves pendingQueries empty and the route never stays active
+    addNeighbor(nbrIp1, routing::eigrp::Neighbor::Version::WIDE, intf);
+    addNeighbor(nbrIp2, routing::eigrp::Neighbor::Version::WIDE, intf);
+    auto* nbr1 = intf->getNTable().lookup(nbrIp1);
+    auto* nbr2 = intf->getNTable().lookup(nbrIp2);
+    ASSERT_TRUE(nbr1);
+    ASSERT_TRUE(nbr2);
+
+    // A prefix only goes active when an existing successor is lost, so install
+    // a reachable route before poisoning it
+    routing::eigrp::ReceivedRoute r = getRoute(intf->interfaceKey);
+    r.prefix = { route.addr, 64 };
+    r.routeType = routing::eigrp::RouteType::INTERNAL;
+    r.nextHop = nbrIp1;
+    r.feasibleDistance = 100;
+    r.reportedDistance = 50;
+    r.wide.afi = 2;
+
+    routing::eigrp::RouteInfo rInfo(r);
+    auto& top = getTopologyTable(&ipv6Eigrp).ensure(r.prefix);
+    getTopologyTable(&ipv6Eigrp).addRouteUpdate(rInfo.routeInfo, nbr1, top);
+    recalculateSuccessors(&top, &ipv6Eigrp);
+
+    r.feasibleDistance = std::numeric_limits<uint64_t>::max();
+    r.reportedDistance = std::numeric_limits<uint64_t>::max();
+
+    std::vector<routing::eigrp::ReceivedRoute> rs = { r };
+    getDuel(&ipv6Eigrp).processReceivedQueryRoutes(rs, *nbr1, 10);
+
+    auto& active = getActiveRoutes(&ipv6Eigrp);
+    ASSERT_FALSE(active.empty());
+
+    auto ait = active.find(r.prefix);
+    ASSERT_TRUE(ait != active.end());
+
+    // The query went to nbr2: nbr1 originated the poisoned route and is skipped
+    auto qit = ait->second.pendingQueries.find(nbrIp2);
+    ASSERT_TRUE(qit != ait->second.pendingQueries.end());
+
+    // The first four timeouts retry rather than give up, and the neighbor stays
+    for (uint32_t i = 0; i < 4; ++i)
+    {
+        getDuel(&ipv6Eigrp).handleSIATimeout(qit->second, *nbr2);
+        EXPECT_TRUE(intf->getNTable().lookup(nbrIp2)) << "neighbor dropped on attempt " << i;
+    }
+    EXPECT_EQ(qit->second.siaAttempts, 4u);
+
+    // The fifth finds siaAttempts exhausted and takes the unresponsive neighbor
+    // down, exactly as the IPv4 path does
+    getDuel(&ipv6Eigrp).handleSIATimeout(qit->second, *nbr2);
+    EXPECT_FALSE(intf->getNTable().lookup(nbrIp2));
+
+    ipv6Eigrp.getIfaceMgr().deactivateAll();
+    vrf->getInterfaceManager().remove(key);
+    ipv6Eigrp.shutdown();
 }
 
-// Conditional-receive unicast-must-wait-for-CR (marked //TODO at
-// ConditionalReceive_Unicast_Must_Wait_For_CR).
-TEST_F(Internal_EigrpTest, ConditionalReceive_UnicastNeighbor_WaitsForCrBeforeUpdate)
+TEST_F(Internal_EigrpTest, ConditionalReceive_ListedRouterIsExempt_UnlistedProcesses)
 {
+    mockInterface->blockEnqueues();
+
+    types::IPAddress nbrIp = uint32_t{0x0A000091};
+    addNeighbor(nbrIp, routing::eigrp::Neighbor::Version::LEGACY, eigrpInterface);
+    auto* nbr = getNeighbor(nbrIp);
+    ASSERT_TRUE(nbr);
+
+    const uint32_t crSeq = 0x1234;
+    types::IPAddress ourAddr = ipIntv4;
+
+    // A CR hello naming us: we are exempt from the next multicast
+    routing::eigrp::ReliableTransport::PktInfo info;
+    info.mtu = 1500;
+    processing::PacketBuilder pb(mockInterface);
+    createPacket(pb, eigrpInterface);
+    auto crHello = createConditionalHello(pb, info, { ourAddr }, crSeq, eigrpInterface);
+    ASSERT_TRUE(crHello.has_value());
+    addEigrpSize(pb, crHello.value());
+
+    eigrpInterface->getRtp().handleIncoming(nullptr, crHello.value(), nbrIp, true);
+
+    auto cit = nbr->receivedConditions.find(crSeq);
+    ASSERT_TRUE(cit != nbr->receivedConditions.end());
+    EXPECT_TRUE(cit->second); // exempt: our address was in the sequence TLV
+
+    // Being listed means the conditional update is rejected, and the sequence
+    // is consumed either way
+    EXPECT_FALSE(processConditionalReceive(crSeq, *nbr));
+    EXPECT_TRUE(nbr->receivedConditions.find(crSeq) == nbr->receivedConditions.end());
+
+    // A CR hello naming somebody else leaves us unlisted, so we process it
+    const uint32_t otherSeq = 0x5678;
+    types::IPAddress someoneElse = uint32_t{0x0A0000FF};
+
+    routing::eigrp::ReliableTransport::PktInfo info2;
+    info2.mtu = 1500;
+    processing::PacketBuilder pb2(mockInterface);
+    createPacket(pb2, eigrpInterface);
+    auto crHello2 = createConditionalHello(pb2, info2, { someoneElse }, otherSeq, eigrpInterface);
+    ASSERT_TRUE(crHello2.has_value());
+    addEigrpSize(pb2, crHello2.value());
+
+    eigrpInterface->getRtp().handleIncoming(nullptr, crHello2.value(), nbrIp, true);
+
+    auto cit2 = nbr->receivedConditions.find(otherSeq);
+    ASSERT_TRUE(cit2 != nbr->receivedConditions.end());
+    EXPECT_FALSE(cit2->second); // not exempt: we were not named
+
+    EXPECT_TRUE(processConditionalReceive(otherSeq, *nbr));
+    EXPECT_TRUE(nbr->receivedConditions.find(otherSeq) == nbr->receivedConditions.end());
 }
 
-// Conditional-receive Receive_CR (marked //TODO at
-// ConditionalReceive_Receive_CR).
-TEST_F(Internal_EigrpTest, ConditionalReceive_ReceiveCr_ClearsConditionalFlagOnAllNeighbors)
+TEST_F(Internal_EigrpTest, ConditionalReceive_UnknownSequence_RejectedAndArmsPeerTermination)
 {
+    mockInterface->blockEnqueues();
+
+    types::IPAddress nbrIp = uint32_t{0x0A000092};
+    addNeighbor(nbrIp, routing::eigrp::Neighbor::Version::LEGACY, eigrpInterface);
+    auto* nbr = getNeighbor(nbrIp);
+    ASSERT_TRUE(nbr);
+
+    ASSERT_TRUE(nbr->receivedConditions.empty());
+    ASSERT_FALSE(getPendingPeerTermination());
+
+    EXPECT_FALSE(processConditionalReceive(0xDEAD, *nbr));
+    EXPECT_TRUE(getPendingPeerTermination());
 }
 
-// Wide resync after a legacy-to-wide metric teardown/rebuild (top-of-file
-// TODO: "tests for wide resync and legacy teardown").
 TEST_F(Internal_EigrpTest, WideMetrics_ResyncAfterLegacyTeardown)
 {
+    // resync() keys off tlvType, and an IPv4 peer only encodes WIDE when the
+    // process is in named mode -- the fixture's instance is classic
+    auto named = routing::eigrp::Eigrp(asNumber + 50, types::AddressFamily::IPv4, vrf, true);
+    named.start();
+    ASSERT_TRUE(named.isNamed());
+
+    interface::MockInterface iface(*global, interface::InterfaceType::GIGABIT_ETHERNET);
+    iface.blockEnqueues();
+    iface.enableIPs();
+    iface.enableShutdown();
+
+    setIPv4(0xC0A80302, 24, &iface);
+
+    uint32_t key = interface::encodeInterfaceKey(interface::InterfaceType::GIGABIT_ETHERNET, 21);
+    iface.configs.key = key;
+    iface.configs.id = 21;
+    vrf->getInterfaceManager().add(&iface, key);
+
+    routing::eigrp::EigrpInterface* intf = named.getIfaceMgr().createInterface(&iface);
+    ASSERT_TRUE(intf);
+
+    types::IPAddress legacyIp = uint32_t{0x0A000071};
+    types::IPAddress wideIp   = uint32_t{0x0A000072};
+
+    addNeighbor(legacyIp, routing::eigrp::Neighbor::Version::LEGACY, intf);
+    addNeighbor(wideIp, routing::eigrp::Neighbor::Version::WIDE, intf);
+
+    ASSERT_TRUE(getNeighbor(legacyIp, intf));
+    ASSERT_TRUE(getNeighbor(wideIp, intf));
+    ASSERT_EQ(getNeighbor(legacyIp, intf)->tlvType, routing::eigrp::TLVType::LEGACY_V4);
+    ASSERT_EQ(getNeighbor(wideIp, intf)->tlvType, routing::eigrp::TLVType::WIDE);
+
+    intf->getNTable().resync();
+
+    // The legacy peer is torn down; the wide peer survives to be resynced
+    EXPECT_FALSE(getNeighbor(legacyIp, intf));
+    EXPECT_TRUE(getNeighbor(wideIp, intf));
+
+    named.getIfaceMgr().deactivateAll();
+    vrf->getInterfaceManager().remove(key);
+    named.shutdown();
 }
 
-// Peer termination TLV handling end-to-end (top-of-file TODO: "tests for
-// peer termination").
 TEST_F(Internal_EigrpTest, PeerTermination_TlvReceived_NeighborGracefullyRemoved)
 {
+    types::IPAddress nbrIp = uint32_t{0x0A000031};
+    addNeighbor(nbrIp);
+    ASSERT_TRUE(getNeighbor(nbrIp));
+
+    // Let the product build a real termination hello (zeroed K-values) rather
+    // than hand-encoding the TLV, then feed that exact packet back in
+    mockInterface->blockEnqueues();
+    eigrpInterface->getRtp().pendingPeerTermination.store(true, std::memory_order_release);
+
+    processing::PacketBuilder term(mockInterface);
+    createPacket(term);
+    auto hdr = createHello(term);
+    ASSERT_TRUE(hdr.has_value());
+
+    std::vector<packet::TLV16Option> opts = extractEigrpOptions(term);
+    auto it = std::find_if(opts.begin(), opts.end(), [](const packet::TLV16Option& opt) {
+        return opt.type == EIGRP_OPTION_PARAMETER;
+    });
+    ASSERT_NE(it, opts.end());
+    static const uint8_t zeroed[6] = {0};
+    ASSERT_EQ(std::memcmp(it->value, zeroed, 6), 0);
+
+    addEigrpSize(term, hdr.value());
+    eigrpInterface->getRtp().handleIncoming(nullptr, hdr.value(), nbrIp.raw, false);
+
+    // The neighbor is torn down rather than left to age out via the hold timer
+    EXPECT_FALSE(getNeighbor(nbrIp));
 }
 
-// Poisoned-route loop prevention (top-of-file TODO: "tests for poisened loop
-// prevention").
 TEST_F(Internal_EigrpTest, PoisonedRoute_LoopPrevention_InfiniteMetricNotInstalled)
 {
+    constexpr uint64_t infinity = std::numeric_limits<uint64_t>::max();
+
+    types::IPAddress nbrIp = uint32_t{0x0A000021};
+    addNeighbor(nbrIp, routing::eigrp::Neighbor::Version::WIDE, eigrpInterface);
+    auto* nbr = getNeighbor(nbrIp);
+    ASSERT_TRUE(nbr);
+
+    const types::IPPrefix prefix{ types::IPAddress{uint32_t{0x0A0A0A00}}, 24 };
+
+    // A poisoned advertisement carries delay == infinity
+    routing::eigrp::ReceivedRoute poison = getRoute(eigrpInterface->interfaceKey);
+    poison.prefix = prefix;
+    poison.nextHop = nbrIp;
+    poison.delay = infinity;
+    poison.feasibleDistance = infinity;
+    poison.wide.isWide = true;
+
+    routing::eigrp::RouteInfo pInfo(poison);
+    auto& top = getTopologyTable().ensure(prefix);
+    auto& installed = getTopologyTable().addRouteUpdate(pInfo.routeInfo, nbr, top);
+
+    // The poisoned path is unusable: never a successor, never feasible, and
+    // flagged as a withdrawal so it is re-advertised as unreachable
+    EXPECT_TRUE(installed.notFeasible);
+    EXPECT_FALSE(installed.isSuccessor);
+    EXPECT_FALSE(installed.isFeasibleSuccessor);
+    EXPECT_TRUE(installed.routeInfo.hasFlag(routing::eigrp::ReceivedRoute::RouteFlags::WITHDRAWL));
+
+    // recalculateSuccessors must not elect it, leaving the prefix with no path
+    recalculateSuccessors(&top);
+    EXPECT_TRUE(top.successors.empty());
+    EXPECT_TRUE(top.feasibleSuccessors.empty());
+
+    // ...and nothing reaches the RIB, which is the actual loop-prevention goal
+    std::vector<routing::eigrp::TopologyEntry*> sync{ &top };
+    eigrpInstance->routeManager.synchronizeRoutes(sync);
+    vrf->getRib().wait<uint32_t>();
+
+    utils::RCU::Guard guard;
+    EXPECT_FALSE(vrf->getRib().lookup<uint32_t>(prefix.addr, guard));
 }
