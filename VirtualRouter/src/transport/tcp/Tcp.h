@@ -13,6 +13,7 @@
 #include "TcpTypes.hpp"
 #include "Listener.h"
 #include "Connection.h"
+#include "utils/Mock.hpp"
 
 namespace core { class VirtualRouter; }
 
@@ -190,6 +191,8 @@ private:
     uint32_t tcpIPv6LlDelId; ///< Event subscription id for IPv6 link-local address-deletion notifications.
 
     TcpEngine* engine{nullptr}; ///< Heap-allocated engine; owned exclusively by this Tcp instance.
+
+    INJECT_MOCK(MOCK_TCP_ENGINE_SWAP_H)
 };
 
 } // namespace transport::tcp

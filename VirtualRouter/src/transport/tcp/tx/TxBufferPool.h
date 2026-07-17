@@ -107,6 +107,39 @@ private:
         const uint8_t* data() const noexcept { return reinterpret_cast<const uint8_t*>(this + 1); }
     };
 
+    /**
+     * @brief Tagged free-list head: pointer packed with a generation counter in a single 64-bit word.
+     *
+     * A plain `std::atomic<Block*>` Treiber stack is vulnerable to the ABA
+     * problem here: freeing and re-pushing a block between another thread's
+     * `head.load()` and its `compare_exchange` can make the CAS succeed
+     * against a head pointer that is bitwise-equal but logically stale,
+     * corrupting the list. x86-64 user-space pointers fit in 48 bits, so the
+     * top 16 bits are free to hold a generation tag bumped on every push;
+     * this keeps the tagged head in a native 64-bit word (genuinely
+     * lock-free everywhere) instead of a 128-bit struct, which libstdc++
+     * only makes lock-free with `-mcx16` (unset in this build) and
+     * otherwise silently serialises via `libatomic`.
+     */
+    struct TaggedHead
+    {
+        static constexpr uintptr_t kPtrMask = (uintptr_t{1} << 48) - 1;
+
+        uintptr_t bits = 0;
+
+        TaggedHead() noexcept = default;
+        TaggedHead(Block* p, uintptr_t tag) noexcept
+            : bits((reinterpret_cast<uintptr_t>(p) & kPtrMask) | (tag << 48)) {}
+
+        Block* ptr() const noexcept { return reinterpret_cast<Block*>(bits & kPtrMask); }
+        uintptr_t tag() const noexcept { return bits >> 48; }
+
+        bool operator==(const TaggedHead& o) const noexcept { return bits == o.bits; }
+    };
+
+    static_assert(std::atomic<TaggedHead>::is_always_lock_free,
+                  "TaggedHead must stay a single machine word or the free-list degrades to libatomic locking");
+
     friend class TxBuffer;
 
     /// Pops one block from the lock-free free-list, growing the pool if necessary.
@@ -126,14 +159,14 @@ private:
     void grow(size_t blocks) noexcept;
 
     /// Atomically pops the head of the given lock-free stack; returns nullptr if empty.
-    static Block* atomicPop(std::atomic<Block*>& head) noexcept;
+    static Block* atomicPop(std::atomic<TaggedHead>& head) noexcept;
 
     /// Atomically pushes @p b onto the head of the given lock-free stack.
-    static void atomicPush(std::atomic<Block*>& head, Block* b) noexcept;
+    static void atomicPush(std::atomic<TaggedHead>& head, Block* b) noexcept;
 
     PoolConfig& cfg;
-    std::atomic<Block*> freeList{nullptr}; ///< Lock-free LIFO free-list head.
-    std::atomic<size_t> totalBlocks{0};    ///< Total number of blocks ever allocated (across all slabs).
+    std::atomic<TaggedHead> freeList{}; ///< Lock-free LIFO free-list head, tagged to avoid ABA.
+    std::atomic<size_t> totalBlocks{0}; ///< Total number of blocks ever allocated (across all slabs).
 
     std::mutex growMtx;          ///< Serialises slab growth; not held on the hot pop/release path.
     std::vector<void*> slabs;    ///< Raw slab pointers freed in the destructor; each slab holds slabBlocks blocks.

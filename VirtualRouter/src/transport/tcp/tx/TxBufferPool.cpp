@@ -27,26 +27,28 @@ TxBuffer TxBufferPool::acquire() noexcept
 
 size_t TxBufferPool::blockSize() const noexcept { return cfg.blockSize; }
 
-TxBufferPool::Block* TxBufferPool::atomicPop(std::atomic<TxBufferPool::Block*>& head) noexcept
+TxBufferPool::Block* TxBufferPool::atomicPop(std::atomic<TxBufferPool::TaggedHead>& head) noexcept
 {
-    TxBufferPool::Block* h = head.load(std::memory_order_acquire);
-    while (h)
+    TaggedHead h = head.load(std::memory_order_acquire);
+    while (h.ptr())
     {
-        TxBufferPool::Block* next = h->next;
+        TaggedHead next{h.ptr()->next, h.tag() + 1};
         if (head.compare_exchange_weak(h, next, std::memory_order_acq_rel, std::memory_order_acquire))
-            return h;
+            return h.ptr();
     }
     return nullptr;
 }
 
-void TxBufferPool::atomicPush(std::atomic<TxBufferPool::Block*>& head, TxBufferPool::Block* b) noexcept
+void TxBufferPool::atomicPush(std::atomic<TxBufferPool::TaggedHead>& head, TxBufferPool::Block* b) noexcept
 {
-    TxBufferPool::Block* h = head.load(std::memory_order_relaxed);
+    TaggedHead h = head.load(std::memory_order_relaxed);
+    TaggedHead next;
     do
     {
-        b->next = h;
+        b->next = h.ptr();
+        next = TaggedHead{b, h.tag() + 1};
     }
-    while (!head.compare_exchange_weak(h, b, std::memory_order_release, std::memory_order_relaxed));
+    while (!head.compare_exchange_weak(h, next, std::memory_order_release, std::memory_order_relaxed));
 }
 
 void TxBufferPool::grow(size_t blocks) noexcept
@@ -88,11 +90,13 @@ void TxBufferPool::grow(size_t blocks) noexcept
 TxBufferPool::Block* TxBufferPool::pop() noexcept
 {
     Block* b = atomicPop(freeList);
-    if (!b)
+    while (!b)
     {
+        size_t before = totalBlocks.load(std::memory_order_relaxed);
         grow(cfg.slabBlocks);
         b = atomicPop(freeList);
-        if (!b) return nullptr;
+        if (!b && totalBlocks.load(std::memory_order_relaxed) == before)
+            return nullptr;
     }
 
     b->refs.store(1, std::memory_order_release);

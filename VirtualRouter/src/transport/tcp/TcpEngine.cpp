@@ -291,6 +291,16 @@ TcpEngine::ConnectionState* TcpEngine::getAcceptedConnectionChecked(ListenId lid
     return c;
 }
 
+Listener TcpEngine::makeListenerHandle(ListenId id) noexcept
+{
+    return Listener(this, id);
+}
+
+Connection TcpEngine::makeConnectionHandle(ConnId cid, TxBuffer& bufTx) noexcept
+{
+    return Connection(this, cid, bufTx);
+}
+
 Listener TcpEngine::createListener(const TcpEndpoint& local, const ListenOptions& opt)
 {
     const int af = TcpIpAdapter::af(local.address);
@@ -578,6 +588,7 @@ size_t TcpEngine::flush(ConnId cid) noexcept
 
     ConnectionState& cs = *c;
     if (!cs.stickyError.ok()) return 0;
+    if (cs.fd < 0) return 0; // mock connection: no socket to send() on
 
     size_t totalSent = 0;
 
@@ -618,6 +629,7 @@ size_t TcpEngine::read(ConnId cid, std::span<uint8_t> out) noexcept
 {
     auto c = getConnection(cid);
     if (!c || out.empty()) return 0;
+    if (c->fd < 0) return 0; // mock connection: no socket to recv() from
 
     while (true)
     {
@@ -643,6 +655,7 @@ void TcpEngine::shutdownConnection(ConnId cid, TcpShutdown how) noexcept
 {
     auto c = getConnection(cid);
     if (!c) return;
+    if (c->fd < 0) return; // mock connection: no socket to shut down
 
     if (how != TcpShutdown::READ)
         (void)flush(cid); // drain buffered TX before the FIN
@@ -657,6 +670,7 @@ TcpState TcpEngine::connectionState(ConnId cid) const noexcept
 {
     auto it = connections.find(cid);
     if (it == connections.end()) return TcpState::CLOSED;
+    if (it->second.fd < 0) return TcpState::ESTABLISHED; // mock connection: no socket to query
 
     tcp_info info{};
     socklen_t len = sizeof(info);
@@ -752,6 +766,8 @@ std::optional<TcpSocketKey> TcpEngine::connectionSocketKey(ConnId cid) const noe
     auto it = connections.find(cid);
     if (it == connections.end())
         return std::nullopt;
+
+    if (it->second.fd < 0) return it->second.key; // mock connection: no live socket to query, use cached key
 
     TcpSocketKey live{};
     if (!getLiveKey(it->second.fd, live))

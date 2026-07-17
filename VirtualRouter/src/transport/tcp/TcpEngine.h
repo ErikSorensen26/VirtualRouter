@@ -12,6 +12,7 @@
 #include "tcp/tx/TxBuffer.h"
 #include "tcp/tx/TxBufferPool.h"
 #include "tcp/rx/RxBuffer.h"
+#include "utils/Mock.hpp"
 
 namespace core { class VirtualRouter; }
 
@@ -57,7 +58,7 @@ class Connection;
  * @see Tcp
  * @see TxBufferPool
  */
-class TcpEngine final
+class TcpEngine
 {
 public:
     /**
@@ -74,7 +75,7 @@ public:
      * Closes all listener and connection fds, then closes the epoll fd.
      * The TxBufferPool destructor frees all slab allocations.
      */
-    ~TcpEngine();
+    MOCK ~TcpEngine();
 
     TcpEngine(const TcpEngine&) = delete;
     TcpEngine& operator=(const TcpEngine&) = delete;
@@ -89,7 +90,7 @@ public:
      * @param opts  Listener configuration including callbacks and socket policy.
      * @return A @ref Listener handle backed by the new socket.
      */
-    Listener createListener(const TcpEndpoint& local, const ListenOptions& opts);
+    MOCK Listener createListener(const TcpEndpoint& local, const ListenOptions& opts);
 
     /**
      * @brief Creates an outbound TCP connection socket and begins connect.
@@ -102,7 +103,7 @@ public:
      * @param opts   Connection configuration including callbacks and socket policy.
      * @return A @ref Connection handle backed by the new socket.
      */
-    Connection createConnection(const TcpEndpoint& local, const TcpEndpoint& remote, const ConnectOptions& opts);
+    MOCK Connection createConnection(const TcpEndpoint& local, const TcpEndpoint& remote, const ConnectOptions& opts);
 
     /**
      * @brief Closes the listener socket and removes it from epoll.
@@ -180,9 +181,9 @@ public:
      * @param maxEvents Maximum number of epoll events to process per call.
      * @return Number of epoll events processed.
      */
-    size_t pump(Tcp& tcp, uint32_t timeoutMs, size_t maxEvents) noexcept;
+    MOCK size_t pump(Tcp& tcp, uint32_t timeoutMs, size_t maxEvents) noexcept;
 
-private:
+protected:
     /// Internal state for one listening socket.
     struct ListenerState final
     {
@@ -250,6 +251,15 @@ private:
     static bool isListenerTag(uint64_t v) noexcept { return (v & kListenerTag) != 0; }
     static uint64_t unpackId(uint64_t v) noexcept { return (v & kIdMask); }
 
+    /// Returns a pointer to the ConnectionState for @p cid, or nullptr if not found.
+    ConnectionState* getConnection(ConnId cid) noexcept;
+
+    /// Constructs a Listener handle bound to this engine; only TcpEngine (and subclasses via this helper) may call the private Listener constructor.
+    Listener makeListenerHandle(ListenId id) noexcept;
+
+    /// Constructs a Connection handle bound to this engine; only TcpEngine (and subclasses via this helper) may call the private Connection constructor.
+    Connection makeConnectionHandle(ConnId cid, TxBuffer& bufTx) noexcept;
+
 private:
     /// Allocates the next ephemeral port from the round-robin cursor, wrapping at cfg.ephemeralMax.
     TcpPort allocateEphemeral() noexcept;
@@ -292,9 +302,6 @@ private:
     /// Fires ConnCallback (if set) and queues a TcpEvent for a connect-complete or error on @p cid.
     void dispatchConnectEvent(Tcp& tcp, ConnId cid, TcpEventType t, TcpError e) noexcept;
 
-    /// Returns a pointer to the ConnectionState for @p cid, or nullptr if not found.
-    ConnectionState* getConnection(ConnId cid) noexcept;
-
     /// Returns the accepted ConnectionState for (@p lid, @p cid) after verifying ownership, or nullptr.
     ConnectionState* getAcceptedConnectionChecked(ListenId lid, ConnId cid) noexcept;
 
@@ -313,21 +320,23 @@ public:
      */
     void dropLocalConnections(const types::IPAddress& addr) noexcept;
 
-private:
-    friend class Tcp;
-
+protected:
     core::VirtualRouter& vr; ///< Owning VRF; used for interface-event subscriptions and address lookups.
     Config cfg;              ///< Engine configuration snapshot (pool size, ephemeral port range, etc.).
     TxBufferPool bufferPool; ///< Shared free-list of fixed-size blocks; all ConnectionState::bufferTx acquire from here.
 
-    int epfd{-1}; ///< epoll file descriptor; valid for the lifetime of the engine.
-
     ListenId nextListenId{1}; ///< Monotonically increasing listener id allocator.
     ConnId nextConnId{1};     ///< Monotonically increasing connection id allocator.
-    TcpPort nextEphemeral{0}; ///< Round-robin cursor within [cfg.ephemeralMin, cfg.ephemeralMax].
 
     std::unordered_map<ListenId, ListenerState> listeners;   ///< All active listeners keyed by id.
     std::unordered_map<ConnId, ConnectionState> connections; ///< All active connections keyed by id.
+
+private:
+    friend class Tcp;
+
+    int epfd{-1}; ///< epoll file descriptor; valid for the lifetime of the engine.
+
+    TcpPort nextEphemeral{0}; ///< Round-robin cursor within [cfg.ephemeralMin, cfg.ephemeralMax].
 
     std::vector<epoll_event> epScratch; ///< Reusable scratch buffer for epoll_wait output.
     std::vector<uint8_t> ioScratch;     ///< Reusable scratch buffer for recv() calls.

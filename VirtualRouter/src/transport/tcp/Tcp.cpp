@@ -6,6 +6,7 @@
 #include "TcpEngine.h"
 #include "interface/InterfaceManager.h"
 #include "interface/Interface.h"
+#include "utils/Mock.hpp"
 
 namespace transport::tcp
 {
@@ -15,11 +16,10 @@ Tcp::Tcp(core::VirtualRouter& vrf, Config cfg)
 
     interface::InterfaceManager& ifaceMgr = vrf.getInterfaceManager();
 
-    // Subscribe to interface managers to close tcp connections when interfaces go down or addresses are removed.
     tcpIfDownId = ifaceMgr.subscribe(interface::StateChange::IF_DOWN,
-        engine,
+        this,
         [](void* ctx, interface::Interface& iface) {
-            auto* engine = static_cast<TcpEngine*>(ctx);
+            auto* engine = static_cast<Tcp*>(ctx)->engine;
             // Primary IPv4
             auto primaryV4 = iface.configs.ipv4.getPrimaryAddress();
             if (primaryV4.addr != 0)
@@ -35,23 +35,23 @@ Tcp::Tcp(core::VirtualRouter& vrf, Config cfg)
 
     // When a specific IP is explicitly removed, tear down only the
     tcpIPv4DelId = ifaceMgr.subscribe(interface::IPv4Event::IPV4_DEL,
-        engine,
+        this,
         [](void* ctx, interface::Interface&, types::IPv4Prefix& prefix) {
-            static_cast<TcpEngine*>(ctx)->dropLocalConnections(
+            static_cast<Tcp*>(ctx)->engine->dropLocalConnections(
                 types::IPAddress(prefix.addr));
         });
 
     tcpIPv6DelId = ifaceMgr.subscribe(interface::IPv6Event::IPV6_DEL,
-        engine,
+        this,
         [](void* ctx, interface::Interface&, types::IPv6Prefix& prefix) {
-            static_cast<TcpEngine*>(ctx)->dropLocalConnections(
+            static_cast<Tcp*>(ctx)->engine->dropLocalConnections(
                 types::IPAddress(prefix.addr));
         });
 
     tcpIPv6LlDelId = ifaceMgr.subscribe(interface::IPv6Event::IPV6_LL_DEL,
-        engine,
+        this,
         [](void* ctx, interface::Interface&, types::IPv6Prefix& prefix) {
-            static_cast<TcpEngine*>(ctx)->dropLocalConnections(
+            static_cast<Tcp*>(ctx)->engine->dropLocalConnections(
                 types::IPAddress(prefix.addr));
         });
 }
@@ -67,6 +67,8 @@ Tcp::~Tcp()
     delete engine;
     engine = nullptr;
 }
+
+INJECT_MOCK(MOCK_TCP_ENGINE_SWAP_CPP)
 
 Listener Tcp::listen(const TcpEndpoint& local, const ListenOptions& opt)
 {
