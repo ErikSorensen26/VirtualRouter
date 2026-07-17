@@ -164,6 +164,7 @@ private:
     friend NeighborAf;
 
     BgpProcess& process;
+
     core::ProcessQueue scheduler;
 
     std::unordered_map<AfiSafi, NeighborAf> afNeighbors; ///< Per-AF state, keyed by AfiSafi.

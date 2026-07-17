@@ -36,7 +36,7 @@ bool DampenState::onAnnounce(const DampenParams& p, std::chrono::steady_clock::t
 {
     decayTo(p.halfLifeSecs, now);
 
-    if (everWithdrawn)
+    if (everWithdrawn && !pendingReuse)
     {
         penalty += 1000.0;
         if (penalty > p.ceiling)

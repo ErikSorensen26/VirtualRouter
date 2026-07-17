@@ -253,7 +253,7 @@ bool BgpRx::processOpen(Session& session, uint64_t cid, std::span<uint8_t> paylo
         pos += 2 + pLen;
     }
 
-    if (!curSession || curSession->verifyConnection(cid))
+    if (!curSession || !curSession->verifyConnection(cid))
         return false;
 
     uint32_t resolvedAs = peerAs2;

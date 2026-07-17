@@ -163,7 +163,7 @@ public:
     AddressFamilyInstance(BgpProcess& proc, AfiSafi fam)
         : process(proc),
           family(fam),
-          policy(ProcessAccessor::getRoutingInstance(proc)),
+          policy(ProcessAccessor::getRoutingInstance(proc), proc),
           igpMetricResolver([](const types::IPAddress&) { return std::numeric_limits<uint64_t>::max(); }),
           configs(ProcessAccessor::getConfigs(proc).get<config::Bgp::ADDRESS_FAMILIES>().emplaceBack(fam.flatten()))
     {
@@ -441,7 +441,6 @@ public:
         {
             uint32_t pid = attrMgr.acquire(entry.pa.attrs, entry.pa.path);
             InboundRoute<NlriT> r(attrMgr, pid, nlriPath.nlri, &nbrAf);
-            r.neighborRouterId = peerRid;
             r.peerAs            = entry.peerAs;
             r.ebgp              = entry.ebgp;
             r.confedEbgp        = entry.confedEbgp;
@@ -515,12 +514,7 @@ public:
         std::unordered_set<NlriT> keys;
         keys.reserve(it->second.size());
         for (const auto& [nlriPath, inRoute] : it->second)
-        {
             keys.insert(nlriPath.nlri);
-            auto lit = locRib.find(nlriPath.nlri);
-            if (lit != locRib.end() && &lit->second.route == &inRoute)
-                locRib.erase(lit);
-        }
 
         adjRibIn.erase(it);
 
@@ -567,9 +561,6 @@ private:
             auto it = peerIn.find(n);
             if (it != peerIn.end())
             {
-                auto lit = locRib.find(n.nlri);
-                if (lit != locRib.end() && &lit->second.route == &it->second)
-                    locRib.erase(lit);
                 peerIn.erase(it);
             }
             if (softReconfig)
@@ -2617,9 +2608,9 @@ private:
         const uint32_t pid = ProcessAccessor::getAsNum(process);
 
         if constexpr (N::afi.afi == BGP_AFI_IPV4)
-            rt.removeRoute(readU32(nlri.addr), nlri.prefixLength, core::RouteSource::BGP, pid);
+            rt.removeRoute(nlri.addr, nlri.prefixLength, core::RouteSource::BGP, pid);
         else if constexpr (N::afi.afi == BGP_AFI_IPV6)
-            rt.removeRoute(readU128(nlri.addr), nlri.prefixLength, core::RouteSource::BGP, pid);
+            rt.removeRoute(nlri.addr, nlri.prefixLength, core::RouteSource::BGP, pid);
     }
 
     /**
@@ -2756,7 +2747,12 @@ private:
             if (!found)
             {
                 if (it->second.watchId)
-                    rt.unwatchAddress(it->second.watchId, it->second.isV6);
+                {
+                    if constexpr (N::afi.afi == BGP_AFI_IPV6)
+                        rt.template unwatchAddress<__uint128_t>(it->second.watchId);
+                    else
+                        rt.template unwatchAddress<uint32_t>(it->second.watchId);
+                }
                 NlriT staleNlri = it->first;
                 it = networkWatches.erase(it);
 
@@ -2785,13 +2781,13 @@ private:
             if constexpr (N::afi.afi == BGP_AFI_IPV6)
             {
                 entry.isV6    = true;
-                entry.watchId = rt.watchRoute(readU128(pfx.addr), pfx.prefixLength,
+                entry.watchId = rt.watchRoute(pfx.addr, pfx.prefixLength,
                                               &entry.ctx.value(), networkWatchCallback<__uint128_t>);
             }
             else
             {
                 entry.isV6    = false;
-                entry.watchId = rt.watchRoute(readU32(pfx.addr), pfx.prefixLength,
+                entry.watchId = rt.watchRoute(pfx.addr, pfx.prefixLength,
                                               &entry.ctx.value(), networkWatchCallback<uint32_t>);
             }
         }

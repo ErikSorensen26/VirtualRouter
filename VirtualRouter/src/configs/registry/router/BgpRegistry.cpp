@@ -33,7 +33,7 @@ void BgpNeighborSessionShutdown(void* n)
     });
 }
 
-void BgpNeighborSessionPathAttribute(void* n, const std::tuple<bool, uint8_t, uint8_t>& t)
+void BgpNeighborSessionPathAttribute(void* n)
 {
     auto& nbr = *static_cast<routing::bgp::Neighbor*>(n);
     nbr.getScheduler().post([&nbr]() {

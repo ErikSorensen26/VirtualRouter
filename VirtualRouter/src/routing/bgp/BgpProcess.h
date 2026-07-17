@@ -291,12 +291,13 @@ private:
     void scheduleScan();
 
     transport::tcp::Listener listener;                                   ///< Passive TCP listener on port 179.
-    std::unordered_map<types::IPAddress, Session> sessions;              ///< Live sessions, keyed by peer IP.
-    std::unordered_map<AfiSafi, AddressFamilyVariant> addressFamilies;   ///< Enabled AFI/SAFI instances.
 
     core::ProcessQueue scheduler; ///< Single-threaded event queue; all BGP FSM work runs here.
     AttributeManager attrMgr;     ///< Flyweight store for path attributes shared across all sessions.
     NeighborTable ntable;         ///< Configured and dynamic neighbor registry.
+    std::unordered_map<AfiSafi, AddressFamilyVariant> addressFamilies;   ///< Enabled AFI/SAFI instances.
+
+    std::unordered_map<types::IPAddress, Session> sessions;              ///< Live sessions, keyed by peer IP.
 
     config::BgpRegistry& configs;         ///< Process-level BGP configuration.
 };

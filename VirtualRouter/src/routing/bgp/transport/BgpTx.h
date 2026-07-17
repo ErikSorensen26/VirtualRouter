@@ -259,6 +259,7 @@ void appendNlri(std::span<const NlriPath<typename N::Nlri>> nlri, bool addPath, 
         if (addPath)
             utils::writeU32(buf.data(), n.pathId);
         N::encodeNlri(buf.data() + (addPath ? 4 : 0), n.nlri);
+        c.commit(entrySize);
     }
 }
 
@@ -295,6 +296,7 @@ size_t BgpTx::appendMpReach(const Session& session, size_t& attrSize, size_t nlr
             auto buf = c.reserveSpan(3);
             utils::writeU16(buf.data(), N::afi.afi);
             buf[2] = N::afi.safi;
+            c.commit(3);
         }
 
         // Next-Hop length + bytes
@@ -311,11 +313,13 @@ size_t BgpTx::appendMpReach(const Session& session, size_t& attrSize, size_t nlr
             {
                 std::memcpy(buf.data() + 1, nextHop.raw, 4);
             }
+            c.commit(1 + nhLen);
         }
 
         {
             auto snpa = c.reserveSpan(1);
             snpa[0] = 0;
+            c.commit(1);
         }
 
         appendNlri<N>(nlri, addPath, c);
@@ -347,6 +351,7 @@ size_t BgpTx::appendMpUnreach(const Session& session, size_t& attrSize, size_t w
         auto buf = c.reserveSpan(3);
         utils::writeU16(buf.data(), mp.family.afi);
         buf[2] = mp.family.safi;
+        c.commit(3);
     }
 
     appendNlri<N>(nlri, addPath, c);
@@ -377,13 +382,17 @@ void BgpTx::buildUpdate(transport::tcp::Connection& connection, Session& session
         while (nlriIdx < a.nlri.size() || withdrawIdx < update.withdrawn.size())
         {
             auto hdrBuf = connection.reserveSpan(packet::BgpHeader::fixedSize);
-            auto wdLenBuf = connection.reserveSpan(2);
-            auto attrLenBuf = connection.reserveSpan(2);
-
-            size_t attrBytes = appendPathAttrs(session, a.attrs, connection);
+            connection.commit(packet::BgpHeader::fixedSize);
 
             if constexpr (!isLegacyV4)
             {
+                auto wdLenBuf = connection.reserveSpan(2);
+                connection.commit(2);
+                auto attrLenBuf = connection.reserveSpan(2);
+                connection.commit(2);
+
+                size_t attrBytes = appendPathAttrs(session, a.attrs, connection);
+
                 size_t withdrawnAdded = 0;
                 size_t nlriAdded = 0;
 
@@ -409,7 +418,10 @@ void BgpTx::buildUpdate(transport::tcp::Connection& connection, Session& session
             }
             else
             {
-                size_t wdBudget = maxMsg - packet::BgpHeader::fixedSize - 4 - attrBytes;
+                auto wdLenBuf = connection.reserveSpan(2);
+                connection.commit(2);
+
+                size_t wdBudget = maxMsg - packet::BgpHeader::fixedSize - 4;
                 std::span<const NlriPath<typename N::Nlri>> wdSpan(
                     update.withdrawn.data() + withdrawIdx,
                     update.withdrawn.size() - withdrawIdx
@@ -417,6 +429,11 @@ void BgpTx::buildUpdate(transport::tcp::Connection& connection, Session& session
                 auto [wdEntries, wdBytes] = computeNlriLen<N>(wdSpan, addPath, wdBudget);
                 appendNlri<N>(wdSpan.subspan(0, wdEntries), addPath, connection);
                 withdrawIdx += wdEntries;
+
+                auto attrLenBuf = connection.reserveSpan(2);
+                connection.commit(2);
+
+                size_t attrBytes = appendPathAttrs(session, a.attrs, connection);
 
                 size_t nlriBudget = maxMsg - packet::BgpHeader::fixedSize - 4 - attrBytes - wdBytes;
                 std::span<const NlriPath<typename N::Nlri>> nlriSpan(
@@ -438,11 +455,15 @@ void BgpTx::buildUpdate(transport::tcp::Connection& connection, Session& session
     while (withdrawIdx < update.withdrawn.size())
     {
         auto hdrBuf = connection.reserveSpan(packet::BgpHeader::fixedSize);
+        connection.commit(packet::BgpHeader::fixedSize);
         auto wdLenBuf = connection.reserveSpan(2);
-        auto attrLenBuf = connection.reserveSpan(2);
+        connection.commit(2);
 
         if constexpr (!isLegacyV4)
         {
+            auto attrLenBuf = connection.reserveSpan(2);
+            connection.commit(2);
+
             size_t attrBytes = 0;
             MpUnreach mp{N::afi};
             std::span<NlriPath<typename N::Nlri>> wdSpan{update.withdrawn.data(), update.withdrawn.size()};
@@ -464,6 +485,9 @@ void BgpTx::buildUpdate(transport::tcp::Connection& connection, Session& session
             auto [wdEntries, wdBytes] = computeNlriLen<N>(wdSpan, addPath, wdBudget);
             appendNlri<N>(wdSpan.subspan(0, wdEntries), addPath, connection);
             withdrawIdx += wdEntries;
+
+            auto attrLenBuf = connection.reserveSpan(2);
+            connection.commit(2);
 
             buildHeader(BGP_TYPE_UPDATE, static_cast<uint16_t>(4 + wdBytes), hdrBuf.data());
             utils::writeU16(wdLenBuf.data(), static_cast<uint16_t>(wdBytes));

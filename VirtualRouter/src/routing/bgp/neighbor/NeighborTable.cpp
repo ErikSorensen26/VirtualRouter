@@ -35,7 +35,9 @@ void NeighborTable::syncNeighbors()
         }
         else
         {
-            createNeighbor(ip);
+            Neighbor* nbr = createNeighbor(ip);
+            if (nbr)
+                startConfiguredSession(*nbr);
         }
     }
 
@@ -60,14 +62,16 @@ Neighbor* NeighborTable::createNeighbor(const types::IPAddress& ipAddress)
         return &neighbors.at(ipAddress);
 
     auto [it, ok] = neighbors.try_emplace(ipAddress, ipAddress, process);
-    if (ok)
-    {
-        auto connectionMode = it->second.getConfigs().get<config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
-        if (connectionMode.hasValue() && !connectionMode.load() /*active = true*/)
-            process.startPassiveSession(it->second);
-        process.startActiveSession(it->second);
-    }
     return ok ? &it->second : nullptr;
+}
+
+void NeighborTable::startConfiguredSession(Neighbor& nbr)
+{
+    auto connectionMode = nbr.getConfigs().get<config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
+    if (connectionMode.hasValue() && !connectionMode.load() /*active = true*/)
+        process.startPassiveSession(nbr);
+    else
+        process.startActiveSession(nbr);
 }
 
 Neighbor* NeighborTable::createDynamicNeighbor(const types::IPAddress& ipAddress, const std::string& peerGroupName)

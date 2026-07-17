@@ -164,7 +164,7 @@ public:
     {
         n.prefixLength = buf[0];
         size_t bytes = (static_cast<size_t>(n.prefixLength) + 7u) / 8u;
-        n.addr = utils::readBytes<uint32_t>(buf, bytes);
+        n.addr = utils::readBytes<uint32_t>(buf + 1, bytes);
         return 1u + bytes;
     }
 

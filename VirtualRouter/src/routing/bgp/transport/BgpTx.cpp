@@ -142,6 +142,7 @@ static void appendCapabilities(const Capabilities& caps, transport::tcp::Connect
         buf[1] = dataSize + 2;
         buf[2] = code;
         buf[3] = dataSize;
+        c.commit(siz);
         return buf.data() + 4;
     };
 
@@ -338,6 +339,7 @@ void BgpTx::appendAttrHdr(uint8_t flags, uint8_t type, size_t valueLen, size_t& 
         buf[0] = flags;
         buf[1] = type;
         utils::writeU16(buf.data() + 2, static_cast<uint16_t>(valueLen));
+        c.commit(4);
     }
     else
     {
@@ -346,6 +348,7 @@ void BgpTx::appendAttrHdr(uint8_t flags, uint8_t type, size_t valueLen, size_t& 
         buf[0] = flags;
         buf[1] = type;
         buf[2] = static_cast<uint8_t>(valueLen);
+        c.commit(3);
     }
 };
 
@@ -362,6 +365,7 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, t
         appendAttrHdr(BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_ORIGIN, 1, attrSize, c);
         auto buf = c.reserveSpan(1);
         buf[0] = *pa.attrs.origin;
+        c.commit(1);
     }
 
     // AS PATH
@@ -376,6 +380,7 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, t
             auto hdr = c.reserveSpan(2);
             hdr[0] = seg.segmentType;
             hdr[1] = static_cast<uint8_t>(seg.asns.size());
+            c.commit(2);
 
             for (uint32_t asn : seg.asns)
             {
@@ -383,6 +388,7 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, t
                 {
                     auto buf = c.reserveSpan(4);
                     utils::writeU32(buf.data(), asn);
+                    c.commit(4);
                 }
                 else
                 {
@@ -391,6 +397,7 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, t
                         : static_cast<uint16_t>(asn);
                     auto buf = c.reserveSpan(2);
                     utils::writeU16(buf.data(), a2);
+                    c.commit(2);
                 }
             }
         }
@@ -428,11 +435,13 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, t
                 auto hdr = c.reserveSpan(2);
                 hdr[0] = seg.segmentType;
                 hdr[1] = static_cast<uint8_t>(seg.asns.size());
+                c.commit(2);
 
                 for (uint32_t asn : seg.asns)
                 {
                     auto buf = c.reserveSpan(4);
                     utils::writeU32(buf.data(), asn);
+                    c.commit(4);
                 }
             }
         }
@@ -443,6 +452,7 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, t
         appendAttrHdr(BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_NEXT_HOP, 4, attrSize, c);
         auto buf = c.reserveSpan(4);
         utils::writeU32(buf.data(), pa.path.nextHop.v4());
+        c.commit(4);
     }
 
     // MED
@@ -451,6 +461,7 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, t
         appendAttrHdr(BGP_ATTR_FLAG_OPTIONAL, BGP_ATTR_MULTI_EXIT_DISC, 4, attrSize, c);
         auto buf = c.reserveSpan(4);
         utils::writeU32(buf.data(), *pa.attrs.med);
+        c.commit(4);
     }
 
     // LOCAL PREF
@@ -459,6 +470,7 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, t
         appendAttrHdr(BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_LOCAL_PREF, 4, attrSize, c);
         auto buf = c.reserveSpan(4);
         utils::writeU32(buf.data(), *pa.attrs.localPref);
+        c.commit(4);
     }
 
     // ATOMIC AGGREGATE
@@ -477,6 +489,7 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, t
             auto buf = c.reserveSpan(8);
             utils::writeU32(buf.data(), agg.asn);
             utils::writeU32(buf.data() + 4, agg.speaker.v4());
+            c.commit(8);
         }
         else
         {
@@ -486,6 +499,7 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, t
             auto buf = c.reserveSpan(6);
             utils::writeU16(buf.data(), a2);
             utils::writeU32(buf.data() + 2, agg.speaker.v4());
+            c.commit(6);
 
             // AS4 AGGREGATOR
             if (agg.asn > 65535)
@@ -494,6 +508,7 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, t
                 auto buf4 = c.reserveSpan(8);
                 utils::writeU32(buf4.data(), agg.asn);
                 utils::writeU32(buf4.data() + 4, agg.speaker.v4());
+                c.commit(8);
             }
         }
     }
@@ -506,6 +521,7 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, t
         {
             auto buf = c.reserveSpan(4);
             utils::writeU32(buf.data(), comm);
+            c.commit(4);
         }
     }
 
@@ -515,6 +531,7 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, t
         appendAttrHdr(BGP_ATTR_FLAG_OPTIONAL, BGP_ATTR_ORIGINATOR_ID, 4, attrSize, c);
         auto buf = c.reserveSpan(4);
         utils::writeU32(buf.data(), *pa.attrs.originatorId);
+        c.commit(4);
     }
 
     // CLUSTER LIST
@@ -525,10 +542,11 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, t
         {
             auto buf = c.reserveSpan(4);
             utils::writeU32(buf.data(), cid);
+            c.commit(4);
         }
     }
 
-    // EXTENDED COMMUNITIES    
+    // EXTENDED COMMUNITIES
     if (!pa.attrs.extendedCommunities.empty())
     {
         appendAttrHdr(BGP_ATTR_FLAG_OPTIONAL | BGP_ATTR_FLAG_TRANSITIVE,
@@ -537,6 +555,7 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, t
         {
             auto buf = c.reserveSpan(8);
             utils::writeU64(buf.data(), ec);
+            c.commit(8);
         }
     }
 
@@ -548,6 +567,7 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, t
         buf[0] = 1;
         utils::writeU16(buf.data() + 1, 11);
         utils::writeU64(buf.data() + 3, *pa.attrs.aigp);
+        c.commit(11);
     }
 
     // LARGE COMMUNITIES
@@ -561,6 +581,7 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, t
             utils::writeU32(buf.data(), lc[0]);
             utils::writeU32(buf.data() + 4, lc[1]);
             utils::writeU32(buf.data() + 8, lc[2]);
+            c.commit(12);
         }
     }
 
@@ -570,6 +591,7 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, t
         appendAttrHdr(ua.flags | BGP_ATTR_FLAG_PARTIAL, ua.type, ua.value.size(), attrSize, c);
         auto buf = c.reserveSpan(ua.value.size());
         std::memcpy(buf.data(), ua.value.data(), ua.value.size());
+        c.commit(ua.value.size());
     }
 
     return attrSize;
@@ -599,14 +621,17 @@ void BgpTx::buildOpen(transport::tcp::Connection& connection, Session& session)
 
     uint16_t capSize = computeCapabilityLen(caps);
     if (capSize >= 255)
-    {
         open.setParameterLen(255);
+    else
+        open.setParameterLen(static_cast<uint8_t>(capSize));
+
+    connection.commit(openSize);
+
+    if (capSize >= 255)
+    {
         auto ext = connection.reserveSpan(2);
         utils::writeU16(ext.data(), capSize);
-    }
-    else
-    {
-        open.setParameterLen(static_cast<uint8_t>(capSize));
+        connection.commit(2);
     }
 
     appendCapabilities(caps, connection);
@@ -627,12 +652,14 @@ void BgpTx::buildNotification(transport::tcp::Connection& connection, const Noti
     utils::writeU16(notif, notification.code);
     std::memcpy(notif + 2, notification.data.data(), notification.data.size());
     buildHeader(BGP_TYPE_NOTIFICATION, notifSize, buf.data());
+    connection.commit(bgpSize);
 }
 
 void BgpTx::buildKeepalive(transport::tcp::Connection& connection)
 {
     std::span<uint8_t> buf =  connection.reserveSpan(packet::BgpHeader::fixedSize);
     buildHeader(BGP_TYPE_KEEPALIVE, 0, buf.data());
+    connection.commit(packet::BgpHeader::fixedSize);
 }
 
 void BgpTx::buildRouteRefresh(transport::tcp::Connection& connection, Session& session,
@@ -659,17 +686,20 @@ void BgpTx::buildRouteRefresh(transport::tcp::Connection& connection, Session& s
         auto hdrBuf = connection.reserveSpan(packet::BgpHeader::fixedSize);
         buildHeader(BGP_TYPE_ROUTE_REFRESH,
             static_cast<uint16_t>(4 + 3 + orfPayload), hdrBuf.data());
+        connection.commit(packet::BgpHeader::fixedSize);
 
         {
             auto buf = connection.reserveSpan(4);
             utils::writeU16(buf.data(), family.afi);
             buf[2] = BGP_ORF_WHEN_IMMEDIATE;
             buf[3] = family.safi;
+            connection.commit(4);
         }
         {
             auto buf = connection.reserveSpan(3);
             buf[0] = BGP_ORF_TYPE_PREFIX_LIST;
             utils::writeU16(buf.data() + 1, orfPayload);
+            connection.commit(3);
         }
         for (const auto& e : orfOutbound)
         {
@@ -677,10 +707,12 @@ void BgpTx::buildRouteRefresh(transport::tcp::Connection& connection, Session& s
             if (e.action == BGP_ORF_ACTION_REMOVE_ALL)
             {
                 connection.reserveSpan(1)[0] = am;
+                connection.commit(1);
                 continue;
             }
             uint8_t pfxBytes = static_cast<uint8_t>((e.prefix.prefixLength + 7) / 8);
-            auto buf = connection.reserveSpan(static_cast<size_t>(8 + pfxBytes));
+            size_t entrySize = static_cast<size_t>(8 + pfxBytes);
+            auto buf = connection.reserveSpan(entrySize);
             buf[0] = am;
             utils::writeU32(buf.data() + 1, e.sequence);
             buf[5] = e.minLen;
@@ -692,6 +724,7 @@ void BgpTx::buildRouteRefresh(transport::tcp::Connection& connection, Session& s
                 else
                     utils::writeBytes(buf.data() + 8, e.prefix.v6(), pfxBytes);
             }
+            connection.commit(entrySize);
         }
         return;
     }
@@ -702,5 +735,6 @@ void BgpTx::buildRouteRefresh(transport::tcp::Connection& connection, Session& s
     utils::writeU16(rr, family.afi);
     rr[2] = subtype;
     rr[3] = family.safi;
+    connection.commit(packet::BgpHeader::fixedSize + 4);
 }
 } // namespace routing

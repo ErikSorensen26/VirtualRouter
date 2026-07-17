@@ -38,6 +38,9 @@ Neighbor::Neighbor(const types::IPAddress& ipAddress, BgpProcess& proc)
 
 Neighbor::~Neighbor()
 {
+    scheduler.release();
+    afNeighbors.clear();
+
     process.getConfigs().get<config::Bgp::NEIGHBOR>().erase(neighborAddress);
 }
 

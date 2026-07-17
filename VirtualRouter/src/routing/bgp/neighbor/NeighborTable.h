@@ -86,6 +86,15 @@ public:
     void syncPeerGroups();
 
     /**
+     * @brief Start a session for @p nbr according to its configured
+     * TRANSPORT_CONNECTION_MODE (active by default, passive when explicitly
+     * set to passive).
+     *
+     * @param nbr Neighbor to start a session for.
+     */
+    void startConfiguredSession(Neighbor& nbr);
+
+    /**
      * @brief Create a statically configured BGP neighbor for @p ipAddress.
      *
      * Inserts a new @ref Neighbor into the table.  If a neighbor already exists

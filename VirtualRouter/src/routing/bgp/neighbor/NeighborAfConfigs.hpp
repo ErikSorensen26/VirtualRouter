@@ -62,7 +62,7 @@ struct NeighborAfConfigs
     {
         if (peerGroup && peerOwnedBaseTable.test(config::toIndex<F>))
             return peerConfigs->get<config::BgpNeighbor::AF_BASE>().get().get<F>();
-        return peerConfigs->get<config::BgpNeighbor::AF_BASE>().get().get<F>();
+        return configs.get<config::BgpNeighbor::AF_BASE>().get().get<F>();
     }
 
     /**

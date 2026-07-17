@@ -237,6 +237,19 @@ bool BgpRx::processUpdate(Session& session, IncomingUpdate& uinfo, ParsedUpdate<
             pos += 4;
         }
 
+        if (pos >= uinfo.withdrawnData.size())
+        {
+            error.code = BGP_NOTIFICATION_UPDATE_MALFORMED_ATTR_LIST;
+            return false;
+        }
+        uint8_t prefixLength = uinfo.withdrawnData[pos];
+        size_t claimedBytes = 1u + (static_cast<size_t>(prefixLength) + 7u) / 8u;
+        if (pos + claimedBytes > uinfo.withdrawnData.size())
+        {
+            error.code = BGP_NOTIFICATION_UPDATE_MALFORMED_ATTR_LIST;
+            return false;
+        }
+
         typename N::Nlri nlri{};
         size_t consumed = N::decodeNlri(uinfo.withdrawnData.data() + pos, nlri);
         if (consumed == 0 || pos + consumed > uinfo.withdrawnData.size())
@@ -263,6 +276,19 @@ bool BgpRx::processUpdate(Session& session, IncomingUpdate& uinfo, ParsedUpdate<
             }
             pathId = utils::readU32(uinfo.nlriData.data() + pos);
             pos += 4;
+        }
+
+        if (pos >= uinfo.nlriData.size())
+        {
+            error.code = BGP_NOTIFICATION_UPDATE_MALFORMED_ATTR_LIST;
+            return false;
+        }
+        uint8_t prefixLength = uinfo.nlriData[pos];
+        size_t claimedBytes = 1u + (static_cast<size_t>(prefixLength) + 7u) / 8u;
+        if (pos + claimedBytes > uinfo.nlriData.size())
+        {
+            error.code = BGP_NOTIFICATION_UPDATE_MALFORMED_ATTR_LIST;
+            return false;
         }
 
         typename N::Nlri nlri{};

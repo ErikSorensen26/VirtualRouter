@@ -120,7 +120,7 @@ else()
         -fdata-sections
         -fno-inline-functions
         -fno-inline-small-functions
-        #-fsanitize=address
+        -fsanitize=address
         #-gz
         -gdwarf-4
         #-gsplit-dwarf

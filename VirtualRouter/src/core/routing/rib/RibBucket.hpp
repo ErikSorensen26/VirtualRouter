@@ -97,9 +97,14 @@ public:
         {
             if (r.source == e->source && r.processId == e->processId)
             {
+                bool sameNextHops = r.nextHopCount == e->nextHopCount;
+                for (uint8_t i = 0; sameNextHops && i < e->nextHopCount; ++i)
+                    sameNextHops = r.nextHops[i].nextHop == e->nextHops[i].nextHop &&
+                                   r.nextHops[i].iface   == e->nextHops[i].iface;
+
                 if (r.metric        == e->metric        &&
-                    r.nextHopCount  == e->nextHopCount  &&
-                    r.adminDistance == e->adminDistance)
+                    r.adminDistance == e->adminDistance &&
+                    sameNextHops)
                 {
                     delete e;
                     return false;
