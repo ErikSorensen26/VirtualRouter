@@ -12,6 +12,7 @@
 #ifndef OSPF_AREA_H
 #define OSPF_AREA_H
 
+#include <optional>
 
 #include "ospf/database/LsdbTable.h"
 #include "ospf/spf/SpfManager.h"
@@ -19,6 +20,7 @@
 #include "IntraRouteManager.h"
 #include "ospf/flooding/FloodManager.h"
 #include "OriginatorContext.h"
+#include "ospf/ospfv2/area/OpaqueOriginatorV2.h"
 
 namespace config::ospf { enum class AreaType; }
 namespace config { struct OspfInterfaceRegistry; }
@@ -32,6 +34,7 @@ class OspfProcess;
 class OspfInterface;
 class OspfRib;
 class TopologyTable;
+class GracefulRestartManager;
 
 /**
  * @brief Returns true if the LSA has reached or exceeded MaxAge.
@@ -219,6 +222,7 @@ private:
     friend class FloodManager;
     friend class SpfManager;
     friend class OriginatorContext;
+    friend class GracefulRestartManager;
     friend struct RouteManagerUtility;
 
     // FLOODING
@@ -443,6 +447,7 @@ private:
 
     core::ProcessQueue scheduler; ///< Reference to the owning process scheduler; all area work is serialized through this.
     OriginatorContext originContext; ///< Origination mechanism: throttle back-off, group-paced refresh, and the LSDB install path.
+    std::optional<OpaqueOriginatorV2> opaqueOriginator; ///< OSPFv2-only opaque LSA originator (Router Capability); unset for V3 areas. Must be constructed before `originator` (its constructor drives a fullRefresh() that touches this).
     IntraOriginator& originator; ///< Version-specific intra-area originator (Router/Network LSAs); heap-allocated by IntraOriginator::create(), deleted in ~Area().
     IntraRouteManager routeManager; ///< Derives this area's intra-area prefix routes from SPF results.
 
@@ -452,6 +457,7 @@ private:
 
     InterOriginator& getInterOriginator();
     ExternalOriginator& getExternalOriginator();
+    OpaqueOriginatorV2* getOpaqueOriginator() { return opaqueOriginator ? &*opaqueOriginator : nullptr; }
     TopologyTable& getTopoTable();
     const config::OspfRegistry& getProcessConfigs() const;
     const InterfaceManager& getIfaceMgr() const;

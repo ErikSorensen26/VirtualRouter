@@ -131,6 +131,33 @@ public:
     void sendReliableLsu(Neighbor* nbr, std::vector<std::pair<FloodInfo, LsaRecordRef>>& keys);
 
     /**
+     * @brief Requests an out-of-band LSDB resync with a Full neighbor (RFC 4811/4812).
+     *
+     * Sets the neighbor's one-shot resync flag and immediately sends a unicast
+     * Hello with the LLS resync bit set. The flag is consumed the next time a
+     * unicast Hello is built for this neighbor (see @ref addLinkLocalExtension
+     * callers), regardless of whether that happens to be this triggered Hello
+     * or a subsequent one.
+     *
+     * @param nbr Target neighbor; should be in the Full state.
+     */
+    void triggerResync(Neighbor& nbr);
+
+    /**
+     * @brief Handles a received LLS resync request from a neighbor.
+     *
+     * Per RFC 4811, only meaningful once the adjacency is Full — a neighbor
+     * that has not finished the initial exchange has no synchronized database
+     * to resync from, so the request is ignored below Full. Does not reset
+     * the neighbor state machine; it re-enqueues the entire local LSDB onto
+     * the neighbor's unicast retransmission list via the existing reliable
+     * LSU machinery, exactly as if every LSA had just changed.
+     *
+     * @param nbr Neighbor that requested the resync.
+     */
+    void onResyncRequested(Neighbor& nbr);
+
+    /**
      * @brief Called when the DD retransmission timer fires for a neighbor.
      *
      * @param nbr Neighbor whose DD retransmit timer expired.
@@ -226,9 +253,25 @@ protected:
      *
      * @param buf     Pointer past the end of the OSPF header where LLS data begins.
      * @param restart True if the graceful-restart extended option should be included.
+     * @param resync  True if the out-of-band resync extended option should be included.
      * @return Total byte length of the appended LLS block.
      */
-    uint16_t addLinkLocalExtension(uint8_t* buf, bool restart);
+    uint16_t addLinkLocalExtension(uint8_t* buf, bool restart, bool resync = false);
+
+    /**
+     * @brief Bit positions of the LLS Extended Options TLV (RFC 4813 SS2.1 / RFC 4811/4812).
+     */
+    enum class LlsOptions : uint32_t
+    {
+        RESYNC  = 0x0001, ///< LR-bit: request an out-of-band LSDB resync.
+        RESTART = 0x0002, ///< RS-bit: graceful-restart signal.
+    };
+
+    /// Returns true if `opt`'s bit is set in a decoded LLS Extended Options value.
+    static bool getLlsOption(uint32_t extension, LlsOptions opt)
+    {
+        return (extension & static_cast<uint32_t>(opt)) != 0;
+    }
 
     /**
      * @brief Writes the LLS Data Block checksum into the buffer in-place.
@@ -341,6 +384,9 @@ protected:
     template <typename Policy>
     std::optional<Area::Result> processLsa(IncomingLsaContext& ctx, LsaBody& body) { return iface.processLsa<Policy>(ctx, body); }
     void runDCIntegrityScan() { iface.runAreaDCIntegrityScan(); }
+
+    // GRACEFUL RESTART (RFC 3623)
+    void handleGraceLsaReceived(uint32_t advertisingRouter, const GraceLsaTlv& tlv) { iface.handleGraceLsaReceived(advertisingRouter, tlv); }
 };
 } // namespace routing
 

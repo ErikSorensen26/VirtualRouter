@@ -14,9 +14,6 @@ namespace
 /// Unique-per-thread address used to recognize the drain thread of a queue.
 thread_local int gControlSchedulerTlsMarker = 0;
 
-/// Decrements a counter on scope exit; wakes waiters when it reaches zero.
-/// The matching increment happens where the work is *enqueued*, so waiters
-/// also cover work that is queued but not yet running.
 struct CounterDoneGuard
 {
     std::atomic<uint32_t>& counter;
@@ -123,10 +120,13 @@ bool ControlScheduler::TaskRing::tryConsumeOne(bool run) noexcept
 
         if (dif == 0)
         {
-            if (tail.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed, std::memory_order_relaxed))
+            if (tail.compare_exchange_weak(pos, pos + 1, std::memory_order_acquire, std::memory_order_relaxed))
             {
                 if (run)
+                {
+                    INJECT_MOCK(MOCK_PROCESS_QUEUE_LOCK)
                     s->task.run();
+                }
 
                 s->task.cleanup();
                 s->seq.store(pos + capacity, std::memory_order_release);
@@ -193,9 +193,6 @@ ControlScheduler::~ControlScheduler()
 {
     stopping.store(true, std::memory_order_release);
 
-    // stopTimer() joins the timer thread AND waits for every callback already
-    // dispatched to the pool, so no onTimerFired() can start (or be running)
-    // after this returns.
     timeManager.stopTimer();
 
     for (ProcessQueueSlot* node : pqAllNodes)
@@ -207,9 +204,6 @@ ControlScheduler::~ControlScheduler()
         }
     }
 
-    // drainsInFlight counts drains from the moment they are enqueued, so this
-    // also waits out drain tasks still sitting unstarted in the pool ring —
-    // they must not touch the slot nodes (or this object) after we free them.
     uint32_t v = drainsInFlight.load(std::memory_order_acquire);
     while (v != 0)
     {
@@ -217,9 +211,6 @@ ControlScheduler::~ControlScheduler()
         v = drainsInFlight.load(std::memory_order_acquire);
     }
 
-    // In-use slots here mean a handle outlived the scheduler (contract
-    // violation); clean up the tasks but leave the nodes to the handle, which
-    // still holds a share of them.
     for (uint32_t i = 0; i < static_cast<uint32_t>(maxDelayedTimers); ++i)
     {
         if (delayedSlots[i].inUse.load(std::memory_order_acquire))
@@ -301,8 +292,6 @@ uint32_t ControlScheduler::allocDelayedSlot() noexcept
 
         DelayedSlot& ds = delayedSlots[idx];
 
-        // `next` may be stale if another thread pops/pushes concurrently; the
-        // tag in the head CAS below detects that and retries (no ABA).
         const uint32_t next = ds.nextFree.load(std::memory_order_relaxed);
 
         if (delayedFreeHead.compare_exchange_weak(
@@ -332,8 +321,6 @@ void ControlScheduler::freeDelayedSlot(uint32_t idx) noexcept
     ds.refNode = nullptr;
     ds.tmTimerId.store(0, std::memory_order_relaxed);
 
-    // Bump the generation and clear the claim in one store: stale handles
-    // can no longer claim this slot, in any interleaving.
     const uint32_t curGen = static_cast<uint32_t>(ds.genClaim.load(std::memory_order_relaxed) >> 1);
     ds.genClaim.store(static_cast<uint64_t>(nextDelayedGeneration(curGen)) << 1, std::memory_order_release);
     ds.inUse.store(false, std::memory_order_release);
@@ -357,12 +344,9 @@ void ControlScheduler::finishFiredDelayed(uint32_t idx, uint32_t expectedGen, bo
 
     DelayedSlot& ds = delayedSlots[idx];
 
-    // The caller holds the claim for this generation; anything else is a bug
-    // upstream, so bail without touching the slot.
     if (ds.genClaim.load(std::memory_order_acquire) != ((static_cast<uint64_t>(expectedGen) << 1) | 1))
         return;
 
-    // onTimerFired() already detached ds.refNode before handing us the slot.
     if (run)
         ds.task.run();
 
@@ -381,9 +365,6 @@ void ControlScheduler::retireFiredDelayed(uint32_t idx, uint32_t expectedGen) no
     if (ds.genClaim.load(std::memory_order_acquire) != ((static_cast<uint64_t>(expectedGen) << 1) | 1))
         return;
 
-    // The fired task never ran: either its trampoline could not be posted
-    // (ring momentarily full) or it was discarded with the queue. If the
-    // queue is still alive the timer must not be lost — re-arm it shortly.
     ProcessQueueSlot* qs = ds.qid;
     const bool queueAlive = qs
         && !stopping.load(std::memory_order_acquire)
@@ -397,13 +378,14 @@ void ControlScheduler::retireFiredDelayed(uint32_t idx, uint32_t expectedGen) no
         return;
     }
 
-    // Unpublish tmTimerId first so a racing cancel spins until the new timer
-    // id is visible, then release the claim to re-open fire/cancel arbitration.
+    const auto reArm = std::chrono::steady_clock::now() + std::chrono::milliseconds(1);
+    ds.expiration.store(reArm.time_since_epoch().count(), std::memory_order_relaxed);
+
     ds.tmTimerId.store(0, std::memory_order_release);
     ds.genClaim.store(static_cast<uint64_t>(expectedGen) << 1, std::memory_order_release);
 
     const uint32_t tmId = timeManager.addTimer(
-        std::chrono::steady_clock::now() + std::chrono::milliseconds(1),
+        reArm,
         [this, idx, expectedGen](uint32_t) noexcept
         {
             onTimerFired(idx, expectedGen);
@@ -419,20 +401,13 @@ void ControlScheduler::onTimerFired(uint32_t delayedIdx, uint32_t delayedGen) no
 
     DelayedSlot& ds = delayedSlots[delayedIdx];
 
-    // Claim the slot for exactly our generation; fails if it was cancelled,
-    // freed or recycled in the meantime.
     uint64_t expected = static_cast<uint64_t>(delayedGen) << 1;
     if (!ds.genClaim.compare_exchange_strong(expected, expected | 1, std::memory_order_acq_rel))
         return;
 
-    // We own this firing. schedule() publishes tmTimerId as its *final* step;
-    // wait for it so the slot cannot be freed (and reallocated) below while
-    // the scheduling thread still has one store outstanding.
     while (ds.tmTimerId.load(std::memory_order_acquire) == 0)
         _mm_pause();
 
-    // Detach the timer node: from here on release() no longer needs to cancel
-    // this timer — the trampoline's pending token keeps it waiting instead.
     if (ds.refNode)
     {
         ds.refNode->active.store(false, std::memory_order_release);
@@ -443,9 +418,6 @@ void ControlScheduler::onTimerFired(uint32_t delayedIdx, uint32_t delayedGen) no
     const ProcessQueueId qid = ds.qid;
     const uint32_t qgen = ds.qgen;
 
-    // Retires the fired task (re-arming or freeing its slot) unless the
-    // trampoline actually ran it. Covers both a failed post below and a
-    // trampoline discarded from the ring without running.
     struct FiredDelayedToken
     {
         ControlScheduler* engine;
@@ -479,8 +451,6 @@ void ControlScheduler::onTimerFired(uint32_t delayedIdx, uint32_t delayedGen) no
             tok.released = true;
             finishFiredDelayed(delayedIdx, delayedGen, true);
         });
-    // On post failure the lambda above is destroyed on the spot and its token
-    // retires the slot exactly once.
 }
 
 bool ControlScheduler::cancelDelayed(uint32_t timerId) noexcept
@@ -496,16 +466,10 @@ bool ControlScheduler::cancelDelayed(uint32_t timerId) noexcept
 
     DelayedSlot& ds = delayedSlots[idx];
 
-    // Claim the slot for exactly the handle's generation; fails if already
-    // fired/cancelled, freed, or recycled (no window for a stale handle to
-    // claim someone else's slot).
     uint64_t expected = static_cast<uint64_t>(gen) << 1;
     if (!ds.genClaim.compare_exchange_strong(expected, expected | 1, std::memory_order_acq_rel))
         return false;
 
-    // We own the cancellation. schedule() (and the re-arm path) publish
-    // tmTimerId as their final step; wait for it so freeing the slot below
-    // cannot race that store.
     uint32_t tmId = ds.tmTimerId.load(std::memory_order_acquire);
     while (tmId == 0)
     {
@@ -533,18 +497,12 @@ bool ControlScheduler::linkRefTimerNode(RefState& owner, RefTimerNode* node) noe
     while (owner.listLock.test_and_set(std::memory_order_acquire))
         _mm_pause();
 
-    // Re-check under the lock: cancelRefTimers() detaches the list under this
-    // lock after `alive` is already false, so a successful link here is
-    // guaranteed to be visible to (and cancelled by) the release path.
     if (!owner.alive.load(std::memory_order_acquire))
     {
         owner.listLock.clear(std::memory_order_release);
         return false;
     }
 
-    // Prune nodes whose timers already fired or were cancelled, dropping the
-    // list's ownership share; the timer side dropped its own share when it
-    // marked the node inactive.
     RefTimerNode** link = &owner.timerHead;
     while (RefTimerNode* cur = *link)
     {
@@ -571,9 +529,7 @@ void ControlScheduler::cancelRefTimers(RefState* state) noexcept
     if (!state)
         return;
 
-    // Detach the whole list under the lock. `alive` is already false, so no
-    // new node can be linked after this (linkRefTimerNode re-checks it under
-    // the same lock).
+    // Detach the whole list under the lock.
     RefTimerNode* head;
     {
         while (state->listLock.test_and_set(std::memory_order_acquire))
@@ -625,10 +581,6 @@ void ControlScheduler::drainProcessQueue(ProcessQueueId id, uint32_t gen) noexce
         if (slot.generation.load(std::memory_order_seq_cst) != gen)
             return;
 
-        // We are the single scheduled drain; claim RUNNING so posters flag
-        // late arrivals via RS_RESCHED instead of scheduling a second drain.
-        // The exchange acquires the release sequence of every poster RMW on
-        // runState, making all items published before it visible to our scan.
         slot.runState.exchange(RS_RUNNING, std::memory_order_acq_rel);
         slot.drainThreadMarker.store(&gControlSchedulerTlsMarker, std::memory_order_release);
 
@@ -650,16 +602,6 @@ void ControlScheduler::drainProcessQueue(ProcessQueueId id, uint32_t gen) noexce
             if (idle)
                 break;
 
-            // A poster flagged RS_RESCHED after our last empty scan: its item
-            // is published, so another pass is guaranteed to find it.
-            //
-            // This transition MUST be an RMW, not a plain store: a buffered
-            // store could still be invisible while the rescan's loads already
-            // execute, so a poster could read the stale RESCHED (assuming a
-            // rescan is still owed) after the rescan effectively happened,
-            // and its item would be lost. The RMW commits before our loads
-            // and synchronizes with the poster RMW that set RESCHED, making
-            // every item published before it visible to the rescan.
             slot.runState.exchange(RS_RUNNING, std::memory_order_acq_rel);
             slot.drainThreadMarker.store(&gControlSchedulerTlsMarker, std::memory_order_relaxed);
         }
@@ -688,9 +630,6 @@ bool ControlScheduler::pumpOwnDrainThread(ProcessQueueId id) noexcept
     if (!onDrainThread(id))
         return false;
 
-    // We are inside a task on this queue's drain thread, so the drain's
-    // access guard already protects the ring; consuming here is the same as
-    // the drain doing it (discarding instead of running once closed).
     return consumeOne(*id);
 }
 
@@ -717,6 +656,84 @@ void ControlScheduler::waitIdle(ProcessQueueId id, uint32_t gen) noexcept
     });
 }
 
+void ControlScheduler::waitScheduled(ProcessQueueId id, uint32_t gen) noexcept
+{
+    if (!id)
+        return;
+
+    if (maxDelayedTimers == 0)
+    {
+        waitIdle(id, gen);
+        return;
+    }
+
+    // Blocking on a delayed task from the queue's own drain thread would deadlock (the drain is us).
+    if (onDrainThread(id))
+        return;
+
+    ProcessQueueSlot& slot = *id;
+
+    while (true)
+    {
+        waitIdle(id, gen);
+
+        if (!slot.active.load(std::memory_order_acquire) ||
+            slot.generation.load(std::memory_order_acquire) != gen)
+            return;
+
+        // Wait only for tasks due by now (+1ms covers retireFiredDelayed's re-arm); future periodic timers are excluded so re-arming chains terminate.
+        const int64_t cutoff =
+            (std::chrono::steady_clock::now() + std::chrono::milliseconds(1)).time_since_epoch().count();
+
+        uint32_t oldestIdx = kInvalidIndex;
+        uint64_t oldestClaim = 0;
+        int64_t oldestExp = 0;
+
+        for (uint32_t idx = 0; idx < maxDelayedTimers; ++idx)
+        {
+            DelayedSlot& ds = delayedSlots[idx];
+
+            const uint64_t gc = ds.genClaim.load(std::memory_order_acquire);
+
+            if (!ds.inUse.load(std::memory_order_acquire))
+                continue;
+
+            if (ds.qid != id || ds.qgen != gen)
+                continue;
+
+            const int64_t exp = ds.expiration.load(std::memory_order_relaxed);
+
+            // qid/qgen/expiration only change across a genClaim transition, so a moved claim word means torn reads; skip (next pass catches re-arms).
+            if (ds.genClaim.load(std::memory_order_acquire) != gc)
+                continue;
+
+            if (exp > cutoff)
+                continue;
+
+            if (oldestIdx == kInvalidIndex || exp < oldestExp)
+            {
+                oldestIdx = idx;
+                oldestClaim = gc;
+                oldestExp = exp;
+            }
+        }
+
+        if (oldestIdx == kInvalidIndex)
+            return;
+
+        // Track the oldest due task: its generation advances only when it has run or been cancelled (freeDelayedSlot), never on a retire re-arm.
+        DelayedSlot& ds = delayedSlots[oldestIdx];
+        while ((ds.genClaim.load(std::memory_order_acquire) >> 1) == (oldestClaim >> 1))
+        {
+            if (!slot.active.load(std::memory_order_acquire) ||
+                slot.generation.load(std::memory_order_acquire) != gen)
+                return;
+
+            std::this_thread::sleep_for(std::chrono::microseconds(100));
+        }
+    }
+}
+
 void ControlScheduler::destroyProcessQueue(ProcessQueueId id, uint32_t gen) noexcept
 {
     if (!id)
@@ -735,9 +752,6 @@ void ControlScheduler::destroyProcessQueue(ProcessQueueId id, uint32_t gen) noex
 
         slot.closed.store(true, std::memory_order_seq_cst);
 
-        // Destroy from within our own drain: defer to the drain loop, which
-        // finalizes after it returns (finalizing here would deadlock waiting
-        // for our own access guard).
         if (slot.drainThreadMarker.load(std::memory_order_acquire) == &gControlSchedulerTlsMarker)
         {
             slot.deferDestroy.store(true, std::memory_order_release);
@@ -755,9 +769,7 @@ void ControlScheduler::finalizeDestroy(ProcessQueueId id, uint32_t gen) noexcept
 
     ProcessQueueSlot& slot = *id;
 
-    // Claim destruction and invalidate the generation in one atomic step:
-    // exactly one finalizer can win, and every accessor that saw the old
-    // generation is covered by the accessors-drain wait below.
+    // Claim destruction and invalidate the generation in one atomic step
     uint32_t expected = gen;
     if (!slot.generation.compare_exchange_strong(expected, gen + 1, std::memory_order_seq_cst))
         return;
@@ -765,9 +777,6 @@ void ControlScheduler::finalizeDestroy(ProcessQueueId id, uint32_t gen) noexcept
     slot.active.store(false, std::memory_order_seq_cst);
 
     // Wait out every thread still inside post()/schedule()/drain/waitIdle for
-    // this slot; none may touch the task ring once we free it. The
-    // running drain finishes (or discards) its current tasks first, so a
-    // reset() from another thread blocks until in-flight work is done.
     for (uint32_t spins = 0; slot.accessors.load(std::memory_order_seq_cst) != 0; ++spins)
     {
         if (spins < 1024)

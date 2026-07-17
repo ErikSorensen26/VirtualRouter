@@ -166,6 +166,27 @@ public:
     void enqueueReset();
 
     /**
+     * @brief Begins graceful restart (RFC 3623) on every owned interface.
+     *
+     * Originates a Grace-LSA on each interface and marks the process as
+     * restarting so outgoing Hellos carry the LLS restart bit. Deliberately
+     * does *not* call @ref enqueueReset — graceful restart's entire purpose
+     * is to preserve existing neighbor adjacencies and LSDB state across the
+     * restart, not to tear them down.
+     *
+     * @param gracePeriodSeconds Grace period advertised to neighbors.
+     * @param reason Restart reason advertised in the Grace-LSA.
+     */
+    void beginGracefulRestart(uint32_t gracePeriodSeconds, GraceRestartReason reason);
+
+    /**
+     * @brief Ends graceful restart on every owned interface.
+     *
+     * Flushes each interface's Grace-LSA and clears the in-progress flag.
+     */
+    void endGracefulRestart();
+
+    /**
      * @brief Schedules a neighbor-configuration sync on the process queue.
      *
      * Config-change entry point: re-applies static `neighbor` configuration

@@ -25,6 +25,7 @@ Area::Area(OspfProcess& base, uint32_t id)
       floodMgr(*this),
       scheduler(base.scheduler.ref()),
       originContext(*this),
+      opaqueOriginator(base.isV3 ? std::nullopt : std::make_optional<OpaqueOriginatorV2>(originContext)),
       originator(IntraOriginator::create(originContext)),
       routeManager(*this),
       configs(base.configs.get<config::Ospf::AREA_CONFIGS>().emplaceBack(id)),
@@ -38,6 +39,8 @@ Area::Area(OspfProcess& base, uint32_t id)
                    priv.type == config::ospf::AreaType::TOTALLY_NSSA);
     flags.setExternalRouting(!isStub);
     flags.setNssa(isNssa);
+    if (base.isV3 && base.af == types::AddressFamily::IPv4)
+        flags.setAddressFamilySupport(true);
 
     configs.context().set(this);
     priv.startAgingTimer();
@@ -55,10 +58,10 @@ Area::~Area()
         scheduler.cancel(priv.resetTid);
     if (priv.agingTimerId != 0)
         scheduler.cancel(priv.agingTimerId);
-    floodMgr.cancel();
-    process.configs.get<config::Ospf::AREA_CONFIGS>().erase(areaId);
     scheduler.release();
     delete &originator;
+    floodMgr.cancel();
+    process.configs.get<config::Ospf::AREA_CONFIGS>().erase(areaId);
 }
 
 void Area::enqueueReset()

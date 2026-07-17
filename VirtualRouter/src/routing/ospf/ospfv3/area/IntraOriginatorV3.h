@@ -191,6 +191,24 @@ protected:
      */
     void addNetworkPrefixLsa(const OspfInterface& iface, bool refresh);
 
+private:
+    /**
+     * @brief Address-family-generic implementation of @ref addRouterPrefixLsa.
+     *
+     * Templated on the Intra-Area-Prefix-LSA body type (@ref IntraAreaPrefixLsa
+     * for IPv6, @ref IntraAreaPrefixLsaV4 for IPv4 per RFC 5838) and its prefix
+     * entry/prefix types so the identical incremental-diff logic is shared
+     * between address families instead of duplicated.
+     */
+    template <typename PrefixLsaBody, typename PrefixEntry, typename PrefixType>
+    void addRouterPrefixLsaImpl(std::vector<std::pair<LsaKey, std::optional<bool>>>& routerLsas, bool refresh);
+
+    /**
+     * @brief Address-family-generic implementation of @ref addNetworkPrefixLsa.
+     */
+    template <typename PrefixLsaBody, typename PrefixEntry, typename PrefixType>
+    void addNetworkPrefixLsaImpl(const OspfInterface& iface, bool refresh);
+
     /**
      * @brief Originates or refreshes the Link-LSA for an interface.
      *

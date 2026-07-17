@@ -8,8 +8,6 @@
 #include "ospf/neighbor/Neighbor.h"
 #include "ospf/OspfTypes.hpp"
 
-#define SUPPORT_RESYNC false
-
 namespace routing::ospf
 {
 PacketDispatcher::PacketDispatcher(OspfInterface& iface)
@@ -49,6 +47,9 @@ bool PacketDispatcher::processOptions(uint32_t options, Neighbor& nbr)
     }
     else if constexpr (std::is_same_v<Policy, PolicyV3>)
     {
+        if (iface.area.process.af == types::AddressFamily::IPv4 && !AreaFlagManager::getAddressFamilySupport(options))
+            return false;
+
         if (auto r = AreaFlagManager::getRouterBit(options); r != nbr.isTransit.load(std::memory_order_relaxed))
             nbr.isTransit.store(r, std::memory_order_release);
     }
@@ -81,21 +82,41 @@ uint16_t PacketDispatcher::calculateAge(bool floodReduction, const LsaRecord& re
     return static_cast<uint16_t>(age) | (dnaOut ? 0x8000 : 0);
 }
 
-uint16_t PacketDispatcher::addLinkLocalExtension(uint8_t* buf, bool restart)
+uint16_t PacketDispatcher::addLinkLocalExtension(uint8_t* buf, bool restart, bool resync)
 {
     utils::writeU32(buf, 0x00000000); // Checksum and size not calculated yet
     utils::writeU16(buf + 4, 0x0001); // Ext TLV type
     utils::writeU16(buf + 6, 0x0004); // Ext TLV size
 
     uint32_t options = 0x0000;
-    if (SUPPORT_RESYNC)
-        options |= 0x0001; // Resync flag
+    if (resync)
+        options |= static_cast<uint32_t>(LlsOptions::RESYNC);
     if (restart)
-        options |= 0x0002; // Restart signal
-    
+        options |= static_cast<uint32_t>(LlsOptions::RESTART);
+
     utils::writeU32(buf + 8, options);
 
     return 12;
+}
+
+void PacketDispatcher::triggerResync(Neighbor& nbr)
+{
+    nbr.resyncRequested.store(true, std::memory_order_relaxed);
+    sendUnicastHello(nbr);
+}
+
+void PacketDispatcher::onResyncRequested(Neighbor& nbr)
+{
+    if (nbr.getState() != Neighbor::State::FULL)
+        return;
+
+    std::vector<std::pair<FloodInfo, LsaRecordRef>> records;
+    getLsdb().forEach([&](const LsaKey& key, const LsaRecord& record) {
+        records.push_back({{FloodReason::UPDATE}, {key, record}});
+    });
+
+    if (!records.empty())
+        sendReliableLsu(&nbr, records);
 }
 
 void PacketDispatcher::addLinkLocalChecksum(uint8_t* buf)
@@ -142,6 +163,8 @@ void PacketDispatcher::sendReliableLsu(Neighbor* nbr, std::vector<std::pair<Floo
 
         // Add lsu updates to neighbors
         iface.ntable.forEach([this, &updates](uint32_t, Neighbor& nbr) {
+            if (nbr.getState() < Neighbor::State::EXCHANGE)
+                return;
             addLsaRetransmissions(nbr.getRtr().lsus(), updates);
             iface.tmgr.startLsuRetransmissionTimer(nbr);
         });

@@ -1,5 +1,7 @@
 // LsdbTable.cpp
 
+#include <algorithm>
+
 #include "LsdbTable.h"
 #include "ospf/FlagManager.hpp"
 
@@ -49,6 +51,9 @@ const LsaRecord* LsdbTable::find(const LsaKey& key) const
 
 bool LsdbTable::erase(const LsaKey& key)
 {
+    if (dbStorage.find(key) == dbStorage.end())
+        return false;
+
     db.erase(key);
     auto& adv = advDb[key];
     adv.erase(key.linkStateId);
@@ -56,7 +61,10 @@ bool LsdbTable::erase(const LsaKey& key)
     type.erase(key);
     if (adv.empty()) advDb.erase(key);
     if (type.empty()) typeDb.erase(key.lsaType);
-    return dbStorage.erase(key) != 0;
+
+    retireStorage(key);
+    reapPending();
+    return true;
 }
 
 void LsdbTable::clear()
@@ -64,7 +72,51 @@ void LsdbTable::clear()
     db.clear();
     advDb.clear();
     typeDb.clear();
-    dbStorage.clear();
+
+    for (auto it = dbStorage.begin(); it != dbStorage.end();)
+    {
+        if (it->second.refCnt.load(std::memory_order_acquire) == 0)
+        {
+            it = dbStorage.erase(it);
+        }
+        else
+        {
+            auto node = dbStorage.extract(it++);
+            pendingRemoval.push_back(std::move(node));
+        }
+    }
+
+    reapPending();
+}
+
+void LsdbTable::retireStorage(const LsaKey& key)
+{
+    auto it = dbStorage.find(key);
+    if (it == dbStorage.end())
+        return;
+
+    if (it->second.refCnt.load(std::memory_order_acquire) == 0)
+    {
+        dbStorage.erase(it);
+    }
+    else
+    {
+        auto node = dbStorage.extract(it);
+        pendingRemoval.push_back(std::move(node));
+    }
+}
+
+void LsdbTable::reapPending()
+{
+    if (pendingRemoval.empty())
+        return;
+
+    pendingRemoval.erase(
+        std::remove_if(pendingRemoval.begin(), pendingRemoval.end(),
+            [](const O_LSDB::node_type& node) {
+                return node.mapped().refCnt.load(std::memory_order_acquire) == 0;
+            }),
+        pendingRemoval.end());
 }
 
 void LsdbTable::releaseMemory()

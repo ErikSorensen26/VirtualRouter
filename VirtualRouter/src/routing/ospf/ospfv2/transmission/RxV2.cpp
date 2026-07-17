@@ -177,6 +177,7 @@ void PacketDispatcherV2::processHello(PacketDispatcher::HeaderInfo& info, bool u
         uint8_t* neighborList = info.payload + packet::Ospfv2HelloHeader::fixedSize;
         size_t listSize = info.payloadSize - packet::Ospfv2HelloHeader::fixedSize;
         if (listSize % 4 != 0) return;
+        info.offset += listSize;
 
         // Find RID
         bool ridFound = false;
@@ -238,6 +239,9 @@ void PacketDispatcherV2::processHello(PacketDispatcher::HeaderInfo& info, bool u
         if (election)
             runDrElection();
     }
+
+    if (unicast && AreaFlagManager::getLBitV2(static_cast<uint32_t>(hdr.getOptions())))
+        processLLSDataBlock(info);
 }
 
 void PacketDispatcherV2::processDBD(PacketDispatcher::HeaderInfo& info)
@@ -480,6 +484,20 @@ void PacketDispatcherV2::processLSUpdate(PacketDispatcher::HeaderInfo& info)
         auto result = processLsa<PolicyV2>(context, body.value());
         if (result.has_value() && result->decision.shouldAck)
             acks.push_back({context.key, *result->record});
+
+        // RFC 3623 SS3: Grace-LSA arrival (not the LLS restart bit).
+        if (result.has_value() && !selfOrigin && checksumValid &&
+            (result->decision.action == InstallAction::INSTALL_NEWER) &&
+            key.lsaType == OSPFV2_LSA_OPAQUE_LINK &&
+            std::holds_alternative<OpaqueLsaV2>(body.value()))
+        {
+            const auto& opaque = std::get<OpaqueLsaV2>(body.value());
+            if (opaque.opaqueType == GRACE_LSA_OPAQUE_TYPE)
+            {
+                if (auto tlv = GraceLsaTlv::build(opaque.payload.data(), static_cast<uint16_t>(opaque.payload.size())))
+                    handleGraceLsaReceived(key.advertisingRouter, *tlv);
+            }
+        }
     }
 
     if (!acks.empty())
@@ -498,7 +516,8 @@ void PacketDispatcherV2::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
     if (info.packetSize < info.offset + 4)
         return;
 
-    uint16_t llsLen = utils::readU16(llsBase + 2);
+    // RFC 5613 SS2.2: the LLS length field is a count of 32-bit words, not bytes.
+    uint16_t llsLen = static_cast<uint16_t>(utils::readU16(llsBase + 2) * 4);
     if (llsLen < 4 || info.offset + llsLen > info.packetSize)
         return;
 
@@ -571,6 +590,9 @@ void PacketDispatcherV2::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
         if (check.finalize() != utils::readU16(llsBase))
             return;
     }
+
+    if (getLlsOption(extension, LlsOptions::RESYNC) && info.neighbor)
+        onResyncRequested(*info.neighbor);
 
     // Trigger DC integrity scan so flood-reduction state stays current
     runDCIntegrityScan();

@@ -24,6 +24,8 @@ class IntraOriginatorV3;
 class InterOriginator;
 class InterfaceManager;
 class ExternalOriginator;
+class OpaqueOriginatorV2;
+class GracefulRestartManager;
 struct LsaKey;
 
 /**
@@ -71,6 +73,8 @@ private:
     friend IntraOriginatorV3;
     friend InterOriginator;
     friend ExternalOriginator;
+    friend OpaqueOriginatorV2;
+    friend GracefulRestartManager;
 
 public:
     /**
@@ -129,6 +133,9 @@ public:
      * to prevent timer callbacks from firing against freed memory.
      */
     void cancelGroupPacing();
+
+    /** @brief Cancels all owned timers (group-pacing buckets + per-LSA throttle callbacks); ~OspfProcess must call this before interface teardown to stop them racing it. */
+    void cancelAllTimers();
 
 private:
 
@@ -290,6 +297,7 @@ private:
     IntraOriginator& getIntraOriginator();
     InterOriginator& getInterOriginator();
     ExternalOriginator& getExternalOriginator();
+    OpaqueOriginatorV2* getOpaqueOriginator();
 
     uint32_t getAreaFlags() const;
 

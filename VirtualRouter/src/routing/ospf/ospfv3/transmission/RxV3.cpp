@@ -155,6 +155,7 @@ void PacketDispatcherV3::processHello(PacketDispatcher::HeaderInfo& info, bool u
         uint8_t* neighborList = info.payload + packet::Ospfv3HelloHeader::fixedSize;
         size_t listSize = info.payloadSize - packet::Ospfv3HelloHeader::fixedSize;
         if (listSize % 4 != 0) return;
+        info.offset += listSize;
 
         // Find RID
         bool ridFound = false;
@@ -216,6 +217,9 @@ void PacketDispatcherV3::processHello(PacketDispatcher::HeaderInfo& info, bool u
         if (election)
             runDrElection();
     }
+
+    if (unicast && AreaFlagManager::getLBit(hdr.getOptions()))
+        processLLSDataBlock(info);
 }
 
 void PacketDispatcherV3::processDBD(PacketDispatcher::HeaderInfo& info)
@@ -476,7 +480,8 @@ void PacketDispatcherV3::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
     if (info.packetSize < info.offset + 4)
         return;
 
-    uint16_t llsLen = utils::readU16(llsBase + 2);
+    // RFC 5613 SS2.2: the LLS length field is a count of 32-bit words, not bytes.
+    uint16_t llsLen = static_cast<uint16_t>(utils::readU16(llsBase + 2) * 4);
     if (llsLen < 4 || info.offset + llsLen > info.packetSize)
         return;
 
@@ -518,6 +523,9 @@ void PacketDispatcherV3::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
     if (check.finalize() != utils::readU16(llsBase))
         return;
 
+    if (getLlsOption(extension, LlsOptions::RESYNC) && info.neighbor)
+        onResyncRequested(*info.neighbor);
+
     // Trigger DC integrity scan so flood-reduction state stays current
     runDCIntegrityScan();
 }
@@ -531,12 +539,24 @@ std::optional<LsaBody> PacketDispatcherV3::buildLsaBody(uint16_t type, const uin
         case OSPFV3_LSA_NETWORK:
             return NetworkLsaV3::build(buf, len);
         case OSPFV3_LSA_INTER_AREA_PREFIX:
+            if (af == types::AddressFamily::IPv4)
+            {
+                auto lsa = InterAreaPrefixLsaV4::build(buf, len);
+                if (!lsa) return std::nullopt;
+                return LsaBody(*lsa);
+            }
             return InterAreaPrefixLsa::build(buf, len);
         case OSPFV3_LSA_INTER_AREA_ROUTER:
             return InterAreaRouterLsa::build(buf, len);
         case OSPFV3_LSA_LINK:
             return LinkLsa::build(buf, len);
         case OSPFV3_LSA_INTRA_AREA_PREFIX:
+            if (af == types::AddressFamily::IPv4)
+            {
+                auto lsa = IntraAreaPrefixLsaV4::build(buf, len);
+                if (!lsa) return std::nullopt;
+                return LsaBody(*lsa);
+            }
             return IntraAreaPrefixLsa::build(buf, len);
         case OSPFV3_LSA_AS_EXTERNAL:
         case OSPFV3_LSA_NSSA_EXTERNAL:

@@ -2,6 +2,7 @@
 
 #include "IntraRouteManager.h"
 #include "Area.h"
+#include "interface/Interface.h"
 #include "ospf/OspfProcess.h"
 #include "ospf/topology/TopologyTypes.hpp"
 #include "ospf/topology/RouteManagerUtility.h"
@@ -76,6 +77,41 @@ void IntraRouteManager::deriveIntraAreaRoutes(const SpfResult& spf, std::vector<
                 out.emplace_back(prefix, makePath(
                     area.areaId, 0,
                     adminDistance, link.metric,
+                    std::move(nextHop), OspfRouteType::INTRA_AREA
+                ));
+            }
+        }
+    }
+    else if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::RouterLsa>, RouterLsaV3>)
+    {
+        // The SPF loop below skips spf.root, so derive self's Intra-Area-Prefix-LSA prefixes here directly, mirroring the V2 self-stub-link block above.
+        const uint32_t selfRid = area.process.getRouterId();
+        auto selfPrefixes = collectIntraAreaPrefixFragments(selfRid, OSPFV3_LSA_ROUTER, 0);
+
+        if (!selfPrefixes.empty())
+        {
+            auto& ifmgr = RouteManagerUtility::getIfaceMgr(area.process);
+
+            for (const auto& pr : selfPrefixes)
+            {
+                const OspfInterface* owner = nullptr;
+                ifmgr.forEach([this, &owner, &pr](OspfInterfaceId id, const OspfInterface& iface) {
+                    if (id.area != area.areaId) return false;
+                    auto routable = iface.iface.configs.ipv6.getRoutablePrefixSet(true);
+                    if (routable.count(pr.prefix) > 0)
+                    {
+                        owner = &iface;
+                        return true;
+                    }
+                    return false;
+                });
+                if (!owner) continue;
+
+                std::vector<OspfNextHop> nextHop{ OspfNextHop{owner->interfaceId, types::IPAddress{}} };
+
+                out.emplace_back(types::IPPrefix(pr.prefix.addr, pr.prefix.prefixLength, true), makePath(
+                    area.areaId, pr.options,
+                    adminDistance, pr.metric,
                     std::move(nextHop), OspfRouteType::INTRA_AREA
                 ));
             }

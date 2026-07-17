@@ -21,7 +21,7 @@
 #define ENABLE_CUSTOM_CONSOLE 1
 #endif
 
-#if defined(ENABLE_MOCK_VIRTUAL) || ENABLE_CUSTOM_CONFIG
+#if defined(ENABLE_MOCK) || ENABLE_CUSTOM_CONFIG
     #define CONSOLE_MOCK virtual
 #else
     #define CONSOLE_MOCK

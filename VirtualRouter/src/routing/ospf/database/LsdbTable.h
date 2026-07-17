@@ -95,13 +95,16 @@ public:
     /**
      * @brief Removes the record for the given key from all indexes.
      *
+     * Safe to call while `LsaRecordRef` holders are outstanding: the index
+     * entries are removed immediately, but the owning `dbStorage` node is
+     * only freed once its `refCnt` reaches zero (see @ref retireStorage).
+     *
      * @param key Full LSA key to remove.
      * @return True if the key was present and removed, false if not found.
-     *
-     * @warning Do not erase a record with a non-zero `refCnt`; outstanding
-     * `LsaRecordRef` holders would be left with a dangling pointer.
      */
     bool erase(const LsaKey& key);
+
+    /// Removes all records and indexes; deferred-frees any record with outstanding `LsaRecordRef` holders (see @ref retireStorage).
     void clear();
 
     /**
@@ -249,12 +252,26 @@ private:
     A_LSDB advDb;       ///< Advertiser-keyed secondary index; points into dbStorage.
     O_LSDB dbStorage;   ///< Ordered primary store; owns all LsaRecord objects.
 
+    std::vector<O_LSDB::node_type> pendingRemoval; ///< Extracted `dbStorage` nodes awaiting `refCnt == 0` before being freed by @ref reapPending.
+
 private:
     using Iterator = decltype(db.begin());
     using ConstIterator = decltype(db.cbegin());
 
     Iterator findIt(const LsaKey& key);
     ConstIterator findIt(const LsaKey& key) const;
+
+    /**
+     * @brief Removes @p key's node from `dbStorage`, freeing it immediately if
+     * unreferenced or moving it to @ref pendingRemoval otherwise.
+     *
+     * Keeps outstanding `LsaRecordRef` holders valid across an index-level
+     * erase instead of leaving them dangling.
+     */
+    void retireStorage(const LsaKey& key);
+
+    /// Frees any @ref pendingRemoval node whose `refCnt` has since dropped to zero.
+    void reapPending();
 
     /**
      * @brief Emplaces a default-constructed `Body` into the record's variant.
@@ -341,7 +358,7 @@ inline size_t LsdbTable::purgeIf(Pred&& pred)
             type.erase(key);
             if (type.empty()) typeDb.erase(key.lsaType);
 
-            dbStorage.erase(key);
+            retireStorage(key);
             ++removed;
         }
         else
@@ -349,6 +366,7 @@ inline size_t LsdbTable::purgeIf(Pred&& pred)
             ++it;
         }
     }
+    reapPending();
     return removed;
 }
 } // namespace routing::ospf

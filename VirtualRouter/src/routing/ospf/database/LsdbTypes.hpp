@@ -41,6 +41,8 @@
 #include "ospf/ospfv3/database/ExternalLsaV3.hpp"
 #include "ospf/ospfv3/database/LinkLsa.hpp"
 #include "ospf/ospfv3/database/IntraAreaPrefixLsa.hpp"
+#include "ospf/ospfv3/database/InterAreaPrefixLsaV4.hpp"
+#include "ospf/ospfv3/database/IntraAreaPrefixLsaV4.hpp"
 
 #include "ospf/flooding/FloodTypes.hpp"
 
@@ -201,7 +203,9 @@ using LsaBody = std::variant<
     InterAreaRouterLsa,
     ExternalLsaV3,
     LinkLsa,
-    IntraAreaPrefixLsa
+    IntraAreaPrefixLsa,
+    InterAreaPrefixLsaV4,
+    IntraAreaPrefixLsaV4
 >;
 
 /**

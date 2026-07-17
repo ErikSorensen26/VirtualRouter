@@ -88,6 +88,17 @@ void InterfaceTimers::cancleInactiveTimer(Neighbor& neighbor)
 
 void InterfaceTimers::handleInactiveTimeExpire(Neighbor& neighbor)
 {
+    // RFC 3623 SS3: while helping this neighbor through a graceful restart, don't tear down the adjacency on a missed Hello -- just keep re-arming until the grace period ends.
+    if (neighbor.helpingRestart.load(std::memory_order_acquire))
+    {
+        if (std::chrono::steady_clock::now() < neighbor.helperDeadline)
+        {
+            startInactiveTimer(neighbor);
+            return;
+        }
+        neighbor.helpingRestart.store(false, std::memory_order_release);
+    }
+
     neighbor.setState(Neighbor::State::DOWN);
 }
 

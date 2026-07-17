@@ -105,6 +105,14 @@ OspfProcess::~OspfProcess()
         ifMgr.unsubscribe(interface::InterfaceManager::IPv6EventMgr::Id{priv.ipDelId});
     }
 
+    // Areas outlive this body but their timers touch state deactivateAll() tears down, so cancel them (Area::scheduler refs aren't reached by scheduler.release()) now.
+    for (auto& [id, area] : priv.areas)
+    {
+        area.originContext.cancelAllTimers();
+        // cancel() misses already-fired timers mid-execution; drain them before teardown.
+        area.scheduler.waitIdle();
+    }
+
     scheduler.release();
 
     ifaceMgr.deactivateAll();
@@ -115,6 +123,24 @@ void OspfProcess::enqueueReset()
     scheduler.post([this] {
         for (auto& [id, area] : priv.areas)
             area.reset();
+    });
+}
+
+void OspfProcess::beginGracefulRestart(uint32_t gracePeriodSeconds, GraceRestartReason reason)
+{
+    scheduler.post([this, gracePeriodSeconds, reason] {
+        ifaceMgr.forEach([&](OspfInterfaceId, OspfInterface& iface) {
+            iface.beginGracefulRestart(gracePeriodSeconds, reason);
+        });
+    });
+}
+
+void OspfProcess::endGracefulRestart()
+{
+    scheduler.post([this] {
+        ifaceMgr.forEach([&](OspfInterfaceId, OspfInterface& iface) {
+            iface.endGracefulRestart();
+        });
     });
 }
 

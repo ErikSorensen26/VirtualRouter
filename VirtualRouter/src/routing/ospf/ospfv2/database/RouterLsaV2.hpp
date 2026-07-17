@@ -147,9 +147,9 @@ struct RouterLsaV2
         {
             utils::writeU32(buf + off, link.linkId);
             utils::writeU32(buf + off + 4, link.linkData);
-            buf[off++] = link.type;
-            buf[off++] = 0;
-            utils::writeU16(buf + off, link.metric);
+            buf[off + 8] = link.type;
+            buf[off + 9] = 0;
+            utils::writeU16(buf + off + 10, link.metric);
             off += 12;
         }
         return true;
@@ -161,7 +161,7 @@ struct RouterLsaV2
      */
     inline uint16_t size() const
     {
-        return 4 + static_cast<uint16_t>(4 * links.size());
+        return 4 + static_cast<uint16_t>(12 * links.size());
     }
 
     /**
@@ -206,7 +206,7 @@ struct RouterLsaV2
         std::sort(b.begin(), b.end(), [&](uint16_t i, uint16_t j) { return rhs.links[i] < rhs.links[j]; });
 
         for (size_t k = 0; k < a.size(); ++k)
-            if (!(links[a[k]] != rhs.links[b[k]]))
+            if (!(links[a[k]] == rhs.links[b[k]]))
                 return false;
 
         return true;

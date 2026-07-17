@@ -94,8 +94,10 @@ private:
      * @param hdr     Header to finalize (modified in place).
      * @param builder Builder positioned just past the payload.
      * @param lls     True if an LLS Data Block was appended after the OSPF payload.
+     * @param nbr     Target neighbor for a unicast send, or null for multicast; used
+     *                to source the LLS resync/restart bits (multicast never sets resync).
      */
-    void finalizeHeader(packet::Ospfv2Header& hdr, OspfBuilder& builder, bool lls = false);
+    void finalizeHeader(packet::Ospfv2Header& hdr, OspfBuilder& builder, bool lls = false, Neighbor* nbr = nullptr);
 
     /**
      * @brief Transmits a packet reliably (queues in the retransmission list for `neighbor`).

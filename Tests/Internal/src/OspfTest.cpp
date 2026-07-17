@@ -24,6 +24,9 @@
 #include <ospf/area/Area.h>
 #include <ospf/area/IntraOriginator.h>
 #include <ospf/ospfv2/area/IntraOriginatorV2.h>
+#include <ospf/ospfv2/area/OpaqueOriginatorV2.h>
+#include <ospf/ospfv2/database/OpaqueLsaV2.hpp>
+#include <ospf/ospfv2/database/RouterCapabilityTlv.hpp>
 #include <ospf/ospfv3/area/IntraOriginatorV3.h>
 #include <ospf/database/LsdbTable.h>
 #include <ospf/OspfTypes.hpp>
@@ -110,37 +113,44 @@ protected:
         ospfInstance->configs.get<config::Ospf::LSA_THROTTLE_MAX>().set(0);
         ospfInstance->configs.get<config::Ospf::LSA_ARRIVAL>().set(0);
         ospfInstance->calculateRID();
-        ospfInstance->scheduler.post([this]
         {
+            std::lock_guard lock(ospfInstance->scheduler.getLock());
             ospfInstance->insureArea(0);
+        }
+        ospfInstance->scheduler.waitScheduled();
+        {
+            std::lock_guard lock(ospfInstance->scheduler.getLock());
             ospfInterface = &ospfInstance->ifaceMgr.createInterface(
                 *mockInterface, OspfInterfaceId(ipIntv4.addr, 0));
-        });
-        ospfInstance->scheduler.waitIdle();
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+        ospfInstance->scheduler.waitScheduled();
 
         // OSPFv3 process (IPv6)
         ospfv3Instance = &vrf->addOspfv3(2, types::AddressFamily::IPv6);
         ospfv3Instance->configs.get<config::Ospf::LSA_THROTTLE_HOLD>().set(0);
         ospfv3Instance->configs.get<config::Ospf::LSA_THROTTLE_MAX>().set(0);
         ospfv3Instance->configs.get<config::Ospf::LSA_ARRIVAL>().set(0);
+        ospfv3Instance->configs.get<config::Ospf::SPF_THROTTLE_DELAY>().set(0);
+        ospfv3Instance->configs.get<config::Ospf::SPF_THROTTLE_HOLD>().set(0);
+        ospfv3Instance->configs.get<config::Ospf::SPF_THROTTLE_MAX>().set(0);
         ospfv3Instance->calculateRID();
-        ospfv3Instance->scheduler.post([this]
         {
+            std::lock_guard lock(ospfv3Instance->scheduler.getLock());
             ospfv3Instance->insureArea(0);
+        }
+        ospfv3Instance->scheduler.waitScheduled();
+        {
+            std::lock_guard lock(ospfv3Instance->scheduler.getLock());
             ospfv3Interface = &ospfv3Instance->ifaceMgr.createInterface(
                 *mockInterface, OspfInterfaceId(ipIntv4.addr, 0));
-        });
-        ospfv3Instance->scheduler.waitIdle();
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+        ospfv3Instance->scheduler.waitScheduled();
     }
 
     void TearDown() override
     {
-        ospfInstance->scheduler.waitIdle();
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
-        ospfv3Instance->scheduler.waitIdle();
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        ospfInstance->scheduler.waitScheduled();
+        ospfv3Instance->scheduler.waitScheduled();
         mockInterface->blockEnqueues();
         vrf->removeOspf(1);
         vrf->removeOspfv3(2, types::AddressFamily::IPv6);
@@ -153,7 +163,32 @@ protected:
 
     void wait(OspfProcess* process = nullptr)
     {
-        (process ? process : ospfInstance)->scheduler.waitIdle();
+        (process ? process : ospfInstance)->scheduler.waitScheduled();
+    }
+
+    template <typename Pred>
+    LsaRecord* waitForLsa(const LsaKey& key, Pred pred, Area* area = nullptr, OspfProcess* process = nullptr)
+    {
+
+        for (int i = 0; i < 50; ++i)
+        {
+            LsaRecord* record = nullptr;
+            {
+                std::lock_guard lock(getSchedulerLock(process));
+                record = getLsdb(area).find(key);
+            }
+            if (record && pred(*record))
+                return record;
+            wait(process);
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        // On timeout return nullptr, not a stale non-matching record, so callers' ASSERT_NE fails loudly.
+        return nullptr;
+    }
+
+    LsaRecord* waitForLsa(const LsaKey& key, Area* area = nullptr, OspfProcess* process = nullptr)
+    {
+        return waitForLsa(key, [](const LsaRecord&) { return true; }, area, process);
     }
 
     // Core accessors
@@ -164,11 +199,8 @@ protected:
         if (Area* existing = p->getArea(areaId); existing)
             return *existing;
 
-        Area* created = nullptr;
-        p->scheduler.post([p, areaId, &created] { created = &p->insureArea(areaId); });
-        p->scheduler.waitIdle();
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
-        return *created;
+        std::lock_guard lock(p->scheduler.getLock());
+        return p->insureArea(areaId);
     }
     NeighborTable& getNTable(OspfInterface* iface = nullptr)
         { return (iface ? iface : ospfInterface)->ntable; }
@@ -178,10 +210,14 @@ protected:
         { return (process ? process : ospfInstance)->rib; }
     LsdbTable& getLsdb(Area* area = nullptr)
         { return (area ? area : &getArea(0))->lsdb; }
+    std::recursive_mutex& getSchedulerLock(OspfProcess* process = nullptr)
+        { return (process ? process : ospfInstance)->scheduler.getLock(); }
     PacketDispatcherV2& getDispatcherV2(OspfInterface* iface = nullptr)
         { return static_cast<PacketDispatcherV2&>((iface ? iface : ospfInterface)->dispatcher); }
     PacketDispatcherV3& getDispatcherV3(OspfInterface* iface = nullptr)
         { return static_cast<PacketDispatcherV3&>((iface ? iface : ospfv3Interface)->dispatcher); }
+    std::optional<LsaBody> invokeBuildLsaBody(PacketDispatcherV3& dispatcher, uint16_t type, const uint8_t* buf, uint16_t len)
+        { return dispatcher.buildLsaBody(type, buf, len); }
     IntraOriginatorV2& getIntraOriginatorV2(Area* area = nullptr)
         { return static_cast<IntraOriginatorV2&>((area ? area : &getArea(0))->originator); }
     IntraOriginatorV3& getIntraOriginatorV3(Area* area = nullptr)
@@ -192,6 +228,94 @@ protected:
         { return (process ? process : ospfInstance)->externalOriginator; }
     OriginatorContext& getOriginatorCtx(Area* area = nullptr)
         { return (area ? area : &getArea(0))->originContext; }
+    OpaqueOriginatorV2& getOpaqueOriginator(Area* area = nullptr)
+        { return *(area ? area : &getArea(0))->originContext.getOpaqueOriginator(); }
+    void fullRefreshV2(Area* area = nullptr)
+    {
+        Area* a = area ? area : &getArea(0);
+        IntraOriginatorV2& orig = getIntraOriginatorV2(a);
+        std::lock_guard lock(a->process.scheduler.getLock());
+        orig.fullRefresh();
+    }
+    void fullRefreshV3(Area* area = nullptr)
+    {
+        Area* a = area ? area : &getArea(0, ospfv3Instance);
+        IntraOriginatorV3& orig = getIntraOriginatorV3(a);
+        std::lock_guard lock(a->process.scheduler.getLock());
+        orig.fullRefresh();
+    }
+    void updateInterfaceV2(uint32_t ifaceId, Area* area = nullptr)
+    {
+        Area* a = area ? area : &getArea(0);
+        IntraOriginatorV2& orig = getIntraOriginatorV2(a);
+        std::lock_guard lock(a->process.scheduler.getLock());
+        orig.updateInterface(ifaceId);
+    }
+    void originateRouterCapability(uint32_t capabilities, Area* area = nullptr)
+    {
+        Area* a = area ? area : &getArea(0);
+        OpaqueOriginatorV2& orig = getOpaqueOriginator(a);
+        std::lock_guard lock(a->process.scheduler.getLock());
+        orig.originateRouterCapability(capabilities);
+    }
+    void withdrawRouterCapability(Area* area = nullptr)
+    {
+        Area* a = area ? area : &getArea(0);
+        OpaqueOriginatorV2& orig = getOpaqueOriginator(a);
+        std::lock_guard lock(a->process.scheduler.getLock());
+        orig.withdrawRouterCapability();
+    }
+    template <typename Policy>
+    void originateSummary(OriginatorContext& ctx, uint32_t lsid, const types::IPPrefix& prefix, uint32_t cost, bool expire = false, OspfProcess* process = nullptr)
+    {
+        OspfProcess* p = process ? process : ospfInstance;
+        InterOriginator& orig = getInterOriginator(p);
+        std::lock_guard lock(p->scheduler.getLock());
+        orig.originateSummary<Policy>(ctx, lsid, prefix, cost, expire);
+    }
+    template <typename Policy>
+    void reoriginateSummaries(OriginatorContext& ctx, std::vector<OspfRouteChange>& pathList, OspfProcess* process = nullptr)
+    {
+        OspfProcess* p = process ? process : ospfInstance;
+        InterOriginator& orig = getInterOriginator(p);
+        std::lock_guard lock(p->scheduler.getLock());
+        orig.reoriginateSummaries<Policy>(ctx, pathList);
+    }
+    template <typename Policy>
+    void addExternal(OriginatorContext& ctx, uint32_t asbr, uint32_t lsid, bool expire, OspfProcess* process = nullptr)
+    {
+        OspfProcess* p = process ? process : ospfInstance;
+        InterOriginator& orig = getInterOriginator(p);
+        std::lock_guard lock(p->scheduler.getLock());
+        orig.addExternal<Policy>(ctx, asbr, lsid, expire);
+    }
+    void setExternalDbEntry(const LsaKey& key, const LsaHeader& hdr, const LsaBody& body, OspfProcess* process = nullptr)
+    {
+        OspfProcess* p = process ? process : ospfInstance;
+        ExternalOriginator& ext = getExternalOriginator(p);
+        std::lock_guard lock(p->scheduler.getLock());
+        ext.externalDb[key] = { hdr, body };
+    }
+    template <typename Policy>
+    void originateExternal(ExternalOriginateContext& ctx, bool expire, OspfProcess* process = nullptr)
+    {
+        OspfProcess* p = process ? process : ospfInstance;
+        ExternalOriginator& ext = getExternalOriginator(p);
+        std::lock_guard lock(p->scheduler.getLock());
+        ext.originateExternal<Policy>(ctx, expire);
+    }
+    void setIfaceOpaqueEnabled(bool enabled, OspfInterface* iface = nullptr)
+        { (iface ? iface : ospfInterface)->opaqueEnabled = enabled; }
+    static uint32_t getLlsResyncBit()
+        { return static_cast<uint32_t>(PacketDispatcher::LlsOptions::RESYNC); }
+    static uint32_t getLlsRestartBit()
+        { return static_cast<uint32_t>(PacketDispatcher::LlsOptions::RESTART); }
+    static bool lssHasResyncOption(uint32_t extension)
+        { return PacketDispatcher::getLlsOption(extension, PacketDispatcher::LlsOptions::RESYNC); }
+    static bool lssHasRestartOption(uint32_t extension)
+        { return PacketDispatcher::getLlsOption(extension, PacketDispatcher::LlsOptions::RESTART); }
+    void invokeHandleGraceLsaReceived(OspfInterface& iface, uint32_t advertisingRouter, const GraceLsaTlv& tlv)
+        { iface.handleGraceLsaReceived(advertisingRouter, tlv); }
     IntraRouteManager& getIntraRouteManager(Area* area = nullptr)
         { return (area ? area : &getArea(0))->routeManager; }
     InterRouteManager& getInterRouteManager(OspfProcess* process = nullptr)
@@ -212,17 +336,43 @@ protected:
     {
         OspfProcess* p = proc ? proc : ospfInstance;
         OspfInterface* result = nullptr;
-        p->scheduler.post([p, &iface, id, &result] { result = &p->ifaceMgr.createInterface(iface, id); });
-        p->scheduler.waitIdle();
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        p->scheduler.postAndWait([&]() { result = &p->ifaceMgr.createInterface(iface, id); });
         return *result;
     }
     void removeIface(const OspfInterfaceId& id, OspfProcess* proc = nullptr)
     {
         OspfProcess* p = proc ? proc : ospfInstance;
-        p->scheduler.post([p, id] { p->ifaceMgr.removeInterface(id); });
-        p->scheduler.waitIdle();
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        // ~OspfInterface rebuilds Router-LSAs (updateOriginations); run it on the scheduler thread like createIface to avoid racing posted tasks.
+        p->scheduler.postAndWait([&]() { p->ifaceMgr.removeInterface(id); });
+    }
+    OspfProcess& setupAfIpv4Process(uint16_t procId, OspfInterface** ifaceOut = nullptr)
+    {
+        OspfProcess& p = vrf->addOspfv3(procId, types::AddressFamily::IPv4);
+        p.configs.get<config::Ospf::LSA_THROTTLE_HOLD>().set(0);
+        p.configs.get<config::Ospf::LSA_THROTTLE_MAX>().set(0);
+        p.configs.get<config::Ospf::LSA_ARRIVAL>().set(0);
+        p.calculateRID();
+        {
+            std::lock_guard lock(p.scheduler.getLock());
+            p.insureArea(0);
+        }
+        // See SetUp(): settle insureArea's group-pacing timers before createInterface touches the same originator state.
+        p.scheduler.waitScheduled();
+        OspfInterface* ifacePtr = nullptr;
+        {
+            std::lock_guard lock(p.scheduler.getLock());
+            ifacePtr = &p.ifaceMgr.createInterface(*mockInterface, OspfInterfaceId(ipIntv4.addr, 0));
+        }
+        p.scheduler.waitScheduled();
+        if (ifaceOut)
+            *ifaceOut = ifacePtr;
+        return p;
+    }
+    void teardownAfIpv4Process(uint16_t procId, OspfProcess& p)
+    {
+        // Settle in-flight origination callbacks before destroying the process; they touch originationState and raced to a heap-use-after-free.
+        p.scheduler.waitScheduled();
+        vrf->removeOspfv3(procId, types::AddressFamily::IPv4);
     }
     InterfaceFlagManager& getIfaceFlags(OspfInterface* iface = nullptr)
         { return (iface ? iface : ospfInterface)->flags; }
@@ -231,7 +381,11 @@ protected:
     SpfManager& getSpfManager(Area* area = nullptr)
         { return (area ? area : &getArea(0))->spfMgr; }
     void calculateCost(OspfInterface* iface = nullptr)
-        { return (iface ? iface : ospfInterface)->calculateCost(); }
+    {
+        OspfInterface* i = iface ? iface : ospfInterface;
+        std::lock_guard lock(i->process.scheduler.getLock());
+        i->calculateCost();
+    }
     Area& getIfaceArea(OspfInterface* iface = nullptr)
         { return (iface ? iface : ospfInterface)->area; }
     uint16_t getIfaceHelloInterval(OspfInterface* iface = nullptr)
@@ -239,7 +393,11 @@ protected:
     uint16_t getIfaceDeadInterval(OspfInterface* iface = nullptr)
         { return static_cast<uint16_t>((iface ? iface : ospfInterface)->getDeadInterval().count()); }
     void addNetworkLsa(OspfInterface* ospfIface, bool refresh)
-        { OspfInterface* iface = ospfIface ? ospfIface : ospfInterface; iface->area.originator.addNetworkLsa(*iface, refresh); }
+    {
+        OspfInterface* iface = ospfIface ? ospfIface : ospfInterface;
+        std::lock_guard lock(iface->process.scheduler.getLock());
+        iface->area.originator.addNetworkLsa(*iface, refresh);
+    }
     void setIfaceDCEnabled(OspfInterface* iface = nullptr)
         { (iface ? iface : ospfInterface)->demandCircuit = OspfInterface::DcDecision::ENABLED; }
     void setIfaceDCDisabled(OspfInterface* iface = nullptr)
@@ -253,17 +411,35 @@ protected:
     bool isIfaceDCUndecided(OspfInterface* iface = nullptr)
         { return (iface ? iface : ospfInterface)->demandCircuit == OspfInterface::DcDecision::UNDECIDED; }
     void runIfaceElection(OspfInterface* iface = nullptr)
-        { (iface ? iface : ospfInterface)->election(); }
+    {
+        OspfInterface* i = iface ? iface : ospfInterface;
+        std::lock_guard lock(i->process.scheduler.getLock());
+        i->election();
+    }
     void runDCIntegrityScan(Area* area = nullptr)
-        { (area ? area : &getArea(0))->runDCIntegrityScan(); }
+    {
+        Area* a = area ? area : &getArea(0);
+        std::lock_guard lock(a->process.scheduler.getLock());
+        a->runDCIntegrityScan();
+    }
     void setIsDr(bool isDr, OspfInterface* iface = nullptr)
         { (iface ? iface : ospfInterface)->priv.isDr = isDr; }
     void setIsBdr(bool isBdr, OspfInterface* iface = nullptr)
         { (iface ? iface : ospfInterface)->priv.isBdr = isBdr; }
     bool setDrRid(uint32_t rid, OspfInterface* ospfIface = nullptr, bool force = false)
-        { auto* iface = ospfIface ? ospfIface : ospfInterface; if (force) iface->dr.rid = rid; else return iface->setDr(rid); return true; }
+    {
+        auto* iface = ospfIface ? ospfIface : ospfInterface;
+        if (force) { iface->dr.rid.store(rid); return true; }
+        std::lock_guard lock(iface->process.scheduler.getLock());
+        return iface->setDr(rid);
+    }
     bool setBdrRid(uint32_t rid, OspfInterface* ospfIface = nullptr, bool force = false)
-        { auto* iface = ospfIface ? ospfIface : ospfInterface; if (force) iface->bdr.rid = rid; else return iface->setBdr(rid); return true; }
+    {
+        auto* iface = ospfIface ? ospfIface : ospfInterface;
+        if (force) { iface->bdr.rid.store(rid); return true; }
+        std::lock_guard lock(iface->process.scheduler.getLock());
+        return iface->setBdr(rid);
+    }
     bool getIsMulticast(OspfInterface* iface = nullptr)
         { return (iface ? iface : ospfInterface)->isMulticast.load(std::memory_order_relaxed); }
     std::optional<__uint128_t> getAuthKey(OspfInterface* iface = nullptr)
@@ -273,35 +449,93 @@ protected:
     InterfaceTimers& getTimers(OspfInterface* iface = nullptr)
         { return (iface ? iface : ospfInterface)->tmgr; }
     bool compareLSASummary(const LsaHeader& hdr, const LsaKey& key, Area* area = nullptr)
-        { return (area ? area : &getArea(0))->compareLSASummary(hdr, key); }
+    {
+        Area* a = area ? area : &getArea(0);
+        std::lock_guard lock(a->process.scheduler.getLock());
+        return a->compareLSASummary(hdr, key);
+    }
     bool getFloodReduction(OspfInterface* iface = nullptr)
         { return (iface ? iface : ospfInterface)->floodReduction; }
     void setFloodReduction(OspfInterface* iface = nullptr)
-        { (iface ? iface : ospfInterface)->enqueueSyncDemandCircuit(); }
+    {
+        OspfInterface* i = iface ? iface : ospfInterface;
+        std::lock_guard lock(i->process.scheduler.getLock());
+        i->updateOriginations();
+        i->setFloodReduction();
+    }
     const std::unordered_set<types::IPPrefix>& getRanges(Area* area = nullptr)
         { return (area ? area : &getArea(0))->getRanges(); }
     void syncRangeSuppression(const std::unordered_set<types::IPPrefix>& ranges, bool abrChange = false, Area* area = nullptr)
-        { (area ? area : &getArea(0))->syncRangeSuppression(ranges, abrChange); }
+    {
+        Area* a = area ? area : &getArea(0);
+        std::lock_guard lock(a->process.scheduler.getLock());
+        a->syncRangeSuppression(ranges, abrChange);
+    }
     void suppressInterAreaPrefix(const types::IPPrefix& prefix, Area* area = nullptr)
-        { (area ? area : &getArea(0))->suppressInterAreaPrefix(prefix); }
+    {
+        Area* a = area ? area : &getArea(0);
+        std::lock_guard lock(a->process.scheduler.getLock());
+        a->suppressInterAreaPrefix(prefix);
+    }
     template <typename Policy>
     void reoriginateSummary(OriginatorContext& ctx, OspfRouteChange& path, OspfProcess* process = nullptr)
-        { (process ? process : ospfInstance)->interOriginator.reoriginateSummary<Policy>(ctx, path); }
+    {
+        OspfProcess* p = process ? process : ospfInstance;
+        std::lock_guard lock(p->scheduler.getLock());
+        p->interOriginator.reoriginateSummary<Policy>(ctx, path);
+    }
     template <typename Policy>
     void processSummaries(std::unordered_map<LsaKey, LsaBody>& summaries, Area* area = nullptr)
-        { (area ? area : &getArea(0))->processSummaries<Policy>(summaries); }
+    {
+        Area* a = area ? area : &getArea(0);
+        std::lock_guard lock(a->process.scheduler.getLock());
+        a->processSummaries<Policy>(summaries);
+    }
     template <typename Policy>
     std::optional<Area::Result> processLsa(IncomingLsaContext& ctx, LsaBody& body, Area* area = nullptr)
-        { return (area ? area : &getArea(0))->processLsa<Policy>(ctx, body); }
+    {
+        Area* a = area ? area : &getArea(0);
+        std::lock_guard lock(a->process.scheduler.getLock());
+        return a->processLsa<Policy>(ctx, body);
+    }
     template <typename Policy>
     void translateNssaToExternal(OriginatorContext& ctx, const LsaKey& key, const LsaBody& lsa, bool expire, OspfProcess* process = nullptr)
-        { getExternalOriginator(process).translateNssaToExternal<Policy>(ctx, key, lsa, expire); }
+    {
+        OspfProcess* p = process ? process : ospfInstance;
+        ExternalOriginator& ext = getExternalOriginator(p);
+        std::lock_guard lock(p->scheduler.getLock());
+        ext.translateNssaToExternal<Policy>(ctx, key, lsa, expire);
+    }
     void clearArea(Area* area = nullptr)
-        { (area ? area : &getArea(0))->clear(); }
+    {
+        Area* a = area ? area : &getArea(0);
+        std::lock_guard lock(a->process.scheduler.getLock());
+        a->clear();
+    }
     void onAgingTick(Area* area = nullptr)
-        { (area ? area : &getArea(0))->priv.onAgingTick(); }
+    {
+        Area* a = area ? area : &getArea(0);
+        std::lock_guard lock(a->process.scheduler.getLock());
+        a->priv.onAgingTick();
+    }
+    // Snapshot and tick under one held scheduler lock so pacing callbacks can't interleave.
+    std::pair<uint16_t, uint16_t> snapshotAndTickAge(const LsaKey& key, Area* area = nullptr)
+    {
+        Area* a = area ? area : &getArea(0);
+        std::lock_guard lock(a->process.scheduler.getLock());
+        LsaRecord* before = a->lsdb.find(key);
+        uint16_t ageBefore = before ? before->header.age : 0;
+        a->priv.onAgingTick();
+        LsaRecord* after = a->lsdb.find(key);
+        uint16_t ageAfter = after ? after->header.age : 0;
+        return {ageBefore, ageAfter};
+    }
     bool calculateRID(OspfProcess* process = nullptr)
-        { return (process ? process : ospfInstance)->calculateRID(); }
+    {
+        OspfProcess* p = process ? process : ospfInstance;
+        std::lock_guard lock(p->scheduler.getLock());
+        return p->calculateRID();
+    }
     core::ProcessQueue& getScheduler(OspfProcess* process = nullptr)
         { return (process ? process : ospfInstance)->scheduler; }
 
@@ -347,6 +581,8 @@ protected:
                                           bool unicast = false)
     {
         OspfInterface* ifacePtr = iface ? iface : ospfInterface;
+
+        std::lock_guard lock(ifacePtr->process.scheduler.getLock());
         Neighbor* nbr = ifacePtr->ntable.createNeighbor(routerId, ip, unicast);
 
         if (ip.isIPv6())
@@ -383,17 +619,19 @@ protected:
 
     Neighbor* getNeighbor(uint32_t routerId, OspfInterface* iface = nullptr)
     {
-        return (iface ? iface : ospfInterface)->ntable.lookup(routerId);
+        OspfInterface* i = iface ? iface : ospfInterface;
+        std::lock_guard lock(i->process.scheduler.getLock());
+        return i->ntable.lookup(routerId);
     }
 
     // Packet header extraction
 
     packet::Ospfv2Header getOspfV2Header(processing::PacketBuilder& pkt)
     {
+        static uint8_t emptyBuf[sizeof(packet::Ospfv2HeaderRaw)] = {};
         auto h = pkt.getHeader(packet::HeaderType::OSPFV2);
         packet::Ospfv2Header hdr;
-        if (!h) return hdr;
-        hdr.setBuffer(h->buffer);
+        hdr.setBuffer(h ? h->buffer : emptyBuf);
         return hdr;
     }
 
@@ -474,7 +712,9 @@ protected:
                                            hdr.getPacketLen() - packet::Ospfv2Header::fixedSize + authTrailerSize);
         uint8_t srcBytes[4];
         utils::writeU32(srcBytes, sourceIp.addr);
-        getDispatcherV2(iface).handleIncoming(hdr, srcBytes, multicast);
+        OspfInterface* i = iface ? iface : ospfInterface;
+        std::lock_guard lock(i->process.scheduler.getLock());
+        getDispatcherV2(i).handleIncoming(hdr, srcBytes, multicast);
     }
 
     // Writes the OSPFv2 common header fields shared by DBD/LSR/LSU/LSAck packets.
@@ -707,7 +947,9 @@ protected:
                                            hdr.getPacketLen() - packet::Ospfv3Header::fixedSize);
         uint8_t srcBytes[16];
         utils::writeU128(srcBytes, sourceIp.addr);
-        getDispatcherV3(iface).handleIncoming(hdr, srcBytes, multicast);
+        OspfInterface* i = iface ? iface : ospfv3Interface;
+        std::lock_guard lock(i->process.scheduler.getLock());
+        getDispatcherV3(i).handleIncoming(hdr, srcBytes, multicast);
     }
 
     uint16_t buildDBDV3(uint8_t* buf, uint32_t routerId, uint32_t areaId,
@@ -1756,12 +1998,10 @@ TEST_F(Internal_OspfTest, Timer_StopHello_Cancels_Pending_Hello)
     // Hello was started during interface construction; stopping must not crash
     // and should leave the interface able to restart cleanly.
     getTimers().stopHello();
-    wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
-
-    getTimers().startHello();
-    wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    {
+        std::lock_guard lock(getScheduler().getLock());
+        getTimers().startHello();
+    }
 
     SUCCEED();
 }
@@ -1772,9 +2012,10 @@ TEST_F(Internal_OspfTest, Timer_ScheduleHello_NoOp_When_Passive)
     getIfaceConfigs().get<config::OspfInterface::PASSIVE>().set(true);
 
     // Should be a no-op and not schedule a timer when passive.
-    getTimers().scheduleHello();
-    wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    {
+        std::lock_guard lock(getScheduler().getLock());
+        getTimers().scheduleHello();
+    }
 
     SUCCEED();
 }
@@ -1785,7 +2026,10 @@ TEST_F(Internal_OspfTest, Timer_StartInactiveTimer_Sets_NonZero_TimerId)
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
     auto* nbr = addNeighbor(neighborRouterId, nbrIp, Neighbor::State::INIT);
 
-    getTimers().startInactiveTimer(*nbr);
+    {
+        std::lock_guard lock(getScheduler().getLock());
+        getTimers().startInactiveTimer(*nbr);
+    }
 
     EXPECT_NE(nbr->inactivityTimerId.load(), 0u);
 }
@@ -2481,6 +2725,12 @@ TEST_F(Internal_OspfTest, Flood_New_Lsa_Installed_From_LSUpdate)
 
     auto& lsdb = getLsdb();
     EXPECT_TRUE(lsdb.contains(key));
+
+    auto* record = lsdb.find(key);
+    ASSERT_NE(record, nullptr);
+    buildLSAckV2(testPacket, neighborRouterId, ospfInterface->getAreaId(), {key}, {record->header});
+    deliverV2(testPacket, types::IPv4Address{0xC0A80102});
+    wait();
 }
 
 // Test: Flood_Update_Triggers_LSAck
@@ -2511,6 +2761,13 @@ TEST_F(Internal_OspfTest, Flood_Update_Triggers_LSAck)
     deliverV2(testPacket, types::IPv4Address{0xC0A80102});
 
     EXPECT_TRUE(sawLSAck);
+
+    auto& lsdb = getLsdb();
+    auto* record = lsdb.find(key);
+    ASSERT_NE(record, nullptr);
+    buildLSAckV2(testPacket, neighborRouterId, ospfInterface->getAreaId(), {key}, {record->header});
+    deliverV2(testPacket, types::IPv4Address{0xC0A80102});
+    wait();
 }
 
 // Test: Flood_Duplicate_Lsa_Not_Reinstalled
@@ -2544,6 +2801,10 @@ TEST_F(Internal_OspfTest, Flood_Duplicate_Lsa_Not_Reinstalled)
     auto* recordAfter = lsdb.find(key);
     ASSERT_NE(recordAfter, nullptr);
     EXPECT_EQ(recordAfter->installTime, installTimeBefore);
+
+    buildLSAckV2(testPacket, neighborRouterId, ospfInterface->getAreaId(), {key}, {recordAfter->header});
+    deliverV2(testPacket, types::IPv4Address{0xC0A80102});
+    wait();
 }
 
 // Test: Flood_Older_Lsa_Ignored
@@ -2581,6 +2842,10 @@ TEST_F(Internal_OspfTest, Flood_Older_Lsa_Ignored)
     record = lsdb.find(key);
     ASSERT_NE(record, nullptr);
     EXPECT_EQ(record->header.sequence, storedSeq);
+
+    buildLSAckV2(testPacket, neighborRouterId, ospfInterface->getAreaId(), {key}, {record->header});
+    deliverV2(testPacket, types::IPv4Address{0xC0A80102});
+    wait();
 }
 
 // Test: Flood_Retransmission_Cleared_On_LSAck
@@ -2670,6 +2935,12 @@ TEST_F(Internal_OspfTest, Flood_LSRequest_Returns_Requested_Lsa_Via_LSUpdate)
     deliverV2(testPacket, types::IPv4Address{0xC0A80102});
 
     EXPECT_TRUE(sawLSUpdate);
+
+    auto* record = lsdb.find(key);
+    ASSERT_NE(record, nullptr);
+    buildLSAckV2(testPacket, neighborRouterId, ospfInterface->getAreaId(), {key}, {record->header});
+    deliverV2(testPacket, types::IPv4Address{0xC0A80102});
+    wait();
 }
 
 // Test: Flood_SelfOriginated_Newer_Instance_From_Peer_Triggers_FightBack
@@ -2710,6 +2981,13 @@ TEST_F(Internal_OspfTest, Flood_SelfOriginated_Newer_Instance_From_Peer_Triggers
     auto* record = lsdb.find(key);
     ASSERT_NE(record, nullptr);
     EXPECT_GE(record->header.sequence, routing::OSPF_INITIAL_SEQUENCE + 1);
+
+    wait();
+    record = lsdb.find(key);
+    ASSERT_NE(record, nullptr);
+    buildLSAckV2(testPacket, neighborRouterId, ospfInterface->getAreaId(), {key}, {record->header});
+    deliverV2(testPacket, types::IPv4Address{0xC0A80102});
+    wait();
 }
 
 // Test: Flood_LSUpdate_From_Neighbor_Below_Exchange_Ignored
@@ -2803,6 +3081,12 @@ TEST_F(Internal_OspfTest, RxV2_HandleIncoming_Dispatches_LSRequest)
     deliverV2(testPacket, types::IPv4Address{0xC0A80102});
 
     EXPECT_TRUE(sawLSUpdate);
+
+    auto* record = lsdb.find(key);
+    ASSERT_NE(record, nullptr);
+    buildLSAckV2(testPacket, neighborRouterId, ospfInterface->getAreaId(), {key}, {record->header});
+    deliverV2(testPacket, types::IPv4Address{0xC0A80102});
+    wait();
 }
 
 // Test: RxV2_HandleIncoming_Dispatches_LSUpdate
@@ -2826,6 +3110,12 @@ TEST_F(Internal_OspfTest, RxV2_HandleIncoming_Dispatches_LSUpdate)
 
     auto& lsdb = getLsdb();
     EXPECT_TRUE(lsdb.contains(key));
+
+    auto* record = lsdb.find(key);
+    ASSERT_NE(record, nullptr);
+    buildLSAckV2(testPacket, neighborRouterId, ospfInterface->getAreaId(), {key}, {record->header});
+    deliverV2(testPacket, types::IPv4Address{0xC0A80102});
+    wait();
 }
 
 // Test: RxV2_HandleIncoming_Dispatches_LSAck
@@ -3083,6 +3373,10 @@ TEST_F(Internal_OspfTest, TxV2_SendLsUpdate_Unicast_To_Neighbor)
 
     EXPECT_TRUE(ok);
     EXPECT_TRUE(sawLSUpdate);
+
+    buildLSAckV2(testPacket, neighborRouterId, ospfInterface->getAreaId(), {key}, {rec->header});
+    deliverV2(testPacket, types::IPv4Address{0xC0A80102});
+    wait();
 }
 
 // Test: TxV2_FinalizeHeader_Sets_Length_And_Checksum
@@ -3136,15 +3430,13 @@ TEST_F(Internal_OspfTest, TxV2_SendHello_Bounded_By_Interface_Mtu)
 // Test: OriginateV2_RouterLsa_Basic_Fields_Match_RouterId_And_Sequence
 TEST_F(Internal_OspfTest, OriginateV2_RouterLsa_Basic_Fields_Match_RouterId_And_Sequence)
 {
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t rid = ospfInstance->getRouterId();
     LsaKey key(OSPFV2_LSA_ROUTER, rid, rid);
 
-    auto& lsdb = getLsdb();
-    auto* record = lsdb.find(key);
+    auto* record = waitForLsa(key);
     ASSERT_NE(record, nullptr);
     EXPECT_TRUE(hasFlag(record->flags, LsaRecordFlags::SELF_ORIGINATED));
     EXPECT_GE(record->header.sequence, routing::OSPF_INITIAL_SEQUENCE);
@@ -3157,14 +3449,21 @@ TEST_F(Internal_OspfTest, OriginateV2_RouterLsa_AddTransitLink_For_DR_Broadcast)
     runIfaceElection();
     ASSERT_TRUE(ospfInterface->getIsDr());
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t rid = ospfInstance->getRouterId();
     LsaKey key(OSPFV2_LSA_ROUTER, rid, rid);
 
-    auto* record = getLsdb().find(key);
+    // Reorigination is async and a stale record may pre-exist; wait for the transit link to actually appear in the body.
+    auto* record = waitForLsa(key, [](const LsaRecord& r) {
+        auto* body = std::get_if<RouterLsaV2>(&r.body);
+        if (!body) return false;
+        for (const auto& link : body->links)
+            if (link.type == OSPFV2_LINK_TRANSIT)
+                return true;
+        return false;
+    });
     ASSERT_NE(record, nullptr);
     auto* body = std::get_if<RouterLsaV2>(&record->body);
     ASSERT_NE(body, nullptr);
@@ -3193,14 +3492,21 @@ TEST_F(Internal_OspfTest, OriginateV2_RouterLsa_AddP2PLink_For_PointToPoint_Full
     auto* nbr = addNeighbor(neighborRouterId, nbrIp, Neighbor::State::FULL);
     ASSERT_EQ(nbr->getState(), Neighbor::State::FULL);
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t rid = ospfInstance->getRouterId();
     LsaKey key(OSPFV2_LSA_ROUTER, rid, rid);
 
-    auto* record = getLsdb().find(key);
+    auto* record = waitForLsa(key, [](const LsaRecord& r) {
+        auto* body = std::get_if<RouterLsaV2>(&r.body);
+        if (!body)
+            return false;
+        for (const auto& link : body->links)
+            if (link.type == OSPFV2_LINK_P2P)
+                return true;
+        return false;
+    });
     ASSERT_NE(record, nullptr);
     auto* body = std::get_if<RouterLsaV2>(&record->body);
     ASSERT_NE(body, nullptr);
@@ -3224,14 +3530,13 @@ TEST_F(Internal_OspfTest, OriginateV2_RouterLsa_AddStubLink_For_Passive_Interfac
     ospfInterface->enqueueSyncPassive();
     wait();
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t rid = ospfInstance->getRouterId();
     LsaKey key(OSPFV2_LSA_ROUTER, rid, rid);
 
-    auto* record = getLsdb().find(key);
+    auto* record = waitForLsa(key);
     ASSERT_NE(record, nullptr);
     auto* body = std::get_if<RouterLsaV2>(&record->body);
     ASSERT_NE(body, nullptr);
@@ -3248,14 +3553,13 @@ TEST_F(Internal_OspfTest, OriginateV2_RouterLsa_AddStubLink_For_Passive_Interfac
 // Test: OriginateV2_RouterLsa_NoDr_NoTransitLink_On_Broadcast
 TEST_F(Internal_OspfTest, OriginateV2_RouterLsa_NoDr_NoTransitLink_On_Broadcast)
 {
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t rid = ospfInstance->getRouterId();
     LsaKey key(OSPFV2_LSA_ROUTER, rid, rid);
 
-    auto* record = getLsdb().find(key);
+    auto* record = waitForLsa(key);
     ASSERT_NE(record, nullptr);
     auto* body = std::get_if<RouterLsaV2>(&record->body);
     ASSERT_NE(body, nullptr);
@@ -3274,15 +3578,14 @@ TEST_F(Internal_OspfTest, OriginateV2_NetworkLsa_Originated_By_Dr_With_FullNeigh
     auto* nbr = addNeighbor(neighborRouterId, nbrIp, Neighbor::State::FULL);
     ASSERT_EQ(nbr->getState(), Neighbor::State::FULL);
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t selfRid = ospfInstance->getRouterId();
     uint32_t netAddr = ospfInterface->interfaceAddress.v4();
     LsaKey key(OSPFV2_LSA_NETWORK, netAddr, selfRid);
 
-    auto* record = getLsdb().find(key);
+    auto* record = waitForLsa(key);
     ASSERT_NE(record, nullptr);
     auto* body = std::get_if<NetworkLsaV2>(&record->body);
     ASSERT_NE(body, nullptr);
@@ -3299,9 +3602,8 @@ TEST_F(Internal_OspfTest, OriginateV2_NetworkLsa_Not_Originated_When_Not_Dr)
     // No election: isDr remains false.
     ASSERT_FALSE(ospfInterface->getIsDr());
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t selfRid = ospfInstance->getRouterId();
     uint32_t netAddr = ospfInterface->interfaceAddress.v4();
@@ -3313,24 +3615,20 @@ TEST_F(Internal_OspfTest, OriginateV2_NetworkLsa_Not_Originated_When_Not_Dr)
 // Test: OriginateV2_AsbrSummary_Type4_Originated_When_Asbr_Reachable
 TEST_F(Internal_OspfTest, OriginateV2_AsbrSummary_Type4_Originated_When_Asbr_Reachable)
 {
-    // Seed reachability to a remote ASBR so addAsbrLsa computes a non-zero metric.
-    // mergeCanidate() only inserts a reach entry when nextHops is non-empty
-    // (an empty next-hop list means "no path", so a route with no next hop
-    // is correctly treated as unreachable) -- a next hop is required here.
     OspfRouter asbrReach{};
     asbrReach.rid = neighborRouterId2;
     asbrReach.cost = 25;
     asbrReach.nextHops.push_back({ospfInterface->interfaceId, types::IPAddress{}});
     getTable().updateAreaAsbr(0, asbrReach);
 
-    getInterOriginator().addExternal<PolicyV2>(getOriginatorCtx(), neighborRouterId2, /*lsid=*/1, /*remove=*/false);
-    wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    addExternal<PolicyV2>(getOriginatorCtx(), neighborRouterId2, /*lsid=*/1, /*remove=*/false);
 
     uint32_t selfRid = ospfInstance->getRouterId();
     LsaKey key(OSPFV2_LSA_SUM_ASBR, neighborRouterId2, selfRid);
 
-    auto* record = getLsdb().find(key);
+    // The install runs from a postAfter reorigination timer, so poll via
+    // waitForLsa instead of a single wait() + find (see the helper's comment).
+    auto* record = waitForLsa(key);
     ASSERT_NE(record, nullptr);
     auto* body = std::get_if<SummaryRouterLsa>(&record->body);
     ASSERT_NE(body, nullptr);
@@ -3343,21 +3641,20 @@ TEST_F(Internal_OspfTest, OriginateV2_AsbrSummary_Withdrawn_When_Last_External_R
     OspfRouter asbrReach{};
     asbrReach.rid = neighborRouterId2;
     asbrReach.cost = 25;
+    asbrReach.nextHops.push_back({ospfInterface->interfaceId, types::IPAddress{}});
     getTable().updateAreaAsbr(0, asbrReach);
 
-    getInterOriginator().addExternal<PolicyV2>(getOriginatorCtx(), neighborRouterId2, /*lsid=*/1, /*remove=*/false);
+    addExternal<PolicyV2>(getOriginatorCtx(), neighborRouterId2, /*lsid=*/1, /*remove=*/false);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t selfRid = ospfInstance->getRouterId();
     LsaKey key(OSPFV2_LSA_SUM_ASBR, neighborRouterId2, selfRid);
-    ASSERT_TRUE(getLsdb().contains(key));
+    ASSERT_TRUE(waitForLsa(key));
 
-    getInterOriginator().addExternal<PolicyV2>(getOriginatorCtx(), neighborRouterId2, /*lsid=*/1, /*remove=*/true);
+    addExternal<PolicyV2>(getOriginatorCtx(), neighborRouterId2, /*lsid=*/1, /*remove=*/true);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    auto* record = getLsdb().find(key);
+    auto* record = waitForLsa(key, [](const LsaRecord& r) { return r.header.age == routing::OSPF_MAX_AGE; });
     ASSERT_NE(record, nullptr);
     EXPECT_EQ(record->header.age, routing::OSPF_MAX_AGE);
 }
@@ -3367,14 +3664,13 @@ TEST_F(Internal_OspfTest, OriginateV2_Type3Summary_OriginateSummary_Sets_Cost_An
 {
     types::IPPrefix prefix(uint32_t{0x0A000000}, 8); // 10.0.0.0/8
 
-    getInterOriginator().originateSummary<PolicyV2>(getOriginatorCtx(), /*lsid=*/0x0A000000, prefix, /*cost=*/55);
+    originateSummary<PolicyV2>(getOriginatorCtx(), /*lsid=*/0x0A000000, prefix, /*cost=*/55);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t selfRid = ospfInstance->getRouterId();
     LsaKey key(OSPFV2_LSA_SUM_NET, 0x0A000000, selfRid);
 
-    auto* record = getLsdb().find(key);
+    auto* record = waitForLsa(key);
     ASSERT_NE(record, nullptr);
     auto* body = std::get_if<SummaryNetworkLsa>(&record->body);
     ASSERT_NE(body, nullptr);
@@ -3387,19 +3683,17 @@ TEST_F(Internal_OspfTest, OriginateV2_Type3Summary_Expire_Sets_MaxAge)
 {
     types::IPPrefix prefix(uint32_t{0x0A000000}, 8); // 10.0.0.0/8
 
-    getInterOriginator().originateSummary<PolicyV2>(getOriginatorCtx(), /*lsid=*/0x0A000000, prefix, /*cost=*/55);
+    originateSummary<PolicyV2>(getOriginatorCtx(), /*lsid=*/0x0A000000, prefix, /*cost=*/55);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t selfRid = ospfInstance->getRouterId();
     LsaKey key(OSPFV2_LSA_SUM_NET, 0x0A000000, selfRid);
-    ASSERT_TRUE(getLsdb().contains(key));
+    ASSERT_TRUE(waitForLsa(key));
 
-    getInterOriginator().originateSummary<PolicyV2>(getOriginatorCtx(), /*lsid=*/0x0A000000, prefix, /*cost=*/55, /*expire=*/true);
+    originateSummary<PolicyV2>(getOriginatorCtx(), /*lsid=*/0x0A000000, prefix, /*cost=*/55, /*expire=*/true);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    auto* record = getLsdb().find(key);
+    auto* record = waitForLsa(key, [](const LsaRecord& r) { return r.header.age == routing::OSPF_MAX_AGE; });
     ASSERT_NE(record, nullptr);
     EXPECT_EQ(record->header.age, routing::OSPF_MAX_AGE);
 }
@@ -3419,9 +3713,8 @@ TEST_F(Internal_OspfTest, OriginateV2_Type5External_OriginateLsa_Installs_Body)
 
     getOriginatorCtx().originateLsa<PolicyV2>(key, LsaBody{ext}, false);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    auto* record = getLsdb().find(key);
+    auto* record = waitForLsa(key);
     ASSERT_NE(record, nullptr);
     auto* body = std::get_if<ExternalLsaV2>(&record->body);
     ASSERT_NE(body, nullptr);
@@ -3445,14 +3738,13 @@ TEST_F(Internal_OspfTest, OriginateV2_Type5External_Expire_Sets_MaxAge)
 
     getOriginatorCtx().originateLsa<PolicyV2>(key, LsaBody{ext}, false);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    ASSERT_TRUE(getLsdb().contains(key));
+    waitForLsa(key);
+    ASSERT_TRUE(waitForLsa(key));
 
     getOriginatorCtx().originateLsa<PolicyV2>(key, LsaBody{ext}, true);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    auto* record = getLsdb().find(key);
+    auto* record = waitForLsa(key, [](const LsaRecord& r) { return r.header.age == routing::OSPF_MAX_AGE; });
     ASSERT_NE(record, nullptr);
     EXPECT_EQ(record->header.age, routing::OSPF_MAX_AGE);
 }
@@ -3472,21 +3764,19 @@ TEST_F(Internal_OspfTest, OriginateV2_StubArea_AddStubDefaultRoute_Originates_Ty
 
     auto& stubArea = getArea(1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_TRUE(ospfInstance->isABR());
 
     // The area's initial fullRefresh() ran before isABR() became true (insureArea
     // sets ABR status after construction completes), so addStubDefaultRoute(true)
     // was a no-op at that point. Re-run fullRefresh now that isABR() is true.
-    getIntraOriginatorV2(&stubArea).fullRefresh();
+    fullRefreshV2(&stubArea);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t selfRid = ospfInstance->getRouterId();
     LsaKey defaultKey(OSPFV2_LSA_SUM_NET, 0, selfRid);
 
-    auto* record = getLsdb(&stubArea).find(defaultKey);
+    auto* record = waitForLsa(defaultKey, &stubArea);
     ASSERT_NE(record, nullptr);
     EXPECT_NE(record->header.age, routing::OSPF_MAX_AGE);
     auto* body = std::get_if<SummaryNetworkLsa>(&record->body);
@@ -3509,23 +3799,31 @@ TEST_F(Internal_OspfTest, OriginateV2_NssaArea_NssaDefaultOriginate_Type7_Defaul
 
     auto& nssaArea = getArea(1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_TRUE(ospfInstance->isABR());
 
     // As with the stub case, re-run fullRefresh now that isABR() is true so
     // nssaDefaultOriginate actually originates the Type-7 default.
-    getIntraOriginatorV2(&nssaArea).fullRefresh();
+    fullRefreshV2(&nssaArea);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t selfRid = ospfInstance->getRouterId();
 
     bool found = false;
-    getLsdb(&nssaArea).forEachInType(OSPFV2_LSA_NSSA, [&](const LsaKey& k, LsaRecord& rec) {
-        if (k.advertisingRouter == selfRid && rec.header.age != routing::OSPF_MAX_AGE)
-            found = true;
-    });
+    for (int i = 0; i < 50 && !found; ++i)
+    {
+        {
+            std::lock_guard lock(getSchedulerLock());
+            getLsdb(&nssaArea).forEachInType(OSPFV2_LSA_NSSA, [&](const LsaKey& k, LsaRecord& rec) {
+                if (k.advertisingRouter == selfRid && rec.header.age != routing::OSPF_MAX_AGE)
+                    found = true;
+            });
+        }
+        if (found)
+            break;
+        wait();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
     EXPECT_TRUE(found);
 
     removeIface(iface1.id);
@@ -3537,14 +3835,13 @@ TEST_F(Internal_OspfTest, OriginateV2_FullRefresh_Increments_Sequence_On_Reorigi
     runIfaceElection();
     ASSERT_TRUE(ospfInterface->getIsDr());
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t rid = ospfInstance->getRouterId();
     LsaKey key(OSPFV2_LSA_ROUTER, rid, rid);
 
-    auto* before = getLsdb().find(key);
+    auto* before = waitForLsa(key);
     ASSERT_NE(before, nullptr);
     uint32_t seqBefore = before->header.sequence;
 
@@ -3553,11 +3850,10 @@ TEST_F(Internal_OspfTest, OriginateV2_FullRefresh_Increments_Sequence_On_Reorigi
     getIfaceConfigs().get<config::OspfInterface::COST>().set(static_cast<uint16_t>(ospfInterface->getCost() + 50));
     calculateCost();
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    auto* after = getLsdb().find(key);
+    auto* after = waitForLsa(key, [seqBefore](const LsaRecord& r) { return r.header.sequence > seqBefore; });
     ASSERT_NE(after, nullptr);
     EXPECT_GT(after->header.sequence, seqBefore);
 }
@@ -3565,23 +3861,29 @@ TEST_F(Internal_OspfTest, OriginateV2_FullRefresh_Increments_Sequence_On_Reorigi
 // Test: OriginateV2_UpdateInterface_Triggers_RouterLsa_Reorigination
 TEST_F(Internal_OspfTest, OriginateV2_UpdateInterface_Triggers_RouterLsa_Reorigination)
 {
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t rid = ospfInstance->getRouterId();
     LsaKey key(OSPFV2_LSA_ROUTER, rid, rid);
 
-    auto* before = getLsdb().find(key);
+    auto* before = waitForLsa(key);
     ASSERT_NE(before, nullptr);
     uint32_t seqBefore = before->header.sequence;
 
     runIfaceElection();
-    getIntraOriginatorV2().updateInterface(ospfInterface->id.interfaceId);
+    updateInterfaceV2(ospfInterface->id.interfaceId);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    auto* after = getLsdb().find(key);
+    auto* after = waitForLsa(key, [](const LsaRecord& r) {
+        auto* body = std::get_if<RouterLsaV2>(&r.body);
+        if (!body)
+            return false;
+        for (const auto& link : body->links)
+            if (link.type == OSPFV2_LINK_TRANSIT)
+                return true;
+        return false;
+    });
     ASSERT_NE(after, nullptr);
     EXPECT_GE(after->header.sequence, seqBefore);
 
@@ -3614,9 +3916,8 @@ TEST_F(Internal_OspfTest, Throttle_FirstOrigination_FiresImmediately_With_Defaul
 
     getOriginatorCtx().originateLsa<PolicyV2>(key, LsaBody{ext}, false);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    auto* record = getLsdb().find(key);
+    auto* record = waitForLsa(key);
     ASSERT_NE(record, nullptr);
     EXPECT_EQ(record->header.sequence, routing::OSPF_INITIAL_SEQUENCE);
     EXPECT_NE(record->header.age, routing::OSPF_MAX_AGE);
@@ -3633,9 +3934,8 @@ TEST_F(Internal_OspfTest, Throttle_RepeatedOriginateLsa_Increments_Sequence_Each
 
     getOriginatorCtx().originateLsa<PolicyV2>(key, LsaBody{ext}, false);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    auto* first = getLsdb().find(key);
+    auto* first = waitForLsa(key);
     ASSERT_NE(first, nullptr);
     uint32_t seq1 = first->header.sequence;
 
@@ -3644,9 +3944,8 @@ TEST_F(Internal_OspfTest, Throttle_RepeatedOriginateLsa_Increments_Sequence_Each
     ext.metric = 20;
     getOriginatorCtx().originateLsa<PolicyV2>(key, LsaBody{ext}, false);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    auto* second = getLsdb().find(key);
+    auto* second = waitForLsa(key, [seq1](const LsaRecord& r) { return r.header.sequence > seq1; });
     ASSERT_NE(second, nullptr);
     EXPECT_GT(second->header.sequence, seq1);
 
@@ -3671,9 +3970,8 @@ TEST_F(Internal_OspfTest, Throttle_NonZeroHold_Does_Not_Block_Initial_Originatio
 
     getOriginatorCtx().originateLsa<PolicyV2>(key, LsaBody{ext}, false);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    auto* record = getLsdb().find(key);
+    auto* record = waitForLsa(key);
     ASSERT_NE(record, nullptr);
     EXPECT_EQ(record->header.sequence, routing::OSPF_INITIAL_SEQUENCE);
 
@@ -3699,9 +3997,8 @@ TEST_F(Internal_OspfTest, Throttle_SecondReorigination_Within_Hold_Window_Does_N
 
     getOriginatorCtx().originateLsa<PolicyV2>(key, LsaBody{ext}, false);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    auto* first = getLsdb().find(key);
+    auto* first = waitForLsa(key);
     ASSERT_NE(first, nullptr);
     uint32_t seq1 = first->header.sequence;
 
@@ -3710,9 +4007,8 @@ TEST_F(Internal_OspfTest, Throttle_SecondReorigination_Within_Hold_Window_Does_N
     ext.metric = 2;
     getOriginatorCtx().originateLsa<PolicyV2>(key, LsaBody{ext}, false);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    auto* second = getLsdb().find(key);
+    auto* second = waitForLsa(key);
     ASSERT_NE(second, nullptr);
     // Sequence should not have advanced yet - the pending throttle timer is
     // scheduled far in the future and waitIdle() does not advance real time.
@@ -3734,17 +4030,15 @@ TEST_F(Internal_OspfTest, Throttle_Expire_While_Pending_Still_Removes_From_Lsdb_
 
     getOriginatorCtx().originateLsa<PolicyV2>(key, LsaBody{ext}, false);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    ASSERT_NE(getLsdb().find(key), nullptr);
+    ASSERT_NE(waitForLsa(key), nullptr);
 
     // Now request expiration; with default (0ms) throttle delay this should
     // apply immediately and set the LSA to MaxAge.
     getOriginatorCtx().originateLsa<PolicyV2>(key, LsaBody{ext}, true);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    auto* record = getLsdb().find(key);
+    auto* record = waitForLsa(key, [](const LsaRecord& r) { return r.header.age == routing::OSPF_MAX_AGE; });
     ASSERT_NE(record, nullptr);
     EXPECT_EQ(record->header.age, routing::OSPF_MAX_AGE);
 }
@@ -3760,15 +4054,14 @@ TEST_F(Internal_OspfTest, GroupPacing_FullRefresh_Reaches_All_SelfOriginated_Lsa
     ext.isType2 = true;
     getOriginatorCtx().originateLsa<PolicyV2>(extKey, LsaBody{ext}, false);
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t rid = ospfInstance->getRouterId();
     LsaKey routerKey(OSPFV2_LSA_ROUTER, rid, rid);
 
-    EXPECT_NE(getLsdb().find(routerKey), nullptr);
-    auto* extRecord = getLsdb().find(extKey);
+    EXPECT_NE(waitForLsa(routerKey), nullptr);
+    auto* extRecord = waitForLsa(extKey);
     ASSERT_NE(extRecord, nullptr);
     EXPECT_NE(extRecord->header.age, routing::OSPF_MAX_AGE);
 }
@@ -3784,25 +4077,22 @@ TEST_F(Internal_OspfTest, GroupPacing_Expired_Lsa_Not_Reintroduced_By_Subsequent
 
     getOriginatorCtx().originateLsa<PolicyV2>(extKey, LsaBody{ext}, false);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    ASSERT_NE(getLsdb().find(extKey), nullptr);
+    ASSERT_NE(waitForLsa(extKey), nullptr);
 
     // Expire it (e.g. redistribution withdrawn).
     getOriginatorCtx().originateLsa<PolicyV2>(extKey, LsaBody{ext}, true);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    auto* expired = getLsdb().find(extKey);
+    auto* expired = waitForLsa(extKey, [](const LsaRecord& r) { return r.header.age == routing::OSPF_MAX_AGE; });
     ASSERT_NE(expired, nullptr);
     EXPECT_EQ(expired->header.age, routing::OSPF_MAX_AGE);
 
     // A subsequent full refresh should not resurrect the expired external -
     // it has been erased from originationState and unscheduled from pacing.
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    auto* afterRefresh = getLsdb().find(extKey);
+    auto* afterRefresh = waitForLsa(extKey);
     ASSERT_NE(afterRefresh, nullptr);
     EXPECT_EQ(afterRefresh->header.age, routing::OSPF_MAX_AGE);
 }
@@ -3823,13 +4113,12 @@ TEST_F(Internal_OspfTest, AbrSummary_ReoriginateSummaries_NoOp_When_Not_Abr)
     changes.push_back(change);
 
     // Should be a no-op: single-area process is never an ABR.
-    getInterOriginator().reoriginateSummaries<PolicyV2>(getOriginatorCtx(), changes);
+    reoriginateSummaries<PolicyV2>(getOriginatorCtx(), changes);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t rid = ospfInstance->getRouterId();
     LsaKey summaryKey(OSPFV2_LSA_SUM_NET, change.prefix.v4(), rid);
-    EXPECT_EQ(getLsdb().find(summaryKey), nullptr);
+    EXPECT_EQ(waitForLsa(summaryKey), nullptr);
 }
 
 // Test: AbrSummary_ReoriginateSummaries_From_Area0_Installs_Into_NonZero_Area
@@ -3840,7 +4129,6 @@ TEST_F(Internal_OspfTest, AbrSummary_ReoriginateSummaries_From_Area0_Installs_In
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
     auto& area1 = getArea(1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_TRUE(ospfInstance->isABR());
 
@@ -3852,14 +4140,13 @@ TEST_F(Internal_OspfTest, AbrSummary_ReoriginateSummaries_From_Area0_Installs_In
 
     // Source area is the backbone (area 0); the summary should be
     // re-originated into area 1.
-    getInterOriginator().reoriginateSummaries<PolicyV2>(getOriginatorCtx(), changes);
+    reoriginateSummaries<PolicyV2>(getOriginatorCtx(), changes);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t rid = ospfInstance->getRouterId();
     LsaKey summaryKey(OSPFV2_LSA_SUM_NET, change.prefix.v4(), rid);
 
-    auto* record = getLsdb(&area1).find(summaryKey);
+    auto* record = waitForLsa(summaryKey, &area1);
     ASSERT_NE(record, nullptr);
     EXPECT_NE(record->header.age, routing::OSPF_MAX_AGE);
 
@@ -3869,7 +4156,7 @@ TEST_F(Internal_OspfTest, AbrSummary_ReoriginateSummaries_From_Area0_Installs_In
     EXPECT_EQ(body->networkMask, types::v4Mask(change.prefix.prefixLength));
 
     // Area 0 itself should not receive a copy of its own summary.
-    EXPECT_EQ(getLsdb().find(summaryKey), nullptr);
+    EXPECT_EQ(waitForLsa(summaryKey), nullptr);
 
     removeIface(iface1.id);
 }
@@ -3881,7 +4168,6 @@ TEST_F(Internal_OspfTest, AbrSummary_ReoriginateSummary_Single_From_NonZero_Area
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
     auto& area1 = getArea(1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_TRUE(ospfInstance->isABR());
 
@@ -3893,12 +4179,11 @@ TEST_F(Internal_OspfTest, AbrSummary_ReoriginateSummary_Single_From_NonZero_Area
     // backbone (area 0).
     reoriginateSummary<PolicyV2>(getOriginatorCtx(&area1), change);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t rid = ospfInstance->getRouterId();
     LsaKey summaryKey(OSPFV2_LSA_SUM_NET, change.prefix.v4(), rid);
 
-    auto* record = getLsdb().find(summaryKey);
+    auto* record = waitForLsa(summaryKey);
     ASSERT_NE(record, nullptr);
     EXPECT_NE(record->header.age, routing::OSPF_MAX_AGE);
 
@@ -3916,7 +4201,6 @@ TEST_F(Internal_OspfTest, AbrSummary_ReoriginateSummaries_From_NonZero_Area_Targ
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
     auto& area1 = getArea(1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_TRUE(ospfInstance->isABR());
 
@@ -3928,14 +4212,13 @@ TEST_F(Internal_OspfTest, AbrSummary_ReoriginateSummaries_From_NonZero_Area_Targ
 
     // reoriginateSummaries (plural) from a non-zero source area must target
     // area 0 (the backbone), not area 1 itself.
-    getInterOriginator().reoriginateSummaries<PolicyV2>(getOriginatorCtx(&area1), changes);
+    reoriginateSummaries<PolicyV2>(getOriginatorCtx(&area1), changes);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t rid = ospfInstance->getRouterId();
     LsaKey summaryKey(OSPFV2_LSA_SUM_NET, change.prefix.v4(), rid);
 
-    auto* record = getLsdb().find(summaryKey);
+    auto* record = waitForLsa(summaryKey);
     ASSERT_NE(record, nullptr);
 
     auto* body = std::get_if<SummaryNetworkLsa>(&record->body);
@@ -3952,7 +4235,6 @@ TEST_F(Internal_OspfTest, AbrSummary_ReoriginateSummaries_From_Area0_Skips_Area_
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
     auto& area1 = getArea(1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_TRUE(ospfInstance->isABR());
 
@@ -3965,14 +4247,13 @@ TEST_F(Internal_OspfTest, AbrSummary_ReoriginateSummaries_From_Area0_Skips_Area_
     change.cost = 5;
     changes.push_back(change);
 
-    getInterOriginator().reoriginateSummaries<PolicyV2>(getOriginatorCtx(), changes);
+    reoriginateSummaries<PolicyV2>(getOriginatorCtx(), changes);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t rid = ospfInstance->getRouterId();
     LsaKey summaryKey(OSPFV2_LSA_SUM_NET, change.prefix.v4(), rid);
 
-    EXPECT_EQ(getLsdb(&area1).find(summaryKey), nullptr);
+    EXPECT_EQ(waitForLsa(summaryKey, &area1), nullptr);
 
     removeIface(iface1.id);
 }
@@ -3999,15 +4280,14 @@ TEST_F(Internal_OspfTest, AbrSummary_ProcessSummaries_Installs_Batch_Into_Area_L
 
     processSummaries<PolicyV2>(summaries);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    auto* rec1 = getLsdb().find(key1);
+    auto* rec1 = waitForLsa(key1);
     ASSERT_NE(rec1, nullptr);
     auto* body1 = std::get_if<SummaryNetworkLsa>(&rec1->body);
     ASSERT_NE(body1, nullptr);
     EXPECT_EQ(body1->metric, 11u);
 
-    auto* rec2 = getLsdb().find(key2);
+    auto* rec2 = waitForLsa(key2);
     ASSERT_NE(rec2, nullptr);
     auto* body2 = std::get_if<SummaryNetworkLsa>(&rec2->body);
     ASSERT_NE(body2, nullptr);
@@ -4021,7 +4301,6 @@ TEST_F(Internal_OspfTest, AbrSummary_ReoriginateSummary_Single_Updates_Existing_
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
     auto& area1 = getArea(1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_TRUE(ospfInstance->isABR());
 
@@ -4031,12 +4310,11 @@ TEST_F(Internal_OspfTest, AbrSummary_ReoriginateSummary_Single_Updates_Existing_
 
     reoriginateSummary<PolicyV2>(getOriginatorCtx(&area1), change);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t rid = ospfInstance->getRouterId();
     LsaKey summaryKey(OSPFV2_LSA_SUM_NET, change.prefix.v4(), rid);
 
-    auto* first = getLsdb().find(summaryKey);
+    auto* first = waitForLsa(summaryKey);
     ASSERT_NE(first, nullptr);
     uint32_t seq1 = first->header.sequence;
 
@@ -4044,9 +4322,8 @@ TEST_F(Internal_OspfTest, AbrSummary_ReoriginateSummary_Single_Updates_Existing_
     change.cost = 25;
     reoriginateSummary<PolicyV2>(getOriginatorCtx(&area1), change);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    auto* second = getLsdb().find(summaryKey);
+    auto* second = waitForLsa(summaryKey, [seq1](const LsaRecord& r) { return r.header.sequence > seq1; });
     ASSERT_NE(second, nullptr);
     EXPECT_GT(second->header.sequence, seq1);
 
@@ -4067,15 +4344,17 @@ TEST_F(Internal_OspfTest, Spf_RunFull_Computes_Shortest_Path_Single_Router)
     // Only self's Router-LSA exists (default broadcast network with no
     // FULL neighbors -> stub link only). SPF should still place the root
     // vertex at distance 0.
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    uint32_t selfRid = ospfInstance->getRouterId();
+    LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
+    ASSERT_NE(waitForLsa(selfKey), nullptr);
 
     SpfTopology<PolicyV2> topo(getSpfManager());
     SpfEngine engine(getSpfManager());
     SpfResult result = engine.run<PolicyV2>(topo);
 
-    uint32_t selfRid = ospfInstance->getRouterId();
     Vertex selfVertex{VertexType::ROUTER, selfRid};
 
     EXPECT_EQ(result.root.type, VertexType::ROUTER);
@@ -4100,11 +4379,22 @@ TEST_F(Internal_OspfTest, Spf_RunFull_Computes_Shortest_Path_Multi_Hop_Topology)
     auto* nbr = addNeighbor(neighborRouterId, nbrIp, Neighbor::State::FULL);
     ASSERT_EQ(nbr->getState(), Neighbor::State::FULL);
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t selfRid = ospfInstance->getRouterId();
+
+    // Reorigination from the FULL adjacency is async; wait for the P2P link to neighborRouterId to land before relying on it.
+    LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
+    ASSERT_NE(waitForLsa(selfKey, [neighborRouterId = this->neighborRouterId](const LsaRecord& r) {
+        auto* body = std::get_if<RouterLsaV2>(&r.body);
+        if (!body)
+            return false;
+        for (const auto& link : body->links)
+            if (link.type == 1 /*P2P*/ && link.linkId == neighborRouterId)
+                return true;
+        return false;
+    }), nullptr);
 
     // Inject a synthetic Router-LSA for the neighbor with a P2P link back
     // to self (cost 5) and a stub link to a distinct prefix (cost 1).
@@ -4122,7 +4412,8 @@ TEST_F(Internal_OspfTest, Spf_RunFull_Computes_Shortest_Path_Multi_Hop_Topology)
     LsaBody nbrLsaBody{nbrLsa};
     processLsa<PolicyV2>(ctx, nbrLsaBody);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    ASSERT_NE(waitForLsa(nbrKey), nullptr);
 
     SpfTopology<PolicyV2> topo(getSpfManager());
     SpfEngine engine(getSpfManager());
@@ -4150,9 +4441,8 @@ TEST_F(Internal_OspfTest, Spf_RunFull_Ecmp_Equal_Cost_Paths_Both_Confirmed)
     auto* nbr = addNeighbor(neighborRouterId, nbrIp, Neighbor::State::FULL);
     ASSERT_EQ(nbr->getState(), Neighbor::State::FULL);
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t selfRid = ospfInstance->getRouterId();
     uint32_t farRid = 0xC0A80104;
@@ -4191,20 +4481,20 @@ TEST_F(Internal_OspfTest, Spf_RunFull_Ecmp_Equal_Cost_Paths_Both_Confirmed)
     LsaBody nbr2LsaBody{nbr2Lsa};
     processLsa<PolicyV2>(nbr2Ctx, nbr2LsaBody);
 
-    // Self's own Router-LSA: P2P links to both neighborRouterId and
-    // neighborRouterId2, each cost 5. Must out-sequence whatever the real
-    // Originator (from fullRefresh()/addNeighbor()/syncNetworkType() above)
-    // has already installed, since those reorigination cycles bump the
-    // sequence each time they fire and are no longer capped at +1.
     RouterLsaV2 selfLsa;
     selfLsa.flags = 0;
     selfLsa.links.push_back({.linkId = neighborRouterId, .linkData = selfRid, .type = 1, .metric = 5});
     selfLsa.links.push_back({.linkId = neighborRouterId2, .linkData = selfRid, .type = 1, .metric = 5});
 
     LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
-    auto* existingSelf = getLsdb().find(selfKey);
+    uint32_t selfSeq;
+    {
+        auto* existingSelf = waitForLsa(selfKey);
+        std::lock_guard lock(getSchedulerLock());
+        selfSeq = existingSelf ? existingSelf->header.sequence : routing::OSPF_INITIAL_SEQUENCE;
+    }
     LsaHeader selfHdr;
-    selfHdr.sequence = (existingSelf ? existingSelf->header.sequence : routing::OSPF_INITIAL_SEQUENCE) + 1;
+    selfHdr.sequence = selfSeq + 1;
     selfHdr.age = 0;
     IncomingLsaContext selfCtx = {.key = selfKey, .header = selfHdr, .checksumValid = true};
     LsaBody selfLsaBody{selfLsa};
@@ -4225,7 +4515,10 @@ TEST_F(Internal_OspfTest, Spf_RunFull_Ecmp_Equal_Cost_Paths_Both_Confirmed)
     processLsa<PolicyV2>(farCtx, farLsaBody);
 
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    ASSERT_NE(waitForLsa(farKey), nullptr);
+    ASSERT_NE(waitForLsa(nbr2Key), nullptr);
+    ASSERT_NE(waitForLsa(selfKey, [selfSeq](const LsaRecord& rec) { return rec.header.sequence == selfSeq + 1; }), nullptr);
 
     SpfTopology<PolicyV2> topo(getSpfManager());
     SpfEngine engine(getSpfManager());
@@ -4247,15 +4540,16 @@ TEST_F(Internal_OspfTest, Spf_ComputeDelta_Detects_New_Link_As_Addition)
 {
     getConfigs().get<config::Ospf::LSA_ARRIVAL>().set(0);
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    uint32_t selfRid = ospfInstance->getRouterId();
+    LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
+    ASSERT_NE(waitForLsa(selfKey), nullptr);
 
     SpfTopology<PolicyV2> topo1(getSpfManager());
     SpfEngine engine(getSpfManager());
     SpfResult result1 = engine.run<PolicyV2>(topo1);
-
-    uint32_t selfRid = ospfInstance->getRouterId();
 
     // Add a new P2P link to neighborRouterId via a synthetic re-origination
     // of self's Router-LSA, plus the neighbor's reciprocal Router-LSA.
@@ -4263,10 +4557,14 @@ TEST_F(Internal_OspfTest, Spf_ComputeDelta_Detects_New_Link_As_Addition)
     selfLsa.flags = 0;
     selfLsa.links.push_back({.linkId = neighborRouterId, .linkData = selfRid, .type = 1, .metric = 7});
 
-    LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
-    auto* existingSelf = getLsdb().find(selfKey);
+    uint32_t selfSeq;
+    {
+        auto* existingSelf = waitForLsa(selfKey);
+        std::lock_guard lock(getSchedulerLock());
+        selfSeq = existingSelf ? existingSelf->header.sequence : routing::OSPF_INITIAL_SEQUENCE;
+    }
     LsaHeader selfHdr;
-    selfHdr.sequence = (existingSelf ? existingSelf->header.sequence : routing::OSPF_INITIAL_SEQUENCE) + 1;
+    selfHdr.sequence = selfSeq + 1;
     selfHdr.age = 0;
     IncomingLsaContext selfCtx = {.key = selfKey, .header = selfHdr, .checksumValid = true};
     LsaBody selfLsaBody{selfLsa};
@@ -4277,7 +4575,7 @@ TEST_F(Internal_OspfTest, Spf_ComputeDelta_Detects_New_Link_As_Addition)
     nbrLsa.links.push_back({.linkId = selfRid, .linkData = neighborRouterId, .type = 1, .metric = 7});
 
     LsaKey nbrKey(OSPFV2_LSA_ROUTER, neighborRouterId, neighborRouterId);
-    auto* existingNbr = getLsdb().find(nbrKey);
+    auto* existingNbr = waitForLsa(nbrKey);
     LsaHeader nbrHdr;
     nbrHdr.sequence = existingNbr ? existingNbr->header.sequence + 1 : routing::OSPF_INITIAL_SEQUENCE;
     nbrHdr.age = 0;
@@ -4286,7 +4584,9 @@ TEST_F(Internal_OspfTest, Spf_ComputeDelta_Detects_New_Link_As_Addition)
     processLsa<PolicyV2>(nbrCtx, nbrLsaBody);
 
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    ASSERT_NE(waitForLsa(selfKey, [selfSeq](const LsaRecord& rec) { return rec.header.sequence == selfSeq + 1; }), nullptr);
+    ASSERT_NE(waitForLsa(nbrKey, [&nbrHdr](const LsaRecord& rec) { return rec.header.sequence == nbrHdr.sequence; }), nullptr);
 
     SpfTopology<PolicyV2> topo2(getSpfManager());
     SpfResult result2 = engine.run<PolicyV2>(topo2);
@@ -4311,6 +4611,15 @@ TEST_F(Internal_OspfTest, Spf_ComputeDelta_Detects_Cost_Decrease)
     getConfigs().get<config::Ospf::LSA_ARRIVAL>().set(0);
 
     uint32_t selfRid = ospfInstance->getRouterId();
+    LsaKey selfKeyForSeq(OSPFV2_LSA_ROUTER, selfRid, selfRid);
+
+    // Out-sequence whatever self Router-LSA the fixture already originated, else the install collides (IGNORE_DUPLICATE).
+    uint32_t baseSelfSeq;
+    {
+        auto* existingSelf = waitForLsa(selfKeyForSeq);
+        std::lock_guard lock(getSchedulerLock());
+        baseSelfSeq = existingSelf ? existingSelf->header.sequence : routing::OSPF_INITIAL_SEQUENCE - 1;
+    }
 
     auto installLinks = [&](uint16_t selfToNbrCost, uint16_t nbrToSelfCost, uint32_t selfSeq, uint32_t nbrSeq)
     {
@@ -4337,18 +4646,16 @@ TEST_F(Internal_OspfTest, Spf_ComputeDelta_Detects_Cost_Decrease)
         processLsa<PolicyV2>(nbrCtx, nbrLsaBody);
     };
 
-    installLinks(20, 20, routing::OSPF_INITIAL_SEQUENCE + 1, routing::OSPF_INITIAL_SEQUENCE);
+    installLinks(20, 20, baseSelfSeq + 1, baseSelfSeq);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     SpfTopology<PolicyV2> topo1(getSpfManager());
     SpfEngine engine(getSpfManager());
     SpfResult result1 = engine.run<PolicyV2>(topo1);
 
     // Decrease the cost of the link.
-    installLinks(5, 5, routing::OSPF_INITIAL_SEQUENCE + 2, routing::OSPF_INITIAL_SEQUENCE + 1);
+    installLinks(5, 5, baseSelfSeq + 2, baseSelfSeq + 1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     SpfTopology<PolicyV2> topo2(getSpfManager());
     SpfResult result2 = engine.run<PolicyV2>(topo2);
@@ -4372,13 +4679,22 @@ TEST_F(Internal_OspfTest, Spf_ComputeDelta_Detects_Cost_Increase_Or_Removal_As_F
     getConfigs().get<config::Ospf::LSA_ARRIVAL>().set(0);
 
     uint32_t selfRid = ospfInstance->getRouterId();
+    LsaKey selfKeyForSeq(OSPFV2_LSA_ROUTER, selfRid, selfRid);
+
+    // Out-sequence whatever self Router-LSA the fixture already originated, else the install collides (IGNORE_DUPLICATE).
+    uint32_t baseSelfSeq;
+    {
+        auto* existingSelf = waitForLsa(selfKeyForSeq);
+        std::lock_guard lock(getSchedulerLock());
+        baseSelfSeq = existingSelf ? existingSelf->header.sequence : routing::OSPF_INITIAL_SEQUENCE - 1;
+    }
 
     RouterLsaV2 selfLsa1;
     selfLsa1.flags = 0;
     selfLsa1.links.push_back({.linkId = neighborRouterId, .linkData = selfRid, .type = 1, .metric = 5});
     LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
     LsaHeader selfHdr1;
-    selfHdr1.sequence = routing::OSPF_INITIAL_SEQUENCE + 1;
+    selfHdr1.sequence = baseSelfSeq + 1;
     selfHdr1.age = 0;
     IncomingLsaContext selfCtx1 = {.key = selfKey, .header = selfHdr1, .checksumValid = true};
     LsaBody selfLsa1Body{selfLsa1};
@@ -4396,7 +4712,6 @@ TEST_F(Internal_OspfTest, Spf_ComputeDelta_Detects_Cost_Increase_Or_Removal_As_F
     processLsa<PolicyV2>(nbrCtx1, nbrLsa1Body);
 
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     SpfTopology<PolicyV2> topo1(getSpfManager());
     SpfEngine engine(getSpfManager());
@@ -4412,14 +4727,13 @@ TEST_F(Internal_OspfTest, Spf_ComputeDelta_Detects_Cost_Increase_Or_Removal_As_F
     selfLsa2.flags = 0;
     selfLsa2.links.push_back({.linkId = neighborRouterId, .linkData = selfRid, .type = 1, .metric = 50});
     LsaHeader selfHdr2;
-    selfHdr2.sequence = routing::OSPF_INITIAL_SEQUENCE + 2;
+    selfHdr2.sequence = baseSelfSeq + 2;
     selfHdr2.age = 0;
     IncomingLsaContext selfCtx2 = {.key = selfKey, .header = selfHdr2, .checksumValid = true};
     LsaBody selfLsa2Body{selfLsa2};
     processLsa<PolicyV2>(selfCtx2, selfLsa2Body);
 
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     SpfTopology<PolicyV2> topo2(getSpfManager());
     SpfResult result2 = engine.run<PolicyV2>(topo2);
@@ -4437,6 +4751,14 @@ TEST_F(Internal_OspfTest, Spf_RunIspfRepair_Handles_Cost_Decrease_Without_Full_R
     getConfigs().get<config::Ospf::LSA_ARRIVAL>().set(0);
 
     uint32_t selfRid = ospfInstance->getRouterId();
+
+    // Out-sequence whatever self Router-LSA the fixture already originated, else the install collides (IGNORE_DUPLICATE).
+    uint32_t baseSelfSeq;
+    {
+        auto* existingSelf = waitForLsa(LsaKey(OSPFV2_LSA_ROUTER, selfRid, selfRid));
+        std::lock_guard lock(getSchedulerLock());
+        baseSelfSeq = existingSelf ? existingSelf->header.sequence : routing::OSPF_INITIAL_SEQUENCE - 1;
+    }
 
     auto installLinks = [&](uint16_t cost, uint32_t selfSeq, uint32_t nbrSeq)
     {
@@ -4463,9 +4785,8 @@ TEST_F(Internal_OspfTest, Spf_RunIspfRepair_Handles_Cost_Decrease_Without_Full_R
         processLsa<PolicyV2>(nbrCtx, nbrLsaBody);
     };
 
-    installLinks(30, routing::OSPF_INITIAL_SEQUENCE + 1, routing::OSPF_INITIAL_SEQUENCE);
+    installLinks(30, baseSelfSeq + 1, routing::OSPF_INITIAL_SEQUENCE);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     SpfEngine engine(getSpfManager());
     {
@@ -4478,9 +4799,8 @@ TEST_F(Internal_OspfTest, Spf_RunIspfRepair_Handles_Cost_Decrease_Without_Full_R
     }
 
     // Decrease cost - a repairable delta (iSPF repair path).
-    installLinks(3, routing::OSPF_INITIAL_SEQUENCE + 2, routing::OSPF_INITIAL_SEQUENCE + 1);
+    installLinks(3, baseSelfSeq + 2, routing::OSPF_INITIAL_SEQUENCE + 1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     SpfTopology<PolicyV2> topo2(getSpfManager());
     SpfResult result2 = engine.run<PolicyV2>(topo2);
@@ -4500,13 +4820,21 @@ TEST_F(Internal_OspfTest, Spf_RunIspfRepair_Falls_Back_To_Full_On_Non_Repairable
 
     uint32_t selfRid = ospfInstance->getRouterId();
 
+    // Out-sequence whatever self Router-LSA the fixture already originated, else the install collides (IGNORE_DUPLICATE).
+    uint32_t baseSelfSeq;
+    {
+        auto* existingSelf = waitForLsa(LsaKey(OSPFV2_LSA_ROUTER, selfRid, selfRid));
+        std::lock_guard lock(getSchedulerLock());
+        baseSelfSeq = existingSelf ? existingSelf->header.sequence : routing::OSPF_INITIAL_SEQUENCE - 1;
+    }
+
     RouterLsaV2 selfLsa1;
     selfLsa1.flags = 0;
     selfLsa1.links.push_back({.linkId = neighborRouterId, .linkData = selfRid, .type = 1, .metric = 5});
     selfLsa1.links.push_back({.linkId = neighborRouterId2, .linkData = selfRid, .type = 1, .metric = 5});
     LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
     LsaHeader selfHdr1;
-    selfHdr1.sequence = routing::OSPF_INITIAL_SEQUENCE + 1;
+    selfHdr1.sequence = baseSelfSeq + 1;
     selfHdr1.age = 0;
     IncomingLsaContext selfCtx1 = {.key = selfKey, .header = selfHdr1, .checksumValid = true};
     LsaBody selfLsa1Body{selfLsa1};
@@ -4535,7 +4863,6 @@ TEST_F(Internal_OspfTest, Spf_RunIspfRepair_Falls_Back_To_Full_On_Non_Repairable
     processLsa<PolicyV2>(nbr2Ctx, nbr2LsaBody);
 
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     SpfEngine engine(getSpfManager());
     {
@@ -4553,23 +4880,19 @@ TEST_F(Internal_OspfTest, Spf_RunIspfRepair_Falls_Back_To_Full_On_Non_Repairable
     selfLsa2.flags = 0;
     selfLsa2.links.push_back({.linkId = neighborRouterId2, .linkData = selfRid, .type = 1, .metric = 5});
     LsaHeader selfHdr2;
-    selfHdr2.sequence = routing::OSPF_INITIAL_SEQUENCE + 2;
+    selfHdr2.sequence = baseSelfSeq + 2;
     selfHdr2.age = 0;
     IncomingLsaContext selfCtx2 = {.key = selfKey, .header = selfHdr2, .checksumValid = true};
     LsaBody selfLsa2Body{selfLsa2};
     processLsa<PolicyV2>(selfCtx2, selfLsa2Body);
 
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     SpfTopology<PolicyV2> topo2(getSpfManager());
     SpfResult result2 = engine.run<PolicyV2>(topo2);
 
     Vertex nbrVertex{VertexType::ROUTER, neighborRouterId};
     auto it2 = result2.nodes.find(nbrVertex);
-    // neighborRouterId is no longer reachable from self (its own Router-LSA
-    // still claims a link back, but self no longer has the reciprocal link;
-    // the back-link validation in SpfTopology::expandRouter should drop it).
     if (it2 != result2.nodes.end())
         EXPECT_FALSE(it2->second.confirmed);
 
@@ -4588,6 +4911,14 @@ TEST_F(Internal_OspfTest, Spf_RelaxEdgeFull_Updates_Distance_When_Shorter_Path_F
     uint32_t selfRid = ospfInstance->getRouterId();
     uint32_t farRid = 0xC0A80104;
 
+    // Out-sequence whatever self Router-LSA the fixture already originated, else the install collides (IGNORE_DUPLICATE).
+    uint32_t baseSelfSeq;
+    {
+        auto* existingSelf = waitForLsa(LsaKey(OSPFV2_LSA_ROUTER, selfRid, selfRid));
+        std::lock_guard lock(getSchedulerLock());
+        baseSelfSeq = existingSelf ? existingSelf->header.sequence : routing::OSPF_INITIAL_SEQUENCE - 1;
+    }
+
     // self -> neighborRouterId (cost 100) -> farRid (cost 1)  => dist 101
     // self -> neighborRouterId2 (cost 1) -> farRid (cost 1)   => dist 2 (shorter)
     RouterLsaV2 selfLsa;
@@ -4596,7 +4927,7 @@ TEST_F(Internal_OspfTest, Spf_RelaxEdgeFull_Updates_Distance_When_Shorter_Path_F
     selfLsa.links.push_back({.linkId = neighborRouterId2, .linkData = selfRid, .type = 1, .metric = 1});
     LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
     LsaHeader selfHdr;
-    selfHdr.sequence = routing::OSPF_INITIAL_SEQUENCE + 1;
+    selfHdr.sequence = baseSelfSeq + 1;
     selfHdr.age = 0;
     IncomingLsaContext selfCtx = {.key = selfKey, .header = selfHdr, .checksumValid = true};
     LsaBody selfLsaBody{selfLsa};
@@ -4639,7 +4970,6 @@ TEST_F(Internal_OspfTest, Spf_RelaxEdgeFull_Updates_Distance_When_Shorter_Path_F
     processLsa<PolicyV2>(farCtx, farLsaBody);
 
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     SpfTopology<PolicyV2> topo(getSpfManager());
     SpfEngine engine(getSpfManager());
@@ -4660,6 +4990,14 @@ TEST_F(Internal_OspfTest, Spf_RelaxEdgeRepair_Restricted_To_Confirmed_Vertices)
 
     uint32_t selfRid = ospfInstance->getRouterId();
 
+    // Out-sequence whatever self Router-LSA the fixture already originated, else the install collides (IGNORE_DUPLICATE).
+    uint32_t baseSelfSeq;
+    {
+        auto* existingSelf = waitForLsa(LsaKey(OSPFV2_LSA_ROUTER, selfRid, selfRid));
+        std::lock_guard lock(getSchedulerLock());
+        baseSelfSeq = existingSelf ? existingSelf->header.sequence : routing::OSPF_INITIAL_SEQUENCE - 1;
+    }
+
     // Two unreachable-then-reachable hops: self -> neighborRouterId (cost
     // 10) -> neighborRouterId2 (cost 10).
     RouterLsaV2 selfLsa1;
@@ -4667,7 +5005,7 @@ TEST_F(Internal_OspfTest, Spf_RelaxEdgeRepair_Restricted_To_Confirmed_Vertices)
     selfLsa1.links.push_back({.linkId = neighborRouterId, .linkData = selfRid, .type = 1, .metric = 10});
     LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
     LsaHeader selfHdr1;
-    selfHdr1.sequence = routing::OSPF_INITIAL_SEQUENCE + 1;
+    selfHdr1.sequence = baseSelfSeq + 1;
     selfHdr1.age = 0;
     IncomingLsaContext selfCtx1 = {.key = selfKey, .header = selfHdr1, .checksumValid = true};
     LsaBody selfLsa1Body{selfLsa1};
@@ -4697,7 +5035,6 @@ TEST_F(Internal_OspfTest, Spf_RelaxEdgeRepair_Restricted_To_Confirmed_Vertices)
     processLsa<PolicyV2>(nbr2Ctx, nbr2LsaBody);
 
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     SpfEngine engine(getSpfManager());
     {
@@ -4715,14 +5052,13 @@ TEST_F(Internal_OspfTest, Spf_RelaxEdgeRepair_Restricted_To_Confirmed_Vertices)
     selfLsa2.flags = 0;
     selfLsa2.links.push_back({.linkId = neighborRouterId, .linkData = selfRid, .type = 1, .metric = 1});
     LsaHeader selfHdr2;
-    selfHdr2.sequence = routing::OSPF_INITIAL_SEQUENCE + 2;
+    selfHdr2.sequence = baseSelfSeq + 2;
     selfHdr2.age = 0;
     IncomingLsaContext selfCtx2 = {.key = selfKey, .header = selfHdr2, .checksumValid = true};
     LsaBody selfLsa2Body{selfLsa2};
     processLsa<PolicyV2>(selfCtx2, selfLsa2Body);
 
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     SpfTopology<PolicyV2> topo2(getSpfManager());
     SpfResult result2 = engine.run<PolicyV2>(topo2);
@@ -4747,12 +5083,26 @@ TEST_F(Internal_OspfTest, Spf_FinalizeParents_Propagates_FirstHop_Interface_Ids)
     auto* nbr = addNeighbor(neighborRouterId, nbrIp, Neighbor::State::FULL);
     ASSERT_EQ(nbr->getState(), Neighbor::State::FULL);
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t selfRid = ospfInstance->getRouterId();
     uint32_t farRid = 0xC0A80104;
+
+    // Reorigination is async and a stale record may pre-exist; wait for the P2P link to neighborRouterId to actually appear in the body.
+    {
+        LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
+        auto* selfRecord = waitForLsa(selfKey, [&](const LsaRecord& r) {
+            auto* body = std::get_if<RouterLsaV2>(&r.body);
+            if (!body) return false;
+            for (auto& link : body->links)
+            {
+                if (link.type == 1 && link.linkId == neighborRouterId) return true;
+            }
+            return false;
+        });
+        ASSERT_NE(selfRecord, nullptr);
+    }
 
     RouterLsaV2 nbrLsa;
     nbrLsa.flags = 0;
@@ -4778,7 +5128,6 @@ TEST_F(Internal_OspfTest, Spf_FinalizeParents_Propagates_FirstHop_Interface_Ids)
     processLsa<PolicyV2>(farCtx, farLsaBody);
 
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     SpfTopology<PolicyV2> topo(getSpfManager());
     SpfEngine engine(getSpfManager());
@@ -4810,13 +5159,12 @@ TEST_F(Internal_OspfTest, Spf_Network_Vertex_Expansion_Includes_All_Attached_Rou
     auto* nbr = addNeighbor(neighborRouterId, nbrIp, Neighbor::State::FULL);
     ASSERT_EQ(nbr->getState(), Neighbor::State::FULL);
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t selfRid = ospfInstance->getRouterId();
     LsaKey netKey(OSPFV2_LSA_NETWORK, ipIntv4.addr, selfRid);
-    auto* netRecord = getLsdb().find(netKey);
+    auto* netRecord = waitForLsa(netKey);
 
     if (netRecord == nullptr)
     {
@@ -4836,9 +5184,8 @@ TEST_F(Internal_OspfTest, Spf_Network_Vertex_Expansion_Includes_All_Attached_Rou
 // Test: Spf_Unreachable_Router_Excluded_From_Result
 TEST_F(Internal_OspfTest, Spf_Unreachable_Router_Excluded_From_Result)
 {
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     // Inject a Router-LSA for an isolated router with no link back to self
     // and no link from self to it - it should never appear as confirmed.
@@ -4856,7 +5203,8 @@ TEST_F(Internal_OspfTest, Spf_Unreachable_Router_Excluded_From_Result)
     processLsa<PolicyV2>(isolatedCtx, isolatedLsaBody);
 
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    ASSERT_NE(waitForLsa(isolatedKey), nullptr);
 
     SpfTopology<PolicyV2> topo(getSpfManager());
     SpfEngine engine(getSpfManager());
@@ -4874,21 +5222,23 @@ TEST_F(Internal_OspfTest, Spf_Unreachable_Router_Excluded_From_Result)
 // Test: Spf_SelfOriginated_Stub_Links_Produce_Local_Prefixes
 TEST_F(Internal_OspfTest, Spf_SelfOriginated_Stub_Links_Produce_Local_Prefixes)
 {
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t selfRid = ospfInstance->getRouterId();
     LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
-    auto* record = getLsdb().find(selfKey);
-    ASSERT_NE(record, nullptr);
-    auto* body = std::get_if<RouterLsaV2>(&record->body);
-    ASSERT_NE(body, nullptr);
+    bool hasStubLink;
+    {
+        auto* record = waitForLsa(selfKey);
+        ASSERT_NE(record, nullptr);
+        auto* body = std::get_if<RouterLsaV2>(&record->body);
+        ASSERT_NE(body, nullptr);
 
-    // Default (no FULL neighbors on the broadcast interface) -> self
-    // originates a stub link for the directly-connected subnet.
-    bool hasStubLink = std::any_of(body->links.begin(), body->links.end(),
-        [](const RouterLinkV2& l) { return l.type == 3; });
+        // Default (no FULL neighbors on the broadcast interface) -> self
+        // originates a stub link for the directly-connected subnet.
+        hasStubLink = std::any_of(body->links.begin(), body->links.end(),
+            [](const RouterLinkV2& l) { return l.type == 3; });
+    }
     EXPECT_TRUE(hasStubLink);
 
     SpfTopology<PolicyV2> topo(getSpfManager());
@@ -4918,9 +5268,12 @@ TEST_F(Internal_OspfTest, RouteDerive_IntraArea_From_Spf_Result_Basic_Prefix)
 {
     auto& area = getArea(0);
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    uint32_t selfRid = ospfInstance->getRouterId();
+    LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
+    ASSERT_NE(waitForLsa(selfKey), nullptr);
 
     SpfTopology<PolicyV2> topo(getSpfManager());
     SpfEngine engine(getSpfManager());
@@ -4946,26 +5299,21 @@ TEST_F(Internal_OspfTest, RouteDerive_IntraArea_Ecmp_Multiple_NextHops)
     uint32_t selfRid = ospfInstance->getRouterId();
     uint32_t farRid = 0xC0A80104;
 
-    // computeNextHops() resolves the first hop via a real interface + neighbor
-    // adjacency, not just LSDB content, so both ECMP branches need a live
-    // neighbor (both reachable via the same mock interface here).
     types::IPAddress nbr1Ip(types::IPv4Address{neighborRouterId});
     types::IPAddress nbr2Ip(types::IPv4Address{neighborRouterId2});
     addNeighbor(neighborRouterId, nbr1Ip, Neighbor::State::FULL);
     addNeighbor(neighborRouterId2, nbr2Ip, Neighbor::State::FULL);
 
-    // Two equal-cost (5) paths from self to neighborRouterId/neighborRouterId2,
-    // each of which has an equal-cost (5) link onward to farRid, which
-    // advertises a stub network. This yields two ECMP next-hops to farRid's
-    // stub prefix.
     RouterLsaV2 selfLsa;
     selfLsa.flags = 0;
     selfLsa.links.push_back({.linkId = neighborRouterId, .linkData = selfRid, .type = 1, .metric = 5});
     selfLsa.links.push_back({.linkId = neighborRouterId2, .linkData = selfRid, .type = 1, .metric = 5});
     LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
-    auto* existingSelf = getLsdb().find(selfKey);
+    uint32_t selfSeq;
+    auto* existingSelf = waitForLsa(selfKey);
+    selfSeq = existingSelf ? existingSelf->header.sequence : routing::OSPF_INITIAL_SEQUENCE;
     LsaHeader selfHdr;
-    selfHdr.sequence = (existingSelf ? existingSelf->header.sequence : routing::OSPF_INITIAL_SEQUENCE) + 1;
+    selfHdr.sequence = selfSeq + 1;
     selfHdr.age = 0;
     IncomingLsaContext selfCtx = {.key = selfKey, .header = selfHdr, .checksumValid = true};
     LsaBody selfLsaBody{selfLsa};
@@ -5011,7 +5359,6 @@ TEST_F(Internal_OspfTest, RouteDerive_IntraArea_Ecmp_Multiple_NextHops)
     processLsa<PolicyV2>(farCtx, farLsaBody);
 
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     SpfTopology<PolicyV2> topo(getSpfManager());
     SpfEngine engine(getSpfManager());
@@ -5044,9 +5391,30 @@ TEST_F(Internal_OspfTest, RouteDerive_InterArea_Type3_Installs_Summary_Route)
     auto* nbr = addNeighbor(abrRid, nbrIp, Neighbor::State::FULL);
     ASSERT_EQ(nbr->getState(), Neighbor::State::FULL);
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    // Reorigination is async and a stale record may pre-exist; wait for the link to actually appear in the body.
+    {
+        LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
+        LsaRecord* selfRecord = nullptr;
+        bool hasLinks = false;
+        for (int i = 0; i < 50 && !hasLinks; ++i)
+        {
+            {
+                selfRecord = waitForLsa(selfKey);
+                if (selfRecord)
+                {
+                    auto* rl = std::get_if<RouterLsaV2>(&selfRecord->body);
+                    hasLinks = rl && !rl->links.empty();
+                }
+            }
+            if (!hasLinks)
+                wait();
+        }
+        ASSERT_NE(selfRecord, nullptr);
+        ASSERT_TRUE(hasLinks);
+    }
 
     RouterLsaV2 abrLsa;
     abrLsa.flags = 0;
@@ -5059,7 +5427,6 @@ TEST_F(Internal_OspfTest, RouteDerive_InterArea_Type3_Installs_Summary_Route)
     LsaBody abrLsaBody{abrLsa};
     processLsa<PolicyV2>(abrCtx, abrLsaBody);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     SpfTopology<PolicyV2> topo(getSpfManager());
     SpfEngine engine(getSpfManager());
@@ -5085,7 +5452,6 @@ TEST_F(Internal_OspfTest, RouteDerive_InterArea_Type3_Installs_Summary_Route)
     LsaBody summaryLsaBody{summaryLsa};
     processLsa<PolicyV2>(summaryCtx, summaryLsaBody);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     types::IPPrefix summaryPrefix(summaryNet, 24);
     const OspfRoute* route = getRib().lookup(summaryPrefix);
@@ -5101,9 +5467,12 @@ TEST_F(Internal_OspfTest, RouteDerive_InterArea_Type3_Rejected_If_Cost_LSInfinit
 
     // Without any neighbor/topology setup, the ABR is unreachable in the
     // (empty) SPF result, so deriveInterAreaNetwork must return nullopt.
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    uint32_t selfRid = ospfInstance->getRouterId();
+    LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
+    ASSERT_NE(waitForLsa(selfKey), nullptr);
 
     SpfTopology<PolicyV2> topo(getSpfManager());
     SpfEngine engine(getSpfManager());
@@ -5149,9 +5518,20 @@ TEST_F(Internal_OspfTest, RouteDerive_InterArea_Type4_Updates_Asbr_Reachability_
     auto* nbr = addNeighbor(abrRid, nbrIp, Neighbor::State::FULL);
     ASSERT_EQ(nbr->getState(), Neighbor::State::FULL);
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    // Reorigination from the FULL adjacency is async; wait for the P2P link to abrRid to land before relying on it.
+    LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
+    ASSERT_NE(waitForLsa(selfKey, [abrRid](const LsaRecord& r) {
+        auto* body = std::get_if<RouterLsaV2>(&r.body);
+        if (!body)
+            return false;
+        for (const auto& link : body->links)
+            if (link.type == 1 /*P2P*/ && link.linkId == abrRid)
+                return true;
+        return false;
+    }), nullptr);
 
     RouterLsaV2 abrLsa;
     abrLsa.flags = 0;
@@ -5164,7 +5544,8 @@ TEST_F(Internal_OspfTest, RouteDerive_InterArea_Type4_Updates_Asbr_Reachability_
     LsaBody abrLsaBody{abrLsa};
     processLsa<PolicyV2>(abrCtx, abrLsaBody);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    ASSERT_NE(waitForLsa(abrKey), nullptr);
 
     SpfTopology<PolicyV2> topo(getSpfManager());
     SpfEngine engine(getSpfManager());
@@ -5214,9 +5595,20 @@ TEST_F(Internal_OspfTest, RouteDerive_External_Type5_E1_Adds_Internal_Plus_Exter
     auto* nbr = addNeighbor(asbrRid, nbrIp, Neighbor::State::FULL);
     ASSERT_EQ(nbr->getState(), Neighbor::State::FULL);
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    // Reorigination from the FULL adjacency is async; wait for the P2P link to asbrRid to land before relying on it.
+    LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
+    ASSERT_NE(waitForLsa(selfKey, [asbrRid](const LsaRecord& r) {
+        auto* body = std::get_if<RouterLsaV2>(&r.body);
+        if (!body)
+            return false;
+        for (const auto& link : body->links)
+            if (link.type == 1 /*P2P*/ && link.linkId == asbrRid)
+                return true;
+        return false;
+    }), nullptr);
 
     RouterLsaV2 asbrLsa;
     asbrLsa.flags = 0;
@@ -5229,7 +5621,8 @@ TEST_F(Internal_OspfTest, RouteDerive_External_Type5_E1_Adds_Internal_Plus_Exter
     LsaBody asbrRtrLsaBody{asbrLsa};
     processLsa<PolicyV2>(asbrRtrCtx, asbrRtrLsaBody);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    ASSERT_NE(waitForLsa(asbrRtrKey), nullptr);
 
     SpfTopology<PolicyV2> topo(getSpfManager());
     SpfEngine engine(getSpfManager());
@@ -5280,9 +5673,20 @@ TEST_F(Internal_OspfTest, RouteDerive_External_Type5_E2_Uses_External_Cost_Only)
     auto* nbr = addNeighbor(asbrRid, nbrIp, Neighbor::State::FULL);
     ASSERT_EQ(nbr->getState(), Neighbor::State::FULL);
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    // Reorigination from the FULL adjacency is async; wait for the P2P link to asbrRid to land before relying on it.
+    LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
+    ASSERT_NE(waitForLsa(selfKey, [asbrRid](const LsaRecord& r) {
+        auto* body = std::get_if<RouterLsaV2>(&r.body);
+        if (!body)
+            return false;
+        for (const auto& link : body->links)
+            if (link.type == 1 /*P2P*/ && link.linkId == asbrRid)
+                return true;
+        return false;
+    }), nullptr);
 
     RouterLsaV2 asbrLsa;
     asbrLsa.flags = 0;
@@ -5295,7 +5699,8 @@ TEST_F(Internal_OspfTest, RouteDerive_External_Type5_E2_Uses_External_Cost_Only)
     LsaBody asbrRtrLsaBody{asbrLsa};
     processLsa<PolicyV2>(asbrRtrCtx, asbrRtrLsaBody);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    ASSERT_NE(waitForLsa(asbrRtrKey), nullptr);
 
     SpfTopology<PolicyV2> topo(getSpfManager());
     SpfEngine engine(getSpfManager());
@@ -5342,9 +5747,20 @@ TEST_F(Internal_OspfTest, RouteDerive_External_ForwardingAddress_Zero_Uses_Adver
     auto* nbr = addNeighbor(asbrRid, nbrIp, Neighbor::State::FULL);
     ASSERT_EQ(nbr->getState(), Neighbor::State::FULL);
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    // Reorigination from the FULL adjacency is async; wait for the P2P link to asbrRid to land before relying on it.
+    LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
+    ASSERT_NE(waitForLsa(selfKey, [asbrRid](const LsaRecord& r) {
+        auto* body = std::get_if<RouterLsaV2>(&r.body);
+        if (!body)
+            return false;
+        for (const auto& link : body->links)
+            if (link.type == 1 /*P2P*/ && link.linkId == asbrRid)
+                return true;
+        return false;
+    }), nullptr);
 
     RouterLsaV2 asbrLsa;
     asbrLsa.flags = 0;
@@ -5357,7 +5773,8 @@ TEST_F(Internal_OspfTest, RouteDerive_External_ForwardingAddress_Zero_Uses_Adver
     LsaBody asbrRtrLsaBody{asbrLsa};
     processLsa<PolicyV2>(asbrRtrCtx, asbrRtrLsaBody);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    ASSERT_NE(waitForLsa(asbrRtrKey), nullptr);
 
     SpfTopology<PolicyV2> topo(getSpfManager());
     SpfEngine engine(getSpfManager());
@@ -5404,16 +5821,25 @@ TEST_F(Internal_OspfTest, RouteDerive_External_ForwardingAddress_NonZero_Anchors
     calculateCost();
     ospfInterface->enqueueSyncNetworkType();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    wait();
 
     types::IPAddress nbrIp(types::IPv4Address{asbrRid});
     auto* nbr = addNeighbor(asbrRid, nbrIp, Neighbor::State::FULL);
     ASSERT_EQ(nbr->getState(), Neighbor::State::FULL);
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    // Reorigination from the FULL adjacency is async; wait for the P2P link to asbrRid to land before relying on it.
+    LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
+    ASSERT_NE(waitForLsa(selfKey, [asbrRid](const LsaRecord& r) {
+        auto* body = std::get_if<RouterLsaV2>(&r.body);
+        if (!body)
+            return false;
+        for (const auto& link : body->links)
+            if (link.type == 1 /*P2P*/ && link.linkId == asbrRid)
+                return true;
+        return false;
+    }), nullptr);
 
     RouterLsaV2 asbrLsa;
     asbrLsa.flags = 0;
@@ -5427,7 +5853,8 @@ TEST_F(Internal_OspfTest, RouteDerive_External_ForwardingAddress_NonZero_Anchors
     LsaBody asbrRtrLsaBody{asbrLsa};
     processLsa<PolicyV2>(asbrRtrCtx, asbrRtrLsaBody);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    ASSERT_NE(waitForLsa(asbrRtrKey), nullptr);
 
     SpfTopology<PolicyV2> topo(getSpfManager());
     SpfEngine engine(getSpfManager());
@@ -5471,9 +5898,8 @@ TEST_F(Internal_OspfTest, RouteDerive_External_Unreachable_ForwardingAddress_Exc
 {
     uint32_t asbrRid = neighborRouterId;
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t extNet = 0x16161600;
     uint32_t fwdAddr = 0x17171701; // not covered by any installed route
@@ -5519,9 +5945,20 @@ TEST_F(Internal_OspfTest, RouteDerive_AdminDistance_Set_Per_Route_Type)
     auto* nbr = addNeighbor(abrRid, nbrIp, Neighbor::State::FULL);
     ASSERT_EQ(nbr->getState(), Neighbor::State::FULL);
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    // Reorigination from the FULL adjacency is async; wait for the P2P link to abrRid to land before relying on it.
+    LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
+    ASSERT_NE(waitForLsa(selfKey, [abrRid](const LsaRecord& r) {
+        auto* body = std::get_if<RouterLsaV2>(&r.body);
+        if (!body)
+            return false;
+        for (const auto& link : body->links)
+            if (link.type == 1 /*P2P*/ && link.linkId == abrRid)
+                return true;
+        return false;
+    }), nullptr);
 
     RouterLsaV2 abrLsa;
     abrLsa.flags = 0;
@@ -5534,7 +5971,8 @@ TEST_F(Internal_OspfTest, RouteDerive_AdminDistance_Set_Per_Route_Type)
     LsaBody abrLsaBody{abrLsa};
     processLsa<PolicyV2>(abrCtx, abrLsaBody);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    ASSERT_NE(waitForLsa(abrKey), nullptr);
 
     SpfTopology<PolicyV2> topo(getSpfManager());
     SpfEngine engine(getSpfManager());
@@ -5563,7 +6001,8 @@ TEST_F(Internal_OspfTest, RouteDerive_AdminDistance_Set_Per_Route_Type)
     LsaBody summaryLsaBody{summaryLsa};
     processLsa<PolicyV2>(summaryCtx, summaryLsaBody);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    ASSERT_NE(waitForLsa(summaryKey), nullptr);
 
     std::vector<std::pair<types::IPPrefix, OspfPath>> interRoutes;
     getInterRouteManager().deriveInterAreaRoutes<PolicyV2>(result, interRoutes, area);
@@ -5612,9 +6051,20 @@ TEST_F(Internal_OspfTest, RouteDerive_DeriveExternalRoutes_Recomputes_All_Type5_
     auto* nbr = addNeighbor(asbrRid, nbrIp, Neighbor::State::FULL);
     ASSERT_EQ(nbr->getState(), Neighbor::State::FULL);
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    // Reorigination from the FULL adjacency is async; wait for the P2P link to asbrRid to land before relying on it.
+    LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
+    ASSERT_NE(waitForLsa(selfKey, [asbrRid](const LsaRecord& r) {
+        auto* body = std::get_if<RouterLsaV2>(&r.body);
+        if (!body)
+            return false;
+        for (const auto& link : body->links)
+            if (link.type == 1 /*P2P*/ && link.linkId == asbrRid)
+                return true;
+        return false;
+    }), nullptr);
 
     RouterLsaV2 asbrLsa;
     asbrLsa.flags = 0;
@@ -5627,7 +6077,8 @@ TEST_F(Internal_OspfTest, RouteDerive_DeriveExternalRoutes_Recomputes_All_Type5_
     LsaBody asbrRtrLsaBody{asbrLsa};
     processLsa<PolicyV2>(asbrRtrCtx, asbrRtrLsaBody);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    ASSERT_NE(waitForLsa(asbrRtrKey), nullptr);
 
     SpfTopology<PolicyV2> topo(getSpfManager());
     SpfEngine engine(getSpfManager());
@@ -5664,8 +6115,8 @@ TEST_F(Internal_OspfTest, RouteDerive_DeriveExternalRoutes_Recomputes_All_Type5_
     extHdr2.sequence = routing::OSPF_INITIAL_SEQUENCE;
     extHdr2.age = 0;
 
-    getExternalOriginator().externalDb[extKey1] = {extHdr1, LsaBody{extLsa1}};
-    getExternalOriginator().externalDb[extKey2] = {extHdr2, LsaBody{extLsa2}};
+    setExternalDbEntry(extKey1, extHdr1, LsaBody{extLsa1});
+    setExternalDbEntry(extKey2, extHdr2, LsaBody{extLsa2});
 
     auto routes = getExternalRouteManager().deriveExternalRoutes<PolicyV2>();
 
@@ -5702,9 +6153,23 @@ TEST_F(Internal_OspfTest, Topology_AsbrReachability_Prefers_IntraArea_Over_Inter
     auto* nbr = addNeighbor(asbrRid, nbrIp, Neighbor::State::FULL);
     ASSERT_EQ(nbr->getState(), Neighbor::State::FULL);
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    // Reorigination is async and a stale record may pre-exist; wait for the P2P link to asbrRid to actually appear in the body.
+    {
+        LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
+        auto* selfRecord = waitForLsa(selfKey, [&](const LsaRecord& r) {
+            auto* body = std::get_if<RouterLsaV2>(&r.body);
+            if (!body) return false;
+            for (auto& link : body->links)
+            {
+                if (link.type == 1 && link.linkId == asbrRid) return true;
+            }
+            return false;
+        });
+        ASSERT_NE(selfRecord, nullptr);
+    }
 
     RouterLsaV2 asbrLsa;
     asbrLsa.flags = 0;
@@ -5717,7 +6182,6 @@ TEST_F(Internal_OspfTest, Topology_AsbrReachability_Prefers_IntraArea_Over_Inter
     LsaBody asbrRtrLsaBody{asbrLsa};
     processLsa<PolicyV2>(asbrRtrCtx, asbrRtrLsaBody);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     SpfTopology<PolicyV2> topo(getSpfManager());
     SpfEngine engine(getSpfManager());
@@ -5760,9 +6224,20 @@ TEST_F(Internal_OspfTest, Topology_AsbrReachability_Updated_On_Type4_Lsa)
     auto* nbr = addNeighbor(abrRid, nbrIp, Neighbor::State::FULL);
     ASSERT_EQ(nbr->getState(), Neighbor::State::FULL);
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    // Reorigination from the FULL adjacency is async; wait for the P2P link to abrRid to land before relying on it.
+    LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
+    ASSERT_NE(waitForLsa(selfKey, [abrRid](const LsaRecord& r) {
+        auto* body = std::get_if<RouterLsaV2>(&r.body);
+        if (!body)
+            return false;
+        for (const auto& link : body->links)
+            if (link.type == 1 /*P2P*/ && link.linkId == abrRid)
+                return true;
+        return false;
+    }), nullptr);
 
     RouterLsaV2 abrLsa;
     abrLsa.flags = 0;
@@ -5775,7 +6250,8 @@ TEST_F(Internal_OspfTest, Topology_AsbrReachability_Updated_On_Type4_Lsa)
     LsaBody abrLsaBody{abrLsa};
     processLsa<PolicyV2>(abrCtx, abrLsaBody);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    ASSERT_NE(waitForLsa(abrKey), nullptr);
 
     SpfTopology<PolicyV2> topo(getSpfManager());
     SpfEngine engine(getSpfManager());
@@ -5819,9 +6295,20 @@ TEST_F(Internal_OspfTest, Topology_AsbrReachability_Removed_When_Type4_Withdrawn
     auto* nbr = addNeighbor(abrRid, nbrIp, Neighbor::State::FULL);
     ASSERT_EQ(nbr->getState(), Neighbor::State::FULL);
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    // Reorigination from the FULL adjacency is async; wait for the P2P link to abrRid to land before relying on it.
+    LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
+    ASSERT_NE(waitForLsa(selfKey, [abrRid](const LsaRecord& r) {
+        auto* body = std::get_if<RouterLsaV2>(&r.body);
+        if (!body)
+            return false;
+        for (const auto& link : body->links)
+            if (link.type == 1 /*P2P*/ && link.linkId == abrRid)
+                return true;
+        return false;
+    }), nullptr);
 
     RouterLsaV2 abrLsa;
     abrLsa.flags = 0;
@@ -5834,7 +6321,8 @@ TEST_F(Internal_OspfTest, Topology_AsbrReachability_Removed_When_Type4_Withdrawn
     LsaBody abrLsaBody{abrLsa};
     processLsa<PolicyV2>(abrCtx, abrLsaBody);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    ASSERT_NE(waitForLsa(abrKey), nullptr);
 
     SpfTopology<PolicyV2> topo(getSpfManager());
     SpfEngine engine(getSpfManager());
@@ -5878,9 +6366,20 @@ TEST_F(Internal_OspfTest, Topology_NextHopCache_Reflects_Spf_Result)
     auto* nbr = addNeighbor(neighborRouterId, nbrIp, Neighbor::State::FULL);
     ASSERT_EQ(nbr->getState(), Neighbor::State::FULL);
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    // Reorigination from the FULL adjacency is async; wait for the P2P link to neighborRouterId to land before relying on it.
+    LsaKey selfKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
+    ASSERT_NE(waitForLsa(selfKey, [neighborRouterId = this->neighborRouterId](const LsaRecord& r) {
+        auto* body = std::get_if<RouterLsaV2>(&r.body);
+        if (!body)
+            return false;
+        for (const auto& link : body->links)
+            if (link.type == 1 /*P2P*/ && link.linkId == neighborRouterId)
+                return true;
+        return false;
+    }), nullptr);
 
     RouterLsaV2 nbrLsa;
     nbrLsa.flags = 0;
@@ -5893,7 +6392,8 @@ TEST_F(Internal_OspfTest, Topology_NextHopCache_Reflects_Spf_Result)
     LsaBody nbrLsaBody{nbrLsa};
     processLsa<PolicyV2>(nbrCtx, nbrLsaBody);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    ASSERT_NE(waitForLsa(nbrKey), nullptr);
 
     SpfTopology<PolicyV2> topo(getSpfManager());
     SpfEngine engine(getSpfManager());
@@ -5940,7 +6440,7 @@ TEST_F(Internal_OspfTest, AreaType_Normal_Accepts_Type5_External_Lsas)
     auto result = processLsa<PolicyV2>(ctx, body);
 
     EXPECT_TRUE(result.has_value());
-    EXPECT_NE(getLsdb().find(key), nullptr);
+    EXPECT_NE(waitForLsa(key), nullptr);
 }
 
 // Test: AreaType_Stub_Rejects_Type5_External_Lsas
@@ -5955,7 +6455,6 @@ TEST_F(Internal_OspfTest, AreaType_Stub_Rejects_Type5_External_Lsas)
 
     auto& stubArea = getArea(1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_EQ(stubArea.getType(), config::ospf::AreaType::STUB);
 
@@ -5993,21 +6492,19 @@ TEST_F(Internal_OspfTest, AreaType_Stub_Originates_Default_Route_From_Abr)
 
     auto& stubArea = getArea(1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_TRUE(ospfInstance->isABR());
 
     // The area's initial fullRefresh() ran before isABR() became true (insureArea
     // sets ABR status after construction completes), so addStubDefaultRoute(true)
     // was a no-op at that point. Re-run fullRefresh now that isABR() is true.
-    getIntraOriginatorV2(&stubArea).fullRefresh();
+    fullRefreshV2(&stubArea);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t selfRid = ospfInstance->getRouterId();
     LsaKey defaultKey(OSPFV2_LSA_SUM_NET, 0, selfRid);
 
-    auto* record = getLsdb(&stubArea).find(defaultKey);
+    auto* record = waitForLsa(defaultKey, [](const LsaRecord& r) { return r.header.age != routing::OSPF_MAX_AGE; }, &stubArea);
     ASSERT_NE(record, nullptr);
     EXPECT_NE(record->header.age, routing::OSPF_MAX_AGE);
 
@@ -6026,7 +6523,6 @@ TEST_F(Internal_OspfTest, AreaType_TotallyStub_Suppresses_Type3_Summaries_Except
 
     auto& tStubArea = getArea(1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_TRUE(ospfInstance->isABR());
     ASSERT_EQ(tStubArea.getType(), config::ospf::AreaType::TOTALLY_STUB);
@@ -6049,13 +6545,12 @@ TEST_F(Internal_OspfTest, AreaType_TotallyStub_Suppresses_Type3_Summaries_Except
     EXPECT_EQ(getLsdb(&tStubArea).find(nonDefaultKey), nullptr);
 
     // The self-originated default route (Type-3, linkStateId=0) must still be present.
-    getIntraOriginatorV2(&tStubArea).fullRefresh();
+    fullRefreshV2(&tStubArea);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t selfRid = ospfInstance->getRouterId();
     LsaKey defaultKey(OSPFV2_LSA_SUM_NET, 0, selfRid);
-    auto* record = getLsdb(&tStubArea).find(defaultKey);
+    auto* record = waitForLsa(defaultKey, [](const LsaRecord& r) { return r.header.age != routing::OSPF_MAX_AGE; }, &tStubArea);
     ASSERT_NE(record, nullptr);
     EXPECT_NE(record->header.age, routing::OSPF_MAX_AGE);
 
@@ -6074,7 +6569,6 @@ TEST_F(Internal_OspfTest, AreaType_Nssa_Accepts_Type7_Rejects_Type5)
 
     auto& nssaArea = getArea(1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_EQ(nssaArea.getType(), config::ospf::AreaType::NSSA);
 
@@ -6126,7 +6620,6 @@ TEST_F(Internal_OspfTest, AreaType_Nssa_Abr_Translates_Type7_To_Type5)
 
     auto& nssaArea = getArea(1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_TRUE(ospfInstance->isABR());
 
@@ -6149,16 +6642,16 @@ TEST_F(Internal_OspfTest, AreaType_Nssa_Abr_Translates_Type7_To_Type5)
     auto result7 = processLsa<PolicyV2>(ctx7, body7, &nssaArea);
     ASSERT_TRUE(result7.has_value());
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     translateNssaToExternal<PolicyV2>(getOriginatorCtx(&getArea(0)), type7Key, body7, false);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     // A Type-5 LSA with the same prefix, advertised by this router, should now
     // exist in the backbone area's LSDB.
     uint32_t selfRid = ospfInstance->getRouterId();
     LsaKey type5Key(OSPFV2_LSA_EXTERNAL, 0x0B000000, selfRid);
+
+    ASSERT_NE(waitForLsa(type5Key, [](const LsaRecord& r) { return r.header.age != routing::OSPF_MAX_AGE; }, &getArea(0)), nullptr);
 
     bool found = false;
     getLsdb().forEachInType(OSPFV2_LSA_EXTERNAL, [&](const LsaKey& k, LsaRecord& rec) {
@@ -6183,21 +6676,29 @@ TEST_F(Internal_OspfTest, AreaType_Nssa_Originates_Default_When_Configured)
 
     auto& nssaArea = getArea(1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_TRUE(ospfInstance->isABR());
 
-    getIntraOriginatorV2(&nssaArea).fullRefresh();
+    fullRefreshV2(&nssaArea);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t selfRid = ospfInstance->getRouterId();
 
     bool found = false;
-    getLsdb(&nssaArea).forEachInType(OSPFV2_LSA_NSSA, [&](const LsaKey& k, LsaRecord& rec) {
-        if (k.advertisingRouter == selfRid && rec.header.age != routing::OSPF_MAX_AGE)
-            found = true;
-    });
+    for (int i = 0; i < 50 && !found; ++i)
+    {
+        {
+            std::lock_guard lock(getSchedulerLock());
+            getLsdb(&nssaArea).forEachInType(OSPFV2_LSA_NSSA, [&](const LsaKey& k, LsaRecord& rec) {
+                if (k.advertisingRouter == selfRid && rec.header.age != routing::OSPF_MAX_AGE)
+                    found = true;
+            });
+        }
+        if (found)
+            break;
+        wait();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
     EXPECT_TRUE(found);
 
     removeIface(iface1.id);
@@ -6216,7 +6717,6 @@ TEST_F(Internal_OspfTest, AreaType_TotallyNssa_Suppresses_Type3_Except_Default)
 
     auto& tNssaArea = getArea(1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_TRUE(ospfInstance->isABR());
     ASSERT_EQ(tNssaArea.getType(), config::ospf::AreaType::TOTALLY_NSSA);
@@ -6241,17 +6741,26 @@ TEST_F(Internal_OspfTest, AreaType_TotallyNssa_Suppresses_Type3_Except_Default)
 
     // The self-originated NSSA default route (Type-7, linkStateId=0) must still
     // be present.
-    getIntraOriginatorV2(&tNssaArea).fullRefresh();
+    fullRefreshV2(&tNssaArea);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t selfRid = ospfInstance->getRouterId();
 
     bool found = false;
-    getLsdb(&tNssaArea).forEachInType(OSPFV2_LSA_NSSA, [&](const LsaKey& k, LsaRecord& rec) {
-        if (k.advertisingRouter == selfRid && k.linkStateId == 0 && rec.header.age != routing::OSPF_MAX_AGE)
-            found = true;
-    });
+    for (int i = 0; i < 50 && !found; ++i)
+    {
+        {
+            std::lock_guard lock(getSchedulerLock());
+            getLsdb(&tNssaArea).forEachInType(OSPFV2_LSA_NSSA, [&](const LsaKey& k, LsaRecord& rec) {
+                if (k.advertisingRouter == selfRid && k.linkStateId == 0 && rec.header.age != routing::OSPF_MAX_AGE)
+                    found = true;
+            });
+        }
+        if (found)
+            break;
+        wait();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
     EXPECT_TRUE(found);
 
     removeIface(iface1.id);
@@ -6266,7 +6775,6 @@ TEST_F(Internal_OspfTest, AreaType_Backbone_Area0_Required_For_InterArea_Routes)
 
     auto& area1 = getArea(1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_TRUE(ospfInstance->isABR());
     ASSERT_EQ(area1.getType(), config::ospf::AreaType::NORMAL);
@@ -6306,7 +6814,6 @@ TEST_F(Internal_OspfTest, AreaRange_SyncRangeConfig_Builds_Range_Map_From_Config
         return true;
     });
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     const auto& ranges = getRanges();
     EXPECT_TRUE(ranges.contains(rangePfx));
@@ -6320,7 +6827,6 @@ TEST_F(Internal_OspfTest, AreaRange_ContributorCount_Incremented_By_Covered_Intr
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
     auto& area1 = getArea(1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_TRUE(ospfInstance->isABR());
 
@@ -6332,7 +6838,6 @@ TEST_F(Internal_OspfTest, AreaRange_ContributorCount_Incremented_By_Covered_Intr
         return true;
     });
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     // Install an intra-area route inside the range into area 1's RIB.
     types::IPPrefix covered(uint32_t{0x0A0A0000}, 16);
@@ -6345,17 +6850,15 @@ TEST_F(Internal_OspfTest, AreaRange_ContributorCount_Incremented_By_Covered_Intr
     pathList.emplace_back(covered, path);
     getRib().replaceArea(area1, pathList);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     // Re-run range sync with the latest intra-area routes.
     area1.enqueueSyncRanges();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     // A Type-3 summary LSA for the range should now exist (contributorCount > 0).
     uint32_t selfRid = ospfInstance->getRouterId();
     LsaKey summaryKey(OSPFV2_LSA_SUM_NET, rangePfx.v4(), selfRid);
-    auto* record = getLsdb(&area1).find(summaryKey);
+    auto* record = waitForLsa(summaryKey, &area1);
     ASSERT_NE(record, nullptr);
     EXPECT_NE(record->header.age, routing::OSPF_MAX_AGE);
 
@@ -6369,7 +6872,6 @@ TEST_F(Internal_OspfTest, AreaRange_ComputedMetric_Is_Min_Of_Contributors)
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
     auto& area1 = getArea(1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_TRUE(ospfInstance->isABR());
 
@@ -6380,7 +6882,6 @@ TEST_F(Internal_OspfTest, AreaRange_ComputedMetric_Is_Min_Of_Contributors)
         return true;
     });
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     // Two intra-area routes covered by the range, with different costs.
     types::IPPrefix covered1(uint32_t{0x0A0A0000}, 16);
@@ -6400,17 +6901,15 @@ TEST_F(Internal_OspfTest, AreaRange_ComputedMetric_Is_Min_Of_Contributors)
     pathList.emplace_back(covered2, path2);
     getRib().replaceArea(area1, pathList);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     area1.enqueueSyncRanges();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     // The summary metric should be the MINIMUM of the contributors' costs (5),
     // not the maximum.
     uint32_t selfRid = ospfInstance->getRouterId();
     LsaKey summaryKey(OSPFV2_LSA_SUM_NET, rangePfx.v4(), selfRid);
-    auto* record = getLsdb(&area1).find(summaryKey);
+    auto* record = waitForLsa(summaryKey, &area1);
     ASSERT_NE(record, nullptr);
     auto* body = std::get_if<SummaryNetworkLsa>(&record->body);
     ASSERT_NE(body, nullptr);
@@ -6426,7 +6925,6 @@ TEST_F(Internal_OspfTest, AreaRange_CostOverride_Takes_Precedence_Over_ComputedM
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
     auto& area1 = getArea(1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_TRUE(ospfInstance->isABR());
 
@@ -6438,7 +6936,6 @@ TEST_F(Internal_OspfTest, AreaRange_CostOverride_Takes_Precedence_Over_ComputedM
         return true;
     });
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     types::IPPrefix covered(uint32_t{0x0A0A0000}, 16);
     OspfPath path;
@@ -6450,15 +6947,13 @@ TEST_F(Internal_OspfTest, AreaRange_CostOverride_Takes_Precedence_Over_ComputedM
     pathList.emplace_back(covered, path);
     getRib().replaceArea(area1, pathList);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     area1.enqueueSyncRanges();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t selfRid = ospfInstance->getRouterId();
     LsaKey summaryKey(OSPFV2_LSA_SUM_NET, rangePfx.v4(), selfRid);
-    auto* record = getLsdb(&area1).find(summaryKey);
+    auto* record = waitForLsa(summaryKey, &area1);
     ASSERT_NE(record, nullptr);
     auto* body = std::get_if<SummaryNetworkLsa>(&record->body);
     ASSERT_NE(body, nullptr);
@@ -6474,7 +6969,6 @@ TEST_F(Internal_OspfTest, AreaRange_NotAdvertise_Suppresses_Summary_Lsa)
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
     auto& area1 = getArea(1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_TRUE(ospfInstance->isABR());
 
@@ -6486,7 +6980,6 @@ TEST_F(Internal_OspfTest, AreaRange_NotAdvertise_Suppresses_Summary_Lsa)
         return true;
     });
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     types::IPPrefix covered(uint32_t{0x0A0A0000}, 16);
     OspfPath path;
@@ -6498,11 +6991,9 @@ TEST_F(Internal_OspfTest, AreaRange_NotAdvertise_Suppresses_Summary_Lsa)
     pathList.emplace_back(covered, path);
     getRib().replaceArea(area1, pathList);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     area1.enqueueSyncRanges();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     // No Type-3 summary LSA for the range should be originated.
     uint32_t selfRid = ospfInstance->getRouterId();
@@ -6521,7 +7012,6 @@ TEST_F(Internal_OspfTest, AreaRange_SyncRangeSuppression_Withdraws_When_Contribu
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
     auto& area1 = getArea(1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_TRUE(ospfInstance->isABR());
 
@@ -6532,7 +7022,6 @@ TEST_F(Internal_OspfTest, AreaRange_SyncRangeSuppression_Withdraws_When_Contribu
         return true;
     });
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     // Install a covered intra-area route, sync, and confirm the summary appears.
     types::IPPrefix covered(uint32_t{0x0A0A0000}, 16);
@@ -6545,15 +7034,13 @@ TEST_F(Internal_OspfTest, AreaRange_SyncRangeSuppression_Withdraws_When_Contribu
     pathList.emplace_back(covered, path);
     getRib().replaceArea(area1, pathList);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     area1.enqueueSyncRanges();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t selfRid = ospfInstance->getRouterId();
     LsaKey summaryKey(OSPFV2_LSA_SUM_NET, rangePfx.v4(), selfRid);
-    auto* record = getLsdb(&area1).find(summaryKey);
+    auto* record = waitForLsa(summaryKey, [](const LsaRecord& r) { return r.header.age != routing::OSPF_MAX_AGE; }, &area1);
     ASSERT_NE(record, nullptr);
     EXPECT_NE(record->header.age, routing::OSPF_MAX_AGE);
     uint32_t seqWithContributor = record->header.sequence;
@@ -6564,13 +7051,11 @@ TEST_F(Internal_OspfTest, AreaRange_SyncRangeSuppression_Withdraws_When_Contribu
     std::vector<std::pair<types::IPPrefix, OspfPath>> emptyList;
     getRib().replaceArea(area1, emptyList);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     area1.enqueueSyncRanges();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    auto* afterRecord = getLsdb(&area1).find(summaryKey);
+    auto* afterRecord = waitForLsa(summaryKey, [seqWithContributor](const LsaRecord& r) { return r.header.age == routing::OSPF_MAX_AGE && r.header.sequence > seqWithContributor; }, &area1);
     ASSERT_NE(afterRecord, nullptr);
     EXPECT_EQ(afterRecord->header.age, routing::OSPF_MAX_AGE);
     EXPECT_GT(afterRecord->header.sequence, seqWithContributor);
@@ -6585,7 +7070,6 @@ TEST_F(Internal_OspfTest, AreaRange_SuppressInterAreaPrefix_Immediate_Withdrawal
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
     auto& area1 = getArea(1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_TRUE(ospfInstance->isABR());
 
@@ -6596,7 +7080,6 @@ TEST_F(Internal_OspfTest, AreaRange_SuppressInterAreaPrefix_Immediate_Withdrawal
         return true;
     });
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     types::IPPrefix covered(uint32_t{0x0A0A0000}, 16);
     OspfPath path;
@@ -6608,15 +7091,13 @@ TEST_F(Internal_OspfTest, AreaRange_SuppressInterAreaPrefix_Immediate_Withdrawal
     pathList.emplace_back(covered, path);
     getRib().replaceArea(area1, pathList);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     area1.enqueueSyncRanges();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t selfRid = ospfInstance->getRouterId();
     LsaKey summaryKey(OSPFV2_LSA_SUM_NET, rangePfx.v4(), selfRid);
-    auto* record = getLsdb(&area1).find(summaryKey);
+    auto* record = waitForLsa(summaryKey, [](const LsaRecord& r) { return r.header.age != routing::OSPF_MAX_AGE; }, &area1);
     ASSERT_NE(record, nullptr);
     EXPECT_NE(record->header.age, routing::OSPF_MAX_AGE);
     uint32_t seqBefore = record->header.sequence;
@@ -6624,9 +7105,8 @@ TEST_F(Internal_OspfTest, AreaRange_SuppressInterAreaPrefix_Immediate_Withdrawal
     // suppressInterAreaPrefix should immediately withdraw (flush) the summary.
     suppressInterAreaPrefix(rangePfx, &area1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    auto* afterRecord = getLsdb(&area1).find(summaryKey);
+    auto* afterRecord = waitForLsa(summaryKey, [seqBefore](const LsaRecord& r) { return r.header.age == routing::OSPF_MAX_AGE && r.header.sequence > seqBefore; }, &area1);
     ASSERT_NE(afterRecord, nullptr);
     EXPECT_EQ(afterRecord->header.age, routing::OSPF_MAX_AGE);
     EXPECT_GT(afterRecord->header.sequence, seqBefore);
@@ -6645,7 +7125,6 @@ TEST_F(Internal_OspfTest, AreaRange_AbrChange_Forces_Full_Range_Reevaluation)
         return true;
     });
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_FALSE(ospfInstance->isABR());
 
@@ -6658,7 +7137,6 @@ TEST_F(Internal_OspfTest, AreaRange_AbrChange_Forces_Full_Range_Reevaluation)
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
     (void)getArea(1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_TRUE(ospfInstance->isABR());
 
@@ -6677,7 +7155,6 @@ TEST_F(Internal_OspfTest, AreaRange_DiscardRoute_Installed_While_Range_Active)
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
     auto& area1 = getArea(1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_TRUE(ospfInstance->isABR());
     ASSERT_TRUE(getConfigs().get<config::Ospf::DISCARD_INTERNAL>().load());
@@ -6689,7 +7166,6 @@ TEST_F(Internal_OspfTest, AreaRange_DiscardRoute_Installed_While_Range_Active)
         return true;
     });
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     // Install a covered intra-area route so the range becomes active.
     types::IPPrefix covered(uint32_t{0x0A0A0000}, 16);
@@ -6702,15 +7178,18 @@ TEST_F(Internal_OspfTest, AreaRange_DiscardRoute_Installed_While_Range_Active)
     pathList.emplace_back(covered, path);
     getRib().replaceArea(area1, pathList);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     area1.enqueueSyncRanges();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    // A discard route covering the range prefix should now be installed in
-    // the global RIB.
-    const auto* discardRoute = getRib().lookup(rangePfx);
+    // Range sync installs the covering discard route via an async postAfter timer; poll for it.
+    auto* discardRoute = getRib().lookup(rangePfx);
+    for (int i = 0; i < 50 && !discardRoute; ++i)
+    {
+        wait();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        discardRoute = getRib().lookup(rangePfx);
+    }
     ASSERT_NE(discardRoute, nullptr);
     ASSERT_FALSE(discardRoute->paths.empty());
     EXPECT_TRUE(discardRoute->paths.front().discard);
@@ -6725,7 +7204,6 @@ TEST_F(Internal_OspfTest, AreaRange_DiscardRoute_Removed_When_Range_Withdrawn)
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
     auto& area1 = getArea(1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_TRUE(ospfInstance->isABR());
 
@@ -6736,7 +7214,6 @@ TEST_F(Internal_OspfTest, AreaRange_DiscardRoute_Removed_When_Range_Withdrawn)
         return true;
     });
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     types::IPPrefix covered(uint32_t{0x0A0A0000}, 16);
     OspfPath path;
@@ -6748,24 +7225,27 @@ TEST_F(Internal_OspfTest, AreaRange_DiscardRoute_Removed_When_Range_Withdrawn)
     pathList.emplace_back(covered, path);
     getRib().replaceArea(area1, pathList);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     area1.enqueueSyncRanges();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    ASSERT_NE(getRib().lookup(rangePfx), nullptr);
+    const OspfRoute* preRoute = getRib().lookup(rangePfx);
+    for (int i = 0; i < 50 && !preRoute; ++i)
+    {
+        wait();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        preRoute = getRib().lookup(rangePfx);
+    }
+    ASSERT_NE(preRoute, nullptr);
 
     // Withdraw the covered route and re-sync; the range becomes inactive and
     // the discard route should be removed.
     std::vector<std::pair<types::IPPrefix, OspfPath>> emptyList;
     getRib().replaceArea(area1, emptyList);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     area1.enqueueSyncRanges();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     EXPECT_EQ(getRib().lookup(rangePfx), nullptr);
 
@@ -6810,7 +7290,6 @@ TEST_F(Internal_OspfTest, VirtualLink_AddVirtualLink_Encoded_In_RouterLsa)
 
     area.getOriginator().fullRefresh();
     ospfInstance->scheduler.waitIdle();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     LsaKey routerKey(OSPFV2_LSA_ROUTER, selfRid, selfRid);
     auto* record = area.lsdb().find(routerKey);
@@ -6949,7 +7428,6 @@ TEST_F(Internal_OspfTest, DemandCircuit_DoNotAge_Bit_Set_On_FloodReduction)
     bool before = getFloodReduction();
     setFloodReduction();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     EXPECT_NE(getFloodReduction(), before);
     EXPECT_TRUE(getFloodReduction());
@@ -6982,7 +7460,6 @@ TEST_F(Internal_OspfTest, DemandCircuit_RunDCIntegrityScan_Flags_Inconsistent_Ls
     auto result = processLsa<PolicyV2>(ctx, body);
     ASSERT_TRUE(result.has_value());
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     runDCIntegrityScan();
     EXPECT_FALSE(area.isDcCompatible());
@@ -7054,7 +7531,6 @@ TEST_F(Internal_OspfTest, Lls_Md5Auth_Validates_Block_Checksum)
         return true;
     });
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
     ASSERT_TRUE(getAuthKey().has_value());
     ASSERT_TRUE(getAuthKeyId().has_value());
 
@@ -7107,6 +7583,513 @@ TEST_F(Internal_OspfTest, Lls_Md5Auth_Validates_Block_Checksum)
 }
 
 #pragma endregion DemandCircuitAndLls
+
+#pragma region OpaqueLsa
+
+// Test: Opaque_OriginateRouterCapability_InstalledInLsdb
+TEST_F(Internal_OspfTest, Opaque_OriginateRouterCapability_InstalledInLsdb)
+{
+    uint32_t selfRid = ospfInstance->getRouterId();
+
+    originateRouterCapability(0);
+    wait();
+
+    LsaKey key(OSPFV2_LSA_OPAQUE_AREA, 0x04000000, selfRid);
+    auto* record = waitForLsa(key);
+    ASSERT_NE(record, nullptr);
+    auto* body = std::get_if<OpaqueLsaV2>(&record->body);
+    ASSERT_NE(body, nullptr);
+    EXPECT_EQ(body->opaqueType, 4u);
+    EXPECT_EQ(body->opaqueId, 0u);
+    ASSERT_EQ(body->payload.size(), RouterCapabilityTlv::size());
+
+    auto tlv = RouterCapabilityTlv::build(body->payload.data(), static_cast<uint16_t>(body->payload.size()));
+    ASSERT_TRUE(tlv.has_value());
+    EXPECT_EQ(tlv->capabilities, 0u);
+}
+
+// Test: Opaque_OriginateRouterCapability_FloodedToFullNeighbor
+TEST_F(Internal_OspfTest, Opaque_OriginateRouterCapability_FloodedToFullNeighbor)
+{
+    addNeighbor(neighborRouterId, types::IPAddress{types::IPv4Address{0xC0A80102}}, Neighbor::State::FULL);
+
+    bool sawOpaqueLsu = false;
+    uint32_t seenLinkStateId = 0;
+    std::vector<LsaKey> ackKeys;
+    std::vector<LsaHeader> ackHeaders;
+
+    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_))
+        .WillRepeatedly(testing::Invoke([&](processing::PacketBuilder& pkt) {
+            if (!pkt.getHeader(packet::HeaderType::OSPFV2))
+                return;
+
+            auto hdr = getOspfV2Header(pkt);
+            if (hdr.getType() != OSPFV2_TYPE_LINK_STATE_UPDATE)
+                return;
+
+            if (hdr.getPacketLen() < packet::Ospfv2Header::fixedSize + 2)
+                return;
+
+            uint8_t* buf = hdr.buffer + packet::Ospfv2Header::fixedSize;
+            size_t payloadLimit = hdr.getPacketLen() - packet::Ospfv2Header::fixedSize;
+            uint16_t count = utils::readU16(buf);
+            size_t offset = 2;
+            for (uint32_t i = 0; i < count; ++i)
+            {
+                if (offset + packet::Ospfv2LSAHeader::fixedSize > payloadLimit)
+                    break;
+
+                packet::Ospfv2LSAHeader lsaHdr;
+                lsaHdr.setBuffer(buf + offset);
+                uint16_t lsaLen = lsaHdr.getLen();
+                if (lsaLen < packet::Ospfv2LSAHeader::fixedSize || offset + lsaLen > payloadLimit)
+                    break;
+
+                if (lsaHdr.getType() == OSPFV2_LSA_OPAQUE_AREA)
+                {
+                    sawOpaqueLsu = true;
+                    seenLinkStateId = lsaHdr.getLsID();
+                }
+
+                LsaKey key(lsaHdr.getType(), lsaHdr.getLsID(), lsaHdr.getAdvRouter());
+                LsaHeader lh;
+                lh.age = lsaHdr.getAge();
+                lh.options = lsaHdr.getOptions();
+                lh.sequence = lsaHdr.getSeqNumber();
+                lh.checksum = lsaHdr.getChecksum();
+                ackKeys.push_back(key);
+                ackHeaders.push_back(lh);
+
+                offset += lsaLen;
+            }
+        }));
+
+    originateRouterCapability(ROUTER_CAP_GRACEFUL_RESTART);
+    wait();
+
+    // Origination is postAfter-driven; poll until the mock has observed the flood.
+    for (int i = 0; i < 50 && !sawOpaqueLsu; ++i)
+    {
+        wait();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+
+    EXPECT_TRUE(sawOpaqueLsu);
+    EXPECT_EQ(seenLinkStateId, 0x04000000u);
+
+    ASSERT_FALSE(ackKeys.empty());
+    buildLSAckV2(testPacket, neighborRouterId, ospfInterface->getAreaId(), ackKeys, ackHeaders);
+    deliverV2(testPacket, types::IPv4Address{0xC0A80102});
+    wait();
+}
+
+// Test: Opaque_RefreshCycle_ReoriginatesWithIncrementedSequence
+TEST_F(Internal_OspfTest, Opaque_RefreshCycle_ReoriginatesWithIncrementedSequence)
+{
+    uint32_t selfRid = ospfInstance->getRouterId();
+    LsaKey key(OSPFV2_LSA_OPAQUE_AREA, 0x04000000, selfRid);
+
+    originateRouterCapability(0);
+    wait();
+
+    waitForLsa(key);
+    auto* record = waitForLsa(key);
+    ASSERT_NE(record, nullptr);
+    uint32_t firstSequence = record->header.sequence;
+
+    originateRouterCapability(ROUTER_CAP_GRACEFUL_RESTART);
+    wait();
+
+    record = waitForLsa(key, [firstSequence](const LsaRecord& r) { return r.header.sequence > firstSequence; });
+    ASSERT_NE(record, nullptr);
+    EXPECT_GT(record->header.sequence, firstSequence);
+    auto* body = std::get_if<OpaqueLsaV2>(&record->body);
+    ASSERT_NE(body, nullptr);
+    auto tlv = RouterCapabilityTlv::build(body->payload.data(), static_cast<uint16_t>(body->payload.size()));
+    ASSERT_TRUE(tlv.has_value());
+    EXPECT_EQ(tlv->capabilities, ROUTER_CAP_GRACEFUL_RESTART);
+}
+
+// Test: Opaque_OBitDisabled_OriginationSuppressed
+TEST_F(Internal_OspfTest, Opaque_OBitDisabled_OriginationSuppressed)
+{
+    uint32_t selfRid = ospfInstance->getRouterId();
+    LsaKey key(OSPFV2_LSA_OPAQUE_AREA, 0x04000000, selfRid);
+
+    setIfaceOpaqueEnabled(false);
+
+    originateRouterCapability(0);
+    wait();
+
+    waitForLsa(key);
+    EXPECT_FALSE(getLsdb().contains(key));
+}
+
+// Test: Opaque_ReceivedOpaqueLsa_ParsedAndInstalled_ViaExistingRxPath
+TEST_F(Internal_OspfTest, Opaque_ReceivedOpaqueLsa_ParsedAndInstalled_ViaExistingRxPath)
+{
+    addNeighbor(neighborRouterId, types::IPAddress{types::IPv4Address{0xC0A80102}}, Neighbor::State::FULL);
+
+    RouterCapabilityTlv tlv;
+    tlv.capabilities = ROUTER_CAP_GRACEFUL_RESTART;
+    uint8_t tlvBuf[RouterCapabilityTlv::size()];
+    tlv.buildBody(tlvBuf, sizeof(tlvBuf));
+
+    LsaKey key(OSPFV2_LSA_OPAQUE_AREA, 0x04000000, neighborRouterId);
+
+    uint8_t testPacket[256] = {0};
+    writeOspfV2CommonHeader(testPacket, OSPFV2_TYPE_LINK_STATE_UPDATE, neighborRouterId, 0);
+    packet::Ospfv2Header hdr;
+    hdr.setBuffer(testPacket);
+
+    size_t offset = packet::Ospfv2Header::fixedSize;
+    utils::writeU32(testPacket + offset, 1);
+    offset += 4;
+
+    uint16_t lsaLen = packet::Ospfv2LSAHeader::fixedSize + static_cast<uint16_t>(sizeof(tlvBuf));
+
+    packet::Ospfv2LSAHeader lsaHdr;
+    lsaHdr.setBuffer(testPacket + offset);
+    lsaHdr.setAge(0);
+    lsaHdr.setOptions(0);
+    lsaHdr.setType(OSPFV2_LSA_OPAQUE_AREA);
+    lsaHdr.setLsID(key.linkStateId);
+    lsaHdr.setAdvRouter(key.advertisingRouter);
+    lsaHdr.setSeqNum(0x80000001);
+    lsaHdr.setLen(lsaLen);
+    lsaHdr.setChecksum(0);
+
+    std::memcpy(testPacket + offset + packet::Ospfv2LSAHeader::fixedSize, tlvBuf, sizeof(tlvBuf));
+
+    ChecksumFletcher check;
+    check.addBytes(testPacket + offset + 2, lsaLen - 2);
+    lsaHdr.setChecksum(check.finalize());
+
+    offset += lsaLen;
+
+    uint16_t packetLen = static_cast<uint16_t>(offset);
+    hdr.setPacketLen(packetLen);
+    finalizeOspfV2Checksum(testPacket, packetLen);
+
+    deliverV2(testPacket, types::IPv4Address{0xC0A80102});
+    wait();
+
+    auto* record = waitForLsa(key);
+    ASSERT_NE(record, nullptr);
+    auto* body = std::get_if<OpaqueLsaV2>(&record->body);
+    ASSERT_NE(body, nullptr);
+    ASSERT_EQ(body->payload.size(), RouterCapabilityTlv::size());
+    auto parsedTlv = RouterCapabilityTlv::build(body->payload.data(), static_cast<uint16_t>(body->payload.size()));
+    ASSERT_TRUE(parsedTlv.has_value());
+    EXPECT_EQ(parsedTlv->capabilities, ROUTER_CAP_GRACEFUL_RESTART);
+}
+
+// Test: Opaque_WithdrawRouterCapability_FlushesFromLsdb
+TEST_F(Internal_OspfTest, Opaque_WithdrawRouterCapability_FlushesFromLsdb)
+{
+    uint32_t selfRid = ospfInstance->getRouterId();
+    LsaKey key(OSPFV2_LSA_OPAQUE_AREA, 0x04000000, selfRid);
+
+    originateRouterCapability(0);
+    wait();
+    waitForLsa(key);
+    ASSERT_TRUE(getLsdb().contains(key));
+
+    withdrawRouterCapability();
+    wait();
+
+    auto* record = waitForLsa(key, [](const LsaRecord& r) { return r.header.age == routing::OSPF_MAX_AGE; });
+    ASSERT_NE(record, nullptr);
+    EXPECT_EQ(record->header.age, routing::OSPF_MAX_AGE);
+}
+
+#pragma endregion OpaqueLsa
+
+#pragma region ResyncLls
+
+// Test: Resync_LlsOptionsEnum_MatchesWireBitPositions
+TEST_F(Internal_OspfTest, Resync_LlsOptionsEnum_MatchesWireBitPositions)
+{
+    // Guards against drift: RFC 4811/4812 §2 fix these bit positions on the wire.
+    EXPECT_EQ(getLlsResyncBit(), 0x0001u);
+    EXPECT_EQ(getLlsRestartBit(), 0x0002u);
+}
+
+// Test: Resync_TriggerResync_Sends_LlsResyncBit_InUnicastHello
+TEST_F(Internal_OspfTest, Resync_TriggerResync_Sends_LlsResyncBit_InUnicastHello)
+{
+    getIfaceBaseConfigs().get<config::OspfInterfaceBase::LLS>().set(true);
+
+    types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
+    auto* nbr = addNeighbor(neighborRouterId, nbrIp, Neighbor::State::FULL, nullptr, true); // unicast = true
+    ASSERT_NE(nbr, nullptr);
+
+    bool sawHello = false;
+    uint32_t extendedOptions = 0;
+
+    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_))
+        .WillRepeatedly(testing::Invoke([&](processing::PacketBuilder& pkt) {
+            auto hdr = getOspfV2Header(pkt);
+            if (hdr.getType() != OSPFV2_TYPE_HELLO)
+                return;
+            sawHello = true;
+
+            // LLS Data Block starts right after the OSPF payload (RFC 5613 Sec 2).
+            uint8_t* lls = hdr.buffer + hdr.getPacketLen();
+            extendedOptions = utils::readU32(lls + 8);
+        }));
+
+    getDispatcherV2().triggerResync(*nbr);
+
+    ASSERT_TRUE(sawHello);
+    EXPECT_TRUE(lssHasResyncOption(extendedOptions));
+}
+
+// Test: Resync_MulticastHello_NeverSetsResyncBit
+TEST_F(Internal_OspfTest, Resync_MulticastHello_NeverSetsResyncBit)
+{
+    getIfaceBaseConfigs().get<config::OspfInterfaceBase::LLS>().set(true);
+    runIfaceElection();
+    ASSERT_TRUE(ospfInterface->getIsDr());
+
+    // A resync request queued for a unicast neighbor must never leak its bit
+    // onto the interface's separate multicast Hello.
+    types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
+    auto* nbr = addNeighbor(neighborRouterId, nbrIp, Neighbor::State::FULL, nullptr, true);
+    ASSERT_NE(nbr, nullptr);
+    nbr->resyncRequested.store(true, std::memory_order_relaxed);
+
+    bool sawHello = false;
+    uint32_t extendedOptions = 0xFFFFFFFFu;
+
+    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_))
+        .WillRepeatedly(testing::Invoke([&](processing::PacketBuilder& pkt) {
+            auto hdr = getOspfV2Header(pkt);
+            if (hdr.getType() != OSPFV2_TYPE_HELLO)
+                return;
+            sawHello = true;
+
+            uint8_t* lls = hdr.buffer + hdr.getPacketLen();
+            extendedOptions = utils::readU32(lls + 8);
+        }));
+
+    getDispatcherV2().sendHello();
+
+    ASSERT_TRUE(sawHello);
+    EXPECT_FALSE(lssHasResyncOption(extendedOptions));
+}
+
+// Test: Resync_ReceivedResyncBit_ReflooedsFullLsdbToNeighbor_WithoutStateReset
+TEST_F(Internal_OspfTest, Resync_ReceivedResyncBit_ReflooedsFullLsdbToNeighbor_WithoutStateReset)
+{
+    types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
+    auto* nbr = addNeighbor(neighborRouterId, nbrIp, Neighbor::State::FULL, nullptr, true);
+    ASSERT_NE(nbr, nullptr);
+    ASSERT_GT(getLsdb().size(), 0u); // SetUp() already originates this router's Router-LSA.
+    ASSERT_FALSE(nbr->getRtr().lsus().getActive());
+
+    uint32_t mask = ospfInterface->interfaceAddress.getMask();
+    uint32_t selfRid = ospfInstance->getRouterId();
+    uint16_t packetLen = buildHelloV2(testPacket, neighborRouterId, ospfInterface->getAreaId(),
+                                       getIfaceHelloInterval(), getIfaceDeadInterval(),
+                                       mask, 1, 0, 0, {selfRid}, 0x12 /* E-bit | L-bit */);
+
+    // Manually append a minimal LLS Data Block (RFC 5613/4813) with the resync
+    // extended option set, since buildHelloV2() has no native LLS support.
+    uint8_t* lls = testPacket + packetLen;
+    utils::writeU16(lls + 2, 3); // length in 32-bit words: checksum+length+EO-TLV
+    utils::writeU16(lls + 4, 0x0001); // Extended Options and Flags TLV type
+    utils::writeU16(lls + 6, 0x0004); // TLV value size
+    utils::writeU32(lls + 8, getLlsResyncBit());
+
+    ChecksumFletcher check;
+    check.addU16(0);
+    check.addBytes(lls + 2, 10); // 12-byte block minus the 2-byte checksum field
+    utils::writeU16(lls, check.finalize());
+
+    deliverV2(testPacket, types::IPv4Address{0xC0A80102}, false /* unicast */, nullptr, 12 /* LLS block size */);
+    wait();
+
+    EXPECT_EQ(nbr->getState(), Neighbor::State::FULL); // Not reset by resync.
+    EXPECT_TRUE(nbr->getRtr().lsus().getActive());
+}
+
+// Test: Resync_ReceivedResyncBit_IgnoredWhenNeighborNotFull
+TEST_F(Internal_OspfTest, Resync_ReceivedResyncBit_IgnoredWhenNeighborNotFull)
+{
+    types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
+    auto* nbr = addNeighbor(neighborRouterId, nbrIp, Neighbor::State::EXCHANGE, nullptr, true);
+    ASSERT_NE(nbr, nullptr);
+    ASSERT_FALSE(nbr->getRtr().lsus().getActive());
+
+    // Per RFC 4811, a neighbor below Full has no synchronized database to
+    // resync from — the request must be silently ignored.
+    getDispatcherV2().onResyncRequested(*nbr);
+    wait();
+
+    EXPECT_EQ(nbr->getState(), Neighbor::State::EXCHANGE);
+    EXPECT_FALSE(nbr->getRtr().lsus().getActive());
+}
+
+#pragma endregion ResyncLls
+
+#pragma region GracefulRestart
+
+// Test: GracefulRestart_BeginGracefulRestart_OriginatesGraceLsa_InLsdb
+TEST_F(Internal_OspfTest, GracefulRestart_BeginGracefulRestart_OriginatesGraceLsa_InLsdb)
+{
+    uint32_t selfRid = ospfInstance->getRouterId();
+    uint32_t linkStateId = (static_cast<uint32_t>(GRACE_LSA_OPAQUE_TYPE) << 24) | (ospfInterface->interfaceId & 0x00FFFFFF);
+    LsaKey key(OSPFV2_LSA_OPAQUE_LINK, linkStateId, selfRid);
+
+    ospfInterface->beginGracefulRestart(120, GraceRestartReason::SOFTWARE_RESTART);
+    wait();
+
+    auto* record = waitForLsa(key);
+    ASSERT_NE(record, nullptr);
+    auto* body = std::get_if<OpaqueLsaV2>(&record->body);
+    ASSERT_NE(body, nullptr);
+    EXPECT_EQ(body->opaqueType, GRACE_LSA_OPAQUE_TYPE);
+
+    auto tlv = GraceLsaTlv::build(body->payload.data(), static_cast<uint16_t>(body->payload.size()));
+    ASSERT_TRUE(tlv.has_value());
+    EXPECT_EQ(tlv->gracePeriodSeconds, 120u);
+    EXPECT_EQ(tlv->restartReason, GraceRestartReason::SOFTWARE_RESTART);
+}
+
+// Test: GracefulRestart_BeginGracefulRestart_SetsRestartBitOnHello
+TEST_F(Internal_OspfTest, GracefulRestart_BeginGracefulRestart_SetsRestartBitOnHello)
+{
+    ospfInterface->beginGracefulRestart(120, GraceRestartReason::SOFTWARE_RESTART);
+    wait();
+
+    bool sawHello = false;
+    uint32_t extendedOptions = 0;
+
+    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_))
+        .WillRepeatedly(testing::Invoke([&](processing::PacketBuilder& pkt) {
+            auto hdr = getOspfV2Header(pkt);
+            if (hdr.getType() != OSPFV2_TYPE_HELLO)
+                return;
+            sawHello = true;
+
+            uint8_t* lls = hdr.buffer + hdr.getPacketLen();
+            extendedOptions = utils::readU32(lls + 8);
+        }));
+
+    getDispatcherV2().sendHello();
+
+    ASSERT_TRUE(sawHello);
+    EXPECT_TRUE(lssHasRestartOption(extendedOptions));
+}
+
+// Test: GracefulRestart_EndGracefulRestart_FlushesGraceLsa
+TEST_F(Internal_OspfTest, GracefulRestart_EndGracefulRestart_FlushesGraceLsa)
+{
+    uint32_t selfRid = ospfInstance->getRouterId();
+    uint32_t linkStateId = (static_cast<uint32_t>(GRACE_LSA_OPAQUE_TYPE) << 24) | (ospfInterface->interfaceId & 0x00FFFFFF);
+    LsaKey key(OSPFV2_LSA_OPAQUE_LINK, linkStateId, selfRid);
+
+    ospfInterface->beginGracefulRestart(120, GraceRestartReason::SOFTWARE_RESTART);
+    wait();
+    waitForLsa(key);
+    ASSERT_TRUE(getLsdb().contains(key));
+
+    ospfInterface->endGracefulRestart();
+    wait();
+
+    auto* record = waitForLsa(key, [](const LsaRecord& r) { return r.header.age == routing::OSPF_MAX_AGE; });
+    ASSERT_NE(record, nullptr);
+    EXPECT_EQ(record->header.age, routing::OSPF_MAX_AGE);
+    EXPECT_FALSE(ospfInterface->getGracefulRestartInProgress());
+}
+
+// Test: GracefulRestart_HelperMode_SuppressesDeadTimerTeardown_WithinGracePeriod
+TEST_F(Internal_OspfTest, GracefulRestart_HelperMode_SuppressesDeadTimerTeardown_WithinGracePeriod)
+{
+    types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
+    auto* nbr = addNeighbor(neighborRouterId, nbrIp, Neighbor::State::FULL);
+    ASSERT_NE(nbr, nullptr);
+
+    nbr->helpingRestart.store(true, std::memory_order_relaxed);
+    nbr->helperDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(120);
+
+    getTimers().handleInactiveTimeExpire(*nbr);
+
+    EXPECT_EQ(nbr->getState(), Neighbor::State::FULL);
+    EXPECT_TRUE(nbr->helpingRestart.load());
+    EXPECT_NE(nbr->inactivityTimerId.load(), 0u);
+}
+
+// Test: GracefulRestart_HelperMode_TearsDownAfterGracePeriodExpires
+TEST_F(Internal_OspfTest, GracefulRestart_HelperMode_TearsDownAfterGracePeriodExpires)
+{
+    types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
+    auto* nbr = addNeighbor(neighborRouterId, nbrIp, Neighbor::State::FULL);
+    ASSERT_NE(nbr, nullptr);
+
+    // Grace period already expired: the deadline is in the past.
+    nbr->helpingRestart.store(true, std::memory_order_relaxed);
+    nbr->helperDeadline = std::chrono::steady_clock::now() - std::chrono::seconds(1);
+
+    getTimers().handleInactiveTimeExpire(*nbr);
+
+    EXPECT_EQ(nbr->getState(), Neighbor::State::DOWN);
+    EXPECT_FALSE(nbr->helpingRestart.load());
+}
+
+// Test: GracefulRestart_HelperModeDisabled_TearsDownImmediately
+TEST_F(Internal_OspfTest, GracefulRestart_HelperModeDisabled_TearsDownImmediately)
+{
+    getIfaceConfigs().get<config::OspfInterface::GRACEFUL_RESTART_HELPER>().set(false);
+
+    addNeighbor(neighborRouterId, types::IPAddress{types::IPv4Address{0xC0A80102}}, Neighbor::State::FULL);
+
+    GraceLsaTlv tlv;
+    tlv.gracePeriodSeconds = 120;
+    tlv.restartReason = GraceRestartReason::SOFTWARE_RESTART;
+
+    invokeHandleGraceLsaReceived(*ospfInterface, neighborRouterId, tlv);
+
+    auto* nbr = getNeighbor(neighborRouterId);
+    ASSERT_NE(nbr, nullptr);
+    EXPECT_FALSE(nbr->helpingRestart.load());
+}
+
+// Test: GracefulRestart_ReceivedRestartBitWithoutGraceLsa_DoesNotEnterHelperMode
+TEST_F(Internal_OspfTest, GracefulRestart_ReceivedRestartBitWithoutGraceLsa_DoesNotEnterHelperMode)
+{
+    types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
+    auto* nbr = addNeighbor(neighborRouterId, nbrIp, Neighbor::State::FULL, nullptr, true);
+    ASSERT_NE(nbr, nullptr);
+
+    uint32_t mask = ospfInterface->interfaceAddress.getMask();
+    uint32_t selfRid = ospfInstance->getRouterId();
+    uint16_t packetLen = buildHelloV2(testPacket, neighborRouterId, ospfInterface->getAreaId(),
+                                       getIfaceHelloInterval(), getIfaceDeadInterval(),
+                                       mask, 1, 0, 0, {selfRid}, 0x12 /* E-bit | L-bit */);
+
+    // Manually append a minimal LLS Data Block (RFC 5613/4813) with only the
+    // restart extended option set -- no Grace-LSA is ever sent.
+    uint8_t* lls = testPacket + packetLen;
+    utils::writeU16(lls + 2, 3);
+    utils::writeU16(lls + 4, 0x0001);
+    utils::writeU16(lls + 6, 0x0004);
+    utils::writeU32(lls + 8, getLlsRestartBit());
+
+    ChecksumFletcher check;
+    check.addU16(0);
+    check.addBytes(lls + 2, 10);
+    utils::writeU16(lls, check.finalize());
+
+    deliverV2(testPacket, types::IPv4Address{0xC0A80102}, false /* unicast */, nullptr, 12 /* LLS block size */);
+    wait();
+
+    // Per RFC 3623 SS3, the LLS restart bit alone must not trigger helper mode.
+    EXPECT_FALSE(nbr->helpingRestart.load());
+}
+
+#pragma endregion GracefulRestart
 
 #pragma region AuthenticationV2
 
@@ -7184,7 +8167,6 @@ TEST_F(Internal_OspfTest, AuthV2_Md5_Correct_Digest_Accepted)
         return true;
     });
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
     ASSERT_TRUE(getAuthKey().has_value());
     ASSERT_TRUE(getAuthKeyId().has_value());
 
@@ -7235,7 +8217,6 @@ TEST_F(Internal_OspfTest, AuthV2_Md5_Incorrect_Digest_Rejected)
         return true;
     });
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
     ASSERT_TRUE(getAuthKey().has_value());
 
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
@@ -7285,7 +8266,6 @@ TEST_F(Internal_OspfTest, AuthV2_Md5_KeyId_Mismatch_Rejected)
         return true;
     });
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
     ASSERT_TRUE(getAuthKeyId().has_value());
     ASSERT_EQ(getAuthKeyId().value(), keyId);
 
@@ -7336,7 +8316,6 @@ TEST_F(Internal_OspfTest, AuthV2_ReplayDetection_Old_Sequence_Rejected)
         return true;
     });
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
     ASSERT_TRUE(getAuthKey().has_value());
 
     types::IPAddress nbrIp(types::IPv4Address{0xC0A80102});
@@ -7423,7 +8402,6 @@ TEST_F(Internal_OspfTest, AuthV2_SyncDigestKey_Picks_Active_KeyChain_Entry)
         return true;
     });
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
     ASSERT_TRUE(getAuthKeyId().has_value());
     EXPECT_EQ(getAuthKeyId().value(), keyId1);
     EXPECT_EQ(getAuthKey().value(), utils::readU128(keyBytes1.data()));
@@ -7434,7 +8412,6 @@ TEST_F(Internal_OspfTest, AuthV2_SyncDigestKey_Picks_Active_KeyChain_Entry)
         return true;
     });
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
     EXPECT_EQ(getAuthKeyId().value(), keyId2);
     EXPECT_EQ(getAuthKey().value(), utils::readU128(keyBytes2.data()));
 }
@@ -7474,14 +8451,13 @@ TEST_F(Internal_OspfTest, AuthV3_NoAuth_Default_Accepted)
 TEST_F(Internal_OspfTest, OriginateV3_RouterLsa_No_Addresses_Topology_Only)
 {
     Area& area = getArea(0, ospfv3Instance);
-    getIntraOriginatorV3(&area).fullRefresh();
+    fullRefreshV3(&area);
     wait(ospfv3Instance);
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t rid = ospfv3Instance->getRouterId();
     LsaKey key(OSPFV3_LSA_ROUTER, 0, rid);
 
-    auto* record = getLsdb(&area).find(key);
+    auto* record = waitForLsa(key, &area, ospfv3Instance);
     ASSERT_NE(record, nullptr);
     EXPECT_TRUE(hasFlag(record->flags, LsaRecordFlags::SELF_ORIGINATED));
 
@@ -7501,15 +8477,14 @@ TEST_F(Internal_OspfTest, OriginateV3_RouterLsa_No_Addresses_Topology_Only)
 TEST_F(Internal_OspfTest, OriginateV3_LinkLsa_Per_Interface_With_LinkLocal_Address)
 {
     Area& area = getArea(0, ospfv3Instance);
-    getIntraOriginatorV3(&area).fullRefresh();
+    fullRefreshV3(&area);
     wait(ospfv3Instance);
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t rid = ospfv3Instance->getRouterId();
     uint32_t ifaceId = ospfv3Interface->iface.configs.key.getId();
     LsaKey key(OSPFV3_LSA_LINK, ifaceId, rid);
 
-    auto* record = getLsdb(&area).find(key);
+    auto* record = waitForLsa(key, &area, ospfv3Instance);
     ASSERT_NE(record, nullptr);
 
     auto* body = std::get_if<LinkLsa>(&record->body);
@@ -7523,20 +8498,19 @@ TEST_F(Internal_OspfTest, OriginateV3_LinkLsa_Per_Interface_With_LinkLocal_Addre
 TEST_F(Internal_OspfTest, OriginateV3_IntraAreaPrefixLsa_Separate_From_RouterLsa)
 {
     Area& area = getArea(0, ospfv3Instance);
-    getIntraOriginatorV3(&area).fullRefresh();
+    fullRefreshV3(&area);
     wait(ospfv3Instance);
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t rid = ospfv3Instance->getRouterId();
 
     // Router-LSA (topology) exists.
     LsaKey routerKey(OSPFV3_LSA_ROUTER, 0, rid);
-    ASSERT_NE(getLsdb(&area).find(routerKey), nullptr);
+    ASSERT_NE(waitForLsa(routerKey, &area, ospfv3Instance), nullptr);
 
     // Intra-Area-Prefix-LSA (addressing, referencing the Router-LSA) also exists,
     // as a distinct LSDB entry.
     LsaKey prefixKey(OSPFV3_LSA_INTRA_AREA_PREFIX, 0, rid);
-    auto* prefixRecord = getLsdb(&area).find(prefixKey);
+    auto* prefixRecord = waitForLsa(prefixKey, &area, ospfv3Instance);
     ASSERT_NE(prefixRecord, nullptr);
 
     auto* body = std::get_if<IntraAreaPrefixLsa>(&prefixRecord->body);
@@ -7551,13 +8525,12 @@ TEST_F(Internal_OspfTest, OriginateV3_NetworkLsa_Originated_By_Dr)
     setIsDr(true, ospfv3Interface);
     addNetworkLsa(ospfv3Interface, false);
     wait(ospfv3Instance);
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t rid = ospfv3Instance->getRouterId();
     uint32_t ifaceId = ospfv3Interface->iface.configs.key.getId();
     LsaKey key(OSPFV3_LSA_NETWORK, ifaceId, rid);
 
-    auto* record = getLsdb(&area).find(key);
+    auto* record = waitForLsa(key, &area, ospfv3Instance);
     ASSERT_NE(record, nullptr);
     auto* body = std::get_if<NetworkLsaV3>(&record->body);
     ASSERT_NE(body, nullptr);
@@ -7573,14 +8546,13 @@ TEST_F(Internal_OspfTest, OriginateV3_InterAreaPrefix_Type3_Equivalent)
     prefix.prefixLength = 64;
     types::IPPrefix ipPrefix(__uint128_t{prefix.addr}, prefix.prefixLength);
 
-    getInterOriginator().originateSummary<PolicyV3>(getOriginatorCtx(&area),/*lsid=*/0x100, ipPrefix, /*cost=*/77);
+    originateSummary<PolicyV3>(getOriginatorCtx(&area), /*lsid=*/0x100, ipPrefix, /*cost=*/77, false, ospfv3Instance);
     wait(ospfv3Instance);
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t selfRid = ospfv3Instance->getRouterId();
     LsaKey key(OSPFV3_LSA_INTER_AREA_PREFIX, 0x100, selfRid);
 
-    auto* record = getLsdb(&area).find(key);
+    auto* record = waitForLsa(key, &area, ospfv3Instance);
     ASSERT_NE(record, nullptr);
     auto* body = std::get_if<InterAreaPrefixLsa>(&record->body);
     ASSERT_NE(body, nullptr);
@@ -7599,7 +8571,6 @@ TEST_F(Internal_OspfTest, OriginateV3_InterAreaRouter_Type4_Equivalent)
         *mockInterface, OspfInterfaceId(ipIntv4.addr, 1), ospfv3Instance);
     auto& area1 = getArea(1, ospfv3Instance);
     wait(ospfv3Instance);
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
     ASSERT_TRUE(ospfv3Instance->isABR());
 
     OspfRouter asbrReach{};
@@ -7607,14 +8578,13 @@ TEST_F(Internal_OspfTest, OriginateV3_InterAreaRouter_Type4_Equivalent)
     asbrReach.cost = 30;
     getTable().updateAreaAsbr(1, asbrReach);
 
-    getInterOriginator().addExternal<PolicyV3>(getOriginatorCtx(&area), neighborRouterId2, /*lsid=*/1, /*remove=*/false);
+    addExternal<PolicyV3>(getOriginatorCtx(&area), neighborRouterId2, /*lsid=*/1, /*remove=*/false, ospfv3Instance);
     wait(ospfv3Instance);
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t selfRid = ospfv3Instance->getRouterId();
     LsaKey key(OSPFV3_LSA_INTER_AREA_ROUTER, neighborRouterId2, selfRid);
 
-    auto* record = getLsdb(&area).find(key);
+    auto* record = waitForLsa(key, &area, ospfv3Instance);
     ASSERT_NE(record, nullptr);
     auto* body = std::get_if<InterAreaRouterLsa>(&record->body);
     ASSERT_NE(body, nullptr);
@@ -7645,15 +8615,14 @@ TEST_F(Internal_OspfTest, OriginateV3_AsExternal_With_Ipv6_ForwardingAddress)
     };
     getRib(ospfv3Instance).replaceArea(area0, connectedPath);
 
-    getExternalOriginator(ospfv3Instance).originateExternal<PolicyV3>(ctx, false);
+    originateExternal<PolicyV3>(ctx, false, ospfv3Instance);
     wait(ospfv3Instance);
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     auto& area = getArea(0, ospfv3Instance);
     uint32_t selfRid = ospfv3Instance->getRouterId();
     LsaKey key(OSPFV3_LSA_AS_EXTERNAL, ctx.lsId, selfRid);
 
-    auto* record = getLsdb(&area).find(key);
+    auto* record = waitForLsa(key, &area, ospfv3Instance);
     ASSERT_NE(record, nullptr);
     auto* body = std::get_if<ExternalLsaV3>(&record->body);
     ASSERT_NE(body, nullptr);
@@ -7687,18 +8656,17 @@ TEST_F(Internal_OspfTest, OriginateV3_FullRefresh_Reoriginates_Router_Link_And_P
     auto& area = getArea(0, ospfv3Instance);
     uint32_t rid = ospfv3Instance->getRouterId();
 
-    getIntraOriginatorV3(&area).fullRefresh();
+    fullRefreshV3(&area);
     wait(ospfv3Instance);
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     LsaKey routerKey(OSPFV3_LSA_ROUTER, 0, rid);
     LsaKey prefixKey(OSPFV3_LSA_INTRA_AREA_PREFIX, 0, rid);
     uint32_t ifaceId = ospfv3Interface->iface.configs.key.getId();
     LsaKey linkKey(OSPFV3_LSA_LINK, ifaceId, rid);
 
-    auto* routerRecord = getLsdb(&area).find(routerKey);
-    auto* prefixRecord = getLsdb(&area).find(prefixKey);
-    auto* linkRecord = getLsdb(&area).find(linkKey);
+    auto* routerRecord = waitForLsa(routerKey, &area, ospfv3Instance);
+    auto* prefixRecord = waitForLsa(prefixKey, &area, ospfv3Instance);
+    auto* linkRecord = waitForLsa(linkKey, &area, ospfv3Instance);
     ASSERT_NE(routerRecord, nullptr);
     ASSERT_NE(prefixRecord, nullptr);
     ASSERT_NE(linkRecord, nullptr);
@@ -7708,13 +8676,12 @@ TEST_F(Internal_OspfTest, OriginateV3_FullRefresh_Reoriginates_Router_Link_And_P
     uint32_t linkSeq = linkRecord->header.sequence;
 
     // A second fullRefresh re-originates all three LSA types with bumped sequences.
-    getIntraOriginatorV3(&area).fullRefresh();
+    fullRefreshV3(&area);
     wait(ospfv3Instance);
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    routerRecord = getLsdb(&area).find(routerKey);
-    prefixRecord = getLsdb(&area).find(prefixKey);
-    linkRecord = getLsdb(&area).find(linkKey);
+    routerRecord = waitForLsa(routerKey, [routerSeq](const LsaRecord& r) { return r.header.sequence > routerSeq; }, &area, ospfv3Instance);
+    prefixRecord = waitForLsa(prefixKey, [prefixSeq](const LsaRecord& r) { return r.header.sequence > prefixSeq; }, &area, ospfv3Instance);
+    linkRecord = waitForLsa(linkKey, [linkSeq](const LsaRecord& r) { return r.header.sequence > linkSeq; }, &area, ospfv3Instance);
     ASSERT_NE(routerRecord, nullptr);
     ASSERT_NE(prefixRecord, nullptr);
     ASSERT_NE(linkRecord, nullptr);
@@ -7799,6 +8766,14 @@ TEST_F(Internal_OspfTest, RxV3_HandleIncoming_Dispatches_LSRequest)
     deliverV3(testPacket, nbrIp6);
 
     EXPECT_TRUE(sawLSUpdate);
+
+    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_)).Times(::testing::AnyNumber());
+
+    auto* record = lsdb.find(key);
+    ASSERT_NE(record, nullptr);
+    buildLSAckV3(testPacket, neighborRouterId, ospfv3Interface->getAreaId(), {key}, {record->header});
+    deliverV3(testPacket, nbrIp6);
+    wait(ospfv3Instance);
 }
 
 // Test: RxV3_HandleIncoming_Dispatches_LSUpdate
@@ -8092,6 +9067,10 @@ TEST_F(Internal_OspfTest, TxV3_SendLsUpdate_Unicast_To_Neighbor)
 
     EXPECT_TRUE(ok);
     EXPECT_TRUE(sawLSUpdate);
+
+    buildLSAckV3(testPacket, neighborRouterId, ospfv3Interface->getAreaId(), {key}, {rec->header});
+    deliverV3(testPacket, nbrIp6);
+    wait();
 }
 
 // Test: TxV3_FinalizeHeader_Sets_Length_And_Checksum
@@ -8138,6 +9117,194 @@ TEST_F(Internal_OspfTest, TxV3_No_Options_Byte_In_Lsa_Header)
 
 #pragma endregion PacketRxTxV3
 
+#pragma region OspfV3AddressFamily
+
+// Test: AfIpv4_ProcessConstruction_SetsAddressFamilySupportBit
+TEST_F(Internal_OspfTest, AfIpv4_ProcessConstruction_SetsAddressFamilySupportBit)
+{
+    OspfProcess& afProcess = setupAfIpv4Process(3);
+
+    Area& area = getArea(0, &afProcess);
+    EXPECT_TRUE(AreaFlagManager::getAddressFamilySupport(getAreaFlags(&area).getFlags()));
+
+    teardownAfIpv4Process(3, afProcess);
+}
+
+// Test: AfIpv4_Hello_CarriesAddressFamilySupportBit
+TEST_F(Internal_OspfTest, AfIpv4_Hello_CarriesAddressFamilySupportBit)
+{
+    OspfInterface* afIface = nullptr;
+    OspfProcess& afProcess = setupAfIpv4Process(3, &afIface);
+
+    uint32_t flags = getIfaceFlags(afIface).getFlags();
+    EXPECT_TRUE(AreaFlagManager::getAddressFamilySupport(flags));
+
+    teardownAfIpv4Process(3, afProcess);
+}
+
+// Test: AfIpv4_InterfaceManager_ReadsIpv4LocalAddress_NotIpv6
+TEST_F(Internal_OspfTest, AfIpv4_InterfaceManager_ReadsIpv4LocalAddress_NotIpv6)
+{
+    OspfInterface* afIface = nullptr;
+    OspfProcess& afProcess = setupAfIpv4Process(3, &afIface);
+
+    // The interface's bound address must be the configured IPv4 prefix, not the IPv6 link-local.
+    EXPECT_TRUE(afIface->interfaceAddress.isIPv4());
+    EXPECT_EQ(afIface->interfaceAddress.v4(), ipIntv4.addr);
+
+    teardownAfIpv4Process(3, afProcess);
+}
+
+// Test: AfIpv4_IntraAreaPrefixLsa_CarriesIpv4Prefix_NotIpv6
+TEST_F(Internal_OspfTest, AfIpv4_IntraAreaPrefixLsa_CarriesIpv4Prefix_NotIpv6)
+{
+    OspfProcess& afProcess = setupAfIpv4Process(3);
+
+    Area& area = getArea(0, &afProcess);
+    fullRefreshV3(&area);
+    wait(&afProcess);
+
+    uint32_t rid = afProcess.getRouterId();
+    LsaKey prefixKey(OSPFV3_LSA_INTRA_AREA_PREFIX, 0, rid);
+    auto* prefixRecord = waitForLsa(prefixKey, &area, &afProcess);
+    ASSERT_NE(prefixRecord, nullptr);
+
+    auto* body = std::get_if<IntraAreaPrefixLsaV4>(&prefixRecord->body);
+    ASSERT_NE(body, nullptr);
+    EXPECT_FALSE(body->prefixes.empty());
+    EXPECT_EQ(std::get_if<IntraAreaPrefixLsa>(&prefixRecord->body), nullptr);
+
+    teardownAfIpv4Process(3, afProcess);
+}
+
+// Test: AfIpv4_ReceivedIntraAreaPrefixLsa_ParsedAsIpv4
+TEST_F(Internal_OspfTest, AfIpv4_ReceivedIntraAreaPrefixLsa_ParsedAsIpv4)
+{
+    OspfInterface* afIface = nullptr;
+    OspfProcess& afProcess = setupAfIpv4Process(3, &afIface);
+
+    IntraAreaPrefixLsaV4 lsa;
+    lsa.referencedLsaType = OSPFV3_LSA_ROUTER;
+    lsa.referencedLinkStateId = 0;
+    lsa.referencedAdvRouter = neighborRouterId;
+    IntraAreaPrefixV4 prefix{};
+    prefix.metric = 10;
+    prefix.prefix = types::IPv4Prefix(0x0A0A0A00u, 24, false);
+    lsa.prefixes.push_back(prefix);
+
+    uint8_t body[64] = {0};
+    ASSERT_TRUE(lsa.buildBody(body, lsa.size()));
+
+    auto result = invokeBuildLsaBody(getDispatcherV3(afIface), OSPFV3_LSA_INTRA_AREA_PREFIX, body, lsa.size());
+    ASSERT_TRUE(result.has_value());
+    auto* v4Body = std::get_if<IntraAreaPrefixLsaV4>(&result.value());
+    ASSERT_NE(v4Body, nullptr);
+    ASSERT_FALSE(v4Body->prefixes.empty());
+    EXPECT_EQ(v4Body->prefixes[0].prefix.prefixLength, 24);
+
+    teardownAfIpv4Process(3, afProcess);
+}
+
+// Test: AfIpv4_MismatchedAfBit_AdjacencyRejected
+TEST_F(Internal_OspfTest, AfIpv4_MismatchedAfBit_AdjacencyRejected)
+{
+    OspfInterface* afIface = nullptr;
+    OspfProcess& afProcess = setupAfIpv4Process(3, &afIface);
+
+    // Hello without the AF-bit set (only V6+E) — a peer that doesn't support this AF.
+    uint32_t optionsNoAf = OSPFV3_OPT_V6 | OSPFV3_OPT_E;
+    buildHelloV3(testPacket, neighborRouterId, 0,
+        neighborRouterId, getIfaceHelloInterval(afIface), getIfaceDeadInterval(afIface),
+        1, 0, 0, {}, optionsNoAf);
+
+    deliverV3(testPacket, ipIntv6, true, afIface);
+    wait(&afProcess);
+
+    auto* nbr = getNeighbor(neighborRouterId, afIface);
+    if (nbr != nullptr)
+        EXPECT_LT(nbr->getState(), Neighbor::State::TWOWAY);
+
+    teardownAfIpv4Process(3, afProcess);
+}
+
+// Test: AfIpv4_AndIpv6Instance_CoexistOnSameRouterId_IndependentLsdbs
+TEST_F(Internal_OspfTest, AfIpv4_AndIpv6Instance_CoexistOnSameRouterId_IndependentLsdbs)
+{
+    OspfProcess& afProcess = setupAfIpv4Process(3);
+
+    // Originate on both the pre-existing IPv6 instance and the new IPv4-AF instance.
+    Area& v6Area = getArea(0, ospfv3Instance);
+    fullRefreshV3(&v6Area);
+    wait(ospfv3Instance);
+
+    Area& v4Area = getArea(0, &afProcess);
+    fullRefreshV3(&v4Area);
+    wait(&afProcess);
+
+    // Both processes derive their Router ID from the same underlying VRF, so
+    // v6Rid == v4Rid here — the two LSAs share an LsaKey. That's expected and
+    // fine: they live in two distinct Area/LsdbTable instances (one per
+    // process), which is what actually needs verifying below.
+    uint32_t rid = ospfv3Instance->getRouterId();
+    ASSERT_EQ(rid, afProcess.getRouterId());
+
+    LsaKey key(OSPFV3_LSA_INTRA_AREA_PREFIX, 0, rid);
+
+    auto* v6Record = waitForLsa(key, &v6Area, ospfv3Instance);
+    auto* v4Record = waitForLsa(key, &v4Area, &afProcess);
+    ASSERT_NE(v6Record, nullptr);
+    ASSERT_NE(v4Record, nullptr);
+    ASSERT_NE(&v6Area, &v4Area);
+    ASSERT_NE(v6Record, v4Record);
+
+    // Each process's LSDB carries only its own address family's LSA body type —
+    // no cross-contamination between the coexisting IPv6 and IPv4-AF instances.
+    EXPECT_NE(std::get_if<IntraAreaPrefixLsa>(&v6Record->body), nullptr);
+    EXPECT_EQ(std::get_if<IntraAreaPrefixLsaV4>(&v6Record->body), nullptr);
+    EXPECT_NE(std::get_if<IntraAreaPrefixLsaV4>(&v4Record->body), nullptr);
+    EXPECT_EQ(std::get_if<IntraAreaPrefixLsa>(&v4Record->body), nullptr);
+
+    teardownAfIpv4Process(3, afProcess);
+}
+
+TEST_F(Internal_OspfTest, Ospfv3_IntraAreaPrefixLsa_RetransmittedViaBuildLSABody)
+{
+    Area& area = getArea(0, ospfv3Instance);
+    fullRefreshV3(&area);
+    wait(ospfv3Instance);
+
+    uint32_t rid = ospfv3Instance->getRouterId();
+    LsaKey prefixKey(OSPFV3_LSA_INTRA_AREA_PREFIX, 0, rid);
+
+    auto* record = waitForLsa(prefixKey, &area, ospfv3Instance);
+    ASSERT_NE(record, nullptr);
+
+    types::IPv6Address nbrIp6 = (static_cast<__uint128_t>(0xFE80000000000000) << 64) | 0x0000000000000002;
+    auto* nbr = addNeighbor(neighborRouterId, types::IPAddress(nbrIp6), Neighbor::State::FULL, ospfv3Interface);
+    ASSERT_EQ(nbr->getState(), Neighbor::State::FULL);
+
+    // Before the fix, buildLSABody's switch had no case for this LSA type and fell
+    // through to `default: return false`, so the LSU below would never be sent.
+    bool sawLSUpdateWithPrefixLsa = false;
+    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_))
+        .WillRepeatedly(testing::Invoke([&](processing::PacketBuilder& pkt) {
+            auto hdr = getOspfV3Header(pkt);
+            if (hdr.getType() == OSPFV3_TYPE_LINK_STATE_UPDATE)
+                sawLSUpdateWithPrefixLsa = true;
+        }));
+
+    buildLSRequestV3(testPacket, neighborRouterId, ospfv3Interface->getAreaId(), {prefixKey});
+    deliverV3(testPacket, nbrIp6);
+
+    EXPECT_TRUE(sawLSUpdateWithPrefixLsa);
+
+    buildLSAckV3(testPacket, neighborRouterId, ospfv3Interface->getAreaId(), {prefixKey}, {record->header});
+    deliverV3(testPacket, nbrIp6);
+    wait();
+}
+
+#pragma endregion OspfV3AddressFamily
+
 #pragma region IPv6Specific
 
 // Test: Ipv6_OspfInterface_Created_With_LinkLocal_And_Global_Addresses
@@ -8170,7 +9337,6 @@ TEST_F(Internal_OspfTest, Ipv6_Full_Adjacency_Establishment_Over_Ospfv3)
     auto* nbr = addNeighbor(neighborRouterId, nbrIp, Neighbor::State::FULL, ospfv3Interface);
     ASSERT_NE(nbr, nullptr);
     wait(ospfv3Instance);
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     EXPECT_EQ(nbr->getState(), Neighbor::State::FULL);
     EXPECT_TRUE(nbr->ipAddress.isIPv6());
@@ -8182,9 +9348,16 @@ TEST_F(Internal_OspfTest, Ipv6_IntraAreaPrefix_Route_Installed_To_Ipv6_Rib)
 {
     auto& area = getArea(0, ospfv3Instance);
 
-    getIntraOriginatorV3(&area).fullRefresh();
+    // SPF is throttled separately (default 5000ms initial delay), so fullRefresh()/wait() alone never populates the RIB here.
+    getConfigs(ospfv3Instance).get<config::Ospf::SPF_THROTTLE_DELAY>().set(0);
+    getConfigs(ospfv3Instance).get<config::Ospf::SPF_THROTTLE_HOLD>().set(0);
+    getConfigs(ospfv3Instance).get<config::Ospf::SPF_THROTTLE_MAX>().set(0);
+
+    // With no FULL neighbor a broadcast interface advertises no links; only passive interfaces unconditionally advertise a stub link/prefix.
+    getIfaceConfigs(ospfv3Interface).get<config::OspfInterface::PASSIVE>().set(true);
+
+    fullRefreshV3(&area);
     wait(ospfv3Instance);
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     auto localPrefix = ospfv3Interface->iface.configs.ipv6.getLocalPrefix();
     (void)localPrefix;
@@ -8193,11 +9366,15 @@ TEST_F(Internal_OspfTest, Ipv6_IntraAreaPrefix_Route_Installed_To_Ipv6_Rib)
     // intra-area OSPFv3 route once SPF has run over our own router LSA.
     types::IPPrefix connectedPrefix(ipIntv6.addr, 64, true);
     const auto* route = getRib(ospfv3Instance).lookup(connectedPrefix);
-    if (route != nullptr)
+    for (int i = 0; i < 50 && !route; ++i)
     {
-        EXPECT_EQ(route->type, OspfRouteType::INTRA_AREA);
-        EXPECT_FALSE(route->paths.empty());
+        wait(ospfv3Instance);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        route = getRib(ospfv3Instance).lookup(connectedPrefix);
     }
+    ASSERT_NE(route, nullptr);
+    EXPECT_EQ(route->type, OspfRouteType::INTRA_AREA);
+    EXPECT_FALSE(route->paths.empty());
 }
 
 // Test: Ipv6_External_Route_With_Ipv6_ForwardingAddress
@@ -8222,15 +9399,14 @@ TEST_F(Internal_OspfTest, Ipv6_External_Route_With_Ipv6_ForwardingAddress)
     };
     getRib(ospfv3Instance).replaceArea(area0, connectedPath);
 
-    getExternalOriginator(ospfv3Instance).originateExternal<PolicyV3>(ctx, false);
+    originateExternal<PolicyV3>(ctx, false, ospfv3Instance);
     wait(ospfv3Instance);
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     auto& area = getArea(0, ospfv3Instance);
     uint32_t selfRid = ospfv3Instance->getRouterId();
     LsaKey key(OSPFV3_LSA_AS_EXTERNAL, ctx.lsId, selfRid);
 
-    auto* record = getLsdb(&area).find(key);
+    auto* record = waitForLsa(key, &area, ospfv3Instance);
     ASSERT_NE(record, nullptr);
     auto* body = std::get_if<ExternalLsaV3>(&record->body);
     ASSERT_NE(body, nullptr);
@@ -8250,18 +9426,12 @@ TEST_F(Internal_OspfTest, Ipv6_External_Route_With_Ipv6_ForwardingAddress)
 // Test: Config_AreaType_Change_Triggers_Lsdb_Reevaluation
 TEST_F(Internal_OspfTest, Config_AreaType_Change_Triggers_Lsdb_Reevaluation)
 {
-    // Area::type is captured once at construction from AREA_TYPE config
-    // (Area.cpp: `type(configs.get<config::OspfArea::AREA_TYPE>().load())`).
-    // Pre-configure area 1 as STUB before the interface (and therefore the
-    // Area object) is created, then verify the area's runtime `type` field
-    // reflects that configuration.
     getConfigs().get<config::Ospf::AREA_CONFIGS>().emplaceBack(1)
         .get<config::OspfArea::AREA_TYPE>().set(config::ospf::AreaType::STUB);
 
     createIface(
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     auto& area1 = getArea(1);
     EXPECT_EQ(area1.getType(), config::ospf::AreaType::STUB);
@@ -8273,14 +9443,18 @@ TEST_F(Internal_OspfTest, Config_AreaType_Change_Triggers_Lsdb_Reevaluation)
 // Test: Config_Cost_Change_Triggers_RouterLsa_Reorigination_And_Spf
 TEST_F(Internal_OspfTest, Config_Cost_Change_Triggers_RouterLsa_Reorigination_And_Spf)
 {
-    getIntraOriginatorV2().fullRefresh();
+    // LSA_THROTTLE_HOLD defaults to 5000ms and would hold a second reorigination far past the poll window.
+    getConfigs().get<config::Ospf::LSA_THROTTLE_DELAY>().set(0);
+    getConfigs().get<config::Ospf::LSA_THROTTLE_HOLD>().set(0);
+    getConfigs().get<config::Ospf::LSA_THROTTLE_MAX>().set(0);
+
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t rid = ospfInstance->getRouterId();
     LsaKey key(OSPFV2_LSA_ROUTER, rid, rid);
 
-    auto* before = getLsdb().find(key);
+    auto* before = waitForLsa(key);
     ASSERT_NE(before, nullptr);
     uint32_t seqBefore = before->header.sequence;
     uint16_t costBefore = ospfInterface->getCost();
@@ -8289,11 +9463,10 @@ TEST_F(Internal_OspfTest, Config_Cost_Change_Triggers_RouterLsa_Reorigination_An
     getIfaceConfigs(ospfInterface).get<config::OspfInterface::COST>().set(newCost);
     calculateCost();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     EXPECT_EQ(ospfInterface->getCost(), newCost);
 
-    auto* after = getLsdb().find(key);
+    auto* after = waitForLsa(key, [seqBefore](const LsaRecord& r) { return r.header.sequence > seqBefore; });
     ASSERT_NE(after, nullptr);
     EXPECT_GE(after->header.sequence, seqBefore);
 }
@@ -8305,14 +9478,9 @@ TEST_F(Internal_OspfTest, Config_NetworkType_Change_Resets_Neighbors)
     auto* nbr = addNeighbor(neighborRouterId, nbrIp, Neighbor::State::FULL);
     ASSERT_EQ(nbr->getState(), Neighbor::State::FULL);
 
-    // syncNetworkType() updates the multicast flag and unicast-neighbor
-    // bookkeeping (via getNTable().syncUnicast()) but does not itself tear
-    // down existing adjacencies -- changing NETWORK type alone leaves
-    // already-FULL neighbors in place.
     getIfaceConfigs().get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
     ospfInterface->enqueueSyncNetworkType();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     EXPECT_EQ(nbr->getState(), Neighbor::State::FULL);
     EXPECT_TRUE(getIsMulticast());
@@ -8323,22 +9491,18 @@ TEST_F(Internal_OspfTest, Area_InitializeReset_Schedules_Async_Reset)
 {
     auto& area = getArea(0);
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t rid = ospfInstance->getRouterId();
     LsaKey routerKey(OSPFV2_LSA_ROUTER, rid, rid);
-    ASSERT_NE(getLsdb().find(routerKey), nullptr);
+    ASSERT_NE(waitForLsa(routerKey), nullptr);
 
-    // initializeReset() posts reset() onto the scheduler asynchronously;
-    // before waitIdle() the LSDB is untouched, after it the area has
-    // flushed/cleared and re-originated its self-originated LSAs.
     area.enqueueReset();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    auto* after = getLsdb().find(routerKey);
+    waitForLsa(routerKey);
+    auto* after = waitForLsa(routerKey);
     ASSERT_NE(after, nullptr);
 }
 
@@ -8351,25 +9515,23 @@ TEST_F(Internal_OspfTest, Area_Reset_Flushes_SelfOriginated_And_ReoriginatesRout
     auto* nbr = addNeighbor(neighborRouterId, nbrIp, Neighbor::State::FULL);
     ASSERT_EQ(nbr->getState(), Neighbor::State::FULL);
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t rid = ospfInstance->getRouterId();
     LsaKey routerKey(OSPFV2_LSA_ROUTER, rid, rid);
-    auto* before = getLsdb().find(routerKey);
+    auto* before = waitForLsa(routerKey);
     ASSERT_NE(before, nullptr);
     uint32_t seqBefore = before->header.sequence;
 
     area.enqueueReset();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     // reset() drives all neighbors on this area's interfaces to DOWN.
     EXPECT_EQ(nbr->getState(), Neighbor::State::DOWN);
 
     // The LSDB was cleared and the Router LSA re-originated via fullRefresh().
-    auto* after = getLsdb().find(routerKey);
+    auto* after = waitForLsa(routerKey);
     ASSERT_NE(after, nullptr);
     EXPECT_GE(after->header.sequence, routing::OSPF_INITIAL_SEQUENCE);
 }
@@ -8377,9 +9539,8 @@ TEST_F(Internal_OspfTest, Area_Reset_Flushes_SelfOriginated_And_ReoriginatesRout
 // Test: Area_Clear_Empties_Lsdb_Without_Destroying_Area
 TEST_F(Internal_OspfTest, Area_Clear_Empties_Lsdb_Without_Destroying_Area)
 {
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     ASSERT_FALSE(getLsdb().empty());
 
@@ -8388,12 +9549,18 @@ TEST_F(Internal_OspfTest, Area_Clear_Empties_Lsdb_Without_Destroying_Area)
     EXPECT_TRUE(getLsdb().empty());
     EXPECT_EQ(getLsdb().size(), 0u);
 
-    // The Area object itself remains usable: re-originating after clear()
-    // repopulates the LSDB without crashing.
-    getIntraOriginatorV2().fullRefresh();
+    // The Area stays usable after clear(): re-origination repopulates the LSDB; it's async, so poll.
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
+    bool repopulated = false;
+    for (int i = 0; i < 50 && !repopulated; ++i)
+    {
+        wait();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        std::lock_guard lock(getSchedulerLock());
+        repopulated = !getLsdb().empty();
+    }
     EXPECT_FALSE(getLsdb().empty());
 }
 
@@ -8403,7 +9570,6 @@ TEST_F(Internal_OspfTest, Area_Destructor_Cancels_Ignore_Reset_Aging_Timers_And_
     createIface(
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     auto& area1 = getArea(1);
 
@@ -8413,7 +9579,6 @@ TEST_F(Internal_OspfTest, Area_Destructor_Cancels_Ignore_Reset_Aging_Timers_And_
     removeIface(
         OspfInterfaceId(0xC0A80201, 1));
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     SUCCEED();
 }
@@ -8421,21 +9586,18 @@ TEST_F(Internal_OspfTest, Area_Destructor_Cancels_Ignore_Reset_Aging_Timers_And_
 // Test: Area_StartAgingTimer_OnAgingTick_Increments_All_Lsa_Ages
 TEST_F(Internal_OspfTest, Area_StartAgingTimer_OnAgingTick_Increments_All_Lsa_Ages)
 {
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t rid = ospfInstance->getRouterId();
     LsaKey routerKey(OSPFV2_LSA_ROUTER, rid, rid);
-    auto* record = getLsdb().find(routerKey);
+    auto* record = waitForLsa(routerKey);
     ASSERT_NE(record, nullptr);
-    uint16_t ageBefore = record->header.age;
 
-    onAgingTick();
+    // A bucket-0 group-pacing refresh (fires ~now) can reset age concurrently; snapshotAndTickAge holds the scheduler lock so the tick can't interleave with it.
+    auto [ageBefore, ageAfter] = snapshotAndTickAge(routerKey);
 
-    record = getLsdb().find(routerKey);
-    ASSERT_NE(record, nullptr);
-    EXPECT_EQ(record->header.age, static_cast<uint16_t>(ageBefore + 1));
+    EXPECT_GT(ageAfter, ageBefore);
 }
 
 // Test: Process_CalculateRid_Stable_Across_Repeated_Calls
@@ -8492,14 +9654,12 @@ TEST_F(Internal_OspfTest, Stress_MultiArea_Concurrent_Spf_No_Deadlock)
     createIface(
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     auto& area1 = getArea(1);
 
-    getIntraOriginatorV2().fullRefresh();
-    getIntraOriginatorV2(&area1).fullRefresh();
+    fullRefreshV2();
+    fullRefreshV2(&area1);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     for (int i = 0; i < 25; ++i)
     {
@@ -8512,7 +9672,6 @@ TEST_F(Internal_OspfTest, Stress_MultiArea_Concurrent_Spf_No_Deadlock)
     }
 
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
     SUCCEED();
 
     removeIface(
@@ -8522,9 +9681,8 @@ TEST_F(Internal_OspfTest, Stress_MultiArea_Concurrent_Spf_No_Deadlock)
 // Test: Stress_Rapid_Neighbor_Flap_No_Lsdb_Corruption
 TEST_F(Internal_OspfTest, Stress_Rapid_Neighbor_Flap_No_Lsdb_Corruption)
 {
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     types::IPAddress nbrIp(types::IPv4Address{neighborRouterId});
 
@@ -8535,11 +9693,10 @@ TEST_F(Internal_OspfTest, Stress_Rapid_Neighbor_Flap_No_Lsdb_Corruption)
         nbr->setState(Neighbor::State::DOWN);
     }
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     uint32_t rid = ospfInstance->getRouterId();
     LsaKey routerKey(OSPFV2_LSA_ROUTER, rid, rid);
-    auto* record = getLsdb().find(routerKey);
+    auto* record = waitForLsa(routerKey);
     ASSERT_NE(record, nullptr);
     SUCCEED();
 }
@@ -8547,9 +9704,8 @@ TEST_F(Internal_OspfTest, Stress_Rapid_Neighbor_Flap_No_Lsdb_Corruption)
 // Test: Stress_Concurrent_Lsdb_Access_From_Multiple_Threads_No_Race
 TEST_F(Internal_OspfTest, Stress_Concurrent_Lsdb_Access_From_Multiple_Threads_No_Race)
 {
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     std::vector<std::thread> threads;
     for (int t = 0; t < 4; ++t)
@@ -8568,7 +9724,6 @@ TEST_F(Internal_OspfTest, Stress_Concurrent_Lsdb_Access_From_Multiple_Threads_No
     for (auto& th : threads) th.join();
 
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
     SUCCEED();
 }
 
@@ -8586,7 +9741,6 @@ TEST_F(Internal_OspfTest, Stress_MultiInterface_Adjacency_Formation)
     auto& ospfIface1 = createIface(
         iface1, OspfInterfaceId(0xC0A80201, 0));
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     getIfaceConfigs(&ospfIface1).get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
     ospfIface1.enqueueSyncNetworkType();
@@ -8607,7 +9761,6 @@ TEST_F(Internal_OspfTest, Stress_MultiInterface_Failure_Isolation)
     createIface(
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     types::IPAddress nbrIp(types::IPv4Address{neighborRouterId});
     auto* nbr0 = addNeighbor(neighborRouterId, nbrIp, Neighbor::State::FULL, ospfInterface);
@@ -8617,7 +9770,6 @@ TEST_F(Internal_OspfTest, Stress_MultiInterface_Failure_Isolation)
     removeIface(
         OspfInterfaceId(0xC0A80201, 1));
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     EXPECT_EQ(nbr0->getState(), Neighbor::State::FULL);
 }
@@ -8630,12 +9782,10 @@ TEST_F(Internal_OspfTest, Stress_Frequent_Interface_Flapping_No_Global_Corruptio
         createIface(
             *mockInterface, OspfInterfaceId(0xC0A80201, 1));
         wait();
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
         removeIface(
             OspfInterfaceId(0xC0A80201, 1));
         wait();
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
 
     // area0's LSDB remains accessible and consistent after repeated flapping
@@ -8651,10 +9801,6 @@ TEST_F(Internal_OspfTest, Stress_Frequent_Interface_Flapping_No_Global_Corruptio
 // Test: Regression_Bug1_Loading_To_Full_No_Stack_Overflow_With_Empty_Lsrs
 TEST_F(Internal_OspfTest, Regression_Bug1_Loading_To_Full_No_Stack_Overflow_With_Empty_Lsrs)
 {
-    // Bug #1: Neighbor::setState recursed EXCHANGE -> LOADING -> FULL when
-    // rtr.lsrs().getActive() was empty. Run under ASan to catch a stack
-    // overflow regression; functionally this just verifies the FULL state
-    // is reached without crashing.
     types::IPAddress nbrIp(types::IPv4Address{neighborRouterId});
     auto* nbr = addNeighbor(neighborRouterId, nbrIp, Neighbor::State::FULL);
 
@@ -8666,20 +9812,15 @@ TEST_F(Internal_OspfTest, Regression_Bug1_Loading_To_Full_No_Stack_Overflow_With
 // Test: Regression_Bug2_Area_Destructor_No_Originator_Leak
 TEST_F(Internal_OspfTest, Regression_Bug2_Area_Destructor_No_Originator_Leak)
 {
-    // Bug #2: Area's destructor must `delete &originator` exactly once.
-    // Creating and removing an area-bound interface repeatedly exercises
-    // Area construction/destruction; run under ASan to detect leaks/double-frees.
     for (int i = 0; i < 5; ++i)
     {
         createIface(
             *mockInterface, OspfInterfaceId(0xC0A80201, 1));
         wait();
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
         removeIface(
             OspfInterfaceId(0xC0A80201, 1));
         wait();
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
     SUCCEED();
 }
@@ -8687,12 +9828,9 @@ TEST_F(Internal_OspfTest, Regression_Bug2_Area_Destructor_No_Originator_Leak)
 // Test: Regression_Bug3_Abr_Summary_Targets_Backbone_Not_Area1
 TEST_F(Internal_OspfTest, Regression_Bug3_Abr_Summary_Targets_Backbone_Not_Area1)
 {
-    // Bug #3: reoriginateSummaries used getArea(1) unconditionally instead
-    // of getArea(0) (backbone) when the source area was non-zero.
     createIface(
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     auto& area1 = getArea(1);
     ASSERT_TRUE(ospfInstance->isABR());
@@ -8705,11 +9843,11 @@ TEST_F(Internal_OspfTest, Regression_Bug3_Abr_Summary_Targets_Backbone_Not_Area1
 
     // reoriginateSummaries from a non-zero source area (area 1) must target
     // area 0 (the backbone), not re-flood the summary back into area 1.
-    getInterOriginator().reoriginateSummaries<PolicyV2>(getOriginatorCtx(&area1), changes);
+    reoriginateSummaries<PolicyV2>(getOriginatorCtx(&area1), changes);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     LsaKey summaryKey(OSPFV2_LSA_SUM_NET, change.prefix.v4(), ospfInstance->getRouterId());
+    ASSERT_NE(waitForLsa(summaryKey), nullptr);
     bool inArea0 = getLsdb().contains(summaryKey);
     bool inArea1 = getLsdb(&area1).contains(summaryKey);
 
@@ -8723,10 +9861,6 @@ TEST_F(Internal_OspfTest, Regression_Bug3_Abr_Summary_Targets_Backbone_Not_Area1
 // Test: Regression_Bug4_LsdbTable_NonPmr_Path_Compiles_And_Operates
 TEST_F(Internal_OspfTest, Regression_Bug4_LsdbTable_NonPmr_Path_Compiles_And_Operates)
 {
-    // Bug #4: the non-PMR LsdbTable branch had a compile error in the
-    // upsert/erase path. This build does not toggle OSPF_LSDB_USE_PMR via a
-    // separate configuration, but exercising upsert/find/erase here ensures
-    // whichever branch is active in this build compiles and operates correctly.
     auto& lsdb = getLsdb();
     LsaKey key(OSPFV2_LSA_ROUTER, neighborRouterId, neighborRouterId);
     LsaHeader hdr;
@@ -8757,11 +9891,10 @@ TEST_F(Internal_OspfTest, EdgeCase_SequenceNumber_Wraparound_Reoriginates_With_R
     IncomingLsaContext ctx{routerKey, hdr};
     getLsdb().upsertMeta(ctx, LsaRecordFlags::SELF_ORIGINATED);
 
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    auto* record = getLsdb().find(routerKey);
+    auto* record = waitForLsa(routerKey, [](const LsaRecord& r) { return r.header.age == routing::OSPF_MAX_AGE; });
     ASSERT_NE(record, nullptr);
     EXPECT_EQ(record->header.age, routing::OSPF_MAX_AGE);
     EXPECT_EQ(record->header.sequence, routing::OSPF_MAX_SEQUENCE);
@@ -8785,9 +9918,8 @@ TEST_F(Internal_OspfTest, EdgeCase_Lsdb_Empty_ForEachInType_NoOp)
 // Test: EdgeCase_Neighbor_Destroyed_Mid_Retransmission_No_UAF
 TEST_F(Internal_OspfTest, EdgeCase_Neighbor_Destroyed_Mid_Retransmission_No_UAF)
 {
-    getIntraOriginatorV2().fullRefresh();
+    fullRefreshV2();
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     types::IPAddress nbrIp(types::IPv4Address{neighborRouterId});
     auto* nbr = addNeighbor(neighborRouterId, nbrIp, Neighbor::State::EXCHANGE);
@@ -8795,7 +9927,7 @@ TEST_F(Internal_OspfTest, EdgeCase_Neighbor_Destroyed_Mid_Retransmission_No_UAF)
 
     uint32_t rid = ospfInstance->getRouterId();
     LsaKey routerKey(OSPFV2_LSA_ROUTER, rid, rid);
-    auto* record = getLsdb().find(routerKey);
+    auto* record = waitForLsa(routerKey);
     ASSERT_NE(record, nullptr);
     LsaRecordRef recordRef{routerKey, *record};
     nbr->getRtr().lsus().add(routerKey, recordRef);
@@ -8805,7 +9937,6 @@ TEST_F(Internal_OspfTest, EdgeCase_Neighbor_Destroyed_Mid_Retransmission_No_UAF)
     // the lsus/lsrs lists before the Neighbor object would be destroyed.
     nbr->setState(Neighbor::State::DOWN);
     wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     EXPECT_FALSE(nbr->getRtr().lsus().getActive());
 }

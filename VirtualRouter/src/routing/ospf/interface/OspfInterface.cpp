@@ -491,6 +491,32 @@ void OspfInterface::runAreaDCIntegrityScan()
     area.runDCIntegrityScan();
 }
 
+void OspfInterface::beginGracefulRestart(uint32_t gracePeriodSeconds, GraceRestartReason reason)
+{
+    graceDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(gracePeriodSeconds);
+    gracefulRestartInProgress.store(true, std::memory_order_release);
+    graceManager.originateGraceLsa(gracePeriodSeconds, reason);
+}
+
+void OspfInterface::endGracefulRestart()
+{
+    gracefulRestartInProgress.store(false, std::memory_order_release);
+    graceManager.flushGraceLsa();
+}
+
+void OspfInterface::handleGraceLsaReceived(uint32_t advertisingRouter, const GraceLsaTlv& tlv)
+{
+    if (!baseConfigs.get<config::OspfInterfaceBase::BASE>().get()
+             .get<config::OspfInterface::GRACEFUL_RESTART_HELPER>().load())
+        return;
+
+    Neighbor* nbr = ntable.lookup(advertisingRouter);
+    if (!nbr) return;
+
+    nbr->helperDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(tlv.gracePeriodSeconds);
+    nbr->helpingRestart.store(true, std::memory_order_release);
+}
+
 const LsdbTable& OspfInterface::getLsdb() const
 {
     return area.lsdb;

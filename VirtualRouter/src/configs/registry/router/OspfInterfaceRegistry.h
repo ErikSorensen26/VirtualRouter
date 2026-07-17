@@ -69,6 +69,7 @@ enum class OspfInterface : uint8_t
     DEMAND_CIRCUIT,
     DEMAND_CIRCUIT_IGNORE,
     FLOOD_REDUCTION,
+    GRACEFUL_RESTART_HELPER,
     HELLO_INTERVAL,
     HELLO_MULTIPLIER,
     MTU_IGNORE,
@@ -89,6 +90,7 @@ enum class OspfInterface : uint8_t
     X(OspfInterface, DEMAND_CIRCUIT, false) \
     X(OspfInterface, DEMAND_CIRCUIT_IGNORE, false) \
     X(OspfInterface, FLOOD_REDUCTION, false) \
+    X(OspfInterface, GRACEFUL_RESTART_HELPER, true) \
     X(OspfInterface, MTU_IGNORE, false) \
     X(OspfInterface, NETWORK, ospf::NetworkType::BROADCAST) \
     X(OspfInterface, PRIORITY, 1) \
@@ -117,6 +119,7 @@ struct OspfInterfaceFields : FieldTuple<
         OspfInterfaceDemandCircuit>,
     AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::FLOOD_REDUCTION),
         OspfInterfaceDemandCircuit>,
+    AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::GRACEFUL_RESTART_HELPER)>,
     OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(OspfInterface::HELLO_INTERVAL),
         OspfInterfaceSyncTimers>,
     OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(OspfInterface::HELLO_MULTIPLIER),

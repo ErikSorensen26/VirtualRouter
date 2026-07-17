@@ -160,7 +160,7 @@ private:
     // Internal helpers and builders...
     void transmit(processing::PacketBuilder& pkt, const types::IPAddress* dest = nullptr) override;
 
-    void finalizeHeader(packet::Ospfv3Header& hdr, OspfBuilder& builder, bool lls = false);
+    void finalizeHeader(packet::Ospfv3Header& hdr, OspfBuilder& builder, bool lls = false, Neighbor* nbr = nullptr);
     void transmitReliable(processing::PacketBuilder& pkt, Neighbor* neighbor, packet::Ospfv3Header& header);
     bool setupDbd(Neighbor& neighbor, packet::Ospfv3Header& pkt);
     uint16_t getMtu();

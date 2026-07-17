@@ -136,6 +136,7 @@ public:
             }
 
             count.fetch_sub(k, std::memory_order_release);
+            return out;
         }
     }
 

@@ -76,12 +76,14 @@ void InterfaceManager::broadcastLsu(Area& area, std::vector<std::pair<FloodInfo,
 
         if (iface.configs.get<config::OspfInterface::NETWORK>().load() == config::ospf::NetworkType::BROADCAST)
         {
-            iface.dispatcher.sendReliableLsu(nullptr, records);
+            if (iface.ntable.size() > 0)
+                iface.dispatcher.sendReliableLsu(nullptr, records);
         }
         else
         {
             iface.ntable.forEach([&iface, &records](uint32_t, Neighbor& nbr) {
-                iface.dispatcher.sendReliableLsu(&nbr, records);
+                if (nbr.getState() >= Neighbor::State::EXCHANGE)
+                    iface.dispatcher.sendReliableLsu(&nbr, records);
             });
         }
     }
@@ -199,6 +201,12 @@ void InterfaceManager::refreshInterfaceList()
                 { auto pfx = interface->configs.ipv4.getPrimaryPrefix(); currentAddress = types::IPPrefix(pfx.addr, pfx.prefixLength); }
                 auto area = isInNetworkRange(static_cast<uint32_t>(currentAddress.addr));
                 if (area.has_value()) key.emplace(interface->configs.ipv4.getPrimaryAddress().addr, area.value());
+            }
+            else if (process.af == types::AddressFamily::IPv4)
+            {
+                { auto pfx = interface->configs.ipv4.getPrimaryPrefix(); currentAddress = types::IPPrefix(pfx.addr, pfx.prefixLength); }
+                auto area = isInNetworkRange(static_cast<uint32_t>(currentAddress.addr));
+                if (area.has_value()) key.emplace(id.getId(), area.value());
             }
             else
             {

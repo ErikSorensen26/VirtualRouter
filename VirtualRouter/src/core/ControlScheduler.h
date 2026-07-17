@@ -20,6 +20,7 @@
 
 #include <ThreadPool.hpp>
 #include <TimeManager.h>
+#include <Mock.hpp>
 
 namespace core
 {
@@ -185,9 +186,6 @@ private:
         }
     };
 
-    /// RefState of the task currently executing on this thread (set around
-    /// every owned task body). Lets release() detect "releasing my own ref
-    /// from inside my own task" and skip waiting for its own token.
     static inline thread_local RefState* tlsCurrentTaskOwner = nullptr;
 
     // RING QUEUES
@@ -252,6 +250,8 @@ private:
 
         alignas(64) std::atomic<uint64_t> head{0};
         alignas(64) std::atomic<uint64_t> tail{0};
+
+        INJECT_MOCK(MOCK_PROCESS_QUEUE_MUTEX) ///< Mock injection for lock during testing
     };
 
     /// Drain-ownership state machine; at most one drain runs per queue.
@@ -268,9 +268,6 @@ private:
         std::atomic<uint32_t> generation{1}; ///< Claimed (CAS +1) by finalizeDestroy.
         std::atomic<bool> active{false};     ///< True once create() finished configuring.
 
-        /// Threads currently touching this slot's ring/config memory
-        /// (post/schedule/drain/waitIdle). finalizeDestroy() waits for zero
-        /// before freeing the rings.
         std::atomic<uint32_t> accessors{0};
 
         std::atomic<uint32_t> runState{RS_IDLE};
@@ -328,11 +325,9 @@ private:
 
         std::atomic<bool> inUse{false};
 
-        /// `(generation << 1) | claimed`. Fire and cancel claim the slot for
-        /// one specific generation with a single CAS, so a stale handle can
-        /// never claim a slot that was freed or recycled in between (the
-        /// generation-check/claim pair is TOCTOU-free by construction).
         std::atomic<uint64_t> genClaim{1u << 1};
+
+        std::atomic<int64_t> expiration{0}; ///< Due time (steady_clock ticks); read by waitScheduled.
 
         std::atomic<uint32_t> tmTimerId{0};
 
@@ -359,27 +354,15 @@ private:
 
     void drainProcessQueue(ProcessQueueId id, uint32_t gen) noexcept;
 
-    /// Consumes one ready task; runs it unless the queue is closed (then it
-    /// is discarded).
     static bool consumeOne(ProcessQueueSlot& slot) noexcept;
 
-    /** @brief True if the calling thread is currently draining this queue. */
     bool onDrainThread(ProcessQueueId id) const noexcept;
 
-    /**
-     * @brief If called from the thread currently draining this queue,
-     * consumes one ready task inline and returns whether
-     * anything was consumed. Used by release() when invoked from a task
-     * running on its own queue, where blocking would deadlock (the blocked
-     * thread is the only one that could drain the remaining work).
-     */
     bool pumpOwnDrainThread(ProcessQueueId id) noexcept;
 
-    /**
-     * @brief Blocks until the queue has no in-flight or pending tasks.
-     * @warning Deadlocks if called from a task running on this queue.
-     */
     void waitIdle(ProcessQueueId id, uint32_t gen) noexcept;
+
+    void waitScheduled(ProcessQueueId id, uint32_t gen) noexcept;
 
     void destroyProcessQueue(ProcessQueueId id, uint32_t gen) noexcept;
     void finalizeDestroy(ProcessQueueId id, uint32_t gen) noexcept;
@@ -389,17 +372,12 @@ private:
     uint32_t allocDelayedSlot() noexcept;
     void freeDelayedSlot(uint32_t idx) noexcept;
 
-    /// Runs (or discards) a fired delayed task and frees its slot.
     void finishFiredDelayed(uint32_t idx, uint32_t expectedGen, bool run) noexcept;
 
-    /// A fired delayed task never ran (trampoline unpostable or discarded):
-    /// re-arms the timer if the queue is still alive, else frees the slot.
     void retireFiredDelayed(uint32_t idx, uint32_t expectedGen) noexcept;
 
     bool linkRefTimerNode(RefState& owner, RefTimerNode* node) noexcept;
 
-    /// Cancels all pending timers of a released handle and drops the list's
-    /// ownership of their nodes. `state->alive` must already be false.
     void cancelRefTimers(RefState* state) noexcept;
 
     uint32_t packDelayedHandle(uint32_t idx, uint32_t gen) const noexcept;
@@ -420,8 +398,10 @@ private:
     const size_t  maxDelayedTimers;
     DelayedSlot*  delayedSlots = nullptr;
 
-    /// Lock-free LIFO free list of delayed slots. The low 32 bits hold the
-    /// head index, the high 32 bits an ABA tag bumped on every push/pop.
+    /**
+     * Lock-free LIFO free list of delayed slots. The low 32 bits hold the
+     * head index, the high 32 bits an ABA tag bumped on every push/pop.
+     */
     std::atomic<uint64_t> delayedFreeHead;
 
     const uint32_t delayedIndexBits; ///< Index-field width in a packed timer handle.
@@ -442,16 +422,10 @@ bool ControlScheduler::post(ProcessQueueId id, uint32_t gen, F&& fn) noexcept
 
     ProcessQueueSlot& slot = *id;
 
-    // Unguarded pre-check: posts to a dead queue must not touch `accessors`,
-    // or a storm of failing posters could keep finalizeDestroy() from ever
-    // observing zero. The guarded re-checks below stay authoritative.
     if (!slot.active.load(std::memory_order_acquire) ||
         slot.generation.load(std::memory_order_acquire) != gen)
         return false;
 
-    // Hold the accessor count across all slot-state access so finalizeDestroy()
-    // cannot free the task ring underneath us. Checks happen after the
-    // increment; see AccessGuard for the ordering argument.
     AccessGuard guard(slot.accessors);
 
     if (!slot.active.load(std::memory_order_seq_cst))
@@ -475,8 +449,6 @@ bool ControlScheduler::post(ProcessQueueId id, uint32_t gen, F&& fn) noexcept
                                                       std::memory_order_acq_rel,
                                                       std::memory_order_acquire))
             {
-                // Counted from enqueue (not drain start) so ~ControlScheduler
-                // can wait out drains still sitting unstarted in the pool.
                 drainsInFlight.fetch_add(1, std::memory_order_acq_rel);
                 while (!pool.enqueue([this, id, gen] { this->drainProcessQueue(id, gen); }))
                     _mm_pause();
@@ -567,6 +539,7 @@ uint32_t ControlScheduler::schedule(ProcessQueueId id,
 
     ds.qid = id;
     ds.qgen = gen;
+    ds.expiration.store(expiration.time_since_epoch().count(), std::memory_order_relaxed);
 
     RefTimerNode* node = new (std::nothrow) RefTimerNode();
     if (!node)
@@ -577,10 +550,6 @@ uint32_t ControlScheduler::schedule(ProcessQueueId id,
 
     node->handle = publicHandle;
 
-    // Link under the list lock. linkRefTimerNode re-checks `alive` inside the
-    // lock, and release() detaches the list under the same lock after `alive`
-    // is already false — so either we abort here or the node is in the list
-    // when it is detached and gets cancelled.
     if (!linkRefTimerNode(*owner, node))
     {
         delete node;
@@ -601,9 +570,6 @@ uint32_t ControlScheduler::schedule(ProcessQueueId id,
             tlsCurrentTaskOwner = prev;
         });
 
-    // Final publish step. The fire/cancel paths wait for a non-zero id before
-    // freeing the slot, so this store can never land in a recycled slot even
-    // if the timer fires immediately.
     const uint32_t tmId = timeManager.addTimer(
         expiration,
         [this, delayedIdx, delayedGen](uint32_t) noexcept
@@ -729,9 +695,6 @@ public:
         std::promise<void> done;
         std::future<void> fut = done.get_future();
 
-        // The waiter must be released even when the task is *discarded*
-        // (queue closed between post and drain destroys the lambda without
-        // running it), so the promise is satisfied from the destructor.
         struct Notifier
         {
             std::promise<void>* p;
@@ -817,19 +780,12 @@ public:
         if (engine)
             engine->cancelRefTimers(state);
 
-        // If this thread is currently running a task posted through this very
-        // handle, that task's own pending token cannot be released until it
-        // returns — exempt it from the wait and let it delete the state.
         const bool insideOwnTask = (ControlScheduler::tlsCurrentTaskOwner == state);
         const uint32_t target = insideOwnTask ? 1u : 0u;
 
         uint32_t v = state->pending.load(std::memory_order_acquire);
         while (v > target)
         {
-            // On the queue's own drain thread, blocking would deadlock: this
-            // thread is the only one that can run the remaining tasks. Pump
-            // them inline instead — spin rather than block, since a delayed
-            // timer's trampoline may not have posted yet.
             if (engine && engine->onDrainThread(id))
             {
                 engine->pumpOwnDrainThread(id);
@@ -862,6 +818,13 @@ public:
     {
         if (engine)
             engine->waitIdle(id, gen);
+    }
+
+    /** @brief Like waitIdle() but also waits (oldest-first) for every already-due postAfter task and the near-term chains they arm; future timers are excluded so periodic re-arms can't extend it, and it returns early on this queue's own drain thread. */
+    void waitScheduled() const noexcept
+    {
+        if (engine)
+            engine->waitScheduled(id, gen);
     }
 
     /**
@@ -904,6 +867,8 @@ private:
     uint32_t gen = 0;                               ///< Guards against slot reuse (ABA).
     ControlScheduler::RefState* state = nullptr;    ///< This handle's posting-lifetime state.
     bool owning = false;                            ///< True only for the handle returned by create().
+
+    INJECT_MOCK(MOCK_PROCESS_QUEUE_MUTEX_GETTER)
 };
 } // namespace core
 

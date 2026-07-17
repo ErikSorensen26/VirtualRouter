@@ -30,6 +30,9 @@ void IntraOriginatorV2::fullRefresh()
     context.getInterOriginator().refreshStubDefaultOriginate<PolicyV2>(context);
     context.getInterOriginator().refreshNssaDefaultOriginate(context);
     context.getInterOriginator().refreshAsbrs<PolicyV2>(context);
+
+    if (auto* opaque = context.getOpaqueOriginator())
+        opaque->originateRouterCapability(0);
 }
 
 void IntraOriginatorV2::updateInterface(uint32_t ifaceId)

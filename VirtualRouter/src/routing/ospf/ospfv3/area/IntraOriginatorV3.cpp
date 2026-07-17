@@ -217,7 +217,7 @@ uint32_t IntraOriginatorV3::findNextRouterLsid()
 void IntraOriginatorV3::expire(LsaKey& key)
 {
     auto& lsa = context.originationState[key];
-    if (std::holds_alternative<IntraAreaPrefixLsa>(lsa.body))
+    if (std::holds_alternative<IntraAreaPrefixLsa>(lsa.body) || std::holds_alternative<IntraAreaPrefixLsaV4>(lsa.body))
         prefixLsidQueue.push_back(key.linkStateId); // Set id available
     else if (std::holds_alternative<RouterLsaV3>(lsa.body))
         routerLsidQueue.push_back(key.linkStateId);
@@ -249,12 +249,22 @@ void IntraOriginatorV3::removeNetworkLsa(uint32_t ifaceId)
 
 void IntraOriginatorV3::addRouterPrefixLsa(std::vector<std::pair<LsaKey, std::optional<bool>>>& routerLsas, bool refresh)
 {
+    if (context.area.process.af == types::AddressFamily::IPv4)
+        addRouterPrefixLsaImpl<IntraAreaPrefixLsaV4, IntraAreaPrefixV4, types::IPv4Prefix>(routerLsas, refresh);
+    else
+        addRouterPrefixLsaImpl<IntraAreaPrefixLsa, IntraAreaPrefix, types::IPv6Prefix>(routerLsas, refresh);
+}
+
+template <typename PrefixLsaBody, typename PrefixEntry, typename PrefixType>
+void IntraOriginatorV3::addRouterPrefixLsaImpl(std::vector<std::pair<LsaKey, std::optional<bool>>>& routerLsas, bool refresh)
+{
     constexpr size_t MAX_PREFIXES_PER_LSA = 32;
+    constexpr bool isV4 = std::is_same_v<PrefixType, types::IPv4Prefix>;
 
     uint32_t selfRid = context.area.process.getRouterId();
     auto& ifaceMgr = context.getIfaceMgr();
 
-    std::unordered_map<uint32_t, std::unordered_map<types::IPv6Prefix, uint16_t>> prefixesByLsid;
+    std::unordered_map<uint32_t, std::unordered_map<PrefixType, uint16_t>> prefixesByLsid;
 
     // Iterate Router-LSAs directly, this preserves LSID ownership
     for (auto& [key, expire] : routerLsas)
@@ -280,19 +290,43 @@ void IntraOriginatorV3::addRouterPrefixLsa(std::vector<std::pair<LsaKey, std::op
             bool isP2MP = config.get<config::OspfInterfaceBase::BASE>().get().get<config::OspfInterface::NETWORK>().load() == config::ospf::NetworkType::POINT_TO_MULTIPOINT;
 
             uint16_t cost = iface->getCost();
-            auto prefixes = iface->iface.configs.ipv6.getRoutablePrefixSet(true);
 
-            out.reserve(prefixes.size());
-
-            for (auto pit = prefixes.begin(); pit != prefixes.end();)
+            if constexpr (isV4)
             {
-                auto prefix = prefixes.extract(pit++);
-                if (isP2MP) 
+                std::unordered_set<types::IPv4Prefix> prefixes;
+                prefixes.insert(iface->iface.configs.ipv4.getPrimaryPrefix(true));
+                for (auto& p : iface->iface.configs.ipv4.getSecondaryPrefixList(true))
+                    prefixes.insert(p);
+
+                out.reserve(prefixes.size());
+
+                for (auto pit = prefixes.begin(); pit != prefixes.end();)
                 {
+                    auto prefix = prefixes.extract(pit++);
+                    if (isP2MP)
+                    {
+                        out.emplace(prefix.value(), cost);
+                        prefix.value().prefixLength = 32;
+                    }
                     out.emplace(std::move(prefix.value()), cost);
-                    prefix.value().prefixLength = 128;
                 }
-                out.emplace(std::move(prefix.value()), cost);
+            }
+            else
+            {
+                auto prefixes = iface->iface.configs.ipv6.getRoutablePrefixSet(true);
+
+                out.reserve(prefixes.size());
+
+                for (auto pit = prefixes.begin(); pit != prefixes.end();)
+                {
+                    auto prefix = prefixes.extract(pit++);
+                    if (isP2MP)
+                    {
+                        out.emplace(prefix.value(), cost);
+                        prefix.value().prefixLength = 128;
+                    }
+                    out.emplace(std::move(prefix.value()), cost);
+                }
             }
         }
     }
@@ -303,12 +337,12 @@ void IntraOriginatorV3::addRouterPrefixLsa(std::vector<std::pair<LsaKey, std::op
     // Rebuild existing prefix lsas
     for (const auto& key : lastRouterPrefixes)
     {
-        auto& oldLsa = std::get<IntraAreaPrefixLsa>(context.originationState[key].body);
-    
+        auto& oldLsa = std::get<PrefixLsaBody>(context.originationState[key].body);
+
         std::optional<bool> expire = std::nullopt;
 
         auto it = prefixesByLsid.find(oldLsa.referencedLinkStateId);
-        std::vector<IntraAreaPrefix> prefixes;
+        std::vector<PrefixEntry> prefixes;
         if (it != prefixesByLsid.end())
         {
             auto prefixMap = it->second;
@@ -336,7 +370,7 @@ void IntraOriginatorV3::addRouterPrefixLsa(std::vector<std::pair<LsaKey, std::op
         if (!expire.value_or(false) && oldLsa.prefixes != prefixes)
             expire = false;
 
-        IntraAreaPrefixLsa& newLsa = oldLsa;
+        PrefixLsaBody& newLsa = oldLsa;
         newLsa.prefixes = std::move(prefixes);
 
         newLsas.emplace_back(key, expire);
@@ -351,21 +385,21 @@ void IntraOriginatorV3::addRouterPrefixLsa(std::vector<std::pair<LsaKey, std::op
 
             for (auto& [key, expire] : newLsas)
             {
-                auto& lsa = std::get<IntraAreaPrefixLsa>(context.originationState[key].body);
+                auto& lsa = std::get<PrefixLsaBody>(context.originationState[key].body);
                 if (lsa.referencedLinkStateId != refLsid || lsa.prefixes.size() < MAX_PREFIXES_PER_LSA) continue;
                 lsa.prefixes.emplace_back(0, cost, prefix);
                 expire = false;
                 placed = true;
                 break;
             }
-        
+
             if (placed) continue;
 
             LsaKey key = {OSPFV3_LSA_INTRA_AREA_PREFIX, findNextPrefixLsid(), selfRid};
             newLsas.emplace_back(key, false);
 
-            context.originationState[key].body = IntraAreaPrefixLsa{};
-            IntraAreaPrefixLsa& lsa = std::get<IntraAreaPrefixLsa>(context.originationState[key].body);
+            context.originationState[key].body = PrefixLsaBody{};
+            PrefixLsaBody& lsa = std::get<PrefixLsaBody>(context.originationState[key].body);
             lsa.referencedLsaType = OSPFV3_LSA_ROUTER;
             lsa.referencedLinkStateId = refLsid;
             lsa.referencedAdvRouter = selfRid;
@@ -390,11 +424,31 @@ void IntraOriginatorV3::addRouterPrefixLsa(std::vector<std::pair<LsaKey, std::op
 
 void IntraOriginatorV3::addNetworkPrefixLsa(const OspfInterface& iface, bool refresh)
 {
+    if (context.area.process.af == types::AddressFamily::IPv4)
+        addNetworkPrefixLsaImpl<IntraAreaPrefixLsaV4, IntraAreaPrefixV4, types::IPv4Prefix>(iface, refresh);
+    else
+        addNetworkPrefixLsaImpl<IntraAreaPrefixLsa, IntraAreaPrefix, types::IPv6Prefix>(iface, refresh);
+}
+
+template <typename PrefixLsaBody, typename PrefixEntry, typename PrefixType>
+void IntraOriginatorV3::addNetworkPrefixLsaImpl(const OspfInterface& iface, bool refresh)
+{
     constexpr size_t MAX_NETWORKS_PER_LSA = 32;
+    constexpr bool isV4 = std::is_same_v<PrefixType, types::IPv4Prefix>;
 
     uint32_t selfRid = context.area.process.getRouterId();
 
-    std::unordered_set<types::IPv6Prefix> prefixSet = iface.iface.configs.ipv6.getRoutablePrefixSet();
+    std::unordered_set<PrefixType> prefixSet;
+    if constexpr (isV4)
+    {
+        prefixSet.insert(iface.iface.configs.ipv4.getPrimaryPrefix());
+        for (auto& p : iface.iface.configs.ipv4.getSecondaryPrefixList())
+            prefixSet.insert(p);
+    }
+    else
+    {
+        prefixSet = iface.iface.configs.ipv6.getRoutablePrefixSet();
+    }
     uint32_t cost = iface.getCost();
 
     std::vector<std::pair<LsaKey, std::optional<bool>>> newLsas;
@@ -426,11 +480,11 @@ void IntraOriginatorV3::addNetworkPrefixLsa(const OspfInterface& iface, bool ref
     {
         for (const auto& key : lastIt->second)
         {
-            auto& oldLsa = std::get<IntraAreaPrefixLsa>(context.originationState[key].body);
+            auto& oldLsa = std::get<PrefixLsaBody>(context.originationState[key].body);
 
             std::optional<bool> expire = std::nullopt;
 
-            std::vector<IntraAreaPrefix> prefixes;
+            std::vector<PrefixEntry> prefixes;
             for (const auto& oldPrefix : oldLsa.prefixes)
             {
                 auto pit = prefixSet.find(oldPrefix.prefix);
@@ -452,7 +506,7 @@ void IntraOriginatorV3::addNetworkPrefixLsa(const OspfInterface& iface, bool ref
                 expire = false;
 
 
-            IntraAreaPrefixLsa& newLsa = oldLsa;
+            PrefixLsaBody& newLsa = oldLsa;
             newLsa.referencedLsaType = OSPFV3_LSA_NETWORK;
             newLsa.referencedLinkStateId = iface.interfaceId;
             newLsa.referencedAdvRouter = selfRid;
@@ -468,19 +522,19 @@ void IntraOriginatorV3::addNetworkPrefixLsa(const OspfInterface& iface, bool ref
 
         for (auto& [key, expire] : newLsas)
         {
-            auto& lsa = std::get<IntraAreaPrefixLsa>(context.originationState[key].body);
+            auto& lsa = std::get<PrefixLsaBody>(context.originationState[key].body);
             if (lsa.prefixes.size() >= MAX_NETWORKS_PER_LSA) continue;
             lsa.prefixes.emplace_back(0, cost, prefix);
             placed = true;
             break;
         }
-    
+
         if (placed) continue;
 
         LsaKey key = {OSPFV3_LSA_INTRA_AREA_PREFIX, findNextPrefixLsid(), selfRid};
         auto& body = context.originationState[key].body;
-        body = IntraAreaPrefixLsa{};
-        auto& lsa = std::get<IntraAreaPrefixLsa>(body);
+        body = PrefixLsaBody{};
+        auto& lsa = std::get<PrefixLsaBody>(body);
 
         lsa.referencedLsaType = OSPFV3_LSA_NETWORK;
         lsa.referencedLinkStateId = key.linkStateId;

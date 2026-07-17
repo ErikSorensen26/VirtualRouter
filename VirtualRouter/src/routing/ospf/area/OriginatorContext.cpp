@@ -6,6 +6,7 @@
 #include "IntraOriginator.h"
 #include "configs/registry/router/OspfRegistry.h"
 #include "ospf/OspfProcess.h"
+#include "ospf/ospfv2/area/OpaqueOriginatorV2.h"
 
 namespace routing::ospf
 {
@@ -15,12 +16,20 @@ OriginatorContext::OriginatorContext(Area& a)
 
 OriginatorContext::~OriginatorContext()
 {
+    cancelAllTimers();
+}
+
+void OriginatorContext::cancelAllTimers()
+{
     cancelGroupPacing();
 
     for (auto& [key, info] : originationState)
     {
         if (info.throttleInfo.timerId != 0)
+        {
             area.scheduler.cancel(info.throttleInfo.timerId);
+            info.throttleInfo.timerId = 0;
+        }
     }
 }
 
@@ -241,6 +250,8 @@ void OriginatorContext::runReorigination(const LsaKey& key)
     if (it == originationState.end())
         return;
 
+    it->second.throttleInfo.pending.store(false, std::memory_order_release);
+
     processReoriginatedLsa<Policy>(key, it->second);
 
     // Re-lookup: processReoriginatedLsa may have erased the entry (expire or rollover)
@@ -248,9 +259,7 @@ void OriginatorContext::runReorigination(const LsaKey& key)
     if (it == originationState.end())
         return;
 
-    auto& throttle = it->second.throttleInfo;
-    throttle.lastOriginate = std::chrono::steady_clock::now();
-    throttle.pending.store(false, std::memory_order_release);
+    it->second.throttleInfo.lastOriginate = std::chrono::steady_clock::now();
 }
 
 template <typename Policy>
@@ -353,6 +362,11 @@ InterOriginator& OriginatorContext::getInterOriginator()
 ExternalOriginator& OriginatorContext::getExternalOriginator()
 {
     return area.getExternalOriginator();
+}
+
+OpaqueOriginatorV2* OriginatorContext::getOpaqueOriginator()
+{
+    return area.getOpaqueOriginator();
 }
 
 const config::OspfAreaRegistry& OriginatorContext::getConfigs() const

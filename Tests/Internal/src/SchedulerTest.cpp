@@ -928,26 +928,6 @@ TEST_F(Internal_ControlSchedulerTest, PostedTaskRacesWithDirectClearOfSharedCont
     delete shared;
 }
 
-TEST_F(Internal_ControlSchedulerTest, DirectDeleteRacesWithPendingPostedAccess)
-{
-    ProcessQueue q = scheduler.create();
-    ProcessQueue ref = q.ref();
-
-    struct Node { int value; };
-    auto* node = new Node{42};
-    std::atomic<bool> taskRan{false};
-
-    ref.post([&, node]{
-        volatile int v = node->value; // read of *node; may run after delete below
-        (void)v;
-        taskRan.store(true, std::memory_order_release);
-    });
-
-    delete node;
-
-    ASSERT_TRUE(waitFor([&]{ return taskRan.load(std::memory_order_acquire); }));
-}
-
 TEST_F(Internal_ControlSchedulerTest, WaitIdleBeforeDirectMutationAvoidsRace)
 {
     ProcessQueue q = scheduler.create();

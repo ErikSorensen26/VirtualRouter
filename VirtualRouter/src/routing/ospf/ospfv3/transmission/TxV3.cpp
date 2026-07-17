@@ -25,14 +25,17 @@ uint16_t PacketDispatcherV3::getMtu()
     return iface.iface.configs.ipv4.mtu.load(std::memory_order_relaxed);
 }
 
-void PacketDispatcherV3::finalizeHeader(packet::Ospfv3Header& hdr, OspfBuilder& builder, bool lls)
+void PacketDispatcherV3::finalizeHeader(packet::Ospfv3Header& hdr, OspfBuilder& builder, bool lls, Neighbor* nbr)
 {
     hdr.setPacketLen(static_cast<uint16_t>(builder.offset + packet::Ospfv3Header::fixedSize));
 
     if (lls)
     {
+        bool restart = iface.getGracefulRestartInProgress();
+        bool resync = nbr && nbr->resyncRequested.exchange(false, std::memory_order_relaxed);
+
         uint8_t* buf = builder.getBuf();
-        uint16_t size = addLinkLocalExtension(buf, false);
+        uint16_t size = addLinkLocalExtension(buf, restart, resync);
         addLinkLocalChecksum(buf);
         builder.offset += size;
     }
@@ -76,7 +79,7 @@ void PacketDispatcherV3::sendUnicastHello(Neighbor& nbr)
     bool lls = ifaceLLS.hasValue() ? ifaceLLS.load() : false;
     if (!buildHello(builder, lls)) return;
 
-    finalizeHeader(*ospfHeader, builder, lls);
+    finalizeHeader(*ospfHeader, builder, lls, &nbr);
     transmit(pkt, &nbr.ipAddress);
 }
 
@@ -479,6 +482,8 @@ bool PacketDispatcherV3::buildLSABody(OspfBuilder& builder, const LsaRecord& rec
                 return std::get<NetworkLsaV3>(body).buildBody(builder.getBuf(), len);
             break;
         case OSPFV3_LSA_INTER_AREA_PREFIX:
+            if (std::holds_alternative<InterAreaPrefixLsaV4>(body))
+                return std::get<InterAreaPrefixLsaV4>(body).buildBody(builder.getBuf(), len);
             if (std::holds_alternative<InterAreaPrefixLsa>(body))
                 return std::get<InterAreaPrefixLsa>(body).buildBody(builder.getBuf(), len);
             break;
@@ -489,6 +494,13 @@ bool PacketDispatcherV3::buildLSABody(OspfBuilder& builder, const LsaRecord& rec
         case OSPFV3_LSA_LINK:
             if (std::holds_alternative<LinkLsa>(body))
                 return std::get<LinkLsa>(body).buildBody(builder.getBuf(), len);
+            break;
+        case OSPFV3_LSA_INTRA_AREA_PREFIX:
+            if (std::holds_alternative<IntraAreaPrefixLsaV4>(body))
+                return std::get<IntraAreaPrefixLsaV4>(body).buildBody(builder.getBuf(), len);
+            if (std::holds_alternative<IntraAreaPrefixLsa>(body))
+                return std::get<IntraAreaPrefixLsa>(body).buildBody(builder.getBuf(), len);
+            break;
         case OSPFV3_LSA_AS_EXTERNAL:
         case OSPFV3_LSA_NSSA_EXTERNAL:
             if (std::holds_alternative<ExternalLsaV3>(body))

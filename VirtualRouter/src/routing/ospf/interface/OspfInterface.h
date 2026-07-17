@@ -16,6 +16,8 @@
 #include "ospf/FlagManager.hpp"
 #include "ospf/neighbor/NeighborTable.h"
 #include "ospf/interface/InterfaceTimers.h"
+#include "ospf/interface/GracefulRestartManager.h"
+#include "ospf/ospfv2/database/GraceLsa.hpp"
 #include "InterfaceId.hpp"
 #include "ospf/area/Area.h"
 
@@ -214,6 +216,25 @@ public:
     types::IPAddress getBdrIp() const { return bdr.ip.load(std::memory_order_relaxed); }
     bool getIsDr() const { return priv.isDr.load(std::memory_order_acquire); }
     bool getIsBdr() const { return priv.isBdr.load(std::memory_order_acquire); }
+    bool getOpaqueEnabled() const { return opaqueEnabled.load(std::memory_order_relaxed); }
+    bool getGracefulRestartInProgress() const { return gracefulRestartInProgress.load(std::memory_order_relaxed); }
+
+    // GRACEFUL RESTART (RFC 3623)
+
+    /**
+     * @brief Begins graceful restart signaling on this interface: originates
+     * a Grace-LSA and sets the LLS restart bit on subsequent Hellos.
+     *
+     * @param gracePeriodSeconds Grace period advertised to neighbors.
+     * @param reason Restart reason code (RFC 3623 SS3).
+     */
+    void beginGracefulRestart(uint32_t gracePeriodSeconds, GraceRestartReason reason);
+
+    /**
+     * @brief Ends graceful restart signaling on this interface: flushes the
+     * Grace-LSA and clears the LLS restart bit.
+     */
+    void endGracefulRestart();
 
 private:
 
@@ -380,6 +401,19 @@ private:
      */
     void runAreaDCIntegrityScan();
 
+    /**
+     * @brief Handles a newly-installed Grace-LSA from a neighbor.
+     *
+     * Per RFC 3623 SS3, Grace-LSA arrival (not just the LLS restart bit) is the
+     * authoritative trigger for entering helper mode. No-op if this
+     * interface's `GRACEFUL_RESTART_HELPER` config is disabled, or if no
+     * neighbor with the advertising router ID exists.
+     *
+     * @param advertisingRouter Router ID that originated the Grace-LSA.
+     * @param tlv Decoded Grace-LSA TLV contents.
+     */
+    void handleGraceLsaReceived(uint32_t advertisingRouter, const GraceLsaTlv& tlv);
+
 
     /**
      * @brief Atomic DR/BDR designation: router ID and IP address pair.
@@ -394,6 +428,10 @@ private:
 
     std::atomic<bool> isMulticast = true;    ///< False on NBMA segments where unicast must be used.
     std::atomic<bool> opaqueEnabled = true;  ///< Whether opaque LSA capability is active on this interface.
+
+    std::atomic<bool> gracefulRestartInProgress{false}; ///< True while this interface's own graceful restart is being signaled (RFC 3623).
+    std::chrono::steady_clock::time_point graceDeadline{}; ///< Wall-clock time this interface's own grace period ends.
+    GracefulRestartManager graceManager{*this}; ///< Grace-LSA originator for this interface (RFC 3623). Must be constructed after `area`/`interfaceId`/`process`.
 
     /**
      * @brief Demand-circuit negotiation state for this interface.

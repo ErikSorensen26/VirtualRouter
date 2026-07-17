@@ -276,7 +276,7 @@ void InterfaceManager::forEach(Fn&& fn)
 {
     for (auto& [id, iface] : ospfInterfaceList)
     {
-        using ReturnType = std::invoke_result_t<decltype(fn), decltype(id), decltype(iface)>;
+        using ReturnType = std::invoke_result_t<decltype(fn), decltype(id), decltype((iface))>;
         if constexpr (std::is_same_v<ReturnType, bool>)
         {
             if (fn(id, iface))
@@ -294,7 +294,7 @@ void InterfaceManager::forEach(Fn&& fn) const
 {
     for (const auto& [id, iface] : ospfInterfaceList)
     {
-        using ReturnType = std::invoke_result_t<decltype(fn), decltype(id), decltype(iface)>;
+        using ReturnType = std::invoke_result_t<decltype(fn), decltype(id), decltype((iface))>;
         if constexpr (std::is_same_v<ReturnType, bool>)
         {
             if (fn(id, iface))

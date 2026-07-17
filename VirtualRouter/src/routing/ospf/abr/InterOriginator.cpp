@@ -25,17 +25,31 @@ void InterOriginator::originateSummary(OriginatorContext& ctx, uint32_t lsid, co
 
     auto& info = ctx.originationState[key];
     auto& body = info.body;
-    body = typename Policy::InterNetworkLsa();
-    auto& summary = std::get<typename Policy::InterNetworkLsa>(body);
 
-    summary.metric = cost;
     if constexpr (std::is_same_v<Policy, PolicyV3>)
     {
-        summary.options = 0;
-        summary.prefix = types::IPv6Prefix(prefix.v6(), prefix.prefixLength, true);
+        if (process.af == types::AddressFamily::IPv4)
+        {
+            body = InterAreaPrefixLsaV4();
+            auto& summary = std::get<InterAreaPrefixLsaV4>(body);
+            summary.metric = cost;
+            summary.options = 0;
+            summary.prefix = types::IPv4Prefix(prefix.v4(), prefix.prefixLength, true);
+        }
+        else
+        {
+            body = InterAreaPrefixLsa();
+            auto& summary = std::get<InterAreaPrefixLsa>(body);
+            summary.metric = cost;
+            summary.options = 0;
+            summary.prefix = types::IPv6Prefix(prefix.v6(), prefix.prefixLength, true);
+        }
     }
     else
     {
+        body = typename Policy::InterNetworkLsa();
+        auto& summary = std::get<typename Policy::InterNetworkLsa>(body);
+        summary.metric = cost;
         summary.networkMask = prefix.getMask();
     }
 
@@ -87,28 +101,11 @@ void InterOriginator::reoriginateSummaries(OriginatorContext& ctx, std::vector<O
 
     for (const auto& path : pathList)
     {
-        auto& net = networks.emplace_back(LsaKey{}, typename Policy::InterNetworkLsa{});
+        LsaKey key;
+        LsaBody n;
 
-        LsaKey& key = net.first;
-        LsaBody& n = net.second;
-
-        typename Policy::InterNetworkLsa& network = std::get<typename Policy::InterNetworkLsa>(n);
-
-        if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::InterNetworkLsa>, SummaryNetworkLsa>)
+        if constexpr (std::is_same_v<Policy, PolicyV3>)
         {
-            network.networkMask = types::v4Mask(path.prefix.prefixLength);
-            network.metric = static_cast<uint32_t>(path.cost);
-
-            key.advertisingRouter = process.getRouterId();
-            key.linkStateId = path.prefix.v4();
-            key.lsaType = OSPFV2_LSA_SUM_NET;
-        }
-        else
-        {
-            network.prefix = types::IPv6Prefix(path.prefix.v6(), path.prefix.prefixLength, true);
-            network.metric = static_cast<uint32_t>(path.cost);
-            network.options = path.options;
-
             key.advertisingRouter = process.getRouterId();
             if (auto it = intraLsids.find(path.prefix); it != intraLsids.end())
             {
@@ -119,9 +116,38 @@ void InterOriginator::reoriginateSummaries(OriginatorContext& ctx, std::vector<O
                 key.linkStateId = monotonicIntraId.fetch_add(1, std::memory_order_release);
                 intraLsids.emplace(path.prefix, key.linkStateId);
             }
-
             key.lsaType = OSPFV3_LSA_INTER_AREA_PREFIX;
+
+            if (process.af == types::AddressFamily::IPv4)
+            {
+                n = InterAreaPrefixLsaV4();
+                auto& network = std::get<InterAreaPrefixLsaV4>(n);
+                network.prefix = types::IPv4Prefix(path.prefix.v4(), path.prefix.prefixLength, true);
+                network.metric = static_cast<uint32_t>(path.cost);
+                network.options = path.options;
+            }
+            else
+            {
+                n = InterAreaPrefixLsa();
+                auto& network = std::get<InterAreaPrefixLsa>(n);
+                network.prefix = types::IPv6Prefix(path.prefix.v6(), path.prefix.prefixLength, true);
+                network.metric = static_cast<uint32_t>(path.cost);
+                network.options = path.options;
+            }
         }
+        else
+        {
+            n = SummaryNetworkLsa();
+            auto& network = std::get<SummaryNetworkLsa>(n);
+            network.networkMask = types::v4Mask(path.prefix.prefixLength);
+            network.metric = static_cast<uint32_t>(path.cost);
+
+            key.advertisingRouter = process.getRouterId();
+            key.linkStateId = path.prefix.v4();
+            key.lsaType = OSPFV2_LSA_SUM_NET;
+        }
+
+        networks.emplace_back(key, std::move(n));
     }
 
     {
@@ -157,25 +183,10 @@ void InterOriginator::reoriginateSummary(OriginatorContext& ctx, OspfRouteChange
     std::vector<std::pair<LsaKey, LsaBody>> networks;
 
     LsaKey key;
-    LsaBody summary = typename Policy::InterNetworkLsa();
+    LsaBody summary;
 
-    typename Policy::InterNetworkLsa& network = std::get<typename Policy::InterNetworkLsa>(summary);
-
-    if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::InterNetworkLsa>, SummaryNetworkLsa>)
+    if constexpr (std::is_same_v<Policy, PolicyV3>)
     {
-        network.networkMask = types::v4Mask(path.prefix.prefixLength);
-        network.metric = static_cast<uint32_t>(path.cost);
-
-        key.advertisingRouter = process.getRouterId();
-        key.linkStateId = path.prefix.v4();
-        key.lsaType = OSPFV2_LSA_SUM_NET;
-    }
-    else
-    {
-        network.prefix = types::IPv6Prefix(path.prefix.v6(), path.prefix.prefixLength, true);
-        network.metric = static_cast<uint32_t>(path.cost);
-        network.options = path.options;
-
         key.advertisingRouter = process.getRouterId();
         if (auto it = intraLsids.find(path.prefix); it != intraLsids.end())
         {
@@ -186,8 +197,35 @@ void InterOriginator::reoriginateSummary(OriginatorContext& ctx, OspfRouteChange
             key.linkStateId = monotonicIntraId.fetch_add(1, std::memory_order_release);
             intraLsids.emplace(path.prefix, key.linkStateId);
         }
-
         key.lsaType = OSPFV3_LSA_INTER_AREA_PREFIX;
+
+        if (process.af == types::AddressFamily::IPv4)
+        {
+            summary = InterAreaPrefixLsaV4();
+            auto& network = std::get<InterAreaPrefixLsaV4>(summary);
+            network.prefix = types::IPv4Prefix(path.prefix.v4(), path.prefix.prefixLength, true);
+            network.metric = static_cast<uint32_t>(path.cost);
+            network.options = path.options;
+        }
+        else
+        {
+            summary = InterAreaPrefixLsa();
+            auto& network = std::get<InterAreaPrefixLsa>(summary);
+            network.prefix = types::IPv6Prefix(path.prefix.v6(), path.prefix.prefixLength, true);
+            network.metric = static_cast<uint32_t>(path.cost);
+            network.options = path.options;
+        }
+    }
+    else
+    {
+        summary = SummaryNetworkLsa();
+        auto& network = std::get<SummaryNetworkLsa>(summary);
+        network.networkMask = types::v4Mask(path.prefix.prefixLength);
+        network.metric = static_cast<uint32_t>(path.cost);
+
+        key.advertisingRouter = process.getRouterId();
+        key.linkStateId = path.prefix.v4();
+        key.lsaType = OSPFV2_LSA_SUM_NET;
     }
 
     uint32_t sourceAreaId = ctx.area.areaId;
@@ -296,19 +334,34 @@ void InterOriginator::setStubDefaultOriginate(OriginatorContext& ctx, bool add)
 
     auto& info = ctx.originationState[ctx.stubDefaultRoute.value()];
     LsaBody& body = info.body;
-    body = typename Policy::InterNetworkLsa();
-
-    auto& summary = std::get<typename Policy::InterNetworkLsa>(body);
 
     auto costField = ctx.getConfigs().get<config::OspfArea::DEFAULT_COST>();
-    summary.metric = costField.hasValue() ? costField.load() : 1;
+    uint32_t cost = costField.hasValue() ? costField.load() : 1;
+
     if constexpr (std::is_same_v<Policy, PolicyV3>)
     {
-        summary.options = 0;
-        summary.prefix = types::IPv6Prefix{};
+        if (process.af == types::AddressFamily::IPv4)
+        {
+            body = InterAreaPrefixLsaV4();
+            auto& summary = std::get<InterAreaPrefixLsaV4>(body);
+            summary.metric = cost;
+            summary.options = 0;
+            summary.prefix = types::IPv4Prefix{};
+        }
+        else
+        {
+            body = InterAreaPrefixLsa();
+            auto& summary = std::get<InterAreaPrefixLsa>(body);
+            summary.metric = cost;
+            summary.options = 0;
+            summary.prefix = types::IPv6Prefix{};
+        }
     }
     else
     {
+        body = typename Policy::InterNetworkLsa();
+        auto& summary = std::get<typename Policy::InterNetworkLsa>(body);
+        summary.metric = cost;
         summary.networkMask = 0;
     }
 

@@ -13,6 +13,7 @@
 #define OSPF_NEIGHBOR_H
 
 #include <atomic>
+#include <chrono>
 #include <optional>
 #include <IPAddress.h>
 
@@ -205,6 +206,11 @@ public:
     const Retransmission& getRtr() const { return rtr; }
 
     std::atomic<bool> isTransit{true}; ///< False once it is confirmed this neighbor need not receive flooded LSAs.
+
+    std::atomic<bool> resyncRequested{false}; ///< One-shot LLS resync request (RFC 4811/4812); consumed by the next unicast Hello built for this neighbor.
+
+    std::atomic<bool> helpingRestart{false};  ///< True while this router is acting as a graceful-restart helper for this neighbor (RFC 3623).
+    std::chrono::steady_clock::time_point helperDeadline{}; ///< Wall-clock time the current helper-mode grace period ends.
 
 private:
     State state;

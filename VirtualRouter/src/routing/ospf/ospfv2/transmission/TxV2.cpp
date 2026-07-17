@@ -27,9 +27,12 @@ uint16_t PacketDispatcherV2::getMtu()
     return iface.iface.configs.ipv4.mtu.load(std::memory_order_relaxed);
 }
 
-void PacketDispatcherV2::finalizeHeader(packet::Ospfv2Header& hdr, OspfBuilder& builder, bool lls)
+void PacketDispatcherV2::finalizeHeader(packet::Ospfv2Header& hdr, OspfBuilder& builder, bool lls, Neighbor* nbr)
 {
     hdr.setPacketLen(static_cast<uint16_t>(builder.offset + packet::Ospfv2Header::fixedSize));
+
+    bool restart = iface.getGracefulRestartInProgress();
+    bool resync = nbr && nbr->resyncRequested.exchange(false, std::memory_order_relaxed);
 
     auto authField = getConfigs().get<config::OspfInterfaceBase::AUTHENTICATION_TYPE>();
     config::ospf::AuthType auth = authField.hasValue()
@@ -52,7 +55,7 @@ void PacketDispatcherV2::finalizeHeader(packet::Ospfv2Header& hdr, OspfBuilder& 
             if (lls)
             {
                 uint8_t* llsBase = builder.getBuf();
-                uint16_t size = addLinkLocalExtension(llsBase, false);
+                uint16_t size = addLinkLocalExtension(llsBase, restart, resync);
                 builder.offset += size;
                 if (!buildLLSAuthentication(builder, size, seq, secret))
                     return;
@@ -64,7 +67,7 @@ void PacketDispatcherV2::finalizeHeader(packet::Ospfv2Header& hdr, OspfBuilder& 
         if (lls)
         {
             uint8_t* buf = builder.getBuf();
-            uint16_t size = addLinkLocalExtension(buf, false);
+            uint16_t size = addLinkLocalExtension(buf, restart, resync);
             addLinkLocalChecksum(buf);
             builder.offset += size;
         }
@@ -122,7 +125,7 @@ void PacketDispatcherV2::sendUnicastHello(Neighbor& nbr)
     bool lls = ifaceLLS.hasValue() ? ifaceLLS.load() : getProcessConfigs().get<config::Ospf::LLS>().load();
     if (!buildHello(builder, lls)) return;
 
-    finalizeHeader(*ospfHeader, builder, lls);
+    finalizeHeader(*ospfHeader, builder, lls, &nbr);
     transmit(pkt, &nbr.ipAddress);
 }
 
@@ -580,17 +583,11 @@ bool PacketDispatcherV2::buildLSABody(OspfBuilder& builder, const LsaRecord& rec
                 return std::get<ExternalLsaV2>(body).buildBody(builder.getBuf(), len);
             break;
         case OSPFV2_LSA_OPAQUE_LINK:
-        {
-
-        }
         case OSPFV2_LSA_OPAQUE_AREA:
-        {
-
-        }
         case OSPFV2_LSA_OPAQUE_AS:
-        {
-
-        }
+            if (std::holds_alternative<OpaqueLsaV2>(body))
+                return std::get<OpaqueLsaV2>(body).buildBody(builder.getBuf(), len);
+            break;
         default:
             return false;
     }
