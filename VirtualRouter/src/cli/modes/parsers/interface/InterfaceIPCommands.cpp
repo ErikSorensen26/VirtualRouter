@@ -248,7 +248,7 @@ bool InterfaceIP_SummaryAddress_Handler(INTERFACE_PARAMS)
 bool InterfaceIP_Ospf_SubHandler(INTERFACE_SUB_PARAMS)
 {
     auto& ospf = ctx.configs().get<config::Interface::IP_OSPF>().get();
-    Context<config::OspfInterfaceBaseRegistry> newCtx(ctx.terminal, ospf);
+    Context<config::OspfGlobalInterfaceRegistry> newCtx(ctx.terminal, ospf);
     newCtx.negate = ctx.negate;
     newCtx.defaulted = ctx.defaulted;
     return InterfaceIPOspfCommands::execute(newCtx, toks, idx);

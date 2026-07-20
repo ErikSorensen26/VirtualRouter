@@ -60,7 +60,7 @@ public:
      * @param process  The owning OSPF process.
      * @param iface    The interface on which this neighbor was formed.
      */
-    Retransmission(OspfInterface& iface, const config::OspfRegistry& cfgs)
+    Retransmission(OspfInterfaceBase& iface, const config::OspfRegistry& cfgs)
         : outboundLsus(iface, cfgs), outboundLsrs(iface, cfgs) {}
 
     uint32_t dbdTimerId; ///< Active DBD retransmission timer ID; 0 when no DBD is pending acknowledgment.

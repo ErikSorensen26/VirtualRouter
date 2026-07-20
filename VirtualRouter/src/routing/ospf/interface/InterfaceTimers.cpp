@@ -2,20 +2,20 @@
 
 #include "InterfaceTimers.h"
 #include "ospf/neighbor/Neighbor.h"
-#include "OspfInterface.h"
+#include "OspfInterfaceBase.h"
 #include "ospf/OspfProcess.h"
 #include "ospf/transmission/PacketDispatcher.h"
 
 namespace routing::ospf
 {
-InterfaceTimers::InterfaceTimers(OspfInterface& iface, core::ProcessQueue&& s)
+InterfaceTimers::InterfaceTimers(OspfInterfaceBase& iface, core::ProcessQueue&& s)
     : scheduler(std::move(s)), iface(iface)
 {
 }
 
 void InterfaceTimers::scheduleHello()
 {
-    if (iface.configs.get<config::OspfInterface::PASSIVE>().load()) return;
+    if (iface.getPassive()) return;
     // Mark hello as active
     if (helloTimerId.load(std::memory_order_relaxed) != 0)
         return; // Timer already active
@@ -53,14 +53,15 @@ void InterfaceTimers::startHello()
 
 void InterfaceTimers::sendHello()
 {
-    if (iface.isMulticast.load(std::memory_order_relaxed))
+    if (iface.getIsMulticast())
     {
         iface.dispatcher.sendHello(); // Send multicast hello
     }
     else // Send unicast hello for each neighbor
     {
-        iface.ntable.forEach([this](uint32_t, Neighbor& nbr) {
-            if (nbr.unicast)
+        bool alwaysUnicast = iface.isVirtualLink();
+        iface.ntable.forEach([this, alwaysUnicast](uint32_t, Neighbor& nbr) {
+            if (nbr.unicast || alwaysUnicast)
                 iface.dispatcher.sendUnicastHello(nbr);
         });
     }
@@ -104,7 +105,7 @@ void InterfaceTimers::handleInactiveTimeExpire(Neighbor& neighbor)
 
 void InterfaceTimers::startDbdRetransmissionTimer(Neighbor& nbr)
 {
-    uint16_t timeout = iface.configs.get<config::OspfInterface::RETRANSMIT_INTERVAL>().load();
+    uint16_t timeout = iface.configsBase.get<config::OspfInterfaceBase::RETRANSMIT_INTERVAL>().load();
 
     uint32_t& tid = nbr.getRtr().dbdTimerId;
     if (tid != 0) scheduler.cancel(tid);
@@ -118,7 +119,7 @@ void InterfaceTimers::startDbdRetransmissionTimer(Neighbor& nbr)
 
 void InterfaceTimers::startLsrRetransmissionTimer(Neighbor& nbr)
 {
-    uint16_t timeout = iface.configs.get<config::OspfInterface::RETRANSMIT_INTERVAL>().load();
+    uint16_t timeout = iface.configsBase.get<config::OspfInterfaceBase::RETRANSMIT_INTERVAL>().load();
 
     uint32_t& tid = nbr.getRtr().lsrs().retransmitTimerId;
     if (tid != 0) scheduler.cancel(tid);
@@ -132,7 +133,7 @@ void InterfaceTimers::startLsrRetransmissionTimer(Neighbor& nbr)
 
 void InterfaceTimers::startLsuRetransmissionTimer(Neighbor& nbr)
 {
-    uint16_t timeout = iface.configs.get<config::OspfInterface::RETRANSMIT_INTERVAL>().load();
+    uint16_t timeout = iface.configsBase.get<config::OspfInterfaceBase::RETRANSMIT_INTERVAL>().load();
 
     uint32_t& tid = nbr.getRtr().lsus().retransmitTimerId;
     if (tid != 0) scheduler.cancel(tid);
@@ -162,7 +163,7 @@ void InterfaceTimers::startLsuPacingTimer(Neighbor* nbr)
 {
     uint8_t timeout = iface.getProcessConfigs().get<config::Ospf::RETRANSMISSION_PACING>().load();
 
-    uint32_t& tid = nbr ? nbr->getRtr().lsrs().pacingTimerId : iface.dispatcher.getMulticastLsu().pacingTimerId;
+    uint32_t& tid = nbr ? nbr->getRtr().lsus().pacingTimerId : iface.dispatcher.getMulticastLsu().pacingTimerId;
     if (tid != 0) scheduler.cancel(tid);
 
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::milliseconds(static_cast<int>(timeout));
@@ -170,5 +171,45 @@ void InterfaceTimers::startLsuPacingTimer(Neighbor* nbr)
     {
         iface.dispatcher.onLsuPacingTimer(nbr);
     });
+}
+
+void InterfaceTimers::cancelLsrTimers(Neighbor& nbr)
+{
+    auto& lsrs = nbr.getRtr().lsrs();
+
+    if (lsrs.retransmitTimerId != 0)
+    {
+        scheduler.cancel(lsrs.retransmitTimerId);
+        lsrs.retransmitTimerId = 0;
+    }
+    if (lsrs.pacingTimerId != 0)
+    {
+        scheduler.cancel(lsrs.pacingTimerId);
+        lsrs.pacingTimerId = 0;
+    }
+}
+
+void InterfaceTimers::cancelRetransmissionTimers(Neighbor& nbr)
+{
+    auto& rtr = nbr.getRtr();
+
+    if (rtr.dbdTimerId != 0)
+    {
+        scheduler.cancel(rtr.dbdTimerId);
+        rtr.dbdTimerId = 0;
+    }
+
+    cancelLsrTimers(nbr);
+
+    if (rtr.lsus().retransmitTimerId != 0)
+    {
+        scheduler.cancel(rtr.lsus().retransmitTimerId);
+        rtr.lsus().retransmitTimerId = 0;
+    }
+    if (rtr.lsus().pacingTimerId != 0)
+    {
+        scheduler.cancel(rtr.lsus().pacingTimerId);
+        rtr.lsus().pacingTimerId = 0;
+    }
 }
 } // namespace routing

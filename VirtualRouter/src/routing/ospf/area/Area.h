@@ -23,7 +23,7 @@
 #include "ospf/ospfv2/area/OpaqueOriginatorV2.h"
 
 namespace config::ospf { enum class AreaType; }
-namespace config { struct OspfInterfaceRegistry; }
+namespace config { struct OspfInterfaceBaseRegistry; }
 class Internal_OspfTest;
 
 namespace routing::ospf
@@ -31,7 +31,8 @@ namespace routing::ospf
 struct OspfPath;
 struct RouteManagerUtility;
 class OspfProcess;
-class OspfInterface;
+class OspfInterfaceBase;
+class InterfaceManager;
 class OspfRib;
 class TopologyTable;
 class GracefulRestartManager;
@@ -129,7 +130,7 @@ CalcResults runLsaCalculations(const LsaHeader& hdr, const LsaKey& key, const Ls
  *
  * ## Architectural Role
  * Area sits below @ref OspfProcess (which owns all areas) and above individual
- * interfaces (@ref OspfInterface).  It is the unit of topology isolation in OSPF:
+ * interfaces (@ref OspfInterfaceBase).  It is the unit of topology isolation in OSPF:
  * LSAs do not cross area boundaries except via ABR summary origination.
  *
  * ## Lifecycle & Ownership
@@ -218,7 +219,8 @@ public:
 private:
     friend class OspfRib;
     friend class OspfProcess;
-    friend class OspfInterface;
+    friend class OspfInterfaceBase;
+    friend class InterfaceManager;
     friend class FloodManager;
     friend class SpfManager;
     friend class OriginatorContext;

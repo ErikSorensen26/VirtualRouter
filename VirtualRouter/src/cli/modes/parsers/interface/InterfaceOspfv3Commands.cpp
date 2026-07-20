@@ -9,7 +9,7 @@
 #include "cli/parser/CommandUtils.hpp"
 #include "configs/FieldAccessor.hpp"
 
-#define OSPF_PARAMS DEFINE_PARAMS(config::OspfInterfaceBaseRegistry)
+#define OSPF_PARAMS DEFINE_PARAMS(config::OspfGlobalInterfaceRegistry)
 #define INTERFACE_SUB_PARAMS DEFINE_SUB_PARAMS(config::InterfaceRegistry)
 
 namespace cli
@@ -20,17 +20,18 @@ bool InterfaceOspfv3_Area_Handler(OSPF_PARAMS)
     auto idTok = segs >> 0 >> 1;
     if (!utils::setValue(areaId, idTok) && !utils::setValue(areaId.addr, idTok))
 	return false;
-    auto area = ctx.configs().get<config::OspfInterfaceBase::AREA_ID>();
+    auto area = ctx.configs().get<config::OspfGlobalInterface::AREA_ID>();
     if (!utils::handleValueReset(area, ctx))
 	area.set(areaId.addr);
-    auto instance = ctx.configs().get<config::OspfInterfaceBase::INSTANCE_ID>();
+    auto instance = ctx.configs().get<config::OspfGlobalInterface::GLOBAL_BASE>().get()
+	.get<config::OspfGlobalInterfaceBase::INSTANCE_ID>();
     utils::setFieldValue(instance, ctx, segs >> 1 >> 1);
     return true;
 }
 
 bool InterfaceOspfv3_Neighbor_Handler(OSPF_PARAMS)
 {
-    auto& ospf = ctx.configs().get<config::OspfInterfaceBase::BASE>().get();
+    auto& ospf = ctx.configs().get<config::OspfGlobalInterface::BASE>().get();
     auto neighbor = ospf.get<config::OspfInterface::NEIGHBOR>();
     config::DefType<decltype(neighbor)::Field>::node tup;
 
@@ -76,7 +77,7 @@ bool InterfaceOspfv3_Neighbor_Handler(OSPF_PARAMS)
 
 bool InterfaceDefaultOspfv3_Authentication_Handler(OSPF_PARAMS)
 {
-    auto& configs = ctx.configs().get<config::OspfInterfaceBase::IPSEC>().get();
+    auto& configs = ctx.configs().get<config::OspfGlobalInterface::IPSEC>().get();
     auto authType = configs.get<config::OspfInterfaceIPSec::AUTHENTICATION_TYPE>();
     auto authSpi = configs.get<config::OspfInterfaceIPSec::SPI>();
     auto authKey = configs.get<config::OspfInterfaceIPSec::AUTHENTICATION_KEY>();
@@ -134,7 +135,7 @@ bool InterfaceDefaultOspfv3_Authentication_Handler(OSPF_PARAMS)
 bool InterfaceDefaultOspfv3_NullAuthentication_Handler(OSPF_PARAMS)
 {
     UNUSED(segs);
-    auto& configs = ctx.configs().get<config::OspfInterfaceBase::IPSEC>().get();
+    auto& configs = ctx.configs().get<config::OspfGlobalInterface::IPSEC>().get();
     auto authType = configs.get<config::OspfInterfaceIPSec::AUTHENTICATION_TYPE>();
     if (utils::handleValueReset(authType, ctx))
 	return true;
@@ -144,7 +145,7 @@ bool InterfaceDefaultOspfv3_NullAuthentication_Handler(OSPF_PARAMS)
 
 bool InterfaceDefaultOspfv3_Encryption_Handler(OSPF_PARAMS)
 {
-    auto& configs = ctx.configs().get<config::OspfInterfaceBase::IPSEC>().get();
+    auto& configs = ctx.configs().get<config::OspfGlobalInterface::IPSEC>().get();
     auto espSpi = configs.get<config::OspfInterfaceIPSec::SPI>();
     auto authType = configs.get<config::OspfInterfaceIPSec::AUTHENTICATION_TYPE>();
     auto authKey = configs.get<config::OspfInterfaceIPSec::AUTHENTICATION_KEY>();
@@ -274,7 +275,7 @@ bool InterfaceDefaultOspfv3_Encryption_Handler(OSPF_PARAMS)
 bool InterfaceDefaultOspfv3_NullEncryption_Handler(OSPF_PARAMS)
 {
     UNUSED(segs);
-    auto& configs = ctx.configs().get<config::OspfInterfaceBase::IPSEC>().get();
+    auto& configs = ctx.configs().get<config::OspfGlobalInterface::IPSEC>().get();
     auto type = configs.get<config::OspfInterfaceIPSec::ENCRYPTION_TYPE>();
     if (utils::handleValueReset(type, ctx))
 	return true;
@@ -289,7 +290,7 @@ bool InterfaceOspfv3Base_ProcessIP_SubHandler(INTERFACE_SUB_PARAMS)
 	return false;
     auto& ospf = ctx.configs().get<config::Interface::OSPFV3>()
 	.emplaceBack(id).get<config::OspfInterfaceAf::IPV4>().get();
-    Context<config::OspfInterfaceBaseRegistry> newCtx(ctx.terminal, ospf);
+    Context<config::OspfGlobalInterfaceRegistry> newCtx(ctx.terminal, ospf);
     newCtx.negate = ctx.negate;
     newCtx.defaulted = ctx.defaulted;
     return InterfaceOspfv3Commands::execute(newCtx, toks, idx);
@@ -302,7 +303,7 @@ bool InterfaceOspfv3Base_ProcessIPv6_SubHandler(INTERFACE_SUB_PARAMS)
 	return false;
     auto& ospf = ctx.configs().get<config::Interface::OSPFV3>()
 	.emplaceBack(id).get<config::OspfInterfaceAf::IPV6>().get();
-    Context<config::OspfInterfaceBaseRegistry> newCtx(ctx.terminal, ospf);
+    Context<config::OspfGlobalInterfaceRegistry> newCtx(ctx.terminal, ospf);
     newCtx.negate = ctx.negate;
     newCtx.defaulted = ctx.defaulted;
     return InterfaceOspfv3Commands::execute(newCtx, toks, idx);
@@ -315,7 +316,7 @@ bool InterfaceOspfv3Base_Process_SubHandler(INTERFACE_SUB_PARAMS)
 	return false;
     auto& ospf = ctx.configs().get<config::Interface::OSPFV3>()
 	.emplaceBack(id).get<config::OspfInterfaceAf::DEFAULT>().get();
-    Context<config::OspfInterfaceBaseRegistry> newCtx(ctx.terminal, ospf);
+    Context<config::OspfGlobalInterfaceRegistry> newCtx(ctx.terminal, ospf);
     newCtx.negate = ctx.negate;
     newCtx.defaulted = ctx.defaulted;
     return InterfaceOspfv3Commands::execute(newCtx, toks, idx);
@@ -324,7 +325,7 @@ bool InterfaceOspfv3Base_Process_SubHandler(INTERFACE_SUB_PARAMS)
 bool InterfaceOspfv3Base_Default_SubHandler(INTERFACE_SUB_PARAMS)
 {
     auto& ospf = ctx.configs().get<config::Interface::OSPFV3_DEFAULT>().get();
-    Context<config::OspfInterfaceBaseRegistry> newCtx(ctx.terminal, ospf);
+    Context<config::OspfGlobalInterfaceRegistry> newCtx(ctx.terminal, ospf);
     newCtx.negate = ctx.negate;
     newCtx.defaulted = ctx.defaulted;
     return InterfaceDefaultOspfv3Commands::execute(newCtx, toks, idx);
@@ -334,7 +335,7 @@ bool InterfaceOspfv3Base_Default_SubHandler(INTERFACE_SUB_PARAMS)
     X(Y, (CMD_INHERIT, InterfaceOspfCommands)) \
     X(Y, (COMMAND, Neighbor, "neighbor"_tok))
 
-DEFINE_CMD_MODE(InterfaceOspfv3, config::OspfInterfaceBaseRegistry, OSPFV3_LIST);
+DEFINE_CMD_MODE(InterfaceOspfv3, config::OspfGlobalInterfaceRegistry, OSPFV3_LIST);
 
 #define DEFAULT_OSPFV3_LIST(X, Y) \
     X(Y, (CMD_INHERIT, InterfaceOspfCommands)) \
@@ -343,7 +344,7 @@ DEFINE_CMD_MODE(InterfaceOspfv3, config::OspfInterfaceBaseRegistry, OSPFV3_LIST)
     X(Y, (COMMAND, Encryption, "encryption"_tok, "ipsec"_tok)) \
     X(Y, (COMMAND, NullEncryption, "encryption"_tok, "null"_tok)) \
 
-DEFINE_CMD_MODE(InterfaceDefaultOspfv3, config::OspfInterfaceBaseRegistry, DEFAULT_OSPFV3_LIST);
+DEFINE_CMD_MODE(InterfaceDefaultOspfv3, config::OspfGlobalInterfaceRegistry, DEFAULT_OSPFV3_LIST);
 
 #define INTERFACE_OSPFV3_LIST(X, Y) \
     X(Y, (SUBPRSR, ProcessIP, P_NUMRNG, "ipv4"_tok)) \

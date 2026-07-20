@@ -38,7 +38,8 @@ namespace core { class VirtualRouter; }
 namespace routing::ospf
 {
 class Topology;
-class OspfInterface;
+class OspfInterfaceBase;
+class VirtualLink;
 struct RouteManagerUtility;
 
 /**
@@ -73,13 +74,13 @@ struct OspfV3Instance
 };
 
 /**
- * @brief Pairs IPv4 and IPv6 @ref OspfInterface pointers for a dual-stack interface binding.
+ * @brief Pairs IPv4 and IPv6 @ref OspfInterfaceBase pointers for a dual-stack interface binding.
  * @ingroup OSPF
  */
-struct OspfInterfaceInstance
+struct OspfInterfaceBaseInstance
 {
-    OspfInterface* IPv4; ///< Pointer to the IPv4 OSPF interface instance.
-    OspfInterface* IPv6; ///< Pointer to the IPv6 OSPF interface instance.
+    OspfInterfaceBase* IPv4; ///< Pointer to the IPv4 OSPF interface instance.
+    OspfInterfaceBase* IPv6; ///< Pointer to the IPv6 OSPF interface instance.
 };
 
 /**
@@ -224,7 +225,9 @@ private:
     friend class Area;
     friend class OspfRib;
     friend class InterfaceManager;
+    friend class OspfInterfaceBase;
     friend class OspfInterface;
+    friend class VirtualLink;
     friend class InterOriginator;
     friend class ExternalOriginator;
     friend struct RouteManagerUtility;
@@ -302,6 +305,15 @@ private:
     template <typename Fn>
     void forEachOriginCtx(Fn&& fn) const;
 
+    /**
+     * @brief Invokes `fn(areaId, area)` for every area on this process.
+     *
+     * Lets `InterfaceManager` enumerate each area's `virtual-link`
+     * configuration list without exposing the area map itself.
+     */
+    template <typename Fn>
+    void forEachArea(Fn&& fn);
+
     // ROUTER TYPE FLAGS
 
     /**
@@ -373,6 +385,13 @@ void OspfProcess::forEachOriginCtx(Fn&& fn)
 {
     for (auto& [id, area] : priv.areas)
         fn(id, area.originContext);
+}
+
+template <typename Fn>
+void OspfProcess::forEachArea(Fn&& fn)
+{
+    for (auto& [id, area] : priv.areas)
+        fn(id, area);
 }
 
 template <typename Fn>

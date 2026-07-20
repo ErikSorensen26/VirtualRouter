@@ -5,6 +5,7 @@
 
 #include "IntraOriginatorV2.h"
 #include "ospf/neighbor/Neighbor.h"
+#include "ospf/interface/OspfInterfaceBase.h"
 #include "ospf/interface/OspfInterface.h"
 #include "ospf/area/Area.h"
 #include "ospf/OspfProcess.h"
@@ -55,7 +56,7 @@ void IntraOriginatorV2::addRouterLsa(std::optional<uint32_t> ifaceId, bool refre
     router.flags = static_cast<uint8_t>(context.getAreaFlags());
 
     auto& ifmgr = context.getIfaceMgr();
-    ifmgr.forEach([&](OspfInterfaceId id, const OspfInterface& iface) {
+    ifmgr.forEach([&](OspfInterfaceId id, const OspfInterfaceBase& iface) {
         if (id.area != context.area.areaId) return;
         addRouterLink(lsa, iface, refresh, fullRefresh || (ifaceId.has_value() && ifaceId.value() == id.interfaceId));
     });
@@ -71,8 +72,10 @@ void IntraOriginatorV2::addRouterLsa(std::optional<uint32_t> ifaceId, bool refre
     context.processOriginatedLsa<PolicyV2>(key);
 }
 
-void IntraOriginatorV2::addNetworkLsa(const OspfInterface& iface, bool refresh)
+void IntraOriginatorV2::addNetworkLsa(const OspfInterfaceBase& baseIface, bool refresh)
 {
+    const OspfInterface& iface = static_cast<const OspfInterface&>(baseIface);
+
     uint32_t selfRid = context.area.process.getRouterId();
     uint32_t addr = iface.interfaceAddress.v4();
     LsaKey key(OSPFV2_LSA_NETWORK, addr, selfRid);
@@ -86,7 +89,7 @@ void IntraOriginatorV2::addNetworkLsa(const OspfInterface& iface, bool refresh)
     NetworkLsaV2& network = std::get<NetworkLsaV2>(lsa);
 
     const InterfaceManager& ifaceMgr = context.getIfaceMgr();
-    bool prefixSuppression = ifaceMgr.getInterfaceBaseConfigs(iface).get<config::OspfInterfaceBase::PREFIX_SUPPRESSION>().load();
+    bool prefixSuppression = ifaceMgr.getGlobalInterfaceConfigs(iface).get<config::OspfGlobalInterface::PREFIX_SUPPRESSION>().load();
 
     network.networkMask = prefixSuppression ? 0xFFFFFFFF : iface.interfaceAddress.getMask();
     network.attachedRouters = ifaceMgr.getNTable(iface).getNeighborRIDs();
@@ -120,8 +123,9 @@ void IntraOriginatorV2::removeNetworkLsa(uint32_t addr)
     networkLsas.erase(it);
 }
 
-void IntraOriginatorV2::addSecondaryLinks(LsaBody& router, const OspfInterface& iface)
+void IntraOriginatorV2::addSecondaryLinks(LsaBody& router, const OspfInterfaceBase& baseIface)
 {
+    const OspfInterface& iface = static_cast<const OspfInterface&>(baseIface);
     auto& lsa = std::get<RouterLsaV2>(router);
     auto secondaries = iface.iface.configs.ipv4.getSecondaryPrefixList(true);
     for (const auto& secondary : secondaries)
@@ -135,39 +139,42 @@ void IntraOriginatorV2::addSecondaryLinks(LsaBody& router, const OspfInterface& 
     }
 }
 
-void IntraOriginatorV2::addTransitLink(LsaBody& router, const OspfInterface& iface, const Neighbor* nbr)
+void IntraOriginatorV2::addTransitLink(LsaBody& router, const OspfInterfaceBase& baseIface, const Neighbor* nbr)
 {
     (void)nbr; // Used in OSPFv3
-    auto& ifaceConfigs = context.getIfaceMgr().getInterfaceBaseConfigs(iface);
+    const OspfInterface& iface = static_cast<const OspfInterface&>(baseIface);
+    auto& ifaceConfigs = context.getIfaceMgr().getGlobalInterfaceConfigs(iface);
     std::get<RouterLsaV2>(router).links.push_back(RouterLinkV2{
         .linkId = static_cast<uint32_t>(iface.getDrIp()),
         .linkData = iface.interfaceAddress.v4(),
         .type = OSPFV2_LINK_TRANSIT,
         .metric = iface.getCost()
     });
-    if (ifaceConfigs.get<config::OspfInterfaceBase::INCLUDE_SECONDARIES>().load() &&
-        ifaceConfigs.get<config::OspfInterfaceBase::PREFIX_SUPPRESSION>().load())
+    if (ifaceConfigs.get<config::OspfGlobalInterface::INCLUDE_SECONDARIES>().load() &&
+        ifaceConfigs.get<config::OspfGlobalInterface::PREFIX_SUPPRESSION>().load())
         addSecondaryLinks(router, iface);
 }
 
-void IntraOriginatorV2::addP2PLink(LsaBody& router, const OspfInterface& iface, const Neighbor& neighbor)
+void IntraOriginatorV2::addP2PLink(LsaBody& router, const OspfInterfaceBase& baseIface, const Neighbor& neighbor)
 {
-    auto& ifaceConfigs = context.getIfaceMgr().getInterfaceBaseConfigs(iface);
+    const OspfInterface& iface = static_cast<const OspfInterface&>(baseIface);
+    auto& ifaceConfigs = context.getIfaceMgr().getGlobalInterfaceConfigs(iface);
     std::get<RouterLsaV2>(router).links.push_back(RouterLinkV2{
         .linkId = neighbor.routerID,
         .linkData = iface.interfaceAddress.v4(),
         .type = OSPFV2_LINK_P2P,
         .metric = iface.getCost()
     });
-    if (ifaceConfigs.get<config::OspfInterfaceBase::INCLUDE_SECONDARIES>().load() &&
-        ifaceConfigs.get<config::OspfInterfaceBase::PREFIX_SUPPRESSION>().load())
+    if (ifaceConfigs.get<config::OspfGlobalInterface::INCLUDE_SECONDARIES>().load() &&
+        ifaceConfigs.get<config::OspfGlobalInterface::PREFIX_SUPPRESSION>().load())
         addSecondaryLinks(router, iface);
 }
 
-void IntraOriginatorV2::addStubLink(LsaBody& router, const OspfInterface& iface, bool fullMask)
+void IntraOriginatorV2::addStubLink(LsaBody& router, const OspfInterfaceBase& baseIface, bool fullMask)
 {
-    auto& ifaceConfigs = context.getIfaceMgr().getInterfaceBaseConfigs(iface);
-    auto cost = ifaceConfigs.get<config::OspfInterfaceBase::BASE>().get().get<config::OspfInterface::COST>();
+    const OspfInterface& iface = static_cast<const OspfInterface&>(baseIface);
+    auto& ifaceConfigs = context.getIfaceMgr().getGlobalInterfaceConfigs(iface);
+    auto cost = ifaceConfigs.get<config::OspfGlobalInterface::BASE>().get().get<config::OspfInterface::COST>();
     uint16_t metric = context.getProcessConfigs().get<config::Ospf::MAX_METRIC_INCLUDE_STUB>().load()
         ? 0xFFFF : cost.hasValue() ? cost.load() : iface.getCost();
     std::get<RouterLsaV2>(router).links.push_back(RouterLinkV2{
@@ -176,16 +183,18 @@ void IntraOriginatorV2::addStubLink(LsaBody& router, const OspfInterface& iface,
         .type = OSPFV2_LINK_STUB,
         .metric = metric
     });
-    if (ifaceConfigs.get<config::OspfInterfaceBase::INCLUDE_SECONDARIES>().load() &&
-        ifaceConfigs.get<config::OspfInterfaceBase::PREFIX_SUPPRESSION>().load())
+    if (ifaceConfigs.get<config::OspfGlobalInterface::INCLUDE_SECONDARIES>().load() &&
+        ifaceConfigs.get<config::OspfGlobalInterface::PREFIX_SUPPRESSION>().load())
         addSecondaryLinks(router, iface);
 }
 
-void IntraOriginatorV2::addVirtualLink(LsaBody& router, const OspfInterface& iface, const Neighbor& vNbr)
+void IntraOriginatorV2::addVirtualLink(LsaBody& router, const OspfInterfaceBase& iface, const Neighbor& vNbr)
 {
+    // RFC 2328 Appendix A.4.3: Link Data for a virtual link is this router's
+    // own IP interface address on the transit area, not the area ID.
     std::get<RouterLsaV2>(router).links.push_back(RouterLinkV2{
         .linkId = vNbr.routerID,
-        .linkData = iface.getAreaId(),
+        .linkData = iface.getTransmitAddress().v4(),
         .type = OSPFV2_LINK_VIRTUAL,
         .metric = iface.getCost()
     });

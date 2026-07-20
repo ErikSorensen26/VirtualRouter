@@ -4,7 +4,7 @@
 
 #include "Neighbor.h"
 #include "ospf/database/LsaKey.hpp"
-#include "ospf/interface/OspfInterface.h"
+#include "ospf/interface/OspfInterfaceBase.h"
 #include "ospf/interface/InterfaceTimers.h"
 #include "ospf/transmission/PacketDispatcher.h"
 #include "ospf/area/Area.h"
@@ -21,17 +21,19 @@ static uint32_t generateInitialDDSequence()
     return dis(gen);
 }
 
-static uint16_t getMtu(bool isV6, ospf::OspfInterface& iface)
+static uint16_t getMtu(bool isV6, ospf::OspfInterfaceBase& iface)
 {
-    if (isV6)
-        return iface.iface.configs.ipv6.mtu.load(std::memory_order_relaxed);
-    else
-        return iface.iface.configs.ipv4.mtu.load(std::memory_order_relaxed);
+    if (iface.isVirtualLink()) return 0;
+
+    auto* txIface = iface.getTransmitInterface();
+    if (!txIface) return 0;
+    return isV6 ? txIface->configs.ipv6.mtu.load(std::memory_order_relaxed)
+                : txIface->configs.ipv4.mtu.load(std::memory_order_relaxed);
 }
 
 namespace ospf
 {
-Neighbor::Neighbor(OspfInterface& iface, InterfaceTimers& tmgr, uint32_t rid, types::IPAddress& neighborIp, bool unicast)
+Neighbor::Neighbor(OspfInterfaceBase& iface, InterfaceTimers& tmgr, uint32_t rid, types::IPAddress& neighborIp, bool unicast)
     : ipAddress(neighborIp),
       unicast(unicast),
       routerID(rid),
@@ -45,6 +47,7 @@ Neighbor::Neighbor(OspfInterface& iface, InterfaceTimers& tmgr, uint32_t rid, ty
 Neighbor::~Neighbor()
 {
     tmgr.cancleInactiveTimer(*this);
+    tmgr.cancelRetransmissionTimers(*this);
 }
 
 void Neighbor::resetDbExchange()
@@ -61,7 +64,8 @@ bool Neighbor::setState(Neighbor::State s)
     {
         case State::DOWN:
         {
-            // Clear retransmission lists
+            // Cancel and clear retransmission state
+            tmgr.cancelRetransmissionTimers(*this);
             rtr.lsus().clear();
             rtr.lsrs().clear();
 
@@ -77,7 +81,7 @@ bool Neighbor::setState(Neighbor::State s)
         {
             state = s;
             
-            auto ntype = iface.configs.get<config::OspfInterface::NETWORK>().load();
+            auto ntype = iface.getNetworkType();
             if (ntype == config::ospf::NetworkType::BROADCAST ||
                 ntype == config::ospf::NetworkType::NON_BROADCAST)
             {
@@ -92,6 +96,7 @@ bool Neighbor::setState(Neighbor::State s)
         {
             if (oldState != State::EXSTART)
             {
+                tmgr.cancelLsrTimers(*this);
                 rtr.lsrs().clear();
                 state = s;
                 iface.dispatcher.sendInitDbd(*this);
@@ -135,7 +140,7 @@ bool Neighbor::setState(Neighbor::State s)
             {
                 state = s;
                 iface.setFloodReduction();
-                if (iface.demandCircuit == OspfInterface::DcDecision::ENABLED)
+                if (iface.demandCircuit == OspfInterfaceBase::DcDecision::ENABLED)
                     tmgr.stopHello();
             }
             break;

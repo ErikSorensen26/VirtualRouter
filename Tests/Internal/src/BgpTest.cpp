@@ -3420,7 +3420,7 @@ TEST_F(Internal_BgpPolicyTest, Ingress_AllowAsIn_OwnAsWithinOccurrences_Accepted
     Notification err;
     { std::lock_guard lock(getSchedulerLock()); ASSERT_TRUE(af.onUpdateFromPeer(*peer.session, ub.finalize(attrs, path), err)); }
 
-    EXPECT_TRUE(isInstalled(0xC0000C00, 24))
+    EXPECT_TRUE(isInstalled(0xC0000C00, 24));
 }
 
 TEST_F(Internal_BgpPolicyTest, Ingress_AllowAsIn_OwnAsExceedsOccurrences_Rejected)

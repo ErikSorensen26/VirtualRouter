@@ -10,6 +10,7 @@
 
 #include "ospf/interface/InterfaceId.hpp"
 #include "ospf/interface/OspfInterface.h"
+#include "ospf/interface/VirtualLink.h"
 
 namespace interface { class Interface; }
 namespace types { struct IPAddress; }
@@ -18,6 +19,7 @@ namespace routing::ospf
 {
 class OspfProcess;
 class Area;
+class OspfInterfaceBase;
 class OspfInterface;
 struct FloodInfo;
 struct LsaRecordRef;
@@ -26,9 +28,9 @@ struct LsaRecordRef;
  * @brief Owns and indexes all OSPF interfaces active within one OSPF process.
  * @ingroup OSPF_INTERFACE
  *
- * `InterfaceManager` is the authoritative registry for `OspfInterface` objects
+ * `InterfaceManager` is the authoritative registry for `OspfInterfaceBase` objects
  * within an `OspfProcess`. It maps the composite `OspfInterfaceId` key (hardware
- * index + area) to the corresponding `OspfInterface` and provides the query
+ * index + area) to the corresponding `OspfInterfaceBase` and provides the query
  * helpers that the SPF engine, flooding logic, and packet dispatcher use to
  * locate interfaces by address or area reachability.
  *
@@ -37,13 +39,13 @@ struct LsaRecordRef;
  *
  * ## Architectural Role
  * `InterfaceManager` sits between the `OspfProcess` (which drives configuration
- * changes) and the individual `OspfInterface` objects (which run the per-link
+ * changes) and the individual `OspfInterfaceBase` objects (which run the per-link
  * protocol state). It does not own protocol logic itself; it is purely a
  * lifecycle and lookup layer.
  *
  * ## Lifecycle & Ownership
  * Constructed and owned by `OspfProcess`. `createInterface` inserts a new
- * `OspfInterface` into `ospfInterfaceList` in-place; `removeInterface` erases
+ * `OspfInterfaceBase` into `ospfInterfaceList` in-place; `removeInterface` erases
  * and destroys it. `deactivateAll` shuts down every interface without removing
  * them (used during graceful process stop). `~InterfaceManager` calls
  * `deactivateAll` before the map is destroyed.
@@ -52,7 +54,7 @@ struct LsaRecordRef;
  * holds a pointer to the interface being removed — doing so invalidates the
  * pointer mid-flight.
  *
- * @see OspfInterface
+ * @see OspfInterfaceBase
  * @see OspfProcess
  */
 class InterfaceManager
@@ -77,7 +79,7 @@ public:
     ~InterfaceManager();
 
     /**
-     * @brief Creates an `OspfInterface` for the given hardware interface and area.
+     * @brief Creates an `OspfInterfaceBase` for the given hardware interface and area.
      *
      * Inserts the interface into `ospfInterfaceList` keyed by @p id and returns
      * a reference to the newly constructed object. If an interface with the
@@ -85,9 +87,9 @@ public:
      *
      * @param interface  The hardware interface to run OSPF on.
      * @param id         Composite key (hardware index + area).
-     * @return Reference to the newly created `OspfInterface`.
+     * @return Reference to the newly created `OspfInterfaceBase`.
      */
-    OspfInterface& createInterface(interface::Interface& interface, const OspfInterfaceId& id);
+    OspfInterfaceBase& createInterface(interface::Interface& interface, const OspfInterfaceId& id);
 
     /**
      * @brief Removes and destroys the interface identified by @p id.
@@ -107,6 +109,16 @@ public:
      * configuration changes.
      */
     void refreshInterfaceList();
+
+    /**
+     * @brief Reconciles `virtualLinkList` against every area's `virtual-link` configuration.
+     *
+     * Creates a `VirtualLink` for each `(transit area, remote router-id)` pair
+     * newly configured and destroys any no longer present. Called at the end
+     * of `refreshInterfaceList()`, since virtual-link transmit resolution
+     * depends on the same interface/area state that triggers it.
+     */
+    void syncVirtualLinks();
 
     /**
      * @brief Stops all interfaces without removing them from the map.
@@ -129,7 +141,7 @@ public:
     /**
      * @brief Tears down and restarts the adjacencies on every managed interface.
      *
-     * Fans out `OspfInterface::resetNeighbors()` across the whole interface
+     * Fans out `OspfInterfaceBase::resetNeighbors()` across the whole interface
      * list: each neighbor drops to Down and is rediscovered via the normal
      * Hello exchange.  Called during area and process resets so no adjacency
      * state survives an LSDB flush.
@@ -151,9 +163,9 @@ public:
      * @brief Looks up a const OSPF interface by its composite key.
      *
      * @param id  The interface key to search for.
-     * @return Pointer to the `OspfInterface`, or `nullptr` if not found.
+     * @return Pointer to the `OspfInterfaceBase`, or `nullptr` if not found.
      */
-    const OspfInterface* getInterface(const OspfInterfaceId& id) const;
+    const OspfInterfaceBase* getInterface(const OspfInterfaceId& id) const;
 
     /**
      * @brief Looks up a const OSPF interface by one of its IP addresses.
@@ -163,9 +175,23 @@ public:
      * incoming unicast packets to the correct interface.
      *
      * @param addr  IP address to search for.
-     * @return Pointer to the matching `OspfInterface`, or `nullptr`.
+     * @return Pointer to the matching `OspfInterfaceBase`, or `nullptr`.
      */
-    const OspfInterface* getInterfaceByAddress(const types::IPAddress& addr) const;
+    const OspfInterfaceBase* getInterfaceByAddress(const types::IPAddress& addr) const;
+
+    /**
+     * @brief Looks up a virtual link by its remote endpoint's router ID.
+     *
+     * `getInterface()` only searches hardware-bound interfaces
+     * (`ospfInterfaceList`); virtual links are tracked separately in
+     * `virtualLinkList` and are always keyed to area 0 (RFC 2328 SS15), so
+     * this takes just the remote router ID rather than a full
+     * `OspfInterfaceId`.
+     *
+     * @param remoteRid  Router ID of the virtual link's remote endpoint.
+     * @return Pointer to the matching `VirtualLink`, or `nullptr` if none is configured.
+     */
+    const VirtualLink* getVirtualLink(uint32_t remoteRid) const;
 
     /**
      * @brief Returns the IP addresses of all interfaces reachable within an area.
@@ -181,7 +207,7 @@ public:
     // INTERNAL GETTERS
 
     /**
-     * @brief Returns an interface's version-agnostic configuration registry.
+     * @brief Returns an interface's global configuration registry.
      *
      * Access-mediation helper: `InterfaceManager` is a friend of
      * @ref OspfInterface, so OSPF-internal collaborators that are not can
@@ -190,7 +216,7 @@ public:
      *
      * @param iface The interface whose base config is requested.
      */
-    const config::OspfInterfaceBaseRegistry& getInterfaceBaseConfigs(const OspfInterface& iface) const;
+    const config::OspfGlobalInterfaceRegistry& getGlobalInterfaceConfigs(const OspfInterface& iface) const;
 
     /**
      * @brief Returns an interface's version-specific (OSPFv2/OSPFv3) configuration registry.
@@ -199,7 +225,7 @@ public:
      *
      * @param iface The interface whose config is requested.
      */
-    const config::OspfInterfaceRegistry& getInterfaceConfigs(const OspfInterface& iface) const;
+    const config::OspfInterfaceBaseRegistry& getInterfaceConfigs(const OspfInterfaceBase& iface) const;
 
     /**
      * @brief Returns an interface's neighbor table for read-only inspection.
@@ -209,7 +235,7 @@ public:
      *
      * @param iface The interface whose neighbor table is requested.
      */
-    const NeighborTable& getNTable(const OspfInterface& iface) const;
+    const NeighborTable& getNTable(const OspfInterfaceBase& iface) const;
 
     // UPDATE
 
@@ -266,7 +292,8 @@ public:
 
 private:
 
-    std::unordered_map<OspfInterfaceId, OspfInterface> ospfInterfaceList; ///< All OSPF interfaces keyed by (interfaceId, area).
+    std::unordered_map<OspfInterfaceId, OspfInterface> ospfInterfaceList;   ///< All OSPF interfaces keyed by (interfaceId, area).
+    std::unordered_map<OspfInterfaceId, VirtualLink> virtualLinkList; ///< All OSPF virtual links keyed by (interfaceId, area).
 
     OspfProcess& process; ///< The owning OSPF process.
 };
@@ -274,17 +301,29 @@ private:
 template <typename Fn>
 void InterfaceManager::forEach(Fn&& fn)
 {
+    using ReturnType = std::invoke_result_t<decltype(fn), OspfInterfaceId, OspfInterfaceBase&>;
     for (auto& [id, iface] : ospfInterfaceList)
     {
-        using ReturnType = std::invoke_result_t<decltype(fn), decltype(id), decltype((iface))>;
         if constexpr (std::is_same_v<ReturnType, bool>)
         {
-            if (fn(id, iface))
+            if (fn(id, dynamic_cast<OspfInterfaceBase&>(iface)))
                 break;
         }
         else
         {
-            fn(id, iface);
+            fn(id, dynamic_cast<OspfInterfaceBase&>(iface));
+        }
+    }
+    for (auto& [id, link] : virtualLinkList)
+    {
+        if constexpr (std::is_same_v<ReturnType, bool>)
+        {
+            if (fn(id, dynamic_cast<OspfInterfaceBase&>(link)))
+                break;
+        }
+        else
+        {
+            fn(id, dynamic_cast<OspfInterfaceBase&>(link));
         }
     }
 }
@@ -292,21 +331,32 @@ void InterfaceManager::forEach(Fn&& fn)
 template <typename Fn>
 void InterfaceManager::forEach(Fn&& fn) const
 {
-    for (const auto& [id, iface] : ospfInterfaceList)
+    using ReturnType = std::invoke_result_t<decltype(fn), OspfInterfaceId, const OspfInterfaceBase&>;
+    for (auto& [id, iface] : ospfInterfaceList)
     {
-        using ReturnType = std::invoke_result_t<decltype(fn), decltype(id), decltype((iface))>;
         if constexpr (std::is_same_v<ReturnType, bool>)
         {
-            if (fn(id, iface))
+            if (fn(id, dynamic_cast<const OspfInterfaceBase&>(iface)))
                 break;
         }
         else
         {
-            fn(id, iface);
+            fn(id, dynamic_cast<const OspfInterfaceBase&>(iface));
+        }
+    }
+    for (auto& [id, link] : virtualLinkList)
+    {
+        if constexpr (std::is_same_v<ReturnType, bool>)
+        {
+            if (fn(id, dynamic_cast<const OspfInterfaceBase&>(link)))
+                break;
+        }
+        else
+        {
+            fn(id, dynamic_cast<const OspfInterfaceBase&>(link));
         }
     }
 }
-
 } // namespace routing::ospf
 
 #endif // OSPF_INTERFACE_MANAGER_H

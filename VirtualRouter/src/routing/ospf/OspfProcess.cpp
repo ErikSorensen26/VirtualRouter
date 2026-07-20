@@ -129,7 +129,7 @@ void OspfProcess::enqueueReset()
 void OspfProcess::beginGracefulRestart(uint32_t gracePeriodSeconds, GraceRestartReason reason)
 {
     scheduler.post([this, gracePeriodSeconds, reason] {
-        ifaceMgr.forEach([&](OspfInterfaceId, OspfInterface& iface) {
+        ifaceMgr.forEach([&](OspfInterfaceId, OspfInterfaceBase& iface) {
             iface.beginGracefulRestart(gracePeriodSeconds, reason);
         });
     });
@@ -138,7 +138,7 @@ void OspfProcess::beginGracefulRestart(uint32_t gracePeriodSeconds, GraceRestart
 void OspfProcess::endGracefulRestart()
 {
     scheduler.post([this] {
-        ifaceMgr.forEach([&](OspfInterfaceId, OspfInterface& iface) {
+        ifaceMgr.forEach([&](OspfInterfaceId, OspfInterfaceBase& iface) {
             iface.endGracefulRestart();
         });
     });
@@ -179,7 +179,7 @@ Area* OspfProcess::getArea(uint32_t areaId)
     if (it == priv.areas.end()) return nullptr;
     return &it->second;
 }
-    
+
 OriginatorContext* OspfProcess::getOriginCtx(uint32_t areaId)
 {
     if (Area* area = getArea(areaId); area)

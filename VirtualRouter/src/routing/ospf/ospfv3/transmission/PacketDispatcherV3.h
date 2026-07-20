@@ -17,7 +17,7 @@
 #define V3_PACKET_DISPATCHER_H
 
 #include "packet/headers/Ospfv3Header.hpp"
-#include "ospf/interface/OspfInterface.h"
+#include "ospf/interface/OspfInterfaceBase.h"
 #include "ospf/database/LsdbTypes.hpp"
 #include "ospf/transmission/PacketDispatcher.h"
 
@@ -28,7 +28,7 @@ namespace packet { struct Ospfv3HelloHeader; struct Ospfv3DBDHeader; struct Ospf
 namespace routing::ospf
 {
 
-class OspfInterface;
+class OspfInterfaceBase;
 class Neighbor;
 class NeighborTable;
 
@@ -49,19 +49,9 @@ public:
      * interface-specific configuration handles.
      *
      * @param iface The interface this dispatcher operates on.
-     * @param configs Reference to the OspfInterfaceBaseRegistry.
+     * @param configs Reference to the OspfInterfaceBaseBaseRegistry.
      */
-    PacketDispatcherV3(OspfInterface& iface);
-
-    /**
-     * @brief Finds and returns the base interface configuration registry.
-     *
-     * Provides access to static interface base configurations for protocol
-     * operations, e.g., timers and retransmission settings.
-     *
-     * @return Reference to the OspfInterfaceBaseRegistry.
-     */
-    config::OspfInterfaceBaseRegistry& getConfigs() override;
+    PacketDispatcherV3(OspfInterfaceBase& iface);
 
     /**
      * @brief Handles an incoming OSPFv3 packet.

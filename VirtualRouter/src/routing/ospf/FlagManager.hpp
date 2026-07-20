@@ -11,7 +11,7 @@
 namespace routing::ospf
 {
 class Area;
-class OspfInterface;
+class OspfInterfaceBase;
 
 /// @brief Internal bitfield primitives used by AreaFlagManager and InterfaceFlagManager.
 namespace flagmanager
@@ -341,7 +341,7 @@ public:
     /**
      * @brief Construct an InterfaceFlagManager, initialising options from
      *        the interface configuration.
-     * @param iface The owning OspfInterface.
+     * @param iface The owning OspfInterfaceBase.
      */
     InterfaceFlagManager(AreaFlagManager& aFlags)
         : areaFlags(aFlags) {}

@@ -5,7 +5,7 @@
 #include "ospf/area/Area.h"
 #include "ospf/OspfProcess.h"
 #include "ospf/interface/InterfaceManager.h"
-#include "ospf/interface/OspfInterface.h"
+#include "ospf/interface/OspfInterfaceBase.h"
 #include "ospf/ospfv2/database/OpaqueLsaV2.hpp"
 #include "ospf/ospfv2/database/RouterCapabilityTlv.hpp"
 #include "packet/headers/embedded/ospf/Ospfv2LSAHeader.hpp"
@@ -28,7 +28,7 @@ OpaqueOriginatorV2::OpaqueOriginatorV2(OriginatorContext& ctx) : context(ctx)
 bool OpaqueOriginatorV2::anyInterfaceOpaqueCapable() const
 {
     bool capable = false;
-    context.getIfaceMgr().forEach([&](OspfInterfaceId id, const OspfInterface& iface) {
+    context.getIfaceMgr().forEach([&](OspfInterfaceId id, const OspfInterfaceBase& iface) {
         if (id.area != context.area.areaId) return;
         if (iface.getOpaqueEnabled()) capable = true;
     });

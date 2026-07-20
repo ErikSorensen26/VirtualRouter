@@ -18,7 +18,7 @@
 
 namespace cli
 {
-DEFINE_CMD_EXECUTOR(InterfaceOspf, CliMode::Interface, config::OspfInterfaceBaseRegistry);
+DEFINE_CMD_EXECUTOR(InterfaceOspf, CliMode::Interface, config::OspfGlobalInterfaceRegistry);
 }
 
 #endif

@@ -1,11 +1,15 @@
 // InterfaceManager.cpp
 
+#include <unordered_set>
+
 #include <VirtualRouter.h>
 #include <Global.h>
 
 #include "InterfaceManager.h"
 #include "ospf/area/Area.h"
+#include "OspfInterfaceBase.h"
 #include "OspfInterface.h"
+#include "VirtualLink.h"
 #include "ospf/OspfProcess.h"
 #include "ospf/neighbor/NeighborTable.h"
 #include "interface/Interface.h"
@@ -17,18 +21,25 @@ InterfaceManager::InterfaceManager(OspfProcess& p) : process(p) {}
 
 InterfaceManager::~InterfaceManager() {}
 
-const OspfInterface* InterfaceManager::getInterface(const OspfInterfaceId& id) const
+const OspfInterfaceBase* InterfaceManager::getInterface(const OspfInterfaceId& id) const
 {
     if (auto it = ospfInterfaceList.find(id); it != ospfInterfaceList.end())
         return &it->second;
     return nullptr;
 }
 
-const OspfInterface* InterfaceManager::getInterfaceByAddress(const types::IPAddress& addr) const
+const OspfInterfaceBase* InterfaceManager::getInterfaceByAddress(const types::IPAddress& addr) const
 {
     for (auto& [id, iface] : ospfInterfaceList)
         if (iface.interfaceAddress.addr == addr.raw)
             return &iface;
+    return nullptr;
+}
+
+const VirtualLink* InterfaceManager::getVirtualLink(uint32_t remoteRid) const
+{
+    if (auto it = virtualLinkList.find(OspfInterfaceId(remoteRid, 0)); it != virtualLinkList.end())
+        return &it->second;
     return nullptr;
 }
 
@@ -41,17 +52,17 @@ std::vector<types::IPAddress> InterfaceManager::getReachableInterfaces(uint32_t 
     return addrs;
 }
 
-const config::OspfInterfaceBaseRegistry& InterfaceManager::getInterfaceBaseConfigs(const OspfInterface& iface) const
+const config::OspfGlobalInterfaceRegistry& InterfaceManager::getGlobalInterfaceConfigs(const OspfInterface& iface) const
 {
-    return iface.baseConfigs;
+    return iface.globalConfigs;
 }
 
-const config::OspfInterfaceRegistry& InterfaceManager::getInterfaceConfigs(const OspfInterface& iface) const
+const config::OspfInterfaceBaseRegistry& InterfaceManager::getInterfaceConfigs(const OspfInterfaceBase& iface) const
 {
-    return iface.configs;
+    return iface.configsBase;
 }
 
-const NeighborTable& InterfaceManager::getNTable(const OspfInterface& iface) const
+const NeighborTable& InterfaceManager::getNTable(const OspfInterfaceBase& iface) const
 {
     return iface.ntable;
 }
@@ -71,10 +82,10 @@ void InterfaceManager::broadcastLsu(Area& area, std::vector<std::pair<FloodInfo,
         if (id.area != area.areaId)
             continue;
 
-        if (iface.configs.get<config::OspfInterface::DATABASE_FILTER>().load())
+        if (iface.getDatabaseFilter())
             continue;
 
-        if (iface.configs.get<config::OspfInterface::NETWORK>().load() == config::ospf::NetworkType::BROADCAST)
+        if (iface.getNetworkType() == config::ospf::NetworkType::BROADCAST)
         {
             if (iface.ntable.size() > 0)
                 iface.dispatcher.sendReliableLsu(nullptr, records);
@@ -84,6 +95,17 @@ void InterfaceManager::broadcastLsu(Area& area, std::vector<std::pair<FloodInfo,
             iface.ntable.forEach([&iface, &records](uint32_t, Neighbor& nbr) {
                 if (nbr.getState() >= Neighbor::State::EXCHANGE)
                     iface.dispatcher.sendReliableLsu(&nbr, records);
+            });
+        }
+    }
+
+    if (area.areaId == 0)
+    {
+        for (auto& [id, link] : virtualLinkList)
+        {
+            link.ntable.forEach([&link, &records](uint32_t, Neighbor& nbr) {
+                if (nbr.getState() >= Neighbor::State::EXCHANGE)
+                    link.dispatcher.sendReliableLsu(&nbr, records);
             });
         }
     }
@@ -107,7 +129,7 @@ void InterfaceManager::runDCIntegrityScan(bool enabled)
     }
 }
 
-OspfInterface& InterfaceManager::createInterface(interface::Interface& interface, const OspfInterfaceId& key)
+OspfInterfaceBase& InterfaceManager::createInterface(interface::Interface& interface, const OspfInterfaceId& key)
 {
     if (auto it = ospfInterfaceList.find(key); it != ospfInterfaceList.end())
         return it->second;
@@ -252,11 +274,41 @@ void InterfaceManager::refreshInterfaceList()
         bool exists = key.interfaceId == 0 && key.area == 0;
         if (exists)
         {
-            auto* iface = static_cast<OspfInterface*>(interface);
+            auto* iface = static_cast<OspfInterfaceBase*>(interface);
             iface->updateOriginations();
         }
         else
             createInterface(*static_cast<interface::Interface*>(interface), key);
+    }
+
+    syncVirtualLinks();
+}
+
+void InterfaceManager::syncVirtualLinks()
+{
+    std::unordered_set<OspfInterfaceId> configured;
+
+    process.forEachArea([&](uint32_t transitAreaId, Area& transitArea) {
+        // Virtual links cannot transit the backbone itself (RFC 2328 SS15).
+        if (transitAreaId == 0)
+            return;
+
+        for (const auto& [remoteRid, cfg] : transitArea.configs.get<config::OspfArea::VIRTUAL_LINKS>())
+        {
+            OspfInterfaceId key{remoteRid, 0}; // area 0: virtual links are backbone adjacencies
+            configured.insert(key);
+
+            if (virtualLinkList.find(key) == virtualLinkList.end())
+                virtualLinkList.try_emplace(key, process, key, transitAreaId, *cfg);
+        }
+    });
+
+    for (auto it = virtualLinkList.begin(); it != virtualLinkList.end();)
+    {
+        if (configured.find(it->first) == configured.end())
+            it = virtualLinkList.erase(it);
+        else
+            ++it;
     }
 }
 
@@ -264,6 +316,7 @@ void InterfaceManager::deactivateAll()
 {
     while (!ospfInterfaceList.empty())
         ospfInterfaceList.erase(ospfInterfaceList.begin());
+    virtualLinkList.clear();
 }
 
 void InterfaceManager::syncNeighbors()
@@ -279,6 +332,10 @@ void InterfaceManager::resetNeighbors()
     for (auto& [_, iface] : ospfInterfaceList)
     {
         iface.ntable.resetNeighbors();
+    }
+    for (auto& [_, link] : virtualLinkList)
+    {
+        link.ntable.resetNeighbors();
     }
 }
 } // namespace routing

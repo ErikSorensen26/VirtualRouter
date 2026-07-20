@@ -5,6 +5,8 @@
 #include "ospf/area/Area.h"
 #include "ospf/neighbor/NeighborTable.h"
 #include "ospf/neighbor/Neighbor.h"
+#include "ospf/interface/InterfaceManager.h"
+#include "ospf/interface/VirtualLink.h"
 
 namespace routing::ospf
 {
@@ -42,7 +44,11 @@ std::optional<OspfNextHop> RouteManagerUtility::resolveDirectNextHop(Area& area,
 
     auto& ifaceMgr = area.process.ifaceMgr;
 
-    const OspfInterface* iface = ifaceMgr.getInterface({pref.firstHopIfid, area.areaId});
+    if (v.type == VertexType::ROUTER && area.areaId == 0)
+        if (const VirtualLink* link = ifaceMgr.getVirtualLink(rid))
+            return link->getRoutingNextHop();
+
+    const OspfInterfaceBase* iface = ifaceMgr.getInterface({pref.firstHopIfid, area.areaId});
     if (!iface) return std::nullopt;
 
     const Neighbor* nbr = ifaceMgr.getNTable(*iface).lookup(rid);
@@ -122,5 +128,15 @@ std::optional<RouterReach> RouteManagerUtility::resolveToAbrs(OspfProcess& proc,
     auto* res = RouteManagerUtility::getTopoTable(proc).lookup(abrRid);
     if (res) return *res;
     return std::nullopt;
+}
+
+std::optional<std::pair<uint64_t, OspfNextHop>> RouteManagerUtility::resolveVirtualLinkPath(Area& transitArea, uint32_t remoteRid)
+{
+    NhCache cache;
+    auto resolved = resolveToAbr(transitArea, transitArea.spfMgr.spfResult, remoteRid, cache);
+    if (!resolved || resolved->second.empty())
+        return std::nullopt;
+
+    return std::make_pair(resolved->first, resolved->second.front());
 }
 }

@@ -5,7 +5,7 @@
 #include "FloodManager.h"
 #include "ospf/area/Area.h"
 #include "configs/registry/router/OspfRegistry.h"
-#include "ospf/interface/OspfInterface.h"
+#include "ospf/interface/OspfInterfaceBase.h"
 
 namespace routing::ospf
 {

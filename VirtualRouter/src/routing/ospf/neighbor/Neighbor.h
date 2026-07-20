@@ -25,7 +25,7 @@ namespace routing::ospf
 {
 struct LsaKey;
 class Retransmission;
-class OspfInterface;
+class OspfInterfaceBase;
 class InterfaceTimers;
 
 /**
@@ -45,9 +45,9 @@ class InterfaceTimers;
  *
  * ## Architectural Role
  * `Neighbor` is the leaf object in the OSPF ownership tree:
- * `OspfProcess → Area → OspfInterface → NeighborTable → Neighbor`.
+ * `OspfProcess → Area → OspfInterfaceBase → NeighborTable → Neighbor`.
  * The rest of the protocol (flooding, SPF, LSA origination) interacts with
- * neighbors indirectly through `NeighborTable` and `OspfInterface`.
+ * neighbors indirectly through `NeighborTable` and `OspfInterfaceBase`.
  *
  * ## Lifecycle & Ownership
  * Neighbors are created by `NeighborTable::createNeighbor` and destroyed by
@@ -111,7 +111,7 @@ public:
      * @param neighborIp The neighbor's IP address (source of Hello packets).
      * @param unicast    True if this is a statically configured unicast neighbor.
      */
-    explicit Neighbor(OspfInterface& iface, InterfaceTimers& tmgr,
+    explicit Neighbor(OspfInterfaceBase& iface, InterfaceTimers& tmgr,
                       uint32_t rid, types::IPAddress& neighborIp,
                       bool unicast = false);
 
@@ -169,7 +169,7 @@ public:
      */
     void resetDbExchange();
 
-    OspfInterface& getIface() const { return iface; }
+    OspfInterfaceBase& getIface() const { return iface; }
 
     std::atomic<uint32_t> dr{0};  ///< DR router ID declared in the neighbor's last Hello.
     std::atomic<uint32_t> bdr{0}; ///< BDR router ID declared in the neighbor's last Hello.
@@ -217,7 +217,7 @@ private:
     Role role = Role::NONE;
 
     Retransmission rtr;       ///< Holds LSU and LSR retransmission lists for this neighbor.
-    OspfInterface& iface;
+    OspfInterfaceBase& iface;
     InterfaceTimers& tmgr;
 };
 

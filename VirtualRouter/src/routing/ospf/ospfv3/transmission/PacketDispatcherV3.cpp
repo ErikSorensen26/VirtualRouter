@@ -8,37 +8,24 @@
 #include "packet/headers/embedded/ospf/Ospfv3DBDHeader.hpp"
 #include "processing/PacketBuilder.hpp"
 #include "infrastructure/IPPacket.h"
-#include "configs/registry/interface/InterfaceRegistry.h"
-#include "configs/registry/router/OspfInterfaceRegistry.h"
 
 namespace routing::ospf
 {
-PacketDispatcherV3::PacketDispatcherV3(OspfInterface& iface)
+PacketDispatcherV3::PacketDispatcherV3(OspfInterfaceBase& iface)
     : PacketDispatcher(iface)
 {}
 
-config::OspfInterfaceBaseRegistry& PacketDispatcherV3::getConfigs()
-{
-    auto& ifCfgs = iface.iface.configs.getConfigs();
-    if (iface.area.process.isV3)
-    {
-        auto& afReg = ifCfgs.get<config::Interface::OSPFV3>().emplaceBack(iface.area.process.procId);
-        return afReg.get<config::OspfInterfaceAf::IPV6>().get();
-    }
-    else
-    {
-        return ifCfgs.get<config::Interface::IPV6_OSPF>().get();
-    }
-}
-
 void PacketDispatcherV3::transmit(processing::PacketBuilder& pkt, const types::IPAddress* dest)
 {
-    auto* interface = &iface.iface;
+    auto* interface = iface.getTransmitInterface();
+    if (!interface) return;
 
     types::IPAddress destination;
     if (!dest)
     {
-        if (iface.getIsDr())
+        // Virtual links never send multicast (getIsMulticast() == false), so
+        // this branch is only reached for OspfInterface.
+        if (static_cast<OspfInterface&>(iface).getIsDr())
             destination = types::IPAddress(OSPFV3_ALL_SPF_ROUTERS, types::AddressFamily::IPv6);
         else
             destination = types::IPAddress(OSPFV3_ALL_D_ROUTERS, types::AddressFamily::IPv6);
@@ -87,14 +74,16 @@ bool PacketDispatcherV3::setupDbd(Neighbor& neighbor, packet::Ospfv3Header& pkt)
 
 void PacketDispatcherV3::onDbdRetransmissionTimer(Neighbor& nbr)
 {
-    processing::PacketBuilder retransmissionPacket(&iface.iface);
+    auto* interface = iface.getTransmitInterface();
+    if (!interface) return;
+
+    processing::PacketBuilder retransmissionPacket(interface);
     af == types::AddressFamily::IPv4
         ? infrastructure::ippacket::reserveIpv4(retransmissionPacket)
         : infrastructure::ippacket::reserveIpv6(retransmissionPacket);
     auto* hdr = retransmissionPacket.addHeader(nbr.getRtr().dbdPacket.packet, packet::HeaderType::OSPFV3);
     if (!hdr) return;
 
-    auto* interface = &iface.iface;
     infrastructure::ippacket::BuildIP build = {
         .iface = interface,
         .packetInfo = retransmissionPacket,

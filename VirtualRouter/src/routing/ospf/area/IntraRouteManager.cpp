@@ -57,10 +57,10 @@ void IntraRouteManager::deriveIntraAreaRoutes(const SpfResult& spf, std::vector<
             {
                 if (link.type != OSPFV2_LINK_STUB) continue;
                 
-                const OspfInterface* owner = nullptr;
-                ifmgr.forEach([this, &owner, &link](OspfInterfaceId id, const OspfInterface& iface) {
+                const OspfInterfaceBase* owner = nullptr;
+                ifmgr.forEach([this, &owner, &link](OspfInterfaceId id, const OspfInterfaceBase& iface) {
                     if (id.area != area.areaId) return false;
-                    if (iface.interfaceAddress.v4() == link.linkId)
+                    if (iface.getTransmitAddress().v4() == link.linkId)
                     {
                         owner = &iface;
                         return true;
@@ -94,10 +94,10 @@ void IntraRouteManager::deriveIntraAreaRoutes(const SpfResult& spf, std::vector<
 
             for (const auto& pr : selfPrefixes)
             {
-                const OspfInterface* owner = nullptr;
-                ifmgr.forEach([this, &owner, &pr](OspfInterfaceId id, const OspfInterface& iface) {
+                const OspfInterfaceBase* owner = nullptr;
+                ifmgr.forEach([this, &owner, &pr](OspfInterfaceId id, const OspfInterfaceBase& iface) {
                     if (id.area != area.areaId) return false;
-                    auto routable = iface.iface.configs.ipv6.getRoutablePrefixSet(true);
+                    auto routable = iface.getTransmitInterface()->configs.ipv6.getRoutablePrefixSet(true);
                     if (routable.count(pr.prefix) > 0)
                     {
                         owner = &iface;

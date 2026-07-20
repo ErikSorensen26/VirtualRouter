@@ -2,31 +2,27 @@
 
 #include "PacketDispatcherV2.h"
 #include "ospf/neighbor/Neighbor.h"
-#include "ospf/area/Area.h"
+#include "ospf/OspfProcess.h"
 #include "packet/headers/embedded/ospf/Ospfv2DBDHeader.hpp"
 #include "processing/PacketBuilder.hpp"
 #include "infrastructure/IPPacket.h"
-#include "configs/registry/interface/InterfaceRegistry.h"
 
 namespace routing::ospf
 {
-PacketDispatcherV2::PacketDispatcherV2(OspfInterface& iface)
+PacketDispatcherV2::PacketDispatcherV2(OspfInterfaceBase& iface)
     : PacketDispatcher(iface)
 {}
 
-config::OspfInterfaceBaseRegistry& PacketDispatcherV2::getConfigs()
-{
-    return iface.iface.configs.getConfigs().get<config::Interface::IP_OSPF>().get();
-}
-
 void PacketDispatcherV2::transmit(processing::PacketBuilder& pkt, const types::IPAddress* dest)
 {
-    auto* interface = &iface.iface;
+    auto* interface = iface.getTransmitInterface();
+    if (!interface) return;
 
     types::IPAddress destination;
     if (!dest)
     {
-        if (iface.getIsDr())
+        // Virtual links never send multicast (getIsMulticast() == false)
+        if (static_cast<OspfInterface&>(iface).getIsDr())
             destination = types::IPAddress(OSPFV2_ALL_SPF_ROUTERS, types::AddressFamily::IPv4);
         else
             destination = types::IPAddress(OSPFV2_ALL_D_ROUTERS, types::AddressFamily::IPv4);
@@ -73,12 +69,14 @@ bool PacketDispatcherV2::setupDbd(Neighbor& neighbor, packet::Ospfv2Header& pkt)
 
 void PacketDispatcherV2::onDbdRetransmissionTimer(Neighbor& nbr)
 {
-    processing::PacketBuilder retransmissionPacket(&iface.iface);
+    auto* interface = iface.getTransmitInterface();
+    if (!interface) return;
+
+    processing::PacketBuilder retransmissionPacket(interface);
     infrastructure::ippacket::reserveIpv4(retransmissionPacket);
     auto* hdr = retransmissionPacket.addHeader(nbr.getRtr().dbdPacket.packet, packet::HeaderType::OSPFV2);
     if (!hdr) return;
 
-    auto* interface = &iface.iface;
     infrastructure::ippacket::BuildIP build = {
         .iface = interface,
         .packetInfo = retransmissionPacket,

@@ -24,6 +24,7 @@
 
 namespace routing::ospf
 {
+class OspfInterface;
 
 /**
  * @brief OSPFv3 concrete implementation of the @ref IntraOriginator base class.
@@ -128,7 +129,7 @@ protected:
      * @param iface   The DR interface.
      * @param refresh True if this is a scheduled refresh rather than a topology change.
      */
-    void addNetworkLsa(const OspfInterface& iface, bool refresh) override;
+    void addNetworkLsa(const OspfInterfaceBase& iface, bool refresh) override;
 
     std::vector<LsaKey> lastRouterLsas;    ///< LS-IDs of active Router-LSA fragments; tracked to detect which fragments were removed.
     std::vector<LsaKey> lastRouterPrefixes; ///< LS-IDs of Intra-Area-Prefix-LSAs associated with Router-LSAs.
@@ -227,7 +228,7 @@ private:
      * @param iface   Broadcast or NBMA interface.
      * @param nbr     DR neighbor, or null if the DR is this router.
      */
-    void addTransitLink(LsaBody& router, const OspfInterface& iface, const Neighbor* nbr = nullptr) override;
+    void addTransitLink(LsaBody& router, const OspfInterfaceBase& iface, const Neighbor* nbr = nullptr) override;
 
     /**
      * @brief Appends a point-to-point link record to a Router-LSA body.
@@ -236,7 +237,7 @@ private:
      * @param iface    P2P interface.
      * @param neighbor The fully adjacent neighbor on this interface.
      */
-    void addP2PLink(LsaBody& router, const OspfInterface& iface, const Neighbor& neighbor) override;
+    void addP2PLink(LsaBody& router, const OspfInterfaceBase& iface, const Neighbor& neighbor) override;
 
     /**
      * @brief Appends a stub link record for an interface with no full adjacencies.
@@ -249,7 +250,7 @@ private:
      * @param iface    Stub interface.
      * @param fullMask True to advertise a host (/128) prefix instead of the interface prefix.
      */
-    void addStubLink(LsaBody& router, const OspfInterface& iface, bool fullMask = false) override;
+    void addStubLink(LsaBody& router, const OspfInterfaceBase& iface, bool fullMask = false) override;
 
     /**
      * @brief Appends a virtual link record to a Router-LSA body.
@@ -258,7 +259,7 @@ private:
      * @param iface   Virtual link interface.
      * @param vNbr    The fully adjacent virtual neighbor.
      */
-    void addVirtualLink(LsaBody& router, const OspfInterface& iface, const Neighbor& vNbr) override;
+    void addVirtualLink(LsaBody& router, const OspfInterfaceBase& iface, const Neighbor& vNbr) override;
 };
 
 } // namespace routing

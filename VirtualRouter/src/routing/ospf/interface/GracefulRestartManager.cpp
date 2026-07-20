@@ -1,7 +1,7 @@
 // GracefulRestartManager.cpp
 
 #include "GracefulRestartManager.h"
-#include "OspfInterface.h"
+#include "OspfInterfaceBase.h"
 #include "ospf/area/Area.h"
 #include "ospf/area/OriginatorContext.h"
 #include "ospf/OspfProcess.h"
@@ -18,7 +18,7 @@ static uint32_t graceLinkStateId(uint32_t interfaceId)
     return (static_cast<uint32_t>(GRACE_LSA_OPAQUE_TYPE) << 24) | (interfaceId & 0x00FFFFFF);
 }
 
-GracefulRestartManager::GracefulRestartManager(OspfInterface& iface) : iface(iface)
+GracefulRestartManager::GracefulRestartManager(OspfInterfaceBase& iface) : iface(iface)
 {}
 
 void GracefulRestartManager::originateGraceLsa(uint32_t gracePeriodSeconds, GraceRestartReason reason)

@@ -17,13 +17,13 @@ namespace core { class ProcessQueue; }
 namespace routing::ospf
 {
 class Neighbor;
-class OspfInterface;
+class OspfInterfaceBase;
 
 /**
  * @brief Manages all periodic and one-shot timers associated with an OSPF interface.
  * @ingroup OSPF_INTERFACE
  *
- * Each `OspfInterface` owns exactly one `InterfaceTimers` instance. The class
+ * Each `OspfInterfaceBase` owns exactly one `InterfaceTimers` instance. The class
  * centralises timer scheduling so that timer IDs, start times, and the
  * `ProcessQueue` reference are not scattered across the interface and neighbor
  * objects.
@@ -46,17 +46,21 @@ class OspfInterface;
  * code free of direct scheduler calls.
  *
  * ## Lifecycle & Ownership
- * Constructed by `OspfInterface` and destroyed with it. The `runTimers` flag
- * is set to `false` during teardown so that in-flight callbacks find the
- * guard and exit without touching freed state.
+ * Constructed by `OspfInterfaceBase` and destroyed with it. Every timer this
+ * class arms must be explicitly cancelled before its owner (a `Neighbor` or
+ * the interface itself) is torn down: `stopHello()` for the Hello/inactivity
+ * timers, `cancelRetransmissionTimers()` for a neighbor's DBD/LSR/LSU
+ * retransmit and pacing timers. There is no separate "teardown mode" guard --
+ * an armed timer that outlives its owner is a bug at the call site that
+ * failed to cancel it, not something this class papers over.
  *
  * ## Concurrency Model
- * `helloTimerId` and `runTimers` are `std::atomic` because the Hello timer
- * callback runs on the scheduler thread while the interface can be stopped
- * from a control-plane thread. All other timer IDs belong to neighbor objects
- * and are similarly atomic.
+ * `helloTimerId` is `std::atomic` because the Hello timer callback runs on
+ * the scheduler thread while the interface can be stopped from a
+ * control-plane thread. All other timer IDs belong to neighbor objects and
+ * are similarly atomic.
  *
- * @see OspfInterface
+ * @see OspfInterfaceBase
  * @see Neighbor
  */
 class InterfaceTimers
@@ -70,7 +74,7 @@ public:
      *
      * @param iface  The owning OSPF interface.
      */
-    explicit InterfaceTimers(OspfInterface& iface, core::ProcessQueue&& scheduler);
+    explicit InterfaceTimers(OspfInterfaceBase& iface, core::ProcessQueue&& scheduler);
 
     /**
      * @brief Arms the Hello timer for a single future firing without starting
@@ -181,15 +185,37 @@ public:
      */
     void startLsuPacingTimer(Neighbor* neighbor);
 
+    /**
+     * @brief Cancels every retransmission/pacing timer owned by a neighbor:
+     *        DBD, LSR retransmit, LSR pacing, LSU retransmit, LSU pacing.
+     *
+     * Does not touch the inactivity timer (see `cancleInactiveTimer`).
+     * Must be called before a neighbor's retransmission lists are cleared or
+     * the neighbor itself is destroyed -- otherwise an already-armed timer
+     * can fire after teardown and call back into a partially- or
+     * fully-destroyed interface/neighbor.
+     *
+     * @param neighbor  The neighbor whose timers should be cancelled.
+     */
+    void cancelRetransmissionTimers(Neighbor& neighbor);
+
+    /**
+     * @brief Cancels just the LSR retransmit and LSR pacing timers.
+     *
+     * Used when re-entering ExStart, which clears only `lsrs()` (the LSU list
+     * survives an ExStart restart) -- see `Neighbor::setState`.
+     *
+     * @param neighbor  The neighbor whose LSR timers should be cancelled.
+     */
+    void cancelLsrTimers(Neighbor& neighbor);
+
 private:
     std::atomic<uint32_t> helloTimerId{0};              ///< Active Hello timer ID; 0 when not running.
     std::chrono::steady_clock::time_point helloStartTime; ///< When the current Hello interval began.
 
-    std::atomic<bool> runTimers = true; ///< Set to false during teardown to suppress in-flight callbacks.
-
     core::ProcessQueue scheduler; ///< Scheduler used to post all timer callbacks.
 
-    OspfInterface& iface; ///< The interface that owns this timer manager.
+    OspfInterfaceBase& iface; ///< The interface that owns this timer manager.
 };
 
 } // namespace routing::ospf

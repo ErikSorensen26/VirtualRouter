@@ -10,7 +10,7 @@
 #include "InterfaceOspfCommands.h"
 #include "configs/FieldAccessor.hpp"
 
-#define OSPF_PARAMS DEFINE_PARAMS(config::OspfInterfaceBaseRegistry)
+#define OSPF_PARAMS DEFINE_PARAMS(config::OspfGlobalInterfaceRegistry)
 
 namespace cli
 {
@@ -25,10 +25,10 @@ bool InterfaceIPOspf_Area_Handler(OSPF_PARAMS)
     auto idTok = segs >> 1 >> 1;
     if (!utils::setValue(areaId, idTok) && !utils::setValue(areaId.addr, idTok))
         return false;
-    auto area = ctx.configs().get<config::OspfInterfaceBase::AREA_ID>();
+    auto area = ctx.configs().get<config::OspfGlobalInterface::AREA_ID>();
     if (!utils::handleValueReset(area, ctx))
         area.set(areaId.addr);
-    auto secondaries = ctx.configs().get<config::OspfInterfaceBase::INCLUDE_SECONDARIES>();
+    auto secondaries = ctx.configs().get<config::OspfGlobalInterface::INCLUDE_SECONDARIES>();
     if (!utils::handleValueReset(secondaries, ctx) && (segs >> 2))
         utils::setToggleValue(secondaries, ctx);
     return true;
@@ -37,7 +37,8 @@ bool InterfaceIPOspf_Area_Handler(OSPF_PARAMS)
 bool InterfaceIPOspf_Authentication_Handler(OSPF_PARAMS)
 {
     auto& ospf = ctx.configs();
-    auto authType = ospf.get<config::OspfInterfaceBase::AUTHENTICATION_TYPE>();
+    auto authType = ospf.get<config::OspfGlobalInterface::GLOBAL_BASE>().get()
+	.get<config::OspfGlobalInterfaceBase::AUTHENTICATION_TYPE>();
 
     if (segs.empty())
     {
@@ -68,7 +69,8 @@ bool InterfaceIPOspf_Authentication_Handler(OSPF_PARAMS)
 bool InterfaceIPOspf_AuthenticationKey_Handler(OSPF_PARAMS)
 {
     auto& ospf = ctx.configs();
-    auto authKey = ospf.get<config::OspfInterfaceBase::AUTHENTICATION_KEY>();
+    auto authKey = ospf.get<config::OspfGlobalInterface::GLOBAL_BASE>().get()
+	.get<config::OspfGlobalInterfaceBase::AUTHENTICATION_KEY>();
     if (utils::handleValueReset(authKey, ctx))
 	return true;
     Token* t = segs >> 0 >> 1;
@@ -85,7 +87,7 @@ bool InterfaceIPOspf_AuthenticationKey_Handler(OSPF_PARAMS)
 bool InterfaceIPOspf_LLS_Handler(OSPF_PARAMS)
 {
     auto& ospf = ctx.configs();
-    auto lls = ospf.get<config::OspfInterfaceBase::LLS>();
+    auto lls = ospf.get<config::OspfGlobalInterface::LLS>();
     if (!utils::handleValueReset(lls, ctx))
 	return true;
     bool disable = segs >> 1; // Disable
@@ -96,7 +98,8 @@ bool InterfaceIPOspf_LLS_Handler(OSPF_PARAMS)
 bool InterfaceIPOspf_MessageDigestKey_Handler(OSPF_PARAMS)
 {
     auto& ospf = ctx.configs();
-    auto digestKeys = ospf.get<config::OspfInterfaceBase::MESSAGE_DIGEST_KEYS>();
+    auto digestKeys = ospf.get<config::OspfGlobalInterface::GLOBAL_BASE>().get()
+	.get<config::OspfGlobalInterfaceBase::MESSAGE_DIGEST_KEYS>();
     config::DefType<typename decltype(digestKeys)::Field>::node tup;
     for (const auto& seg : segs)
     {
@@ -126,7 +129,7 @@ bool InterfaceIPOspf_MessageDigestKey_Handler(OSPF_PARAMS)
 bool InterfaceIPOspf_PrefixSuppression_Handler(OSPF_PARAMS)
 {
     auto& ospf = ctx.configs();
-    auto ps = ospf.get<config::OspfInterfaceBase::PREFIX_SUPPRESSION>();
+    auto ps = ospf.get<config::OspfGlobalInterface::PREFIX_SUPPRESSION>();
     if (!utils::handleValueReset(ps, ctx))
 	return true;
     bool disable = segs >> 1; // Disable
@@ -136,14 +139,14 @@ bool InterfaceIPOspf_PrefixSuppression_Handler(OSPF_PARAMS)
 
 bool InterfaceIPOspf_ResyncTimeout_Handler(OSPF_PARAMS)
 {
-    auto resync = ctx.configs().get<config::OspfInterfaceBase::RESYNC_TIMEOUT>();
+    auto resync = ctx.configs().get<config::OspfGlobalInterface::RESYNC_TIMEOUT>();
     return utils::setFieldValue(resync, ctx, segs >> 0 >> 1);
 }
 
 bool InterfaceIPOspf_Shutdown_Handler(OSPF_PARAMS)
 {
     UNUSED(segs);
-    auto shut = ctx.configs().get<config::OspfInterfaceBase::SHUTDOWN>();
+    auto shut = ctx.configs().get<config::OspfGlobalInterface::SHUTDOWN>();
     utils::setToggleValue(shut, ctx);
     return true;
 }
@@ -151,8 +154,10 @@ bool InterfaceIPOspf_Shutdown_Handler(OSPF_PARAMS)
 bool InterfaceIPOspf_TtlSecurity_Handler(OSPF_PARAMS)
 {
     auto& ospf = ctx.configs();
-    auto ttlSec = ospf.get<config::OspfInterfaceBase::BASE>().get().get<config::OspfInterface::TTL_SEC>();
-    auto ttlSecHops = ospf.get<config::OspfInterfaceBase::BASE>().get().get<config::OspfInterface::TTL_SEC_HOPS>();
+    auto ttlSec = ospf.get<config::OspfGlobalInterface::BASE>().get()
+	.get<config::OspfInterface::BASE>().get().get<config::OspfInterfaceBase::TTL_SEC>();
+    auto ttlSecHops = ospf.get<config::OspfGlobalInterface::BASE>().get()
+	.get<config::OspfInterface::BASE>().get().get<config::OspfInterfaceBase::TTL_SEC_HOPS>();
     if (utils::handleValueReset(ttlSec, ctx) && utils::handleValueReset(ttlSecHops, ctx))
 	return true;
     ttlSec.set((segs >> 0 >> 0) != "disable"_tok);
@@ -179,7 +184,7 @@ bool InterfaceIPOspf_TtlSecurity_Handler(OSPF_PARAMS)
  * Extends `InterfaceOspfCommands` (shared OSPFv2/v3 base) with OSPFv2-specific
  * interface commands.  Covers `CliMode::Interface` with `InterfaceContext`.
  */
-DEFINE_CMD_MODE(InterfaceIPOspf, config::OspfInterfaceBaseRegistry, INTERFACE_IP_OSPF_LIST);
+DEFINE_CMD_MODE(InterfaceIPOspf, config::OspfGlobalInterfaceRegistry, INTERFACE_IP_OSPF_LIST);
 }
 
 #undef OSPF_PARAMS

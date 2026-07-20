@@ -9,13 +9,13 @@
 #include "InterfaceOspfCommands.h"
 #include "configs/FieldAccessor.hpp"
 
-#define OSPF_PARAMS DEFINE_PARAMS(config::OspfInterfaceBaseRegistry)
+#define OSPF_PARAMS DEFINE_PARAMS(config::OspfGlobalInterfaceRegistry)
 
 namespace cli
 {
 bool InterfaceIPv6Ospf_Area_Handler(OSPF_PARAMS)
 {
-    config::OspfInterfaceBaseRegistry* ospf = nullptr;
+    auto& ospf = ctx.configs();
 
     uint16_t id;
     if (!utils::setValue(id, segs >> 0 >> 1))
@@ -25,17 +25,17 @@ bool InterfaceIPv6Ospf_Area_Handler(OSPF_PARAMS)
     auto idTok = segs >> 1 >> 1;
     if (!utils::setValue(areaId, idTok) && !utils::setValue(areaId.addr, idTok))
 	    return false;
-    auto area = ospf->get<config::OspfInterfaceBase::AREA_ID>();
+    auto area = ospf.get<config::OspfGlobalInterface::AREA_ID>();
     if (!utils::handleValueReset(area, ctx))
 	area.set(areaId.addr);
-    auto instance = ospf->get<config::OspfInterfaceBase::INSTANCE_ID>();
+    auto instance = ospf.get<config::OspfGlobalInterface::GLOBAL_BASE>().get().get<config::OspfGlobalInterfaceBase::INSTANCE_ID>();
     utils::setFieldValueWithFallback(instance, ctx, segs >> 2 >> 1);
     return true;
 }
 
 bool InterfaceIPv6Ospf_Authentication_Handler(OSPF_PARAMS)
 {
-    auto& ospf = ctx.configs().get<config::OspfInterfaceBase::IPSEC>().get();
+    auto& ospf = ctx.configs().get<config::OspfGlobalInterface::IPSEC>().get();
 
     if (auto t = ospf.get<config::OspfInterfaceIPSec::ENCRYPTION_TYPE>();
 	t.hasValue() || t.load() != config::ospf::IPsecEncryptType::NULL_TYPE)
@@ -90,7 +90,7 @@ bool InterfaceIPv6Ospf_Authentication_Handler(OSPF_PARAMS)
 
 bool InterfaceIPv6Ospf_Encryption_Handler(OSPF_PARAMS)
 {
-    auto& ospf = ctx.configs().get<config::OspfInterfaceBase::IPSEC>().get();
+    auto& ospf = ctx.configs().get<config::OspfGlobalInterface::IPSEC>().get();
 	
     auto spi = ospf.get<config::OspfInterfaceIPSec::SPI>();
     auto encryptType = ospf.get<config::OspfInterfaceIPSec::ENCRYPTION_TYPE>();
@@ -168,7 +168,7 @@ bool InterfaceIPv6Ospf_Encryption_Handler(OSPF_PARAMS)
 
 bool InterfaceIPv6Ospf_Neighbor_Handler(OSPF_PARAMS)
 {
-    auto neighbors = ctx.configs().get<config::OspfInterfaceBase::BASE>().get().get<config::OspfInterface::NEIGHBOR>();
+    auto neighbors = ctx.configs().get<config::OspfGlobalInterface::BASE>().get().get<config::OspfInterface::NEIGHBOR>();
     config::DefType<typename decltype(neighbors)::Field>::node tup;
 
     for (const auto& seg : segs)
@@ -224,7 +224,7 @@ bool InterfaceIPv6Ospf_Neighbor_Handler(OSPF_PARAMS)
  * Extends `InterfaceOspfCommands` (shared OSPFv2/v3 base) with OSPFv3-specific
  * interface commands.  Covers `CliMode::Interface` with `InterfaceContext`.
  */
-DEFINE_CMD_MODE(InterfaceIPv6Ospf, config::OspfInterfaceBaseRegistry, INTERFACE_IPV6_OSPF_LIST);
+DEFINE_CMD_MODE(InterfaceIPv6Ospf, config::OspfGlobalInterfaceRegistry, INTERFACE_IPV6_OSPF_LIST);
 }
 
 #undef OSPF_PARAMS

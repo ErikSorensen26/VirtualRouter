@@ -16,7 +16,7 @@ namespace types { struct IPAddress; }
 
 namespace routing::ospf
 {
-class OspfInterface;
+class OspfInterfaceBase;
 class InterfaceTimers;
 class Neighbor;
 struct DrCandidate;
@@ -28,7 +28,7 @@ struct LsaRecordRef;
  * @ingroup OSPF_NEIGHBOR
  *
  * `NeighborTable` is the authoritative store of `Neighbor` objects for a
- * single `OspfInterface`. It provides creation, deletion, and lookup by
+ * single `OspfInterfaceBase`. It provides creation, deletion, and lookup by
  * Router ID, as well as the unicast neighbor configuration map used on NBMA
  * and point-to-multipoint segments.
  *
@@ -38,13 +38,13 @@ struct LsaRecordRef;
  *   overrides), used to populate Hello destinations on non-broadcast segments.
  *
  * ## Architectural Role
- * `NeighborTable` sits between `OspfInterface` (the link-level owner) and
+ * `NeighborTable` sits between `OspfInterfaceBase` (the link-level owner) and
  * individual `Neighbor` objects. The flooding, packet dispatcher, and timer
  * subsystems obtain `Neighbor*` pointers from here; they do not hold their
  * own references.
  *
  * ## Lifecycle & Ownership
- * Constructed by `OspfInterface` and destroyed with it. `Neighbor` objects
+ * Constructed by `OspfInterfaceBase` and destroyed with it. `Neighbor` objects
  * are stored by value in `neighbors`, so they are destroyed in place when
  * `deleteNeighbor` or the destructor runs.
  *
@@ -53,7 +53,7 @@ struct LsaRecordRef;
  * after calling `deleteNeighbor` for that neighbor's RID.
  *
  * @see Neighbor
- * @see OspfInterface
+ * @see OspfInterfaceBase
  */
 class NeighborTable
 {
@@ -66,7 +66,7 @@ public:
      *
      * @param iface  The owning OSPF interface.
      */
-    explicit NeighborTable(OspfInterface& iface, InterfaceTimers& tmgr);
+    explicit NeighborTable(OspfInterfaceBase& iface, InterfaceTimers& tmgr);
 
     /**
      * @brief Reconciles the live neighbor table against the unicast configuration.
@@ -212,7 +212,7 @@ private:
     };
 
     std::unordered_map<types::IPAddress, UnicastConfigs> unicast; ///< Statically configured unicast neighbors.
-    OspfInterface& iface;
+    OspfInterfaceBase& iface;
     InterfaceTimers& tmgr;
 };
 

@@ -2,7 +2,7 @@
 
 #include "PacketDispatcherV2.h"
 #include "ospf/OspfProcess.h"
-#include "ospf/interface/OspfInterface.h"
+#include "ospf/interface/OspfInterfaceBase.h"
 #include "ospf/interface/InterfaceTimers.h"
 #include "ospf/neighbor/Neighbor.h"
 #include "ospf/area/Area.h"
@@ -21,10 +21,6 @@
 namespace routing::ospf
 {
 
-// Validates the OSPF LSA Fletcher checksum against raw wire bytes (RFC 2328 §C.4).
-// Recomputes the checksum over bytes [2, len) (skipping the 2-byte Age field) with the
-// 2-byte checksum field (at LSA offset 16-17) treated as zero — matching how the
-// checksum was originally computed — then compares against the value on the wire.
 static bool verifyOspfFletcher(const uint8_t* lsa, uint16_t len)
 {
     if (len < 20) return false;
@@ -41,7 +37,7 @@ void PacketDispatcherV2::handleIncoming(const packet::Ospfv2Header& ospfHeader, 
     uint32_t rid = ospfHeader.getRouterID();
 
     // Check passive
-    if (getIfaceConfigs().get<config::OspfInterface::PASSIVE>().load())
+    if (iface.getPassive())
         return;
 
     // Validate version
@@ -55,7 +51,7 @@ void PacketDispatcherV2::handleIncoming(const packet::Ospfv2Header& ospfHeader, 
     size_t packetSize = packet::Ospfv2Header::fixedSize + ospfHeader.getTrail().size();
     if (ospfHeader.getPacketLen() > packetSize) return;
 
-    auto interfaceAuth = getIfaceBaseConfigs().get<config::OspfInterfaceBase::AUTHENTICATION_TYPE>();
+    auto interfaceAuth = getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::AUTHENTICATION_TYPE>();
     auto authType = interfaceAuth.hasValue() ? interfaceAuth.load()
         : getAreaConfigs().get<config::OspfArea::AUTHENTICATION_TYPE>().load();
 
@@ -125,8 +121,6 @@ void PacketDispatcherV2::processHello(PacketDispatcher::HeaderInfo& info, bool u
     packet::Ospfv2HelloHeader hdr;
     hdr.setBuffer(info.payload);
 
-    auto& ifaceConfigs = getIfaceConfigs();
-
     info.offset += packet::Ospfv2HelloHeader::fixedSize;
     if (info.offset > info.payloadSize)
         return;
@@ -139,12 +133,12 @@ void PacketDispatcherV2::processHello(PacketDispatcher::HeaderInfo& info, bool u
         return;
     }
 
-    auto ntype = ifaceConfigs.get<config::OspfInterface::NETWORK>().load();
+    auto ntype = iface.getNetworkType();
     bool multiAccess = ntype == config::ospf::NetworkType::BROADCAST || ntype == config::ospf::NetworkType::NON_BROADCAST;
 
     if (multiAccess)
     {
-        if (hdr.getMask() != iface.interfaceAddress.getMask())
+        if (hdr.getMask() != static_cast<OspfInterface&>(iface).interfaceAddress.getMask())
         {
             if (info.neighbor)
                 info.neighbor->setState(Neighbor::State::DOWN);
@@ -226,15 +220,15 @@ void PacketDispatcherV2::processHello(PacketDispatcher::HeaderInfo& info, bool u
         info.neighbor->dr.store(newDr, std::memory_order_relaxed);
         info.neighbor->bdr.store(newBdr, std::memory_order_relaxed);
 
-        uint32_t currentDr = iface.getDrRid();
-        uint32_t currentBdr = iface.getBdrRid();
+        uint32_t currentDr = static_cast<OspfInterface*>(&iface)->getDrRid();
+        uint32_t currentBdr = static_cast<OspfInterface*>(&iface)->getBdrRid();
 
         const bool election = (newPriority == 0 &&
             (info.neighbor->routerID == currentBdr ||
              info.neighbor->routerID == currentDr)) ||
             (info.neighbor->getState() == Neighbor::State::TWOWAY &&
-            ((iface.getDrRid() == 0) ||
-            (iface.getBdrRid() == 0)));
+            ((currentDr == 0) ||
+            (currentBdr == 0)));
 
         if (election)
             runDrElection();
@@ -268,7 +262,7 @@ void PacketDispatcherV2::processDBD(PacketDispatcher::HeaderInfo& info)
     }
 
     // Verify MTU
-    if (!getIfaceConfigs().get<config::OspfInterface::MTU_IGNORE>().load() && info.neighbor->mtu != hdr.getMtu())
+    if (!iface.getMtuIgnore() && info.neighbor->mtu != hdr.getMtu())
     {
         info.neighbor->setState(Neighbor::State::DOWN);
         return;
@@ -600,7 +594,7 @@ void PacketDispatcherV2::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
 
 bool PacketDispatcherV2::processOspfSimpleAuthentication(const packet::Ospfv2Header& hdr)
 {
-    auto secretVal = getIfaceBaseConfigs().get<config::OspfInterfaceBase::AUTHENTICATION_KEY>();
+    auto secretVal = getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::AUTHENTICATION_KEY>();
     if (!secretVal.hasValue()) return true; // Auth not fully enabled.
     if (hdr.getAuthType() != static_cast<uint16_t>(config::ospf::AuthType::SIMPLE))
         return false;

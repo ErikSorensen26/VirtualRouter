@@ -338,7 +338,7 @@ bool InterfaceIPv6_ND_SubHandler(INTERFACE_SUB_PARAMS)
 bool InterfaceIPv6_Ospf_SubHandler(INTERFACE_SUB_PARAMS)
 {
     auto& ospf = ctx.configs().get<config::Interface::IPV6_OSPF>().get();
-    Context<config::OspfInterfaceBaseRegistry> newCtx(ctx.terminal, ospf);
+    Context<config::OspfGlobalInterfaceRegistry> newCtx(ctx.terminal, ospf);
     newCtx.negate = ctx.negate;
     newCtx.defaulted = ctx.defaulted;
     return InterfaceIPv6OspfCommands::execute(newCtx, toks, idx);

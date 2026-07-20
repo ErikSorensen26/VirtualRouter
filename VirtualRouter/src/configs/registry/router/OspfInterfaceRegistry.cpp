@@ -7,9 +7,9 @@
 
 namespace config
 {
-void OspfInterfaceSyncTimers(void* ifacePtr)
+void OspfInterfaceBaseSyncTimers(void* ifacePtr)
 {
-    auto& iface = *static_cast<routing::ospf::OspfInterface*>(ifacePtr);
+    auto& iface = *static_cast<routing::ospf::OspfInterfaceBase*>(ifacePtr);
     iface.enqueueSyncTimers();
 }
 
@@ -37,13 +37,13 @@ void OspfInterfaceSyncPassive(void* ifacePtr)
     iface.enqueueSyncPassive();
 }
 
-void OspfInterfaceBaseUpdateDigestKey(void* ifacePtr)
+void OspfGlobalInterfaceBaseUpdateDigestKey(void* ifacePtr)
 {
-    auto& iface = *static_cast<routing::ospf::OspfInterface*>(ifacePtr);
-    iface.enqueueSyncDigestKey(); 
+    auto& iface = *static_cast<routing::ospf::OspfInterfaceBase*>(ifacePtr);
+    iface.enqueueSyncDigestKey();
 }
 
-void OspfInterfaceBasePrefixSuppression(void* ifacePtr)
+void OspfGlobalInterfacePrefixSuppression(void* ifacePtr)
 {
     auto& iface = *static_cast<routing::ospf::OspfInterface*>(ifacePtr);
     iface.enqueueSyncPrefixSuppression();

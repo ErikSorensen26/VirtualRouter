@@ -2,7 +2,7 @@
 
 #include "PacketDispatcherV3.h"
 #include "ospf/OspfProcess.h"
-#include "ospf/interface/OspfInterface.h"
+#include "ospf/interface/OspfInterfaceBase.h"
 #include "ospf/interface/InterfaceTimers.h"
 #include "ospf/neighbor/Neighbor.h"
 #include "ospf/area/Area.h"
@@ -19,9 +19,6 @@
 
 namespace routing::ospf
 {
-// Recomputes the checksum over bytes [2, len) (skipping the 2-byte Age field) with the
-// 2-byte checksum field (at LSA offset 16-17) treated as zero — matching how the
-// checksum was originally computed — then compares against the value on the wire.
 static bool verifyOspfFletcher(const uint8_t* lsa, uint16_t len)
 {
     if (len < 20) return false;
@@ -38,12 +35,12 @@ void PacketDispatcherV3::handleIncoming(const packet::Ospfv3Header& ospfHeader, 
     uint32_t rid = ospfHeader.getRouterID();
 
     // Check if
-    auto ntype = getIfaceConfigs().get<config::OspfInterface::NETWORK>().load();
+    auto ntype = iface.getNetworkType();
     if (multicast && (ntype == config::ospf::NetworkType::NON_BROADCAST || ntype == config::ospf::NetworkType::POINT_TO_MULTIPOINT))
         return;
 
     // Check passive
-    if (getIfaceConfigs().get<config::OspfInterface::PASSIVE>().load())
+    if (iface.getPassive())
         return;
 
     // Validate version
@@ -79,7 +76,7 @@ void PacketDispatcherV3::handleIncoming(const packet::Ospfv3Header& ospfHeader, 
         return;
 
     // RFC 5340 §4.4.1: instance ID must match the interface's configured instance
-    if (ospfHeader.getInstanceID() != getIfaceBaseConfigs().get<config::OspfInterfaceBase::INSTANCE_ID>().load())
+    if (ospfHeader.getInstanceID() != getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::INSTANCE_ID>().load())
         return;
 
     if (ospfHeader.getType() == OSPFV3_TYPE_HELLO)
@@ -113,8 +110,6 @@ void PacketDispatcherV3::processHello(PacketDispatcher::HeaderInfo& info, bool u
     packet::Ospfv3HelloHeader hdr;
     hdr.setBuffer(info.payload);
 
-    auto& ifaceConfigs = getIfaceConfigs();
-
     info.offset += packet::Ospfv3HelloHeader::fixedSize;
     if (info.offset > info.payloadSize)
         return;
@@ -127,7 +122,7 @@ void PacketDispatcherV3::processHello(PacketDispatcher::HeaderInfo& info, bool u
         return;
     }
 
-    auto ntype = ifaceConfigs.get<config::OspfInterface::NETWORK>().load();
+    auto ntype = iface.getNetworkType();
     bool multiAccess = ntype == config::ospf::NetworkType::BROADCAST || ntype == config::ospf::NetworkType::NON_BROADCAST;
 
     // Create neighbor if first Hello from this router
@@ -204,15 +199,15 @@ void PacketDispatcherV3::processHello(PacketDispatcher::HeaderInfo& info, bool u
         info.neighbor->dr.store(newDr, std::memory_order_relaxed);
         info.neighbor->bdr.store(newBdr, std::memory_order_relaxed);
 
-        uint32_t currentDr = iface.getDrRid();
-        uint32_t currentBdr = iface.getDrRid();
+        uint32_t currentDr = static_cast<OspfInterface*>(&iface)->getDrRid();
+        uint32_t currentBdr = static_cast<OspfInterface*>(&iface)->getBdrRid();
 
         const bool election = (newPriority == 0 &&
             (info.neighbor->routerID == currentBdr ||
              info.neighbor->routerID == currentDr)) ||
             (info.neighbor->getState() == Neighbor::State::TWOWAY &&
-            ((iface.getDrRid() == 0) ||
-            (iface.getBdrRid() == 0)));
+            ((currentDr == 0) ||
+            (currentBdr == 0)));
 
         if (election)
             runDrElection();
@@ -246,7 +241,7 @@ void PacketDispatcherV3::processDBD(PacketDispatcher::HeaderInfo& info)
     }
 
     // Verify MTU
-    if (getIfaceConfigs().get<config::OspfInterface::MTU_IGNORE>().load() && info.neighbor->mtu != hdr.getMtu())
+    if (iface.getMtuIgnore() && info.neighbor->mtu != hdr.getMtu())
     {
         info.neighbor->setState(Neighbor::State::DOWN);
         return;

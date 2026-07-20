@@ -22,6 +22,7 @@ class TopologyTable;
 class LsdbTable;
 class ExternalOriginator;
 class InterfaceManager;
+class VirtualLink;
 
 /**
  * @brief Access- and next-hop-resolution helpers shared by the three route managers.
@@ -44,6 +45,7 @@ private:
     friend class IntraRouteManager;
     friend class InterRouteManager;
     friend class ExternalRouteManager;
+    friend class VirtualLink;
 
     // PRIVATE-MEMBER ACCESSORS
 
@@ -106,6 +108,24 @@ private:
      * @return The stored reachability entry, or std::nullopt if unknown.
      */
     static std::optional<RouterReach> resolveToAbrs(OspfProcess& proc, uint32_t abrRid);
+
+    /**
+     * @brief Resolves the current next hop toward a virtual-link neighbor through the transit area.
+     *
+     * Per RFC 2328 SS15, a virtual link's transmit path is the transit area's
+     * own intra-area shortest path to the remote endpoint's router ID -- never
+     * an inter-area path and never another virtual link. Uses the transit
+     * area's most recent SPF result directly (bypassing the process-wide
+     * @ref TopologyTable, which would let a non-transit-area or inter-area
+     * candidate win).
+     *
+     * @param transitArea Area the virtual link is configured against.
+     * @param remoteRid   Router ID of the virtual-link neighbor.
+     * @return (intra-area cost, one equal-cost next hop), or std::nullopt if
+     *         the transit area's SPF has no current intra-area path to
+     *         @p remoteRid.
+     */
+    static std::optional<std::pair<uint64_t, OspfNextHop>> resolveVirtualLinkPath(Area& transitArea, uint32_t remoteRid);
 };
 }
 

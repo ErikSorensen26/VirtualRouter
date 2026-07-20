@@ -8,7 +8,7 @@
 
 #include "ospf/database/LsdbTypes.hpp"
 
-namespace config { struct OspfAreaRegistry; struct OspfRegistry; struct OspfInterfaceBaseRegistry; }
+namespace config { struct OspfAreaRegistry; struct OspfRegistry; struct OspfInterfaceBaseBaseRegistry; }
 class Internal_OspfTest;
 
 namespace routing::ospf
@@ -16,7 +16,7 @@ namespace routing::ospf
 struct OspfInterfaceId;
 class Area;
 class OriginatorContext;
-class OspfInterface;
+class OspfInterfaceBase;
 class InterfaceManager;
 class TopologyTable;
 class NeighborTable;
@@ -158,7 +158,7 @@ protected:
      * @param iface   The DR interface for which to originate a Network LSA.
      * @param refresh True if this is a periodic refresh.
      */
-    virtual void addNetworkLsa(const OspfInterface& iface, bool refresh) = 0;
+    virtual void addNetworkLsa(const OspfInterfaceBase& iface, bool refresh) = 0;
 
     // REMOVING (version-specific)
 
@@ -203,7 +203,7 @@ protected:
      * @param refresh         True if this is a periodic refresh build.
      * @param attemptNetLsa   If true and the interface is DR, attempt to originate a Network LSA.
      */
-    void addRouterLink(LsaBody& router, const OspfInterface& iface, bool refresh, bool attemptNetLsa = false);
+    void addRouterLink(LsaBody& router, const OspfInterfaceBase& iface, bool refresh, bool attemptNetLsa = false);
 
     /**
      * @brief Adds a transit (broadcast/NBMA DR-segment) link to the Router LSA body.
@@ -212,7 +212,7 @@ protected:
      * @param iface  DR interface to encode as a transit link.
      * @param nbr    Designated Router neighbor (nullptr if the local router is the DR).
      */
-    virtual void addTransitLink(LsaBody& router, const OspfInterface& iface, const Neighbor* nbr = nullptr) = 0;
+    virtual void addTransitLink(LsaBody& router, const OspfInterfaceBase& iface, const Neighbor* nbr = nullptr) = 0;
 
     /**
      * @brief Adds a point-to-point link to the Router LSA body.
@@ -221,7 +221,7 @@ protected:
      * @param iface    Point-to-point interface.
      * @param neighbor The fully adjacent neighbor on this interface.
      */
-    virtual void addP2PLink(LsaBody& router, const OspfInterface& iface, const Neighbor& neighbor) = 0;
+    virtual void addP2PLink(LsaBody& router, const OspfInterfaceBase& iface, const Neighbor& neighbor) = 0;
 
     /**
      * @brief Adds a stub (non-transit) network link to the Router LSA body.
@@ -233,7 +233,7 @@ protected:
      * @param iface    Interface to encode as a stub link.
      * @param fullMask If true, encode the link with a /32 (host) mask instead of the interface prefix mask.
      */
-    virtual void addStubLink(LsaBody& router, const OspfInterface& iface, bool fullMask = false) = 0;
+    virtual void addStubLink(LsaBody& router, const OspfInterfaceBase& iface, bool fullMask = false) = 0;
 
     /**
      * @brief Adds a virtual link to the Router LSA body.
@@ -242,7 +242,7 @@ protected:
      * @param iface  Virtual-link interface.
      * @param vNbr   The virtual-link neighbor (must be in Full state).
      */
-    virtual void addVirtualLink(LsaBody& router, const OspfInterface& iface, const Neighbor& vNbr) = 0;
+    virtual void addVirtualLink(LsaBody& router, const OspfInterfaceBase& iface, const Neighbor& vNbr) = 0;
 
     /**
      * @brief Removes duplicate adjacent links from a Router LSA link list.

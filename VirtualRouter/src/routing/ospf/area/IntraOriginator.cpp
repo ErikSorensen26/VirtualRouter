@@ -7,7 +7,7 @@
 #include "configs/registry/router/OspfRegistry.h"
 #include "interface/Interface.h"
 #include "ospf/OspfProcess.h"
-#include "ospf/interface/OspfInterface.h"
+#include "ospf/interface/OspfInterfaceBase.h"
 #include "ospf/neighbor/Neighbor.h"
 #include "interface/Interface.h"
 #include "interface/configs/InterfaceType.hpp"
@@ -22,18 +22,31 @@ IntraOriginator::IntraOriginator(OriginatorContext& ctx)
 IntraOriginator::~IntraOriginator()
 {}
 
-void IntraOriginator::addRouterLink(LsaBody& router, const OspfInterface& iface, bool refresh, bool attemptNetLsa)
+void IntraOriginator::addRouterLink(LsaBody& router, const OspfInterfaceBase& iface, bool refresh, bool attemptNetLsa)
 {
     if (iface.getAreaId() != context.area.areaId) return;
 
-    auto& ifaceBaseConfigs = context.getIfaceMgr().getInterfaceBaseConfigs(iface);
-    auto& ifaceConfigs = context.getIfaceMgr().getInterfaceConfigs(iface);
+    if (iface.isVirtualLink())
+    {
+        if (!iface.getTransmitInterface())
+            return;
 
-    bool prefixSuppression = ifaceBaseConfigs.get<config::OspfInterfaceBase::PREFIX_SUPPRESSION>().load();
-    auto ntype = ifaceConfigs.get<config::OspfInterface::NETWORK>().load();
+        const NeighborTable& vlNtable = context.getIfaceMgr().getNTable(iface);
+        vlNtable.forEach([this, &iface, &router](uint32_t, const Neighbor& nbr) {
+            if (nbr.getState() == Neighbor::State::FULL)
+                addVirtualLink(router, iface, nbr);
+        });
+        return;
+    }
 
-    if (ifaceConfigs.get<config::OspfInterface::PASSIVE>().load() ||
-        iface.iface.configs.interfaceType == interface::InterfaceType::LOOPBACK)
+    const OspfInterface& concreteIface = static_cast<const OspfInterface&>(iface);
+
+    bool prefixSuppression = context.getIfaceMgr().getGlobalInterfaceConfigs(concreteIface)
+        .get<config::OspfGlobalInterface::PREFIX_SUPPRESSION>().load();
+    auto ntype = iface.getNetworkType();
+
+    if (iface.getPassive() ||
+        concreteIface.iface.configs.interfaceType == interface::InterfaceType::LOOPBACK)
     {
         addStubLink(router, iface);
         return;
@@ -47,14 +60,9 @@ void IntraOriginator::addRouterLink(LsaBody& router, const OspfInterface& iface,
             if (nbr.getState() != Neighbor::State::FULL)
                 return;
 
-            if (iface.isVirtual)
-                addVirtualLink(router, iface, nbr);
-            else
-            {
-                addP2PLink(router, iface, nbr);
-                if (!prefixSuppression)
-                    addStubLink(router, iface);
-            }
+            addP2PLink(router, iface, nbr);
+            if (!prefixSuppression)
+                addStubLink(router, iface);
         });
         return;
     }
@@ -74,13 +82,13 @@ void IntraOriginator::addRouterLink(LsaBody& router, const OspfInterface& iface,
     if (ntype == config::ospf::NetworkType::BROADCAST ||
         ntype == config::ospf::NetworkType::NON_BROADCAST)
     {
-        bool isDr = iface.getIsDr();
+        bool isDr = concreteIface.getIsDr();
         bool haveDr = isDr;
 
         const Neighbor* drNbr = nullptr;
         if (!haveDr)
         {
-            drNbr = ntable.lookup(iface.getDrRid());
+            drNbr = ntable.lookup(concreteIface.getDrRid());
             if (drNbr && drNbr->getState() == Neighbor::State::FULL)
                 haveDr = true;
         }

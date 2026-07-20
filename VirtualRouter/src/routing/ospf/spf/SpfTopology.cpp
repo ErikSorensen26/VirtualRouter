@@ -94,21 +94,20 @@ bool SpfTopology<Policy>::expandRouter(uint32_t rid, std::vector<SpfEdge>& outEd
 
             if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::NetworkLsa>, NetworkLsaV2>)
             {
-                if (t == static_cast<uint8_t>(OSPFV2_LINK_P2P))
+                if (t == static_cast<uint8_t>(OSPFV2_LINK_P2P) || t == static_cast<uint8_t>(OSPFV2_LINK_VIRTUAL))
                 {
                     const uint32_t nbr = l.linkId;
 
                     auto nit = rtr.find(nbr);
                     if (nit == rtr.end()) continue;
 
-                    // backlink check
                     const auto bk = BacklinkKey(VertexType::ROUTER, static_cast<uint64_t>(rid), VertexType::ROUTER, static_cast<uint64_t>(nbr));
                     bool backlink = (backlinkCache.find(bk) != backlinkCache.end());
                     if (!backlink)
                     {
                         for (const auto& bl : nit->second.front()->links)
                         {
-                            if (bl.type == OSPFV2_LINK_P2P && bl.linkId == rid)
+                            if ((bl.type == OSPFV2_LINK_P2P || bl.type == OSPFV2_LINK_VIRTUAL) && bl.linkId == rid)
                             {
                                 backlink = true;
                                 backlinkCache.insert(bk);
@@ -157,14 +156,13 @@ bool SpfTopology<Policy>::expandRouter(uint32_t rid, std::vector<SpfEdge>& outEd
             }
             else
             {
-                if (t == static_cast<uint8_t>(OSPFV3_LINK_P2P))
+                if (t == static_cast<uint8_t>(OSPFV3_LINK_P2P) || t == static_cast<uint8_t>(OSPFV3_LINK_VIRTUAL))
                 {
                     uint32_t nbr = l.neighborRouterId;
 
                     auto nit = rtr.find(nbr);
                     if (nit == rtr.end()) continue;
 
-                    // Backlink cache
                     const auto bk = BacklinkKey(VertexType::ROUTER, static_cast<uint64_t>(rid), VertexType::ROUTER, static_cast<uint64_t>(nbr));
                     bool backlink = (backlinkCache.find(bk) != backlinkCache.end());
                     if (!backlink)
@@ -173,7 +171,7 @@ bool SpfTopology<Policy>::expandRouter(uint32_t rid, std::vector<SpfEdge>& outEd
                         {
                             for (const auto& bl : links->links)
                             {
-                                if (bl.type == OSPFV3_LINK_P2P && bl.neighborRouterId == rid)
+                                if ((bl.type == OSPFV3_LINK_P2P || bl.type == OSPFV3_LINK_VIRTUAL) && bl.neighborRouterId == rid)
                                 {
                                     backlink = true;
                                     backlinkCache.insert(bk);

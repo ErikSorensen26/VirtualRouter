@@ -40,19 +40,6 @@ enum class AreaType
 }
 
 /**
- * @brief Configuration fields for an OSPF virtual link (placeholder — not yet implemented).
- * @ingroup OSPF
- */
-enum class OspfVirtualLink
-{
-    COUNT
-};
-
-struct OspfVirtualLinkFields : FieldTuple<> {};
-
-struct OspfVirtualLinkRegistry : public SubRegistry<OspfVirtualLinkRegistry, OspfVirtualLink, nullptr, OspfVirtualLinkFields> {};
-
-/**
  * @brief Per-area OSPF configuration fields (type, authentication, stub cost, NSSA).
  * @ingroup OSPF
  */
@@ -108,7 +95,7 @@ struct OspfAreaFields : FieldTuple<
     AtomicField<bool CONFIG_INDEX_ARG(OspfArea::NSSA_SUPPRESS_FA)>,
     ListField<std::tuple<types::IPPrefix, bool, std::optional<uint32_t>> CONFIG_INDEX_ARG(OspfArea::RANGE),
         OspfAreaSycnRanges>,
-    ListField<std::vector<std::tuple<>> CONFIG_INDEX_ARG(OspfArea::VIRTUAL_LINKS)> // TODO:
+    OwnedListField<OspfVirtualLinkRegistry, uint32_t CONFIG_INDEX_ARG(OspfArea::VIRTUAL_LINKS)> // TODO:
 > {};
 
 /**

@@ -2,18 +2,23 @@
 
 #include "Neighbor.h"
 #include "NeighborTable.h"
+#include "ospf/interface/OspfInterfaceBase.h"
 #include "ospf/interface/OspfInterface.h"
 #include "ospf/transmission/PacketDispatcher.h"
 #include "ospf/OspfProcess.h"
 
 namespace routing::ospf
 {
-NeighborTable::NeighborTable(OspfInterface& iface, InterfaceTimers& t)
+NeighborTable::NeighborTable(OspfInterfaceBase& iface, InterfaceTimers& t)
     : iface(iface), tmgr(t) {}
 
 void NeighborTable::syncUnicast()
 {
-    auto ntype = iface.configs.get<config::OspfInterface::NETWORK>().load();
+    if (iface.isVirtualLink())
+        return;
+
+    auto& concreteIface = static_cast<OspfInterface&>(iface);
+    auto ntype = iface.getNetworkType();
 
     if (ntype == config::ospf::NetworkType::POINT_TO_MULTIPOINT || ntype == config::ospf::NetworkType::NON_BROADCAST)
     {
@@ -24,7 +29,7 @@ void NeighborTable::syncUnicast()
             unicastNbrs.insert(ip);
 
         // Update configs of all unicast neighbors (OspfInterface::NEIGHBOR has IgnoreCompare wrappers)
-        iface.configs.get<config::OspfInterface::NEIGHBOR>().withRead([&](const auto& nbrs)
+        concreteIface.configs.get<config::OspfInterface::NEIGHBOR>().withRead([&](const auto& nbrs)
         {
             for (const auto& entry : nbrs)
             {
@@ -33,7 +38,7 @@ void NeighborTable::syncUnicast()
                 const auto& dbf   = std::get<2>(entry).value;
                 const auto& poll  = std::get<3>(entry).value;
                 const auto& prio  = std::get<4>(entry).value;
-                if (!iface.interfaceAddress.contains(ip))
+                if (!concreteIface.interfaceAddress.contains(ip))
                     continue;
                 unicastNbrs.erase(ip);
                 unicast.try_emplace(
@@ -52,7 +57,7 @@ void NeighborTable::syncUnicast()
             for (const auto& nbrs : nbrsList)
                 for (const auto& [ip, cost, dbfilter, pollIntv, priority] : nbrs)
                 {
-                    if (!iface.interfaceAddress.contains(ip))
+                    if (!concreteIface.interfaceAddress.contains(ip))
                         continue;
                     unicastNbrs.erase(ip);
                     unicast.try_emplace(

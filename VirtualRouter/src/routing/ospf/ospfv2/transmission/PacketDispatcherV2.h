@@ -13,7 +13,7 @@
 #define V2_PACKET_DISPATCHER_H
 
 #include "packet/headers/Ospfv2Header.hpp"
-#include "ospf/interface/OspfInterface.h"
+#include "ospf/interface/OspfInterfaceBase.h"
 #include "ospf/database/LsdbTypes.hpp"
 #include "ospf/transmission/PacketDispatcher.h"
 
@@ -23,7 +23,7 @@ namespace packet { struct Ospfv2HelloHeader; struct Ospfv2DBDHeader; struct Ospf
 
 namespace routing::ospf
 {
-class OspfInterface;
+class OspfInterfaceBase;
 class Neighbor;
 class NeighborTable;
 
@@ -37,7 +37,7 @@ class NeighborTable;
  * (RFC 4813), and all five OSPFv2 packet types.
  *
  * ## Architectural Role
- * One instance is created per OSPFv2 interface by `OspfInterface` during
+ * One instance is created per OSPFv2 interface by `OspfInterfaceBase` during
  * initialisation. It delegates LSA body serialisation to the LSA type
  * structs in `ospfv2/database/`, and calls `transmit()` which hands the
  * finished packet to the underlying @ref processing::PacketBuilder.
@@ -57,9 +57,8 @@ public:
      * @param iface   The OSPFv2 interface that owns this dispatcher.
      * @param configs Reference to the shared base interface configuration registry.
      */
-    PacketDispatcherV2(OspfInterface& iface);
+    PacketDispatcherV2(OspfInterfaceBase& iface);
 
-    config::OspfInterfaceBaseRegistry& getConfigs() override;
 
     /**
      * @brief Dispatches an incoming OSPFv2 packet to the appropriate handler.

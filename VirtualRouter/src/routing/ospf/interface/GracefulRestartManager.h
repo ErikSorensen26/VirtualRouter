@@ -12,7 +12,7 @@ class Internal_OspfTest;
 
 namespace routing::ospf
 {
-class OspfInterface;
+class OspfInterfaceBase;
 enum class GraceRestartReason : uint8_t;
 
 /**
@@ -26,7 +26,7 @@ enum class GraceRestartReason : uint8_t;
  * origination is out of scope (see the OSPF todo plan).
  *
  * ## Lifecycle & Ownership
- * Owned by @ref OspfInterface, constructed alongside it. Only meaningful for
+ * Owned by @ref OspfInterfaceBase, constructed alongside it. Only meaningful for
  * OSPFv2 interfaces.
  *
  * ## Concurrency Model
@@ -38,7 +38,7 @@ class GracefulRestartManager
 {
     friend class ::Internal_OspfTest;
 public:
-    explicit GracefulRestartManager(OspfInterface& iface);
+    explicit GracefulRestartManager(OspfInterfaceBase& iface);
 
     /**
      * @brief Originates (or re-originates) this interface's Grace-LSA.
@@ -53,7 +53,7 @@ public:
     void flushGraceLsa();
 
 private:
-    OspfInterface& iface;
+    OspfInterfaceBase& iface;
     bool originated = false; ///< True if a Grace-LSA is currently installed for this interface.
 };
 } // namespace routing::ospf

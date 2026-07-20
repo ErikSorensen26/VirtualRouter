@@ -15,7 +15,7 @@ namespace config { struct OspfRegistry; }
 
 namespace routing::ospf
 {
-class OspfInterface;
+class OspfInterfaceBase;
 
 /**
  * @brief Key-indexed retransmission queue supporting paced burst delivery.
@@ -48,8 +48,11 @@ class OspfInterface;
  *
  * ## Lifecycle & Ownership
  * Owned by `Retransmission`, which is owned by `Neighbor`. `clear()` is called
- * whenever the adjacency resets (ExStart restart or Down transition) to discard
- * all pending entries and stop associated timers.
+ * whenever the adjacency resets (ExStart restart or Down transition) to
+ * discard all pending entries; it has no scheduler access and does not
+ * cancel `retransmitTimerId`/`pacingTimerId` itself -- callers must cancel
+ * those via `InterfaceTimers::cancelRetransmissionTimers` /
+ * `cancelLsrTimers` before calling `clear()` (see `Neighbor::setState`).
  *
  * @tparam Key     The type used to identify entries. Must be hashable (i.e.
  *                 `std::hash<Key>` must be defined) and equality-comparable.
@@ -78,7 +81,7 @@ public:
      * @param iface    The interface this list belongs to (provides
      *                 demand-circuit status).
      */
-    RetransmissionList(OspfInterface& iface, const config::OspfRegistry& cfgs)
+    RetransmissionList(OspfInterfaceBase& iface, const config::OspfRegistry& cfgs)
         : iface(iface), processCfgs(cfgs)
     {}
 
@@ -229,7 +232,7 @@ private:
     std::vector<Key>    outboundKeys;                   ///< Keys in the same order as outbound records.
     std::vector<Record> outbound;                       ///< Packed array of pending records.
 
-    OspfInterface& iface; ///< Used to determine whether demand-circuit limits apply.
+    OspfInterfaceBase& iface; ///< Used to determine whether demand-circuit limits apply.
     const config::OspfRegistry& processCfgs; ///< Global process configs for retransmission limit.
 };
 

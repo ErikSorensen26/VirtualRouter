@@ -3,14 +3,14 @@
 #include "PacketDispatcher.h"
 #include "OspfPacket.hpp"
 #include "OspfFletcher.hpp"
-#include "ospf/interface/OspfInterface.h"
+#include "ospf/interface/OspfInterfaceBase.h"
 #include "ospf/OspfProcess.h"
 #include "ospf/neighbor/Neighbor.h"
 #include "ospf/OspfTypes.hpp"
 
 namespace routing::ospf
 {
-PacketDispatcher::PacketDispatcher(OspfInterface& iface)
+PacketDispatcher::PacketDispatcher(OspfInterfaceBase& iface)
     : multicastLsus(iface, iface.getProcessConfigs()), iface(iface), ntable(iface.ntable), af(iface.area.process.af) {}
 
 PacketDispatcher::~PacketDispatcher() = default;
@@ -22,14 +22,14 @@ bool PacketDispatcher::processOptions(uint32_t options, Neighbor& nbr)
 
     uint32_t flags = iface.flags.getFlags();
 
-    bool ignore = getIfaceBaseConfigs().get<config::OspfInterfaceBase::BASE>().get().get<config::OspfInterface::DEMAND_CIRCUIT_IGNORE>().load();
-    if (iface.demandCircuit == OspfInterface::DcDecision::UNDECIDED && !ignore)
+    bool ignore = iface.getDemandCircuitIgnore();
+    if (iface.demandCircuit == OspfInterfaceBase::DcDecision::UNDECIDED && !ignore)
     {
         if (InterfaceFlagManager::getDemandCircuits(options) && InterfaceFlagManager::getDemandCircuits(flags) &&
-            iface.configs.get<config::OspfInterface::NETWORK>().load() == config::ospf::NetworkType::POINT_TO_POINT)
-            iface.demandCircuit = OspfInterface::DcDecision::ENABLED;
+            iface.getNetworkType() == config::ospf::NetworkType::POINT_TO_POINT)
+            iface.demandCircuit = OspfInterfaceBase::DcDecision::ENABLED;
         else
-            iface.demandCircuit = OspfInterface::DcDecision::DISABLED;
+            iface.demandCircuit = OspfInterfaceBase::DcDecision::DISABLED;
     }
 
     if (AreaFlagManager::getExternalRouting(flags) != AreaFlagManager::getExternalRouting(options))
@@ -73,7 +73,7 @@ uint16_t PacketDispatcher::calculateAge(bool floodReduction, const LsaRecord& re
         age = (record.header.age & 0x7FFF) + delta;
     }
 
-    age += iface.configs.get<config::OspfInterface::TRANSMIT_DELAY>().load();
+    age += iface.configsBase.get<config::OspfInterfaceBase::TRANSMIT_DELAY>().load();
 
     if (age > OSPF_MAX_AGE) age = OSPF_MAX_AGE;
 
@@ -139,7 +139,7 @@ void PacketDispatcher::sendReliableLsr(Neighbor& nbr, const std::vector<LsaKey>&
 
 void PacketDispatcher::sendReliableLsu(Neighbor* nbr, std::vector<std::pair<FloodInfo, LsaRecordRef>>& updates)
 {
-    bool filter = iface.configs.get<config::OspfInterface::DATABASE_FILTER>().load();
+    bool filter = iface.getDatabaseFilter();
     bool floodReduction = iface.floodReduction;
 
     if (nbr)
@@ -213,7 +213,7 @@ void PacketDispatcher::onLsrPacingTimer(Neighbor& nbr)
 
 void PacketDispatcher::addLsaRetransmissions(RetransmissionList<LsaKey, LsaRecordRef>& lsuList, std::vector<std::pair<FloodInfo, LsaRecordRef>>& updates)
 {
-    bool filter = iface.configs.get<config::OspfInterface::DATABASE_FILTER>().load();
+    bool filter = iface.getDatabaseFilter();
     bool floodReduction = iface.floodReduction;
 
     for (const auto& [info, record] : updates)

@@ -17,7 +17,7 @@
 
 namespace cli
 {
-DEFINE_CMD_EXECUTOR(InterfaceIPv6Ospf, CliMode::Interface, config::OspfInterfaceBaseRegistry);
+DEFINE_CMD_EXECUTOR(InterfaceIPv6Ospf, CliMode::Interface, config::OspfGlobalInterfaceRegistry);
 }
 
 #endif // INTERFACE_IPV6_OSPF_COMMANDS_H

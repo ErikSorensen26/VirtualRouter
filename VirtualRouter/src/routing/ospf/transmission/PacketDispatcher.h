@@ -15,7 +15,7 @@
 #include "configs/registry/router/OspfInterfaceRegistry.h"
 #include "ospf/database/LsdbTypes.hpp"
 #include "ospf/neighbor/RetransmissionList.h"
-#include "ospf/interface/OspfInterface.h"
+#include "ospf/interface/OspfInterfaceBase.h"
 #include "ospf/area/Area.h"
 
 namespace processing { class PacketBuilder; }
@@ -24,7 +24,7 @@ class Internal_OspfTest;
 namespace routing::ospf
 {
 class UnicastPacket;
-class OspfInterface;
+class OspfInterfaceBase;
 class Neighbor;
 class NeighborTable;
 
@@ -37,7 +37,7 @@ class NeighborTable;
  * processing. The version-specific subclasses (@ref PacketDispatcherV2,
  * @ref PacketDispatcherV3) implement wire-format encoding/decoding.
  *
- * Each dispatcher is owned by an @ref OspfInterface and operates exclusively on
+ * Each dispatcher is owned by an @ref OspfInterfaceBase and operates exclusively on
  * the owning process's scheduler thread — there is no additional locking.
  *
  * ## Architectural Role
@@ -46,7 +46,7 @@ class NeighborTable;
  * individual neighbors but not about areas or the LSDB directly.
  *
  * ## Lifecycle & Ownership
- * Constructed by `OspfInterface` after the underlying hardware interface is
+ * Constructed by `OspfInterfaceBase` after the underlying hardware interface is
  * attached. Destroyed when the interface is removed. No explicit `stop()` is
  * required; timer handles are cancelled by the scheduler on destruction.
  *
@@ -55,7 +55,7 @@ class NeighborTable;
  * The retransmission timers fire on the same scheduler, so no additional
  * synchronization is needed.
  *
- * @see PacketDispatcherV2, PacketDispatcherV3, OspfInterface
+ * @see PacketDispatcherV2, PacketDispatcherV3, OspfInterfaceBase
  */
 class PacketDispatcher
 {
@@ -67,15 +67,12 @@ public:
      *
      * @param iface The OSPF interface that owns this dispatcher.
      */
-    PacketDispatcher(OspfInterface& iface);
+    PacketDispatcher(OspfInterfaceBase& iface);
 
     /**
      * @brief Destroys the dispatcher and releases all retransmission state.
      */
     virtual ~PacketDispatcher();
-
-    /// Returns the base (version-independent) interface config registry.
-    virtual config::OspfInterfaceBaseRegistry& getConfigs() = 0;
 
     /// Sends a multicast Hello on the interface.
     virtual void sendHello() = 0;
@@ -352,7 +349,7 @@ protected:
 
     RetransmissionList<LsaKey, LsaRecordRef> multicastLsus; ///< Outstanding multicast LSUs awaiting implicit acknowledgement.
 
-    OspfInterface& iface;    ///< Owning OSPF interface.
+    OspfInterfaceBase& iface;    ///< Owning OSPF interface.
     NeighborTable& ntable;   ///< Neighbor table for this interface.
     types::AddressFamily af; ///< Address family (IPv4 or IPv6) of this interface.
 
@@ -373,8 +370,8 @@ protected:
     std::optional<uint8_t> getAuthKeyId() { return iface.getAuthKeyId(); }
 
     // CONFIG REGISTRIES
-    const config::OspfInterfaceBaseRegistry& getIfaceBaseConfigs() const { return iface.baseConfigs; }
-    const config::OspfInterfaceRegistry& getIfaceConfigs() const { return iface.configs; }
+    const config::OspfGlobalInterfaceBaseRegistry& getIfaceGlobalBaseConfigs() const { return iface.globalConfigsBase; }
+    const config::OspfInterfaceBaseRegistry& getIfaceBaseConfigs() const { return iface.configsBase; }
     const config::OspfAreaRegistry& getAreaConfigs() const { return iface.getAreaConfigs(); }
     const config::OspfRegistry& getProcessConfigs() const { return iface.getProcessConfigs(); }
 

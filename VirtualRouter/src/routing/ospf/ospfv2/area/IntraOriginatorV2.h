@@ -81,7 +81,7 @@ private:
      * @param iface   The DR's OSPF interface on the transit link.
      * @param refresh True when refreshing an existing Network LSA.
      */
-    void addNetworkLsa(const OspfInterface& iface, bool refresh) override;
+    void addNetworkLsa(const OspfInterfaceBase& iface, bool refresh) override;
 
     /**
      * @brief MaxAges (expires) an LSA identified by the given key.
@@ -102,7 +102,7 @@ private:
      * @param router LSA body being constructed.
      * @param iface  Interface whose secondary address prefixes are being advertised.
      */
-    void addSecondaryLinks(LsaBody& router, const OspfInterface& iface);
+    void addSecondaryLinks(LsaBody& router, const OspfInterfaceBase& iface);
 
     /**
      * @brief Appends a transit (Type 2) link descriptor to a Router LSA body.
@@ -111,7 +111,7 @@ private:
      * @param nbr    Optional: the Full neighbor that makes the link active. Pass nullptr
      *               to append the link using the DR address from the interface state.
      */
-    void addTransitLink(LsaBody& router, const OspfInterface& iface, const Neighbor* nbr = nullptr) override;
+    void addTransitLink(LsaBody& router, const OspfInterfaceBase& iface, const Neighbor* nbr = nullptr) override;
 
     /**
      * @brief Appends a point-to-point (Type 1) link descriptor to a Router LSA body.
@@ -119,7 +119,7 @@ private:
      * @param iface    The point-to-point interface.
      * @param neighbor The Full neighbor reachable through this interface.
      */
-    void addP2PLink(LsaBody& router, const OspfInterface& iface, const Neighbor& neighbor) override;
+    void addP2PLink(LsaBody& router, const OspfInterfaceBase& iface, const Neighbor& neighbor) override;
 
     /**
      * @brief Appends a stub (Type 3) link descriptor to a Router LSA body.
@@ -127,7 +127,7 @@ private:
      * @param iface    Interface whose prefix is being advertised as a stub.
      * @param fullMask True to use a /32 host mask instead of the interface subnet mask.
      */
-    void addStubLink(LsaBody& router, const OspfInterface& iface, bool fullMask = false) override;
+    void addStubLink(LsaBody& router, const OspfInterfaceBase& iface, bool fullMask = false) override;
 
     /**
      * @brief Appends a virtual link (Type 4) descriptor to a Router LSA body.
@@ -135,7 +135,7 @@ private:
      * @param iface  The virtual link OSPF interface.
      * @param vNbr   The Full neighbor at the other end of the virtual link.
      */
-    void addVirtualLink(LsaBody& router, const OspfInterface& iface, const Neighbor& vNbr) override;
+    void addVirtualLink(LsaBody& router, const OspfInterfaceBase& iface, const Neighbor& vNbr) override;
 };
 } // namespace routing::ospf
 
