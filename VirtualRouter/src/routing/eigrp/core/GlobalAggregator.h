@@ -27,9 +27,9 @@ class GlobalAggregator
 public:
     /**
      * @brief Constructs a GlobalAggregator bound to the given EIGRP process.
-     * @param base The owning EIGRP process instance.
+     * @param process The owning EIGRP process instance.
      */
-    GlobalAggregator(Eigrp& base);
+    GlobalAggregator(Eigrp& process);
 
     /**
      * @brief Installs a new process-level summary route into the topology table.
@@ -57,7 +57,7 @@ public:
     void recomputeAutoSummaries();
 
 private:
-    Eigrp& base; ///< Reference to the owning EIGRP process.
+    Eigrp& process; ///< Reference to the owning EIGRP process.
 };
 } // namespace routing
 

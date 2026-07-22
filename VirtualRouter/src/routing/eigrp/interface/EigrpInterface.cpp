@@ -10,9 +10,9 @@
 namespace routing::eigrp
 {
 EigrpInterface::EigrpInterface(Eigrp& eigrpSystem, config::EigrpInterfaceRegistry& ifaceReg, interface::Interface& interface)
-  : configs(ifaceReg),
-    interfaceKey(interface.configs.key),
-    base(eigrpSystem),
+  : interfaceKey(interface.configs.key),
+    configs(ifaceReg),
+    process(eigrpSystem),
     currentInterface(&interface),
     currentInterfaceInfo(&interface.configs),
     rtp(*this),
@@ -26,15 +26,15 @@ EigrpInterface::EigrpInterface(Eigrp& eigrpSystem, config::EigrpInterfaceRegistr
     configs.context().set(this);
 
     // Set local ip
-    if (base.getAF() == types::AddressFamily::IPv4)
+    if (process.addressFamily == types::AddressFamily::IPv4)
     {
         ifaceAddress.setV4(interface.configs.ipv4.getPrimaryAddress().addr);
-        base.getTopology().synchronizeConnected(*this);
+        process.getTopology().synchronizeConnected(*this);
     }
     else
     {
         ifaceAddress.setV6(interface.configs.ipv6.getLocalAddress().addr);
-        base.getTopology().synchronizeConnected(*this);
+        process.getTopology().synchronizeConnected(*this);
     }
 
     // Add pending summary routes if needed
@@ -49,14 +49,14 @@ EigrpInterface::EigrpInterface(Eigrp& eigrpSystem, config::EigrpInterfaceRegistr
     uint8_t load        = 1;
 
     // Check if this interface is passive
-    if (base.getGlobalConfigMgr().isPassive(interfaceKey))
-        setPassiveMode(true);
+    if (process.isPassive(interfaceKey))
+        syncPassive();
 
     localMetric = metrics.calculateCompositeMetric(
         load, reliability, delay * 1'000'000, bandwidth);
 
     // Handle unicast neighbors
-    std::unordered_set<types::IPAddress> unicastNeighbors = base.getGlobalConfigMgr().getUnicastNeighbors(interfaceKey);
+    std::unordered_set<types::IPAddress> unicastNeighbors = process.getUnicastNeighbors(interfaceKey);
     if (!unicastNeighbors.empty())
     {
         multicastEnabledFlag.store(false, std::memory_order_release);
@@ -70,12 +70,71 @@ EigrpInterface::EigrpInterface(Eigrp& eigrpSystem, config::EigrpInterfaceRegistr
 
 EigrpInterface::~EigrpInterface()
 {
-    base.getTopology().clearConnected(*this);
+    process.getTopology().clearConnected(*this);
+}
+
+void EigrpInterface::addGlobalNeighbor(const types::IPAddress& neighborIp, Neighbor* neighbor)
+{
+    process.addGlobalNeighbor(neighborIp, neighbor);
+}
+
+void EigrpInterface::delGlobalNeighbor(const types::IPAddress& neighborIp)
+{
+    process.delGlobalNeighbor(neighborIp);
+}
+
+const config::EigrpRegistry& EigrpInterface::getConfigs() const
+{
+    return process.getConfigs();
+}
+
+uint32_t EigrpInterface::routerID() const
+{
+    return process.routerID();
+}
+
+uint16_t EigrpInterface::getVirtualRouterID() const
+{
+    return process.getVirtualRouterID();
+}
+
+void EigrpInterface::enqueueSyncPassive()
+{
+    Eigrp& eigrp = process;
+    interface::InterfaceKey key = interfaceKey;
+    eigrp.getScheduler().post([&eigrp, key]() {
+        auto* eigrpIface = eigrp.getIfaceMgr().getInterface(key);
+        if (!eigrpIface) return;
+        eigrpIface->syncPassive();
+    });
+}
+
+void EigrpInterface::enqueueRefreshInterfaceList()
+{
+    process.enqueueRefreshInterfaceList();
+}
+
+void EigrpInterface::enqueueSyncSummary()
+{
+    Eigrp& eigrp = process;
+    interface::InterfaceKey key = interfaceKey;
+    eigrp.getScheduler().post([&eigrp, key] {
+        auto* eigrpIface = eigrp.getIfaceMgr().getInterface(key);
+        if (!eigrpIface) return;
+
+        std::set<types::IPPrefix> summaries;
+        eigrpIface->configs.get<config::EigrpInterface::SUMMARY_ADDRESS>().withRead(
+            [&](const std::vector<std::tuple<types::IPPrefix, std::optional<std::string>>>& v) {
+                for (const auto& [prefix, name] : v)
+                    summaries.emplace(prefix);
+            });
+        eigrpIface->aggregator.installSummaries(summaries);
+    });
 }
 
 void EigrpInterface::notifyRoutingChange(const std::vector<const RouteInfo*>& changedRoutes)
 {
-    if (changedRoutes.empty() || isSupressed.load(std::memory_order_relaxed))
+    if (changedRoutes.empty() || priv.isSupressed.load(std::memory_order_relaxed))
         return;
 
     std::vector<Neighbor*> unicastNeighbors = ntable.lookupUnicast();
@@ -92,9 +151,9 @@ void EigrpInterface::notifyRoutingChange(const std::vector<const RouteInfo*>& ch
     }
 }
 
-void EigrpInterface::setPassiveMode(bool passive)
+void EigrpInterface::syncPassive()
 {
-    configs.get<config::EigrpInterface::PASSIVE_INTERFACE>().set(passive);
+    bool passive = configs.get<config::EigrpInterface::PASSIVE_INTERFACE>().load();
     if (passive)
     {
         for (auto it = ntable.neighbors.begin(); it != ntable.neighbors.end();)
@@ -129,7 +188,7 @@ void EigrpInterface::setMulticast(bool state)
 const uint8_t* EigrpInterface::multicastEnabled()
 {
     return multicastEnabledFlag.load(std::memory_order_relaxed)
-        ? (base.getAF() == types::AddressFamily::IPv4)
+        ? (process.addressFamily == types::AddressFamily::IPv4)
             ? EIGRP_MULTICAST_ADDRESS
             : EIGRP_MULTICAST_ADDRESS_V6
         : nullptr;
@@ -137,41 +196,39 @@ const uint8_t* EigrpInterface::multicastEnabled()
 
 void EigrpInterface::startDampening()
 {
-    if (base.getGlobalConfigMgr().getDampening())
+    if (process.getConfigs().get<config::Eigrp::DAMPENING>().load())
         tmgr.startDampeningIntervalTimer();
 }
 
 bool EigrpInterface::recordDampeningEvent()
 {
-    auto& cfg = base.getGlobalConfigMgr();
-    if (!cfg.getDampening()) return true;
+    if (!process.getConfigs().get<config::Eigrp::DAMPENING>().load()) return true;
 
     auto now = std::chrono::steady_clock::now();
-    routeChangeTimes.push_back(now);
+    priv.routeChangeTimes.push_back(now);
 
     // Drop old changes outside of interval
     const auto intervalSec = std::chrono::seconds(configs.get<config::EigrpInterface::DAMPENING_INTERVAL_TIME>().load());
-    while (!routeChangeTimes.empty() && now - routeChangeTimes.front() > intervalSec)
-        routeChangeTimes.pop_front();
+    while (!priv.routeChangeTimes.empty() && now - priv.routeChangeTimes.front() > intervalSec)
+        priv.routeChangeTimes.pop_front();
 
-    return !isSupressed.load(std::memory_order_relaxed);
+    return !priv.isSupressed.load(std::memory_order_relaxed);
 }
 
 void EigrpInterface::triggerDampeningOnRouteChange()
 {
-    auto& cfg = base.getGlobalConfigMgr();
-    uint32_t maxPrefix = cfg.getMaximumPrefixes();
+    uint32_t maxPrefix = process.getConfigs().get<config::Eigrp::MAXIMUM_PREFIX>().load();
     if (maxPrefix == 0) return;
 
-    prefixCount.fetch_add(1, std::memory_order_relaxed);
+    priv.prefixCount.fetch_add(1, std::memory_order_relaxed);
 
-    double changePercent = (static_cast<double>(routeChangeTimes.size()) / maxPrefix) * 100.0;
+    double changePercent = (static_cast<double>(priv.routeChangeTimes.size()) / maxPrefix) * 100.0;
     double triggerPercent = configs.get<config::EigrpInterface::DAMPENING_CHANGE_PERCENT>().load();
 
-    if (changePercent >= triggerPercent && !isSupressed.load(std::memory_order_relaxed))
+    if (changePercent >= triggerPercent && !priv.isSupressed.load(std::memory_order_relaxed))
     {
-        isSupressed.store(true, std::memory_order_release);
-        restartCounter++;
+        priv.isSupressed.store(true, std::memory_order_release);
+        priv.restartCounter++;
 
         tmgr.restartDampeningResetTimer();
     }
@@ -179,14 +236,13 @@ void EigrpInterface::triggerDampeningOnRouteChange()
 
 void EigrpInterface::checkDampeningStatus()
 {
-    if (!isSupressed.load(std::memory_order_relaxed)) return;
+    if (!priv.isSupressed.load(std::memory_order_relaxed)) return;
 
-    auto& cfg = base.getGlobalConfigMgr();
-    bool reachedLimit = restartCounter >= cfg.getDampeningRestartCount();
+    bool reachedLimit = priv.restartCounter >= process.getConfigs().get<config::Eigrp::DAMPENING_RESTART_COUNT>().load();
 
-    isSupressed.store(false, std::memory_order_release);
-    routeChangeTimes.clear();
-    prefixCount.store(0, std::memory_order_release);
+    priv.isSupressed.store(false, std::memory_order_release);
+    priv.routeChangeTimes.clear();
+    priv.prefixCount.store(0, std::memory_order_release);
 
     if (!reachedLimit)
         tmgr.restartDampeningRestartTimer();
@@ -199,28 +255,27 @@ void EigrpInterface::onDampeningResetExpire()
 
 void EigrpInterface::onDampeningRestartExpire()
 {
-    restartCounter = 0;
-    prefixCount.store(0, std::memory_order_release);
-    routeChangeTimes.clear();
+    priv.restartCounter = 0;
+    priv.prefixCount.store(0, std::memory_order_release);
+    priv.routeChangeTimes.clear();
 }
 
 void EigrpInterface::onDampeningIntervalExpire()
 {
-    auto& cfg = base.getGlobalConfigMgr();
-    if (!cfg.getDampening()) return;
+    if (!process.getConfigs().get<config::Eigrp::DAMPENING>().load()) return;
 
     tmgr.startDampeningIntervalTimer();
 
-    const uint32_t maxPrefixes = cfg.getMaximumPrefixes();
+    const uint32_t maxPrefixes = process.getConfigs().get<config::Eigrp::MAXIMUM_PREFIX>().load();
     if (maxPrefixes == 0) return;
 
-    double changePercent = (static_cast<double>(routeChangeTimes.size()) / maxPrefixes) * 100.0;
+    double changePercent = (static_cast<double>(priv.routeChangeTimes.size()) / maxPrefixes) * 100.0;
     double triggerPercent = configs.get<config::EigrpInterface::DAMPENING_CHANGE_PERCENT>().load();
 
-    if (changePercent >= triggerPercent && !isSupressed.load(std::memory_order_relaxed))
+    if (changePercent >= triggerPercent && !priv.isSupressed.load(std::memory_order_relaxed))
     {
-        isSupressed.store(true, std::memory_order_release);
-        ++restartCounter;
+        priv.isSupressed.store(true, std::memory_order_release);
+        ++priv.restartCounter;
 
         tmgr.restartDampeningResetTimer();
     }

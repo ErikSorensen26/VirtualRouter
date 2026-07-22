@@ -5,22 +5,25 @@
 #include "TimerManager.h"
 #include "eigrp/core/Eigrp.h"
 #include "DuelEngine.h"
+#include "configs/FieldAccessor.hpp"
 
 namespace routing::eigrp
 {
-TimerManager::TimerManager(Eigrp& base, core::ProcessQueue& scheduler)
-    : base(base), scheduler(scheduler.ref())
+TimerManager::TimerManager(Eigrp& process, core::ProcessQueue& scheduler)
+    : process(process), scheduler(scheduler.ref())
 {}
 
 void TimerManager::startSIATimer(OutgoingQuery& query, Neighbor& neighbor)
 {
-    auto expirationTime = std::chrono::steady_clock::now() + std::chrono::seconds(base.getGlobalConfigMgr().getSIATime());
+    auto siaTimeField = process.getConfigs().get<config::Eigrp::ACTIVE_TIME>();
+    uint16_t siaTime = siaTimeField.hasValue() ? siaTimeField.load() : 90;
+    auto expirationTime = std::chrono::steady_clock::now() + std::chrono::seconds(siaTime);
 
     // Schedule SIA-Query timer
     query.siaTimerId = scheduler.postAfter(expirationTime, [
         this, queryPtr = &query, neighborPtr = &neighbor
     ](uint32_t){
-        base.getTopology().handleSIATimeout(*queryPtr, *neighborPtr);
+        process.getTopology().handleSIATimeout(*queryPtr, *neighborPtr);
     });
 }
 

@@ -6,6 +6,7 @@
 #include "eigrp/rtp/NeighborTable.h"
 #include "EigrpInterface.h"
 #include "eigrp/core/Eigrp.h"
+#include "eigrp/EigrpTypes.hpp"
 
 namespace routing::eigrp
 {
@@ -27,8 +28,7 @@ std::vector<const RouteInfo*> TopologyController::getAdvertisableRoutes()
     if (iface.configs.get<config::EigrpInterface::PASSIVE_INTERFACE>().load())
         return routes;
 
-    auto& cfgMgr = iface.getBase().getGlobalConfigMgr();
-    const auto& stubCfg = cfgMgr.getStubConfig();
+    auto stubCfg = getStubConfig(iface.getConfigs());
     const bool splitHorizon = iface.configs.get<config::EigrpInterface::SPLIT_HORIZON>().load();
 
     for (const auto& [_, entry] : duel.topologyTable.entries())
@@ -70,8 +70,7 @@ std::vector<const RouteInfo*> TopologyController::filterAdvertisableRoutes(const
     std::vector<const RouteInfo*> filtered;
     if (routes.empty() || iface.configs.get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return filtered;
 
-    auto& cfgMgr = iface.getBase().getGlobalConfigMgr();
-    const auto& stubCfg = cfgMgr.getStubConfig();
+    auto stubCfg = getStubConfig(iface.getConfigs());
     const bool splitHorizon = iface.configs.get<config::EigrpInterface::SPLIT_HORIZON>().load();
 
     for (const auto* route : routes)

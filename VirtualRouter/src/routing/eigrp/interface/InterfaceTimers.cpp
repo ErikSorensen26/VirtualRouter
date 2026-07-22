@@ -13,7 +13,6 @@ namespace routing::eigrp
 {
 InterfaceTimers::InterfaceTimers(EigrpInterface& iface, core::ProcessQueue& scheduler) : iface(iface), scheduler(scheduler), ref(scheduler.ref())
 {
-    base = &iface.getBase();
 }
 
 InterfaceTimers::~InterfaceTimers()
@@ -44,7 +43,7 @@ void InterfaceTimers::stopHello()
         ref.cancel(helloTimerId);
         helloTimerId.store(0, std::memory_order_release);
     }
-    iface.getNTable().cancelAllHoldTimers();
+    iface.ntable.cancelAllHoldTimers();
 }
 
 void InterfaceTimers::startHello()
@@ -55,8 +54,8 @@ void InterfaceTimers::startHello()
 
 void InterfaceTimers::sendHello()
 {
-    auto& rtp = iface.getRtp();
-    auto unicastNeighbors = iface.getNTable().lookupUnicast();
+    auto& rtp = iface.rtp;
+    auto unicastNeighbors = iface.ntable.lookupUnicast();
     for (const auto& neighbor : unicastNeighbors)
     {
         rtp.sendUnicastHello(neighbor->ipAddress);
@@ -87,11 +86,11 @@ void InterfaceTimers::cancelHoldTimer(Neighbor& neighbor)
 
 void InterfaceTimers::handleHoldTimeExpire(Neighbor& neighbor)
 {
-    iface.getRtp().pendingPeerTermination.store(true, std::memory_order_release);
-    if (base->getGlobalConfigMgr().isNonStopForwarding())
-        iface.getNTable().startGracefulRestart(neighbor);
+    iface.rtp.pendingPeerTermination.store(true, std::memory_order_release);
+    if (iface.getConfigs().get<config::Eigrp::NON_STOP_FORWARDING>().load())
+        iface.ntable.startGracefulRestart(neighbor);
     else
-        iface.getNTable().onDown(neighbor);
+        iface.ntable.onDown(neighbor);
 }
 
 void InterfaceTimers::startRetransmissionTimer(Neighbor* neighbor, MulticastReliablePacket& multicast, ReliableInfo& info, uint32_t seq)
@@ -100,7 +99,7 @@ void InterfaceTimers::startRetransmissionTimer(Neighbor* neighbor, MulticastReli
     if (info.timerId != 0) ref.cancel(info.timerId);
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::milliseconds(static_cast<int>(timeout * 1000));
     info.timerId = ref.postAfter(expirationTime, [this, neighbor, m = &multicast, i = &info, seq](uint32_t) {
-        iface.getRtp().handleRetransmission(neighbor, *m, *i, seq);
+        iface.rtp.handleRetransmission(neighbor, *m, *i, seq);
     });
 }
 
@@ -110,7 +109,7 @@ void InterfaceTimers::startRetransmissionTimer(Neighbor* neighbor, UnicastReliab
     if (unicast.info.timerId != 0) ref.cancel(unicast.info.timerId);
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::milliseconds(static_cast<int>(timeout * 1000));
     unicast.info.timerId = ref.postAfter(expirationTime, [this, neighbor, u = &unicast, seq](uint32_t) {
-        iface.getRtp().handleRetransmission(neighbor, *u, seq);
+        iface.rtp.handleRetransmission(neighbor, *u, seq);
     });
 }
 
@@ -125,9 +124,9 @@ void InterfaceTimers::cancelRetransmissionTimer(ReliableInfo& pkt)
 
 void InterfaceTimers::startGracefulTimer(Neighbor& neighbor)
 {
-    auto expireTime = std::chrono::steady_clock::now() + std::chrono::seconds(base->getGlobalConfigMgr().getPurgeTime());
+    auto expireTime = std::chrono::steady_clock::now() + std::chrono::seconds(iface.getConfigs().get<config::Eigrp::GRACEFUL_PURGE_TIME>().load());
     uint32_t gracefulTimerId = ref.postAfter(expireTime, [this, nbr = &neighbor](uint32_t) {
-        iface.getNTable().onDown(*nbr);
+        iface.ntable.onDown(*nbr);
     });
     neighbor.gracefulTimerId.store(gracefulTimerId, std::memory_order_release);
     neighbor.isGraceful = true;
@@ -154,7 +153,7 @@ void InterfaceTimers::restartDampeningResetTimer()
     if (auto id = dampeningResetId.load(std::memory_order_relaxed); id != 0)
         ref.cancel(id);
 
-    suppressedUntil = std::chrono::steady_clock::now() + std::chrono::seconds(base->getGlobalConfigMgr().getDampeningResetTime()),
+    suppressedUntil = std::chrono::steady_clock::now() + std::chrono::seconds(iface.getConfigs().get<config::Eigrp::DAMPENING_RESET_TIME>().load()),
     dampeningResetId.store(ref.postAfter(
         suppressedUntil,
         [this](uint32_t) { iface.onDampeningResetExpire(); }
@@ -167,7 +166,7 @@ void InterfaceTimers::restartDampeningRestartTimer()
         ref.cancel(id);
 
     dampeningRestartId.store(ref.postAfter(
-        std::chrono::steady_clock::now() + std::chrono::seconds(base->getGlobalConfigMgr().getDampeningRestart()),
+        std::chrono::steady_clock::now() + std::chrono::seconds(iface.getConfigs().get<config::Eigrp::DAMPENING_RESTART>().load()),
         [this](uint32_t) { iface.onDampeningRestartExpire(); }
     ), std::memory_order_release);
 }

@@ -7,17 +7,17 @@
 
 namespace routing::eigrp
 {
-inline TLVType getTLVType(EigrpInterface& iface, Neighbor::Version v)
+TLVType Neighbor::getTLVType(EigrpInterface& iface, Version v)
 {
-    Eigrp& base = iface.getBase();
-    bool isV6 = base.getAF() == types::AddressFamily::IPv6;
-    if (v == Neighbor::Version::LEGACY)
+    Eigrp& process = iface.process;
+    bool isV6 = process.addressFamily == types::AddressFamily::IPv6;
+    if (v == Version::LEGACY)
     {
         return isV6
             ? TLVType::LEGACY_V6
             : TLVType::LEGACY_V4;
     }
-    else if (base.isNamed())
+    else if (process.namedMode)
     {
         return TLVType::WIDE;
     }
@@ -45,8 +45,8 @@ Neighbor::~Neighbor()
     if (iface.tlvTypes[tlvType].empty())
         iface.tlvTypes.erase(tlvType);
 
-    iface.getTimers().cancelNeighborTimers(*this);
-    iface.getBase().delGlobalNeighbor(ipAddress);
+    iface.tmgr.cancelNeighborTimers(*this);
+    iface.delGlobalNeighbor(ipAddress);
 }
 
 void Neighbor::clear()
@@ -105,14 +105,14 @@ bool Neighbor::isActive() const noexcept
 
 void Neighbor::clearReliable()
 {
-    auto& rtp = iface.getRtp();
+    auto& rtp = iface.rtp;
     uint32_t current = currentReliable.load(std::memory_order_relaxed);
     currentReliable.store(0, std::memory_order_release);
     if (current != 0)
     {
         if (reliablePackets.count(current))
         {
-            iface.getTimers().cancelRetransmissionTimer(reliablePackets[current].info);
+            iface.tmgr.cancelRetransmissionTimer(reliablePackets[current].info);
         }
         else if (auto it = rtp.reliablePackets.find(current); it != rtp.reliablePackets.end())
         {

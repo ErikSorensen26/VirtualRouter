@@ -14,11 +14,11 @@
 namespace processing { class PacketBuilder; }
 namespace types { struct IPAddress; }
 namespace packet { class TLV16BufferManager; }
+namespace config { class EigrpRegistry; }
 
 namespace routing::eigrp
 {
 class EigrpInterface;
-class EigrpConfig;
 struct RouteInfo;
 enum class TLVType : uint16_t;
 
@@ -124,11 +124,11 @@ public:
      * directed at this router. The TLV is omitted if stub mode is not enabled.
      *
      * @param tlv TLV buffer to append into.
-     * @param cfg Process-level EIGRP configuration containing the stub settings.
+     * @param configs Process-level EIGRP configuration registry containing the stub settings.
      * @return True if the TLV was written (stub is enabled); false if stub is off
      *         or the buffer is full.
      */
-    static bool appendStubTLV(packet::TLV16BufferManager& tlv, EigrpConfig& cfg);
+    static bool appendStubTLV(packet::TLV16BufferManager& tlv, const config::EigrpRegistry& configs);
 
     /**
      * @brief Appends one IP-address entry per neighbor into the sequence TLV.

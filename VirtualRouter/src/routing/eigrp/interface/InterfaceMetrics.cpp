@@ -36,18 +36,18 @@ void InterfaceMetrics::addRouteMetrics(std::vector<ReceivedRoute>& routes)
 uint64_t InterfaceMetrics::getLocalMetric()
 {
     // TODO questionable
-    auto& cfg = iface.getIfaceCfg();
+    auto& cfg = *iface.currentInterfaceInfo;
     uint8_t load = 1;
     uint8_t reliability = 255;
     uint64_t bandwidth = cfg.hwInfo.bandwidth / 1000;
     uint64_t delay = 0;
 
-    return iface.getMetrics().calculateCompositeMetric(load, reliability, delay, bandwidth);
+    return iface.metrics.calculateCompositeMetric(load, reliability, delay, bandwidth);
 }
 
 uint64_t InterfaceMetrics::calculateCompositeMetric(uint8_t load, uint8_t reliability, uint64_t delay, uint64_t bandwidth)
 {
-    const auto k = iface.getBase().getGlobalConfigMgr().getKValues();
+    const auto k = getKValues(iface.getConfigs());
 
     // Convert delay from picoseconds to microseconds
     uint64_t delayMicroseconds = delay / 1'000'000ULL;

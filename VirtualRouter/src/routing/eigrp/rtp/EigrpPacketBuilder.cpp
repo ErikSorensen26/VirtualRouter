@@ -3,7 +3,6 @@
 #include "EigrpPacketBuilder.h"
 #include "eigrp/core/Eigrp.h"
 #include "processing/PacketBuilder.hpp"
-#include "eigrp/core/EigrpConfig.h"
 #include "eigrp/EigrpTypes.hpp"
 #include "eigrp/interface/AuthHandler.h"
 #include "eigrp/interface/EigrpInterface.h"
@@ -38,15 +37,16 @@ void EigrpPacketBuilder::appendAuthTLV(packet::TLV16BufferManager& tlv, EigrpInt
     if (!iface.isAuthEnabled()) return;
     auto* buf = tlv.getNextValBuf(52); // max: SHA256 (20 + 32)
     if (!buf) return;
-    uint16_t valSize = iface.getAuth().buildAuthTLV(buf);
+    uint16_t valSize = iface.auth.buildAuthTLV(buf);
     if (valSize == 0) return;
     tlv.append(EIGRP_OPTION_AUTHENTICATION, static_cast<uint16_t>(valSize + 4), nullptr, valSize);
 }
 
-bool EigrpPacketBuilder::appendStubTLV(packet::TLV16BufferManager& tlv, EigrpConfig& cfg)
+bool EigrpPacketBuilder::appendStubTLV(packet::TLV16BufferManager& tlv, const config::EigrpRegistry& configs)
 {
-    if (!cfg.stubEnabled()) return false;
-    TLVBuilder::encodeStubOption(tlv.getNextValBuf(), cfg.getStubConfig());
+    auto stub = configs.get<config::Eigrp::STUB>();
+    if (!stub.hasValue() || !stub.load()) return false;
+    TLVBuilder::encodeStubOption(tlv.getNextValBuf(), getStubConfig(configs));
     tlv.append(EIGRP_OPTION_STUB, 6, nullptr, 2);
     return true;
 }
@@ -74,15 +74,15 @@ bool EigrpPacketBuilder::appendParameterTLV(packet::TLV16BufferManager& tlv, Eig
 {
     uint8_t* val = tlv.getNextValBuf(8);
     if (!val) return false;
-    if (iface.getRtp().pendingPeerTermination.load(std::memory_order_relaxed))
+    if (iface.rtp.pendingPeerTermination.load(std::memory_order_relaxed))
     {
         std::memset(val, 0, 6);
         utils::writeU16(val + 6, iface.configs.get<config::EigrpInterface::HOLD_TIME>().load());
-        iface.getRtp().pendingPeerTermination.store(false, std::memory_order_release);
+        iface.rtp.pendingPeerTermination.store(false, std::memory_order_release);
     }
     else
     {
-        KValue k = iface.getBase().getGlobalConfigMgr().getKValues();
+        KValue k = getKValues(iface.getConfigs());
         TLVBuilder::calculateParameters(val, k, iface.configs.get<config::EigrpInterface::HOLD_TIME>().load());
     }
     return tlv.append(EIGRP_OPTION_PARAMETER, 12, nullptr, 8);

@@ -10,11 +10,11 @@
 
 namespace routing::eigrp
 {
-DuelEngine::DuelEngine(Eigrp& process) : base(process), topologyTable(process), tmgr(process, process.getScheduler()) {}
+DuelEngine::DuelEngine(Eigrp& process) : process(process), topologyTable(process), tmgr(process, process.getScheduler()) {}
 
 bool DuelEngine::isRouteAdvertised(const uint8_t* network, uint8_t mask)
 {
-    types::IPPrefix prefix(network, mask, base.getAF(), true);
+    types::IPPrefix prefix(network, mask, process.addressFamily, true);
     auto* entry = topologyTable.find(prefix);
     return entry != nullptr && !entry->successors.empty();
 }
@@ -46,7 +46,7 @@ void DuelEngine::refreshSuppression(std::vector<TopologyEntry*>& entries, EigrpI
 
     if (resync)
     {
-        iface->getNTable().resync();
+        iface->ntable.resync();
     }
 }
 
@@ -79,9 +79,9 @@ void DuelEngine::updateSuccessors(std::vector<TopologyEntry*>& entries)
     }
 
     for (auto& entry : entries)
-        base.getAggregator().updateSummary(*entry);
+        process.getAggregator().updateSummary(*entry);
     
-    base.routeManager.synchronizeRoutes(entries);
+    process.routeManager.synchronizeRoutes(entries);
 
     if (!activeEntries.empty())
         setActive(activeEntries);
@@ -90,8 +90,8 @@ void DuelEngine::updateSuccessors(std::vector<TopologyEntry*>& entries)
 bool DuelEngine::recalculateSuccessors(TopologyEntry* entry)
 {
     if (entry->routesBySource.empty()) return false;
-    config::eigrp::TrafficShareMode trafMode = base.getGlobalConfigMgr().getTrafficMode();
-    uint8_t variance = base.getGlobalConfigMgr().getVariance();
+    config::eigrp::TrafficShareMode trafMode = process.getConfigs().get<config::Eigrp::TRAFFIC_SHARE>().load();
+    uint8_t variance = process.getConfigs().get<config::Eigrp::VARIANCE>().load();
 
     uint64_t bestFD = std::numeric_limits<uint64_t>::max();
     uint8_t bestAD = std::numeric_limits<uint8_t>::max();
@@ -164,7 +164,7 @@ bool DuelEngine::recalculateDistances(TopologyEntry* entry, uint64_t localMetric
 
     uint64_t bestFD = std::numeric_limits<uint64_t>::max();
     uint8_t bestAD = std::numeric_limits<uint8_t>::max();
-    types::IPAddress bestNeighbor = (base.getAF() == types::AddressFamily::IPv4) ? types::IPAddress(uint32_t(0)) : types::IPAddress(__uint128_t(0));
+    types::IPAddress bestNeighbor = (process.addressFamily == types::AddressFamily::IPv4) ? types::IPAddress(uint32_t(0)) : types::IPAddress(__uint128_t(0));
 
     for (auto& [nbr, route] : entry->routesBySource)
     {
@@ -196,7 +196,7 @@ void DuelEngine::processReceivedRoutes(std::vector<ReceivedRoute>& newRoutes, co
 {
     std::vector<TopologyEntry*> updates;
     std::vector<const RouteInfo*> reversePoisens;
-    uint8_t maxHops = base.getGlobalConfigMgr().getMaxHops();
+    uint8_t maxHops = process.getConfigs().get<config::Eigrp::MAX_HOPS>().load();
     for (auto& newRoute : newRoutes)
     {
         if (newRoute.hopCount >= maxHops || newRoute.reportedDistance > newRoute.feasibleDistance) continue;
@@ -214,7 +214,7 @@ void DuelEngine::processReceivedRoutes(std::vector<ReceivedRoute>& newRoutes, co
     }
 
     if (!reversePoisens.empty())
-        neighbor.getIface().getRtp().sendPoisenedUpdate(nullptr, reversePoisens);
+        neighbor.getIface().rtp.sendPoisenedUpdate(nullptr, reversePoisens);
 
     updateSuccessors(updates);
 }
@@ -230,7 +230,8 @@ void DuelEngine::processReceivedQueryRoutes(std::vector<ReceivedRoute>& queriedR
     std::vector<TopologyEntry*> toActivate;
     std::vector<const RouteInfo*> replies;
 
-    bool isStub = base.getGlobalConfigMgr().stubEnabled();
+    auto stubField = process.getConfigs().get<config::Eigrp::STUB>();
+    bool isStub = stubField.hasValue() && stubField.load();
 
     for (auto& route : queriedRoutes)
     {
@@ -254,7 +255,7 @@ void DuelEngine::processReceivedQueryRoutes(std::vector<ReceivedRoute>& queriedR
     }
 
     if (!replies.empty())
-        nbr.getIface().getRtp().sendReply(nbr, replies);
+        nbr.getIface().rtp.sendReply(nbr, replies);
 
     if (!toActivate.empty())
         setActive(toActivate, &recvSeq);
@@ -272,7 +273,7 @@ void DuelEngine::setActive(std::vector<TopologyEntry*>& entries, const uint32_t*
                 entry->state == TopologyEntry::State::ACTIVE)
                 continue;
 
-            base.routeManager.withdrawRoute(entry->prefix);
+            process.routeManager.withdrawRoute(entry->prefix);
 
             // Create new active route
             ActiveRoute& ar = activeRoutes[entry->prefix];
@@ -298,7 +299,7 @@ void DuelEngine::setActive(std::vector<TopologyEntry*>& entries, const uint32_t*
         return;
 
     std::unordered_map<EigrpInterface*, std::vector<ActiveRoute*>> multicastBuckets;
-    auto& allNeighbors = base.allNeighbors;
+    auto& allNeighbors = process.allNeighbors;
     for (auto& ar : routes)
     {
         types::IPAddress& origin = ar->originNeighbor;
@@ -318,7 +319,7 @@ void DuelEngine::setActive(std::vector<TopologyEntry*>& entries, const uint32_t*
 
                 // Send unicast query
                 std::vector<OutgoingQuery*> qs = { &query };
-                neighbor->getIface().getRtp().sendUnicastQuery(*neighbor, qs);
+                neighbor->getIface().rtp.sendUnicastQuery(*neighbor, qs);
             }
             else
             {
@@ -334,7 +335,7 @@ void DuelEngine::setActive(std::vector<TopologyEntry*>& entries, const uint32_t*
 
     for (auto& [iface, rts] : multicastBuckets)
     {
-        iface->getRtp().sendQuery(rts);
+        iface->rtp.sendQuery(rts);
     }
 
     for (auto& ar : routes)
@@ -404,7 +405,7 @@ void DuelEngine::handleSIATimeout(OutgoingQuery& query, Neighbor& neighbor)
     {
         if (query.siaAttempts < 4)
         {
-            neighbor.getIface().getRtp().sendSIAQuery(neighbor, {&query});
+            neighbor.getIface().rtp.sendSIAQuery(neighbor, {&query});
             query.siaAttempts++;
             tmgr.startSIATimer(query, neighbor);
             return;
@@ -414,7 +415,7 @@ void DuelEngine::handleSIATimeout(OutgoingQuery& query, Neighbor& neighbor)
         empty = route->pendingQueries.empty();
     }
 
-    neighbor.getIface().getNTable().onDown(neighbor);
+    neighbor.getIface().ntable.onDown(neighbor);
     if (empty)
         concludeActive(*route);
 }
@@ -426,15 +427,15 @@ void DuelEngine::concludeActive(ActiveRoute& activeRoute)
 
     for (auto& [neighbor, route] : activeRoute.possibleRoutes)
     {
-        auto it = base.allNeighbors.find(neighbor);
-        if (it == base.allNeighbors.end()) continue;
+        auto it = process.allNeighbors.find(neighbor);
+        if (it == process.allNeighbors.end()) continue;
         topologyTable.addRouteUpdate(route, it->second, *entry);
     }
 
     if (!recalculateSuccessors(entry))
     {
         entry->state = TopologyEntry::State::POISENED;
-        entry->valid = std::chrono::steady_clock::now() + std::chrono::seconds(base.getGlobalConfigMgr().getDelTimer());
+        entry->valid = std::chrono::steady_clock::now() + std::chrono::seconds(120); // 3x default hold time (3 * 40s)
     }
     else
         entry->state = TopologyEntry::State::PASSIVE;
@@ -452,13 +453,13 @@ void DuelEngine::concludeActive(ActiveRoute& activeRoute)
         }
         for (const auto& src : activeRoute.remoteSources)
         {
-            auto it = base.allNeighbors.find(src.first);
-            if (it == base.allNeighbors.end()) continue;
-            it->second->getIface().getRtp().sendReply(*it->second, replies);
+            auto it = process.allNeighbors.find(src.first);
+            if (it == process.allNeighbors.end()) continue;
+            it->second->getIface().rtp.sendReply(*it->second, replies);
         }
     }
 
     activeRoutes.erase(activeRoute.activePrefix);
-    base.routeManager.synchronizeRoute(*entry);
+    process.routeManager.synchronizeRoute(*entry);
 }
 } // namespace routing

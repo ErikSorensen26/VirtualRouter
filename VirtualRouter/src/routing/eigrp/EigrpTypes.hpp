@@ -8,6 +8,8 @@
 
 #include <cstdint>
 
+namespace config { class EigrpRegistry; }
+
 namespace routing::eigrp
 {
 
@@ -66,7 +68,7 @@ struct KValue
  * When `receiveOnly` is true, all `advertise*` flags are ignored and no
  * routes are advertised, regardless of their individual settings.
  *
- * @see EigrpConfig::enableStub
+ * @see Eigrp::enableStub
  */
 struct StubConfig
 {
@@ -78,6 +80,18 @@ struct StubConfig
     bool advertiseRedistributed = true;  ///< Advertise all other redistributed routes.
     bool receiveOnly = false;            ///< Suppress all outbound advertisements.
 };
+
+/**
+ * @brief Reads the current K-value set for composite metric calculation
+ *        from a process's raw configuration registry.
+ */
+KValue getKValues(const config::EigrpRegistry& configs);
+
+/**
+ * @brief Reads the full stub configuration from a process's raw
+ *        configuration registry.
+ */
+StubConfig getStubConfig(const config::EigrpRegistry& configs);
 
 } // namespace routing::eigrp
 

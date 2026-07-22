@@ -9,7 +9,7 @@
 
 namespace routing::eigrp
 {
-EigrpTopology::EigrpTopology(Eigrp& base) : duel(base), base(base) {}
+EigrpTopology::EigrpTopology(Eigrp& process) : duel(process), process(process) {}
 
 void EigrpTopology::pruneStaleRoutes()
 {
@@ -33,8 +33,8 @@ void EigrpTopology::handleSIATimeout(OutgoingQuery& query, Neighbor& neighbor)
 
 void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
 {
-    const auto* interface = iface.getIface();
-    types::IPAddress connected = (base.getAF() == types::AddressFamily::IPv4) ? types::IPAddress(uint32_t(0)) : types::IPAddress(__uint128_t(0));
+    const auto* interface = iface.currentInterface;
+    types::IPAddress connected = (process.addressFamily == types::AddressFamily::IPv4) ? types::IPAddress(uint32_t(0)) : types::IPAddress(__uint128_t(0));
 
     ReceivedRoute r{};
     r.originInterface = iface.interfaceKey;
@@ -43,11 +43,11 @@ void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
     r.load = 1;
     r.reliability = 255;
     r.hopCount = 0;
-    r.mtu = base.getAF() == types::AddressFamily::IPv4
+    r.mtu = process.addressFamily == types::AddressFamily::IPv4
         ? interface->configs.ipv4.mtu.load(std::memory_order_relaxed)
         : interface->configs.ipv6.mtu.load(std::memory_order_relaxed);
     r.routeType = RouteType::CONNECTED;
-    r.adminDistance = base.getGlobalConfigMgr().getAD();
+    r.adminDistance = process.getConfigs().get<config::Eigrp::INTERNAL_ADMIN_DISTANCE>().load();
     r.nextHop = connected; // Self originated
 
     std::set<types::IPPrefix> withdraws = iface.connectedRoutes;
@@ -59,14 +59,14 @@ void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
         ReceivedRoute newRoute = r;
         newRoute.prefix = prefix;
         auto& entry = duel.topologyTable.ensure(newRoute.prefix);
-        base.getAggregator().updateSummary(entry);
+        process.getAggregator().updateSummary(entry);
         duel.topologyTable.addRouteUpdate(newRoute, nullptr, entry);
         withdraws.erase(prefix); // Erase to mark found
         iface.connectedRoutes.insert(prefix);
         updates.push_back(&entry);
     };
 
-    if (base.getAF() == types::AddressFamily::IPv4)
+    if (process.addressFamily == types::AddressFamily::IPv4)
     {
         if (interface->configs.ipv4.hasPrimaryAddress())
         {
@@ -101,7 +101,7 @@ void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
 void EigrpTopology::clearConnected(EigrpInterface& iface)
 {
     std::vector<TopologyEntry*> updates;
-    types::IPAddress connected = (base.getAF() == types::AddressFamily::IPv4) ? types::IPAddress(uint32_t(0)) : types::IPAddress(__uint128_t(0));
+    types::IPAddress connected = (process.addressFamily == types::AddressFamily::IPv4) ? types::IPAddress(uint32_t(0)) : types::IPAddress(__uint128_t(0));
     for (auto it = iface.connectedRoutes.begin(); it != iface.connectedRoutes.end();)
     {
         if (auto* entry = duel.topologyTable.find(*it); entry)
@@ -116,6 +116,6 @@ void EigrpTopology::clearConnected(EigrpInterface& iface)
     }
 
     duel.updateSuccessors(updates);
-    base.routeManager.synchronizeRoutes(updates);
+    process.routeManager.synchronizeRoutes(updates);
 }
 } // namespace routing

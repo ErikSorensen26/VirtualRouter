@@ -7,7 +7,7 @@
 
 namespace routing::eigrp
 {
-TopologyTable::TopologyTable(Eigrp& process) : eigrpProcess(process) {}
+TopologyTable::TopologyTable(Eigrp& process) : process(process) {}
 
 TopologyTable::~TopologyTable() {}
 
@@ -54,7 +54,7 @@ TopologyEntry& TopologyTable::ensure(const types::IPPrefix& prefix)
     if (inserted)
     {
         it->second.prefix = prefix;
-        eigrpProcess.getAggregator().addSummary(it->second);
+        process.getAggregator().addSummary(it->second);
     }
     return it->second;
 }

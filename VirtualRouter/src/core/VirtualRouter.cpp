@@ -138,7 +138,7 @@ bool VirtualRouter::removeEigrpNamed(const std::string& name)
             auto [v4, v6] = pair;
             if (v4)
             {
-                uint32_t as = v4->getAS();
+                uint32_t as = v4->asNumber;
                 if (eigrpList.find(as) != eigrpList.end())
                 {
                     delete eigrpList[as].ipv4;
@@ -149,7 +149,7 @@ bool VirtualRouter::removeEigrpNamed(const std::string& name)
             }
             if (v6)
             {
-                uint32_t as = v6->getAS();
+                uint32_t as = v6->asNumber;
                 if (eigrpList.find(as) != eigrpList.end())
                 {
                     delete eigrpList[as].ipv6;
@@ -279,28 +279,28 @@ bool VirtualRouter::removeOspfv3(uint16_t id, types::AddressFamily af)
 void VirtualRouter::refreshEigrpV4()
 {
     for (auto& [id, as] : eigrpList)
-        if (as.ipv4) as.ipv4->getIfaceMgr().refreshInterfaceList();
+        if (as.ipv4) as.ipv4->enqueueRefreshInterfaceList();
     for (auto& [name, named] : namedEigrpList)
         for (auto& [subName, pair] : named.systems)
-            if (pair.first) pair.first->getIfaceMgr().refreshInterfaceList();
+            if (pair.first) pair.first->enqueueRefreshInterfaceList();
 }
 
 void VirtualRouter::refreshEigrpV6()
 {
     for (auto& [id, as] : eigrpList)
-        if (as.ipv6) as.ipv6->getIfaceMgr().refreshInterfaceList();
+        if (as.ipv6) as.ipv6->enqueueRefreshInterfaceList();
     for (auto& [name, named] : namedEigrpList)
         for (auto& [subName, pair] : named.systems)
-            if (pair.second) pair.second->getIfaceMgr().refreshInterfaceList();
+            if (pair.second) pair.second->enqueueRefreshInterfaceList();
 }
 
 void VirtualRouter::refreshEigrpV6Interfaces()
 {
     for (auto& [id, as] : eigrpList)
-        if (as.ipv6) as.ipv6->getIfaceMgr().refreshInterfaceList();
+        if (as.ipv6) as.ipv6->enqueueRefreshInterfaceList();
     for (auto& [name, named] : namedEigrpList)
         for (auto& [subName, pair] : named.systems)
-            if (pair.second) pair.second->getIfaceMgr().refreshInterfaceList();
+            if (pair.second) pair.second->enqueueRefreshInterfaceList();
 }
 
 config::VrfRegistry& VirtualRouter::getConfigs()

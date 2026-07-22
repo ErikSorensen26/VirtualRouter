@@ -20,8 +20,6 @@ NeighborTable::~NeighborTable()
 Neighbor* NeighborTable::createNeighbor(const types::IPAddress& neighborIp, Neighbor::Version v, bool isUnicast)
 {
     // Add neighbor only if it doesn't already exist
-    auto& base = iface.getBase();
-
     if (isUnicast)
     {
         unicast.insert(neighborIp);
@@ -35,13 +33,13 @@ Neighbor* NeighborTable::createNeighbor(const types::IPAddress& neighborIp, Neig
         if (modeSwap)
         {
             if (!isUnicast) unicast.erase(neighborIp);
-            base.delGlobalNeighbor(neighborIp);
+            iface.delGlobalNeighbor(neighborIp);
         }
 
-        auto neighborIt = neighbors.try_emplace(neighborIp, iface, iface.getTimers(), neighborIp, v, isUnicast);
+        auto neighborIt = neighbors.try_emplace(neighborIp, iface, iface.tmgr, neighborIp, v, isUnicast);
         if (!neighborIt.second) return nullptr;
         auto* neighbor = &neighborIt.first->second;
-        base.addGlobalNeighbor(neighborIp, neighbor);
+        iface.addGlobalNeighbor(neighborIp, neighbor);
 
         if (isUnicast && iface.multicastEnabledFlag.load(std::memory_order_relaxed))
         {
@@ -95,8 +93,8 @@ void NeighborTable::deleteNeighbor(const types::IPAddress& neighborIp, bool isUn
     if (neighborIt != neighbors.end())
     {
         if (isUnicast != neighborIt->second.unicast) return;
-        iface.getTopController().onNeighborDown(neighborIt->second);
-        iface.getBase().delGlobalNeighbor(neighborIp);
+        iface.topology.onNeighborDown(neighborIt->second);
+        iface.delGlobalNeighbor(neighborIp);
         neighbors.erase(neighborIp);
         if (isUnicast)
         {
@@ -137,7 +135,7 @@ Neighbor* NeighborTable::lookup(const types::IPAddress& neighborIp)
 
 void NeighborTable::cancelAllHoldTimers()
 {
-    auto& timeMgr = iface.getTimers();
+    auto& timeMgr = iface.tmgr;
     for (auto& [_, neighbor] : neighbors)
     {
         timeMgr.cancelHoldTimer(neighbor);
@@ -149,9 +147,9 @@ void NeighborTable::onDown(Neighbor& neighbor)
     const types::IPAddress neighborIp = neighbor.ipAddress;
     // The hold timer captures &neighbor; erasing below frees it, so a still-armed
     // timer would fire against freed memory. Cancel before the erase.
-    iface.getTimers().cancelHoldTimer(neighbor);
-    iface.getTopController().onNeighborDown(neighbor);
-    iface.getBase().delGlobalNeighbor(neighborIp);
+    iface.tmgr.cancelHoldTimer(neighbor);
+    iface.topology.onNeighborDown(neighbor);
+    iface.delGlobalNeighbor(neighborIp);
     unicast.erase(neighborIp);
     neighbors.erase(neighborIp);
     if (neighbors.empty())
@@ -166,8 +164,8 @@ void NeighborTable::resync()
     {
         if ((static_cast<uint16_t>(it->second.tlvType) & 0xFF00) == 0x0600)
         {
-            iface.getTopController().onNeighborDown(it->second);
-            iface.getRtp().sendFullTopology(it->second, ReliableTransport::Resync::INIT);
+            iface.topology.onNeighborDown(it->second);
+            iface.rtp.sendFullTopology(it->second, ReliableTransport::Resync::INIT);
             it++;
         }
         else
@@ -179,7 +177,7 @@ void NeighborTable::resync()
 
 void NeighborTable::startGracefulRestart(Neighbor& neighbor)
 {
-    iface.getTimers().startGracefulTimer(neighbor);
+    iface.tmgr.startGracefulTimer(neighbor);
 }
 
 bool NeighborTable::validatePTP(const types::IPAddress& neighborIp)
