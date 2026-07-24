@@ -27,6 +27,8 @@
 namespace core { class VirtualRouter; }
 namespace config { struct BgpBaseRegistry; struct BgpRegistry; }
 
+class Internal_BgpTest;
+
 /**
  * @namespace routing::bgp
  * @brief BGP routing protocol implementation.
@@ -40,6 +42,8 @@ namespace routing::bgp
 {
 class BgpNeighbor;
 class Session;
+class BgpRx;
+class BgpTx;
 
 /**
  * @brief Top-level BGP process object for one AS number / VRF pair.
@@ -111,31 +115,22 @@ public:
      */
     ~BgpProcess();
 
-    core::VirtualRouter* routingInstance = nullptr; ///< Owning VRF; set at construction, never null after construction.
+    const uint32_t asNumber; ///< Local AS number — immutable after construction.
+    uint32_t getRouterId() const;
 
-    // GETTERS
+    static void onConnectCallback(transport::tcp::ConnCallbackCtx& ctx) noexcept;
+    static void onAcceptCallback(transport::tcp::AcceptCallbackCtx& ctx) noexcept;
+    static void onReceiveCallback(transport::tcp::RecvCallbackCtx& ctx) noexcept;
 
-    config::BgpRegistry& getConfigs() { return configs; }
-    const config::BgpRegistry& getConfigs() const { return configs; }
-    NeighborTable& getNtable() { return ntable; }
-    const NeighborTable& getNtable() const { return ntable; }
-    AttributeManager& getAttrMgr() { return attrMgr; }
-    const AttributeManager& getAttrMgr() const { return attrMgr; }
+    core::VirtualRouter& routingInstance; ///< Owning VRF; set at construction.
 
-    /**
-     * @brief Returns the BGP Router ID used in OPEN messages.
-     *
-     * Reads `BGP_ROUTER_ID` from the process config.  Falls back to the AS
-     * number when no explicit Router ID has been configured — this is only a
-     * safe default for single-router test environments; production deployments
-     * should always set an explicit Router ID.
-     */
-    uint32_t getRouterId() const noexcept
-    {
-        auto rid = getConfigs().get<config::Bgp::BGP_ROUTER_ID>();
-        if (rid.hasValue()) return rid.load();
-        return asNumber;
-    }
+private:
+    friend class NeighborTable;
+    friend class Session;
+    friend class PeerTemplateTable;
+    friend class ProcessAccessor;
+    friend class ::Internal_BgpTest;
+
 
     /**
      * @brief Looks up an active session by peer IP address.
@@ -200,8 +195,7 @@ public:
      * mapping, and sets `Neighbor::session = nullptr`.
      */
     void onSessionDown(Session& session);
-
-    /**
+/**
      * @brief Looks up an address-family instance by AFI/SAFI at runtime.
      *
      * @return Pointer to the variant wrapper, or `nullptr` if the AF has not
@@ -217,7 +211,7 @@ public:
     template <typename F>
     void forEachAf(F&& fn) const
     {
-        for (const auto& [afi, afv] : addressFamilies)
+        for (const auto& [afi, afv] : priv.addressFamilies)
             fn(afi);
     }
 
@@ -237,10 +231,10 @@ public:
      *         yet enabled.
      */
     template <AfiSafi AF>
-    AddressFamily<AF>* findAddressFamily()
+    const AddressFamily<AF>* findAddressFamily()
     {
         static_assert(hasAddressFamily<AF>(), "types::AddressFamily not supported");
-        if (auto it = addressFamilies.find(AF); it != addressFamilies.end())
+        if (auto it = priv.addressFamilies.find(AF); it != priv.addressFamilies.end())
             return &std::get<AddressFamily<AF>>(it->second);
         return nullptr;
     }
@@ -255,51 +249,39 @@ public:
      * @tparam AF  AFI/SAFI constant.  Must satisfy `hasAddressFamily<AF>()`.
      */
     template <AfiSafi AF>
-    AddressFamily<AF>& enableAddressFamily()
+    const AddressFamily<AF>& enableAddressFamily()
     {
         static_assert(hasAddressFamily<AF>(), "types::AddressFamily not supported");
-        if (auto it = addressFamilies.find(AF); it != addressFamilies.end())
+        if (auto it = priv.addressFamilies.find(AF); it != priv.addressFamilies.end())
             return std::get<AddressFamily<AF>>(it->second);
-        auto [it, ok] = addressFamilies.try_emplace(AF, std::in_place_type<AddressFamily<AF>>, *this, AF);
+        auto [it, ok] = priv.addressFamilies.try_emplace(AF, std::in_place_type<AddressFamily<AF>>, *this, AF);
         return std::get<AddressFamily<AF>>(it->second);
     }
-
-    const uint32_t asNumber; ///< Local AS number — immutable after construction.
-
-    /// @name TCP Callbacks
-    /// Static callbacks registered with the TCP stack.  They enqueue work onto
-    /// the scheduler and must never touch FSM state directly.
-    ///@{
-    static void onConnectCallback(transport::tcp::ConnCallbackCtx& ctx) noexcept;
-    static void onAcceptCallback(transport::tcp::AcceptCallbackCtx& ctx) noexcept;
-    static void onReceiveCallback(transport::tcp::RecvCallbackCtx& ctx) noexcept;
-    ///@}
-
-    /**
-     * @brief Returns a lifetime-safe ref for posting self-referencing tasks
-     *        (e.g. delayed peer-establishment, periodic scan-time timers).
-     *
-     * Released first in `~BgpProcess()`, before `addressFamilies`/`ntable`/
-     * `sessions` are torn down, so that no posted task can run against a
-     * partially-destroyed `BgpProcess`.
-     */
-    core::ProcessQueue& getScheduler() { return scheduler; }
-
-private:
-
-    /// Schedules the next BGP scan-time timer (BGP_SCAN_TIME config).
-    void scheduleScan();
-
-    transport::tcp::Listener listener;                                   ///< Passive TCP listener on port 179.
 
     core::ProcessQueue scheduler; ///< Single-threaded event queue; all BGP FSM work runs here.
     AttributeManager attrMgr;     ///< Flyweight store for path attributes shared across all sessions.
     NeighborTable ntable;         ///< Configured and dynamic neighbor registry.
-    std::unordered_map<AfiSafi, AddressFamilyVariant> addressFamilies;   ///< Enabled AFI/SAFI instances.
-
-    std::unordered_map<types::IPAddress, Session> sessions;              ///< Live sessions, keyed by peer IP.
 
     config::BgpRegistry& configs;         ///< Process-level BGP configuration.
+private:
+
+    struct Private
+    {
+        Private(BgpProcess& proc);
+
+        const uint32_t rid;
+
+        /// Schedules the next BGP scan-time timer (BGP_SCAN_TIME config).
+        void scheduleScan();
+
+        transport::tcp::Listener listener;                                   ///< Passive TCP listener on port 179.
+
+        std::unordered_map<AfiSafi, AddressFamilyVariant> addressFamilies;   ///< Enabled AFI/SAFI instances.
+
+        std::unordered_map<types::IPAddress, Session> sessions;              ///< Live sessions, keyed by peer IP.
+
+        BgpProcess& process;
+    } priv;
 };
 } // namespace routing
 

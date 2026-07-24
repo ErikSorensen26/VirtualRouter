@@ -61,7 +61,7 @@ public:
      *
      * @param session Owning session; must outlive this object.
      */
-    explicit SessionTimers(Session& session) noexcept;
+    explicit SessionTimers(Session& session, core::ProcessQueue& scheduler) noexcept;
 
     SessionTimers(const SessionTimers&) = delete;
     SessionTimers& operator=(const SessionTimers&) = delete;
@@ -175,15 +175,15 @@ private:
      * @param timerId Atomic timer ID to cancel; set to 0 on success.
      * @return True if a timer was actually cancelled; false if it had already fired or was not running.
      */
-    bool cancel(std::atomic<uint32_t>& timerId) noexcept;
+    bool cancel(uint32_t& timerId) noexcept;
 
     Session& session;                   ///< Owning session; receives FSM events when timers fire.
     core::ProcessQueue& scheduler;   ///< Scheduler used to post timer-expiry events to the BGP thread.
 
-    std::atomic<uint32_t> connectionRetryTimerId{0}; ///< Scheduler token for the ConnectRetry timer; 0 = not running.
-    std::atomic<uint32_t> holdTimerId{0};            ///< Scheduler token for the Hold timer; 0 = not running.
-    std::atomic<uint32_t> keepaliveTimerId{0};       ///< Scheduler token for the KeepAlive timer; 0 = not running.
-    std::atomic<uint32_t> idleHoldTimerId{0};        ///< Scheduler token for the IdleHold timer; 0 = not running.
+    uint32_t connectionRetryTimerId{0}; ///< Scheduler token for the ConnectRetry timer; 0 = not running.
+    uint32_t holdTimerId{0};            ///< Scheduler token for the Hold timer; 0 = not running.
+    uint32_t keepaliveTimerId{0};       ///< Scheduler token for the KeepAlive timer; 0 = not running.
+    uint32_t idleHoldTimerId{0};        ///< Scheduler token for the IdleHold timer; 0 = not running.
 
     std::chrono::seconds lastHoldTime{0};            ///< Hold time used by the most recent `startHoldTimer` call; needed for `restartHoldTimer`.
     std::chrono::seconds lastKeepaliveInterval{0};   ///< Interval used by the most recent `startKeepaliveTimer` call; needed for `restartKeepaliveTimer`.

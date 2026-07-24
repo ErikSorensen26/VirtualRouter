@@ -98,6 +98,7 @@ void Fsm::handleIdle(FsmEvent event)
         case FsmEvent::MANUAL_START:
         case FsmEvent::AUTOMATIC_START:
         {
+            session.initialize();
             passiveMode = false;
             session.getTimers().connectionRetryCount = 0;
             session.getTimers().startConnectRetry(kConnectRetryInterval);
@@ -108,6 +109,7 @@ void Fsm::handleIdle(FsmEvent event)
         case FsmEvent::MANUAL_START_PASSIVE_TCP:
         case FsmEvent::AUTOMATIC_START_PASSIVE_TCP:
         {
+            session.initialize();
             passiveMode = true;
             session.getTimers().connectionRetryCount = 0;
             session.getTimers().startConnectRetry(kConnectRetryInterval);
@@ -117,6 +119,7 @@ void Fsm::handleIdle(FsmEvent event)
         case FsmEvent::AUTOMATIC_START_DAMP:
         case FsmEvent::AUTOMATIC_START_DAMP_PASSIVE_TCP:
         {
+            session.initialize();
             auto count = session.getTimers().connectionRetryCount;
             auto secs = std::chrono::seconds(5u << std::min<uint32_t>(count, 4));
             if (secs > std::chrono::seconds(120)) secs = std::chrono::seconds(120);

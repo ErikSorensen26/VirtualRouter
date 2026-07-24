@@ -30,6 +30,7 @@ namespace processing { class PacketBuilder; }
 namespace routing::bgp
 {
 class Neighbor;
+class NeighborConfigs;
 class BgpProcess;
 class MultiSession;
 
@@ -90,7 +91,7 @@ public:
      *
      * @param nbr Neighbor configuration object; must outlive this session.
      */
-    Session(Neighbor& nbr) noexcept;
+    Session(Neighbor& nbr, BgpProcess& proc) noexcept;
 
     /**
      * @brief Constructs a multi-session instance bound to a specific AFI/SAFI.
@@ -101,7 +102,7 @@ public:
      * @param nbr Neighbor configuration object; must outlive this session.
      * @param afi The specific address family this session is responsible for.
      */
-    Session(Neighbor& nbr, const AfiSafi& afi) noexcept;
+    Session(Neighbor& nbr, const AfiSafi& afi, BgpProcess& proc) noexcept;
 
     Session(const Session&) = delete;
     Session& operator=(const Session&) = delete;
@@ -116,6 +117,25 @@ public:
      * before destroying the object.
      */
     ~Session();
+
+    void initialize();
+
+    // NEIGHBOR
+
+    /**
+     * TODO add doxy comment
+     */
+    Neighbor& activatePeer(uint32_t rid);
+
+    /**
+     * TODO add doxy comment
+     */
+    Neighbor& deactivatePeer();
+
+    /**
+     * TODO add doxy comment
+     */
+    bool isActivated() const;
 
     // TCP MANAGEMENT
 
@@ -329,22 +349,11 @@ public:
     FsmState getFsmState() const noexcept { return fsm.getState(); }
     uint32_t getPeerRid() const noexcept { return peerRouterId; }
 
-    /**
-     * @brief Returns true if this session is to an external BGP peer (different AS).
-     */
-    bool isEbgp() const noexcept;
-
-    /**
-     * @brief Returns true if this session is to a confederation external peer.
-     */
-    bool isConfedEbgp() const noexcept;
-
     bool isOutgoing() const noexcept { return activeConn.has_value(); }
 
     void setPeerRid(uint32_t rid) { peerRouterId = rid; }
 
-    Neighbor& getNeighbor() noexcept { return neighbor; }
-    const Neighbor& getNeighbor() const noexcept { return neighbor; }
+    const NeighborConfigs& getNeighborConfigs() const noexcept;
     SessionTimers& getTimers() noexcept { return timers; }
     const config::BgpBaseRegistry& getBaseConfig() const noexcept { return base; }
 
@@ -405,6 +414,8 @@ public:
      */
     static void onReceiveCallback(transport::tcp::RecvCallbackCtx& ctx) noexcept;
 
+    BgpProcess& process;
+    Neighbor& neighbor;             ///< Owning neighbor; provides configuration and AF-instance access.
 private:
     /**
      * @brief Populates `localCaps` from the neighbor and process configuration.
@@ -415,7 +426,6 @@ private:
     void buildLocalCapabilities();
 
     // REFERENCES
-    Neighbor& neighbor;             ///< Owning neighbor; provides configuration and AF-instance access.
     config::BgpBaseRegistry& base;  ///< Base BGP session configuration (timers, AS, router-id, etc.).
 
     // PROTOCOL STATE

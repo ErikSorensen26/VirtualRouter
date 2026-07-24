@@ -10,7 +10,6 @@
 
 #include "configs/registry/router/BgpRegistry.h"
 #include "bgp/neighbor/PeerTemplate.h"
-#include "configs/FieldAccessor.hpp"
 
 namespace routing::bgp
 {
@@ -40,25 +39,12 @@ struct NeighborAfConfigs
     {}
 
     /**
-     * @brief Read a BgpNeighbor config field, falling back to the peer-group when applicable.
-     * @tparam F Config field tag.
-     * @return Reference to the config field value.
-     */
-    template <config::BgpNeighbor F>
-    decltype(auto) get()
-    {
-        if (peerGroup && peerOwnedTable.test(config::toIndex<F>))
-            return (*peerConfigs).get<F>();
-        return configs.get<F>();
-    }
-
-    /**
      * @brief Read a BgpAfBase config field, falling back to the peer-group when applicable.
      * @tparam F Config field tag.
      * @return Reference to the config field value.
      */
     template <config::BgpAfBase F>
-    decltype(auto) get()
+    decltype(auto) get() const
     {
         if (peerGroup && peerOwnedBaseTable.test(config::toIndex<F>))
             return peerConfigs->get<config::BgpNeighbor::AF_BASE>().get().get<F>();

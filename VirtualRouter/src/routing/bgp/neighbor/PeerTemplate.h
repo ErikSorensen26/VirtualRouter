@@ -49,7 +49,7 @@ public:
      * @param groupName Unique name for this peer group within the process.
      * @param proc      Owning BGP process; used for config registry allocation.
      */
-    PeerGroup(const std::string& groupName, BgpProcess& proc);
+    PeerGroup(const std::string& groupName, BgpProcess& proc, config::BgpNeighborSessionRegistry& configs);
     ~PeerGroup() = default;
 
     PeerGroup(const PeerGroup&) = delete;
@@ -108,7 +108,7 @@ public:
      * @param groupName Unique name for this template within the process.
      * @param proc      Owning BGP process; used for config registry allocation.
      */
-    PeerSessionTemplate(const std::string& groupName, BgpProcess& proc);
+    PeerSessionTemplate(const std::string& groupName, config::BgpNeighborSessionRegistry& configs);
     ~PeerSessionTemplate() = default;
 
     PeerSessionTemplate(const PeerSessionTemplate&) = delete;
@@ -156,7 +156,7 @@ public:
      * @param groupName Unique name for this template within the process.
      * @param proc      Owning BGP process; used for config registry allocation.
      */
-    PeerPolicyTemplate(const std::string& groupName, BgpProcess& proc);
+    PeerPolicyTemplate(const std::string& groupName, config::BgpNeighborRegistry& configs);
     ~PeerPolicyTemplate() = default;
 
     PeerPolicyTemplate(const PeerPolicyTemplate&) = delete;

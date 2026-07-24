@@ -19,6 +19,8 @@
 #include "NeighborConfigs.hpp"
 #include "NeighborAf.h"
 
+class Internal_BgpTest;
+
 namespace routing::bgp
 {
 class BgpProcess;
@@ -48,25 +50,43 @@ public:
      * @param ipAddress The peer IP address.
      * @param proc      The BgpProcess that owns this neighbor.
      */
-    Neighbor(const types::IPAddress& ipAddress, BgpProcess& proc);
+    Neighbor(const types::IPAddress& ipAddress, NeighborTable& ntable, core::ProcessQueue& schdlr);
 
     /**
      * @brief Destructor. Cleans up all per-AF state.
      */
     ~Neighbor();
 
+    void enqueueConnectionRestart();
+
     const types::IPAddress neighborAddress; ///< IP address of this BGP peer.
 
-    uint32_t rid = 0; ///< Peer's BGP Router ID (network-byte-order); 0 until OPEN is received.
+    uint32_t getRouterId() const { return rid; }
 
-    Session* session = nullptr; ///< Non-owning pointer to the active Session; null when not established.
+    const NeighborConfigs& getConfigs() const noexcept { return configs; }
 
-    // True for neighbors created dynamically via bgp listen range.
-    // Dynamic neighbors are passive-only and not owned by the static config.
-    bool dynamic = false; ///< True when this neighbor was created by a "bgp listen range" match.
+    /**
+     * @brief Retrieve the NeighborAf for the given AFI/SAFI (const overload).
+     * @param afi The address family to look up.
+     * @return Const reference to the NeighborAf.
+     */
+    NeighborAf& getAfNeighbor(const AfiSafi& afi);
 
-    BgpProcess& getProcess() { return process; }
-    const BgpProcess& getProcess() const { return process; }
+    /**
+     * @brief Invoke a callable for every activated per-AF neighbor state object (const overload).
+     * @tparam F Callable type accepting a @c const NeighborAf& parameter.
+     * @param fn The callable to invoke.
+     */
+    template <typename F>
+    void forEachAfNeighbor(F&& fn) const;
+
+    /**
+     * @brief Invoke a callable for every activated per-AF neighbor state object.
+     * @tparam F Callable type accepting a @c NeighborAf& parameter.
+     * @param fn The callable to invoke.
+     */
+    template <typename F>
+    void forEachAfNeighbor(F&& fn);
 
     /**
      * @brief Return true when this peer is in a different AS (external BGP).
@@ -77,6 +97,34 @@ public:
      * @brief Return true when this peer is a confederation eBGP peer.
      */
     bool isConfedEbgp() const noexcept;
+
+    /**
+     * @brief Returns the cached discard/withdraw attribute-type bitmasks.
+     */
+    const auto& getAttrRanges() const noexcept { return attrRanges; }
+
+private:
+    friend ::Internal_BgpTest;
+    friend NeighborAf;
+    friend NeighborTable;
+    friend PeerTemplateTable;
+    friend Session;
+
+    uint32_t rid = 0; ///< Peer's BGP Router ID (network-byte-order); 0 until OPEN is received.
+
+    Session* session = nullptr; ///< Non-owning pointer to the active Session; null when not established.
+
+    bool dynamic = false; ///< True when this neighbor was created by a "bgp listen range" match.
+
+    // SYNC
+
+    /**
+     * TODO add doxy comment
+     * TODO run this any time remote-as or global confederations change
+     */
+    void syncEbgp();
+
+    // HELPERS
 
     /**
      * @brief Activate the given address family for this neighbor, creating a NeighborAf entry.
@@ -91,61 +139,6 @@ public:
     void delAfNeighbor(AfiSafi& afi);
 
     /**
-     * @brief Retrieve the NeighborAf for the given AFI/SAFI.
-     * @param afi The address family to look up.
-     * @return Reference to the NeighborAf.
-     */
-    NeighborAf& getAfNeighbor(const AfiSafi& afi);
-
-    /**
-     * @brief Retrieve the NeighborAf for the given AFI/SAFI (const overload).
-     * @param afi The address family to look up.
-     * @return Const reference to the NeighborAf.
-     */
-    const NeighborAf& getAfNeighbor(const AfiSafi& afi) const;
-
-    /**
-     * @brief Invoke a callable for every activated per-AF neighbor state object.
-     * @tparam F Callable type accepting a @c NeighborAf& parameter.
-     * @param fn The callable to invoke.
-     */
-    template <typename F>
-    void forEachAfNeighbor(F&& fn)
-    {
-        for (auto& [_, nbr] : afNeighbors)
-            fn(nbr);
-    }
-
-    /**
-     * @brief Invoke a callable for every activated per-AF neighbor state object (const overload).
-     * @tparam F Callable type accepting a @c const NeighborAf& parameter.
-     * @param fn The callable to invoke.
-     */
-    template <typename F>
-    void forEachAfNeighbor(F&& fn) const
-    {
-        for (const auto& [_, nbr] : afNeighbors)
-            fn(nbr);
-    }
-
-    NeighborConfigs& getConfigs() { return configs; }
-    const NeighborConfigs& getConfigs() const { return configs; }
-    core::ProcessQueue& getScheduler() { return scheduler; }
-    const core::ProcessQueue& getScheduler() const { return scheduler; }
-
-    /**
-     * @brief Bitmasks describing per-attribute-type behavior during UPDATE parsing.
-     *
-     * Built from the ATTRIBUTE_DISCARD / ATTRIBUTE_WITHDRAW config fields and cached
-     * here to avoid repeated config lookups in the hot path.
-     */
-    struct AttributeRanges
-    {
-        std::bitset<256> discard;  ///< Attribute types to silently discard on receipt.
-        std::bitset<256> withdraw; ///< Attribute types that cause route withdrawal on receipt.
-    };
-
-    /**
      * @brief Rebuild the @ref AttributeRanges from the current neighbor config.
      *
      * Must be called whenever the ATTRIBUTE_DISCARD or ATTRIBUTE_WITHDRAW config changes.
@@ -153,24 +146,43 @@ public:
     void buildAttributeRanges();
 
     /**
-     * @brief Return the cached attribute-range bitmasks.
+     * TODO add doxy comment
      */
-    const AttributeRanges& getAttrRanges() { return attrRanges; }
+    void unshutdown();
 
-private:
-    AttributeRanges attrRanges; ///< Cached discard/withdraw bitmasks built from config.
-
-private:
-    friend NeighborAf;
-
-    BgpProcess& process;
-
+    struct AttributeRanges
+    {
+        std::bitset<256> discard;  ///< Attribute types to silently discard on receipt.
+        std::bitset<256> withdraw; ///< Attribute types that cause route withdrawal on receipt.
+    } attrRanges; ///< Cached discard/withdraw bitmasks built from config.
+    
+    NeighborTable& ntable;
     core::ProcessQueue scheduler;
-
-    std::unordered_map<AfiSafi, NeighborAf> afNeighbors; ///< Per-AF state, keyed by AfiSafi.
-
     NeighborConfigs configs;
+
+    struct Private
+    {
+        private:
+        friend Neighbor;
+        std::atomic<bool> isEbgp{false};
+        std::atomic<bool> inConfed{false};
+        std::unordered_map<AfiSafi, NeighborAf> afNeighbors; ///< Per-AF state, keyed by AfiSafi.
+    } priv;
 };
+
+template <typename F>
+void Neighbor::forEachAfNeighbor(F&& fn) const
+{
+    for (const auto& [_, nbr] : priv.afNeighbors)
+        fn(nbr);
+}
+
+template <typename F>
+void Neighbor::forEachAfNeighbor(F&& fn)
+{
+    for (auto& [_, nbr] : priv.afNeighbors)
+        fn(nbr);
+}
 } // namespace routing
 
 #endif // BGP_NEIGHBOR_H

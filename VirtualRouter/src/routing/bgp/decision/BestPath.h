@@ -21,6 +21,7 @@ class BgpProcess;
  */
 struct BestPathConfig
 {
+    bool compareMed        = false; ///< Compare MED as tiebreaker (bgp bestpath compare-med).
     bool compareRouterId   = false; ///< Compare router IDs as tiebreaker (bgp bestpath compare-routerid).
     bool medMissingAsWorst = false; ///< Treat missing MED as infinity (bgp bestpath med missing-as-worst).
     bool ignoreIgpMetric   = false; ///< Ignore IGP metric in next-hop cost (bgp bestpath igp-metric-ignore).

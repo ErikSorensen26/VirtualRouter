@@ -42,7 +42,7 @@ class DecisionEngine
 {
 public:
     explicit DecisionEngine(BgpProcess& p, BestPathConfig cfg = {})
-        : proc(p), comparator(p, cfg) {}
+        : comparator(p, cfg) {}
 
     template <typename N>
     std::optional<LocalRoute<N>> selectBest(std::vector<InboundRoute<N>*>& canidates, size_t maxEPaths, size_t maxIPaths) const
@@ -52,7 +52,7 @@ public:
 
         static const types::IPAddress kEmpty{};
         auto nbrAddr = [](const InboundRoute<N>* r) -> const types::IPAddress& {
-            return r->sourceNeighbor ? r->sourceNeighbor->globalNbr().neighborAddress : kEmpty;
+            return r->sourceNeighbor ? r->sourceNeighbor->getParent().neighborAddress : kEmpty;
         };
 
         InboundRoute<N>* best = canidates.front();
@@ -95,7 +95,7 @@ public:
     {
         static const types::IPAddress kEmpty{};
         auto nbrAddr = [](const InboundRoute<N>* r) -> const types::IPAddress& {
-            return r->sourceNeighbor ? r->sourceNeighbor->globalNbr().neighborAddress : kEmpty;
+            return r->sourceNeighbor ? r->sourceNeighbor->getParent().neighborAddress : kEmpty;
         };
 
         std::stable_sort(candidates.begin(), candidates.end(),
@@ -116,7 +116,6 @@ public:
     }
 
 private:
-    BgpProcess& proc;
     BestPathComparator comparator;
 };
 } // namespace routing

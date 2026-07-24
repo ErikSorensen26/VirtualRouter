@@ -263,7 +263,7 @@ bool BgpRx::processOpen(Session& session, uint64_t cid, std::span<uint8_t> paylo
         resolvedAs = kAsTrans;
 
     // Validate remote AS matches configuration.
-    auto& sessCfg = curSession->getNeighbor().getConfigs();
+    auto& sessCfg = curSession->getNeighborConfigs();
     auto remAsOpt = sessCfg.get<config::BgpNeighborSession::REMOTE_AS>();
     if (remAsOpt.hasValue())
     {
@@ -357,7 +357,7 @@ bool BgpRx::processUpdate(Session& session, std::span<uint8_t> payload, Notifica
     if (update.afi.afi == BGP_AFI_IPV4 && update.afi.safi == BGP_SAFI_UNICAST)
         update.nlriData = std::span<uint8_t>(payload.data() + offset, payload.size() - offset);
 
-    AddressFamilyVariant* af = session.getNeighbor().getProcess().findAddressFamily(update.afi);
+    AddressFamilyVariant* af = session.process.findAddressFamily(update.afi);
     if (!af) // Af not enabled
     {
         error.code = BGP_NOTIFICATION_UPDATE_MALFORMED_ATTR_LIST;
@@ -742,17 +742,17 @@ bool BgpRx::processRouteRefresh(Session& session, std::span<uint8_t> payload, No
 
     if (!orfEntries.empty())
     {
-        session.getNeighbor().getAfNeighbor(family).updateOrfFilter(orfEntries);
+        session.neighbor.getAfNeighbor(family).updateOrfFilter(orfEntries);
         if (subtype == BGP_ORF_WHEN_IMMEDIATE)
         {
-            AddressFamilyVariant* af = session.getNeighbor().getProcess().findAddressFamily(family);
+            AddressFamilyVariant* af = session.process.findAddressFamily(family);
             if (af)
                 std::visit([&](auto&& fam) { fam.refreshPeer(session); }, *af);
         }
     }
     else
     {
-        AddressFamilyVariant* af = session.getNeighbor().getProcess().findAddressFamily(family);
+        AddressFamilyVariant* af = session.process.findAddressFamily(family);
         if (af)
         {
             if (subtype == BGP_ROUTE_REFRESH_BORR)
@@ -832,7 +832,7 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
 
         {
             // NOTE: 1,2,3,4,8,14,15,16 not allowed 
-            auto& attrRanges = session.getNeighbor().getAttrRanges();
+            auto& attrRanges = session.neighbor.getAttrRanges();
             if (attrRanges.discard.test(type))
                 continue;
             if (attrRanges.withdraw.test(type))

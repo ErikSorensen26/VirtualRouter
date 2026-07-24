@@ -6,11 +6,7 @@
 
 #include "NeighborAf.h"
 #include "Neighbor.h"
-#include "PeerTemplate.h"
-#include "bgp/af/AddressFamily.hpp"
-#include "bgp/neighbor/Neighbor.h"
-
-#include "bgp/BgpProcess.h"
+#include "bgp/neighbor/NeighborTable.h"
 
 namespace routing::bgp
 {
@@ -28,16 +24,16 @@ NeighborAf::NeighborAf(const AfiSafi& fam, Neighbor& p)
 
     // Resolve peer group
     {
-        auto pgField = parent.getConfigs().get<config::BgpNeighborSession::PEER_GROUP>();
+        auto pgField = parent.configs.get<config::BgpNeighborSession::PEER_GROUP>();
         if (pgField.hasValue())
-            configs.setPeerGroup(parent.getProcess().getNtable().lookupPeerGroup(pgField.load()));
+            configs.setPeerGroup(parent.ntable.lookupPeerGroup(pgField.load()));
     }
 
     // Resolve session-level peer template from INHERIT_PEER_SESSION.
     {
         auto inhPolField = configs.get<config::BgpNeighbor::INHERIT_PEER_POLICY>();
         if (inhPolField.hasValue())
-            configs.setPeerPolicyTemplate(parent.getProcess().getNtable().lookupPeerPolicyTemplate(inhPolField.load()));
+            configs.setPeerPolicyTemplate(parent.ntable.lookupPeerPolicyTemplate(inhPolField.load()));
     }
 }
 
@@ -67,36 +63,61 @@ void NeighborAf::updateOrfFilter(const std::vector<OrfPrefixEntry>& entries)
         [](const OrfPrefixEntry& a, const OrfPrefixEntry& b) { return a.sequence < b.sequence; });
 }
 
-AddressFamilyVariant& NeighborAf::getAddressFamily()
+void NeighborAf::invalidate()
 {
-    auto* af = parent.getProcess().findAddressFamily(family);
-    assert(af);
-    return *af;
+    orfFilter.clear();
+    maxPfxWarned = false;
+    cancelPfxRestart();
+    isSlowPeer = false;
+    slowFirstSeen = {};
 }
 
 void NeighborAf::schedulePfxRestart(uint16_t minutes)
 {
     cancelPfxRestart();
     auto expiry = std::chrono::steady_clock::now() + std::chrono::minutes(minutes);
-    maxPfxRestartTimerId = parent.getScheduler().postAfter(expiry, [this](uint32_t) {
-        maxPfxRestartTimerId = 0;
-        parent.getProcess().unshutdownNeighbor(parent);
+    priv.maxPfxRestartTimerId = parent.scheduler.postAfter(expiry, [this](uint32_t) {
+        priv.maxPfxRestartTimerId = 0;
+        parent.unshutdown();
     });
 }
 
 void NeighborAf::cancelPfxRestart()
 {
-    if (maxPfxRestartTimerId != 0)
+    if (priv.maxPfxRestartTimerId != 0)
     {
-        parent.getScheduler().cancel(maxPfxRestartTimerId);
-        maxPfxRestartTimerId = 0;
+        parent.scheduler.cancel(priv.maxPfxRestartTimerId);
+        priv.maxPfxRestartTimerId = 0;
     }
+}
+
+Session* NeighborAf::getSession() noexcept
+{
+    return parent.session;
+}
+
+std::optional<uint32_t> NeighborAf::getRemoteAs() const noexcept
+{
+    auto remoteAs = parent.configs.get<config::BgpNeighborSession::REMOTE_AS>();
+    if (remoteAs.hasValue())
+        return std::nullopt;
+    return remoteAs.load();
+}
+
+bool NeighborAf::isEbgp() const noexcept
+{
+    return parent.isEbgp();
+}
+
+bool NeighborAf::isConfedEbgp() const noexcept
+{
+    return parent.isConfedEbgp();
 }
 
 NeighborAf::~NeighborAf()
 {
     cancelPfxRestart();
-    parent.getConfigs().get<config::BgpNeighborSession::AF_NEIGHBOR>().erase(
+    parent.configs.get<config::BgpNeighborSession::AF_NEIGHBOR>().erase(
         family.afi | uint32_t(family.afi << 16));
 }
 } // namespace routing

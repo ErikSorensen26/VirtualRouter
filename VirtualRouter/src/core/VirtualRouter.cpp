@@ -169,7 +169,7 @@ routing::ospf::OspfProcess& VirtualRouter::addOspf(uint16_t id)
 {
     if (auto it = ospfList.find(id); it == ospfList.end())
     {
-        ospfList.try_emplace(id, false, id, types::AddressFamily::IPv4, this);
+        ospfList.try_emplace(id, false, id, types::AddressFamily::IPv4, *this);
     }
     return ospfList.at(id);
 }
@@ -208,13 +208,13 @@ routing::ospf::OspfProcess& VirtualRouter::addOspfv3(uint16_t id, types::Address
     if (af == types::AddressFamily::IPv4)
     {
         if (!ospf.ipv4)
-            ospf.ipv4 = new routing::ospf::OspfProcess(true, id, af, this);
+            ospf.ipv4 = new routing::ospf::OspfProcess(true, id, af, *this);
         return *ospf.ipv4;
     }
     else
     {
         if (!ospf.ipv6)
-            ospf.ipv6 = new routing::ospf::OspfProcess(true, id, af, this);
+            ospf.ipv6 = new routing::ospf::OspfProcess(true, id, af, *this);
         return *ospf.ipv6;
     }
 }

@@ -9,15 +9,11 @@
 
 namespace routing::bgp
 {
-Neighbor::Neighbor(const types::IPAddress& ipAddress, BgpProcess& proc)
+Neighbor::Neighbor(const types::IPAddress& ipAddress, NeighborTable& ntable, core::ProcessQueue& schldr)
     : neighborAddress(ipAddress),
-      process(proc),
-      scheduler(proc.getScheduler().ref()),
-      configs([&proc, &ipAddress]() -> config::BgpNeighborSessionRegistry& {
-          auto& procConfigs = proc.getConfigs();
-          auto neighborConfigs = procConfigs.get<config::Bgp::NEIGHBOR>();
-          return neighborConfigs.emplaceBack(ipAddress);
-      }())
+      ntable(ntable),
+      scheduler(schldr.ref()),
+      configs(ntable.ensureNeighborConfigs(ipAddress))
 {
     configs.getConfigs().context().set(this);
 
@@ -25,79 +21,80 @@ Neighbor::Neighbor(const types::IPAddress& ipAddress, BgpProcess& proc)
     {
         auto pgField = configs.get<config::BgpNeighborSession::PEER_GROUP>();
         if (pgField.hasValue())
-            configs.setPeerGroup(proc.getNtable().lookupPeerGroup(pgField.load()));
+            configs.setPeerGroup(ntable.lookupPeerGroup(pgField.load()));
     }
 
     // Resolve session-level peer template from INHERIT_PEER_SESSION.
     {
         auto inhSessField = configs.get<config::BgpNeighborSession::INHERIT_PEER_SESSION>();
         if (inhSessField.hasValue())
-            configs.setPeerSessionTemplate(proc.getNtable().lookupPeerSessionTemplate(inhSessField.load()));
+            configs.setPeerSessionTemplate(ntable.lookupPeerSessionTemplate(inhSessField.load()));
     }
 }
 
 Neighbor::~Neighbor()
 {
     scheduler.release();
-    afNeighbors.clear();
+    priv.afNeighbors.clear();
+    ntable.removeNeighborConfigs(neighborAddress);
+}
 
-    process.getConfigs().get<config::Bgp::NEIGHBOR>().erase(neighborAddress);
+void Neighbor::enqueueConnectionRestart()
+{
+    scheduler.post([this]() {
+        ntable.shutdownNeighbor(*this);
+        ntable.unshutdownNeighbor(*this);
+    });
+}
+
+void Neighbor::enqueueSyncAdditionalPaths()
+{
+    scheduler.post([this]() {
+        forEachAfNeighbor([this](NeighborAf& nbr) {
+            AddressFamilyVariant* fam = ntable.findAddressFamily(nbr.family);
+            if (!fam) return;
+            std::visit([](auto& fam) { fam.recomputeAdditionalPaths(); }, *fam);
+        });
+    });
 }
 
 void Neighbor::addAfNeighbor(AfiSafi& afi)
 {
-    afNeighbors.try_emplace(afi, afi, *this);
+    priv.afNeighbors.try_emplace(afi, afi, *this);
 }
 
 void Neighbor::delAfNeighbor(AfiSafi& afi)
 {
-    afNeighbors.erase(afi);
+    priv.afNeighbors.erase(afi);
 }
 
 NeighborAf& Neighbor::getAfNeighbor(const AfiSafi& afi)
 {
-    auto it = afNeighbors.find(afi);
-    assert(it != afNeighbors.end());
-    return  it->second;
+    auto it = priv.afNeighbors.find(afi);
+    assert(it != priv.afNeighbors.end());
+    return it->second;
 }
 
-const NeighborAf& Neighbor::getAfNeighbor(const AfiSafi& afi) const
+void Neighbor::syncEbgp()
 {
-    auto it = afNeighbors.find(afi);
-    assert(it != afNeighbors.end());
-    return  it->second;
+    auto remAs = configs.get<config::BgpNeighborSession::REMOTE_AS>();
+    if (!remAs.hasValue())
+    {
+        priv.isEbgp.store(false, std::memory_order_release);
+        priv.inConfed.store(false, std::memory_order_release);
+    }
+    priv.isEbgp.store(remAs.load() != ntable.process.asNumber, std::memory_order_release);
+    priv.inConfed.store(ntable.isPeerConfed(remAs.load()), std::memory_order_release);
 }
 
 bool Neighbor::isEbgp() const noexcept
 {
-    auto remAs = configs.get<config::BgpNeighborSession::REMOTE_AS>();
-    if (!remAs.hasValue()) return false;
-    uint32_t peerAs = remAs.load();
-    if (peerAs == process.asNumber) return false;
-
-    bool inConfed = false;
-    process.getConfigs().get<config::Bgp::BGP_CONFEDERATION_PEERS>().withRead(
-        [&](const auto& peersList) {
-            for (uint32_t p : peersList)
-                    if (p == peerAs) { inConfed = true; return; }
-        });
-    return !inConfed;
+    return priv.isEbgp.load(std::memory_order_relaxed);
 }
 
 bool Neighbor::isConfedEbgp() const noexcept
 {
-    auto remAs = configs.get<config::BgpNeighborSession::REMOTE_AS>();
-    if (!remAs.hasValue()) return false;
-    uint32_t peerAs = remAs.load();
-    if (peerAs == process.asNumber) return false;
-
-    bool inConfed = false;
-    process.getConfigs().get<config::Bgp::BGP_CONFEDERATION_PEERS>().withRead(
-        [&](const auto& peersList) {
-            for (uint32_t p : peersList)
-                    if (p == peerAs) { inConfed = true; return; }
-        });
-    return inConfed;
+    return priv.inConfed.load(std::memory_order_relaxed);
 }
 
 void Neighbor::buildAttributeRanges()
@@ -120,5 +117,10 @@ void Neighbor::buildAttributeRanges()
             }
         }
     });
+}
+
+void Neighbor::unshutdown()
+{
+    ntable.unshutdownNeighbor(*this);
 }
 } // namespace routing

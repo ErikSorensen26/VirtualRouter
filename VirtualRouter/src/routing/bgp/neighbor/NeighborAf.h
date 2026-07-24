@@ -11,6 +11,8 @@
 #include "NeighborAfConfigs.hpp"
 #include "bgp/af/AddressFamily.hpp"
 
+class Internal_BgpTest;
+
 namespace routing::bgp
 {
 class Neighbor;
@@ -18,6 +20,8 @@ class BgpProcess;
 class PeerGroup;
 class PeerPolicyTemplate;
 class Session;
+class BgpRx;
+class BgpTx;
 
 /**
  * @brief Tracks all per-neighbor, per-AFI/SAFI state for one BGP peer.
@@ -49,18 +53,17 @@ public:
      */
     ~NeighborAf();
 
+    void enqueueSyncAdditionalPaths();
+
     const AfiSafi family; ///< The address family covered by this object.
+    const Neighbor& getParent() const noexcept { return parent; }
 
-    NeighborAfConfigs& getConfigs() { return configs; }
-    const NeighborAfConfigs& getConfigs() const { return configs; }
-    Neighbor& globalNbr() { return parent; }
-    const Neighbor& globalNbr() const { return parent; }
-
-    /**
-     * @brief Retrieve the AddressFamilyInstance variant for this AF from the owning BgpProcess.
-     * @return Reference to the variant holding the concrete AddressFamilyInstance.
-     */
-    AddressFamilyVariant& getAddressFamily();
+private:
+    friend class ::Internal_BgpTest;
+    template <typename>
+    friend class AddressFamilyInstance;
+    friend PeerTemplateTable;
+    friend class Session;
 
     bool mpNegotiated; ///< True when MP-BGP was negotiated for this family during OPEN.
 
@@ -70,11 +73,10 @@ public:
      */
     void updateOrfFilter(const std::vector<OrfPrefixEntry>& entries);
 
-    std::vector<OrfPrefixEntry> orfOutbound; ///< ORF filter we advertise TO this peer — set from inbound prefix-list config.
-    std::vector<OrfPrefixEntry> orfFilter; ///< ORF filter received FROM this peer — applied to our Adj-RIB-Out. Cleared on session reset.
-
-    // Maximum-prefix tracking. Reset on session reset.
-    bool maxPfxWarned = false; ///< True once the maximum-prefix warning threshold has been crossed.
+    /**
+     * TODO add doxy comment
+     */
+    void invalidate();
 
     /**
      * @brief Schedule a maximum-prefix restart after the configured interval.
@@ -87,15 +89,46 @@ public:
      */
     void cancelPfxRestart();
 
+    /**
+     * TODO add doxy comment
+     */
+    Session* getSession() noexcept;
+
+    /**
+     * TODO add doxy comment
+     */
+    std::optional<uint32_t> getRemoteAs() const noexcept;
+
+    /**
+     * TODO add doxy comment
+     */
+    bool isEbgp() const noexcept;
+
+    /**
+     * TODO add doxy comment
+     */
+    bool isConfedEbgp() const noexcept;
+
+    std::vector<OrfPrefixEntry> orfOutbound; ///< ORF filter we advertise TO this peer — set from inbound prefix-list config.
+    std::vector<OrfPrefixEntry> orfFilter; ///< ORF filter received FROM this peer — applied to our Adj-RIB-Out. Cleared on session reset.
+
+    // Maximum-prefix tracking. Reset on session reset.
+    bool maxPfxWarned = false; ///< True once the maximum-prefix warning threshold has been crossed.
     // Slow peer tracking. Reset on session reset.
     bool isSlowPeer = false;                              ///< True when the peer has been classified as slow.
     std::chrono::steady_clock::time_point slowFirstSeen{}; ///< Timestamp when the peer was first seen as slow.
 
 private:
-    uint32_t maxPfxRestartTimerId = 0; ///< Scheduler timer ID for the max-prefix restart delay.
 
     Neighbor& parent;
     NeighborAfConfigs configs;
+
+    struct Private
+    {
+    private:
+        friend class NeighborAf;
+        uint32_t maxPfxRestartTimerId = 0; ///< Scheduler timer ID for the max-prefix restart delay.
+    } priv;
 };
 } // namespace routing
 

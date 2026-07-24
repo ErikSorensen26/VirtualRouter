@@ -357,7 +357,7 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, t
     size_t attrSize = 0;
 
     const bool use4 = session.getNegotiated().asn32bit;
-    const bool ebgp = session.isEbgp();
+    const bool ebgp = session.neighbor.isEbgp();
 
     // ORIGIN
     if (pa.attrs.origin.has_value())
@@ -600,7 +600,7 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, t
 void BgpTx::buildOpen(transport::tcp::Connection& connection, Session& session)
 {
     const auto& caps = session.getLocalCaps();
-    const auto& proc = session.getNeighbor().getProcess();
+    const auto& proc = session.process;
     const uint32_t localAs = caps.asn;
     const uint32_t rid = proc.getRouterId();
 
@@ -673,7 +673,7 @@ void BgpTx::buildRouteRefresh(transport::tcp::Connection& connection, Session& s
         subtype = BGP_ROUTE_REFRESH_NORMAL;
 
     // Append ORF TLV if we have an outbound filter and ORF is negotiated.
-    const auto& orfOutbound = session.getNeighbor().getAfNeighbor(family).orfOutbound;
+    const auto& orfOutbound = session.neighbor.getAfNeighbor(family).orfOutbound;
     const bool sendOrf = !orfOutbound.empty() && neg.canSendOrf(family, BGP_ORF_TYPE_PREFIX_LIST);
 
     if (sendOrf)

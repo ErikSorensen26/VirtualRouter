@@ -14,6 +14,8 @@
 
 namespace types { struct IPAddress; }
 
+class Internal_BgpTest;
+
 namespace routing::bgp
 {
 class BgpProcess;
@@ -140,7 +142,6 @@ public:
      * @return Pointer to the Neighbor if found, nullptr otherwise.
      */
     Neighbor* lookup(const types::IPAddress& ipAddress);
-    const Neighbor* lookup(const types::IPAddress& ipAddress) const;
 
     /**
      * @brief Look up a neighbor by the peer's BGP router ID.
@@ -153,7 +154,16 @@ public:
      * @return Pointer to the Neighbor if found, nullptr otherwise.
      */
     Neighbor* lookup(uint32_t rid);
-    const Neighbor* lookup(uint32_t rid) const;
+
+    /**
+     * TODO add doxy comment
+     */
+    NeighborAf* lookup(const types::IPAddress& ipAddress, const AfiSafi& afi);
+
+    /**
+     * TODO add doxy comment
+     */
+    NeighborAf* lookup(uint32_t rid, const AfiSafi& afi);
 
     /**
      * @brief Register the router-ID-to-neighbor mapping for an established peer.
@@ -161,20 +171,20 @@ public:
      * Called by the session FSM when the OPEN exchange completes and the peer's
      * router ID is known.  Overwrites any previous entry for @p peer.
      *
-     * @param nbr  Peer IP address that identified itself with router ID @p peer.
      * @param peer 32-bit router ID from the peer's OPEN message.
+     * @param session Session object for peers open session.
      * @return True if the neighbor at @p nbr exists and was indexed; false if
      *         no neighbor exists at that address.
      */
-    bool activatePeer(const types::IPAddress& nbr, uint32_t peer);
+    bool activatePeer(uint32_t peer, Session& sess);
 
     /**
      * @brief Remove the router-ID-to-neighbor mapping for a peer that went down.
      *
-     * @param peer 32-bit router ID to deregister.
+     * @param session Session that is being de-registered.
      * @return True if the entry existed and was removed; false if not found.
      */
-    bool deactivatePeer(uint32_t peer);
+    bool deactivatePeer(Session& sess);
 
     /**
      * @brief Cancel the hold timer on every configured neighbor.
@@ -193,38 +203,39 @@ public:
      */
     void runDccCheck();
 
-    /// Whether any configured neighbor has DISABLE_CONNECTION_CHECK enabled.
-    /// Read by the TCP accept path; see Concurrency Model in the class doc.
-    bool disableConnectionCheck = false;
-
-    // PEER GROUP AND TEMPLATE MANAGEMENT
+    // UTILS
 
     /**
-     * @brief Create a new peer group with the given name.
-     *
-     * @param name Unique peer group name within this process.
-     * @return Reference to the newly created PeerGroup.
+     * TODO add doxy comment
      */
-    PeerGroup& createPeerGroup(const std::string& name);
-    void removePeerGroup(const std::string& name);
+    bool isShutdown(const Neighbor& nbr) const;
 
     /**
-     * @brief Create a new session template with the given name.
-     *
-     * @param name Unique session template name within this process.
-     * @return Reference to the newly created PeerSessionTemplate.
+     * TODO add doxy comment
      */
-    PeerSessionTemplate& createPeerSessionTemplate(const std::string& name);
-    void removePeerSessionTemplate(const std::string& name);
+    bool isConnectionCheck(const Neighbor& nbr) const;
 
     /**
-     * @brief Create a new policy template with the given name.
-     *
-     * @param name Unique policy template name within this process.
-     * @return Reference to the newly created PeerPolicyTemplate.
+     * TODO add doxy comment
      */
-    PeerPolicyTemplate& createPeerPolicyTemplate(const std::string& name);
-    void removePeerPolicyTemplate(const std::string& name);
+    std::optional<bool> isTcpConnectionMode(const Neighbor& nbr) const;
+
+    /**
+     * TODO add doxy comment
+     */
+    void shutdownNeighbor(Neighbor& neighbor);
+
+    /**
+     * TODO add doxy comment
+     */
+    void unshutdownNeighbor(Neighbor& neighbor);
+
+    /**
+     * TODO add doxy comment
+     */
+    AddressFamilyVariant* findAddressFamily(const AfiSafi& afi);
+
+    bool disableConnectionCheck = false; ///< Whether any configured neighbor has DISABLE_CONNECTION_CHECK enabled.
 
     PeerGroup* lookupPeerGroup(const std::string& name);
     const PeerGroup* lookupPeerGroup(const std::string& name) const;
@@ -240,18 +251,9 @@ public:
      * @param fn  Function to call for each neighbor.
      */
     template <typename F>
-    void forEachNeighbor(F&& fn)
-    {
-        for (auto& [addr, nbr] : neighbors)
-            fn(nbr);
-    }
-
+    void forEachNeighbor(F&& fn);
     template <typename F>
-    void forEachNeighbor(F&& fn) const
-    {
-        for (const auto& [addr, nbr] : neighbors)
-            fn(nbr);
-    }
+    void forEachNeighbor(F&& fn) const;
 
     /**
      * @brief Invoke @p fn for every established peer (router-ID index).
@@ -263,26 +265,55 @@ public:
      * @param fn  Function to call for each established peer.
      */
     template <typename F>
-    void forEachPeer(F&& fn)
-    {
-        for (auto& [addr, nbr] : peers)
-            fn(*nbr);
-    }
-
+    void forEachSession(F&& fn);
     template <typename F>
-    void forEachPeer(F&& fn) const
-    {
-        for (const auto& [addr, nbr] : peers)
-            fn(*nbr);
-    }
+    void forEachSession(F&& fn) const;
 
 private:
+    friend class Neighbor;
+    friend class ::Internal_BgpTest;
+
+    config::BgpNeighborSessionRegistry& ensureNeighborConfigs(types::IPAddress addr);
+    void removeNeighborConfigs(types::IPAddress addr);
+
+    bool isPeerConfed(uint32_t peerAs) const;
+
     std::unordered_map<types::IPAddress, Neighbor> neighbors; ///< Primary neighbor store, keyed by peer IP.
     std::unordered_map<uint32_t, Neighbor*> peers;            ///< Secondary index by router ID; populated on ESTABLISHED.
 
     BgpProcess& process;           ///< Owning process; passed to each new Neighbor on creation.
     PeerTemplateTable peerTemplates; ///< Peer groups and session/policy templates for this process.
 };
+
+template <typename F>
+void NeighborTable::forEachNeighbor(F&& fn)
+{
+    for (auto& [addr, nbr] : neighbors)
+        fn(nbr);
+}
+
+template <typename F>
+void NeighborTable::forEachNeighbor(F&& fn) const
+{
+    for (const auto& [addr, nbr] : neighbors)
+        fn(nbr);
+}
+
+template <typename F>
+void NeighborTable::forEachSession(F&& fn)
+{
+    for (auto& [addr, nbr] : peers)
+        if (nbr->session)
+            fn(*nbr->session);
+}
+
+template <typename F>
+void NeighborTable::forEachSession(F&& fn) const
+{
+    for (const auto& [addr, nbr] : peers)
+        if (nbr->session)
+            fn(*nbr->session);
+}
 } // namespace routing
 
 #endif // BGP_NEIGHBOR_TABLE_H

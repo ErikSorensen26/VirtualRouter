@@ -29,7 +29,7 @@ BestPathComparator::BestPathComparator(BgpProcess& p, BestPathConfig cfg)
 
 inline bool BestPathComparator::compareMed(const InboundRouteBase& lhs, const InboundRouteBase& rhs) const
 {
-    if (!proc.getConfigs().get<config::Bgp::BGP_ALWAYS_COMPARE_MED>().load() && lhs.peerAs != rhs.peerAs)
+    if (!config.compareMed)
         return false;
     return medOrDefault(lhs.getPathAttributes(), config.medMissingAsWorst)
          < medOrDefault(rhs.getPathAttributes(), config.medMissingAsWorst);
@@ -86,8 +86,8 @@ bool BestPathComparator::better(const InboundRouteBase& lhs, const types::IPAddr
     else
     {
         // With compare-routerid: prefer lowest router-ID (deterministic, skip oldest-route step).
-        uint32_t lhsRid = lhs.sourceNeighbor ? lhs.sourceNeighbor->globalNbr().rid : proc.getRouterId();
-        uint32_t rhsRid = rhs.sourceNeighbor ? rhs.sourceNeighbor->globalNbr().rid : proc.getRouterId();
+        uint32_t lhsRid = lhs.sourceNeighbor ? lhs.sourceNeighbor->getParent().getRouterId() : proc.getRouterId();
+        uint32_t rhsRid = rhs.sourceNeighbor ? rhs.sourceNeighbor->getParent().getRouterId() : proc.getRouterId();
         if (lhsRid != rhsRid)
             return lhsRid < rhsRid;
     }
