@@ -170,8 +170,8 @@ bool Area::isValidForwardAddress(const types::IPAddress& addr) const
     {
         utils::RCU::Guard g;
         return addr.isIPv6()
-            ? process.routingInstance->getRib().lookup(addr.v6(), g) != nullptr
-            : process.routingInstance->getRib().lookup(addr.v4(), g) != nullptr;
+            ? process.routingInstance.getRib().lookup(addr.v6(), g) != nullptr
+            : process.routingInstance.getRib().lookup(addr.v4(), g) != nullptr;
     }
     else
     {

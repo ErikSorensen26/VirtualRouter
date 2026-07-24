@@ -13,22 +13,22 @@
 
 namespace routing::ospf
 {
-OspfProcess::OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, core::VirtualRouter* vrf)
+OspfProcess::OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, core::VirtualRouter& vrf)
     : isV3(isV3),
       procId(procId),
       af(af),
       routingInstance(vrf),
       rib(*this),
-      scheduler(vrf->getControlScheduler().create()),
+      scheduler(vrf.getControlScheduler().create()),
       interOriginator(*this),
       externalOriginator(*this),
       externalRouteManager(*this),
       ifaceMgr(*this),
-      configs([af, isV3, vrf, procId]() -> config::OspfRegistry& {
+      configs([af, isV3, &vrf, procId]() -> config::OspfRegistry& {
           if (isV3)
           {
-              auto& base = vrf->getGlobal().getConfigs().get<config::Global::ROUTER_OSPFV3_DEFAULT>().emplaceBack(procId);
-              auto& v3Reg = vrf->getConfigs().get<config::Vrf::ROUTER_OSPFV3>().emplaceBack(procId);
+              auto& base = vrf.getGlobal().getConfigs().get<config::Global::ROUTER_OSPFV3_DEFAULT>().emplaceBack(procId);
+              auto& v3Reg = vrf.getConfigs().get<config::Vrf::ROUTER_OSPFV3>().emplaceBack(procId);
               config::OspfRegistry& afCfgs = [&]() -> config::OspfRegistry& {
                   if (af == types::AddressFamily::IPv4)
                       return v3Reg.get<config::Ospfv3AddressFamily::IPV4>().get();
@@ -43,9 +43,9 @@ OspfProcess::OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, co
           {
               // OSPFv2 types::AddressFamily
               if (af == types::AddressFamily::IPv4)
-                  return vrf->getConfigs().get<config::Vrf::ROUTER_OSPF>().emplaceBack(procId);
+                  return vrf.getConfigs().get<config::Vrf::ROUTER_OSPF>().emplaceBack(procId);
               else
-                  return vrf->getConfigs().get<config::Vrf::IPV6_ROUTER_OSPF>().emplaceBack(procId);
+                  return vrf.getConfigs().get<config::Vrf::IPV6_ROUTER_OSPF>().emplaceBack(procId);
           }
       }()),
       priv(*this)
@@ -54,7 +54,7 @@ OspfProcess::OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, co
     calculateRID();
 
     // Subscribe to interface lifecycle events so the interface list stays
-    auto& ifMgr = vrf->getInterfaceManager();
+    auto& ifMgr = vrf.getInterfaceManager();
 
     auto postRefresh = [](void* ctx, interface::Interface&) {
         auto* p = static_cast<OspfProcess*>(ctx);
@@ -91,7 +91,7 @@ OspfProcess::Private::Private(OspfProcess& proc)
 OspfProcess::~OspfProcess()
 {
     // Unsubscribe before the scheduler and interface state tear down.
-    auto& ifMgr = routingInstance->getInterfaceManager();
+    auto& ifMgr = routingInstance.getInterfaceManager();
     ifMgr.unsubscribe(interface::InterfaceManager::StateEventMgr::Id{priv.ifUpId});
     ifMgr.unsubscribe(interface::InterfaceManager::StateEventMgr::Id{priv.ifDownId});
     if (!isV3)
@@ -168,7 +168,7 @@ void OspfProcess::enqueueSyncSummaries()
 bool OspfProcess::calculateRID()
 {
     uint32_t rid;
-    bool calculated = routingInstance->calculateRID(rid);
+    bool calculated = routingInstance.calculateRID(rid);
     priv.rid.store(rid, std::memory_order_release);
     return calculated;
 }

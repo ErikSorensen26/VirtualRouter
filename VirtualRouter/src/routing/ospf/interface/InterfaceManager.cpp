@@ -210,7 +210,7 @@ void InterfaceManager::refreshInterfaceList()
             return area;
         };
 
-        for (const auto& [id, interface] : process.routingInstance->getInterfaceManager().snapshot())
+        for (const auto& [id, interface] : process.routingInstance.getInterfaceManager().snapshot())
         {
             if (!interface || interface->shutdownFlag.load(std::memory_order_relaxed))
                 continue;

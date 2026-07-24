@@ -53,7 +53,7 @@ std::pair<types::IPPrefix, std::optional<OspfPath>> ExternalRouteManager::derive
 
     constexpr uint16_t kMaxAge = OSPF_MAX_AGE;
 
-    auto& globalRib = process.routingInstance->getRib();
+    auto& globalRib = process.routingInstance.getRib();
 
     const typename Policy::ExternalLsa& extLsa = std::get<typename Policy::ExternalLsa>(rec.second);
 
@@ -145,7 +145,7 @@ std::vector<std::pair<types::IPPrefix, OspfPath>> ExternalRouteManager::deriveEx
     std::vector<std::pair<types::IPPrefix, OspfPath>> out;
     out.reserve(64);
 
-    auto& globalRib = process.routingInstance->getRib();
+    auto& globalRib = process.routingInstance.getRib();
 
     for (auto& [key, rec] : RouteManagerUtility::getExtOriginator(process).externalDb)
     {
