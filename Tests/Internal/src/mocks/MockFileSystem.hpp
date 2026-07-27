@@ -5,7 +5,7 @@
 
 #include <gmock/gmock.h>
 #include <string>
-#include <cli/runtime/Configs.h>
+#include <cli/session/Configs.h>
 
 namespace cli
 {

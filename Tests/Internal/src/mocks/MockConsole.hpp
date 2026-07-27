@@ -3,7 +3,7 @@
 #ifndef MOCK_CONSOLE_HPP
 #define MOCK_CONSOLE_HPP
 
-#include <cli/runtime/Console.h>
+#include <cli/terminal/Console.h>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 

@@ -1,5 +1,5 @@
-#include <cli/runtime/Console.h>
-#include <cli/runtime/CliEngine.h>
+#include <cli/terminal/Console.h>
+#include <cli/session/CliEngine.h>
 #include <MockConsole.hpp>
 #include <gtest/gtest.h>
 #include <string>

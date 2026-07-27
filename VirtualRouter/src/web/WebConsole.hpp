@@ -6,10 +6,10 @@
 #ifndef WEB_CONSOLE_HPP
 #define WEB_CONSOLE_HPP
 
-#include "cli/runtime/Console.h"
-#include "cli/runtime/CliSession.h"
+#include "cli/terminal/Console.h"
+#include "cli/session/CliSession.h"
 #include "UnixApi.h"
-#include "cli/runtime/ConsoleController.hpp"
+#include "cli/terminal/ConsoleController.hpp"
 #include <json.hpp>
 #include <Global.h>
 

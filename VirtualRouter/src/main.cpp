@@ -6,8 +6,8 @@
 #include <CrashHandler.hpp>
 #include <RCU.hpp>
 
-#include "cli/runtime/CliEngine.h"
-#include "cli/runtime/CliSession.h"
+#include "cli/session/CliEngine.h"
+#include "cli/session/CliSession.h"
 #include "web/WebSessionManager.hpp"
 
 #include <VirtualRouter.h>

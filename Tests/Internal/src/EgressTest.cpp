@@ -24,7 +24,7 @@
 #include "hardware/Ifname.h"
 #include "hardware/PacketSlot.hpp"
 #include "qos/egress/TxDistributor.h"
-#include "cli/runtime/Configs.h"
+#include "cli/session/Configs.h"
 
 namespace {
 

@@ -20,17 +20,17 @@
 #include "configs/RegistryReference.hpp"
 #include "cli/execution/Executor.hpp"
 
-#include "cli/modes/parsers/global/GlobalCommands.h"
-#include "cli/modes/parsers/interface/InterfaceCommands.h"
-#include "cli/modes/parsers/PrivilegedExecCommands.h"
-#include "cli/modes/parsers/UserExecCommands.h"
+#include "cli/commands/global/GlobalCommands.h"
+#include "cli/commands/interface/InterfaceCommands.h"
+#include "cli/commands/PrivilegedExecCommands.h"
+#include "cli/commands/UserExecCommands.h"
 
 
-#include "cli/modes/parsers/router/RouterEigrpClassicCommands.h"
-#include "cli/modes/parsers/router/RouterEigrpNamedCommands.h"
-#include "cli/modes/parsers/router/RouterEigrpAddressFamilyCommands.h"
-#include "cli/modes/parsers/router/RouterEigrpInterfaceCommands.h"
-#include "cli/modes/parsers/router/RouterEigrpTopologyCommands.h"
+#include "cli/commands/router/RouterEigrpClassicCommands.h"
+#include "cli/commands/router/RouterEigrpNamedCommands.h"
+#include "cli/commands/router/RouterEigrpAddressFamilyCommands.h"
+#include "cli/commands/router/RouterEigrpInterfaceCommands.h"
+#include "cli/commands/router/RouterEigrpTopologyCommands.h"
 
 namespace cli
 {

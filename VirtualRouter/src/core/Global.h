@@ -23,7 +23,7 @@
 #include "interface/configs/InterfaceType.hpp"
 #include "qos/egress/TxQueueManager.h"
 #include "qos/ingress/RxQueueManager.h"
-#include "cli/runtime/CliEngine.h"
+#include "cli/session/CliEngine.h"
 #include "security/keys/KeyChainManager.h"
 #include "ControlScheduler.h"
 #include "AddressFamily.hpp"

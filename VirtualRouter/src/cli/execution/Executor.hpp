@@ -13,8 +13,8 @@
 
 #include <iostream>
 
-#include "cli/runtime/Token.hpp"
-#include "cli/parser/CliModeParser.hpp"
+#include "cli/grammar/Token.hpp"
+#include "cli/grammar/CliModeParser.hpp"
 #include "cli/modes/contexts/Context.hpp"
 #include "cli/modes/Mode.hpp"
 

@@ -7,11 +7,11 @@
 #include <vector>
 #include <sstream>
 
-#include "cli/runtime/CliEngine.h"
+#include "cli/session/CliEngine.h"
 #include "hardware/HardwareManager.h"
 #include "interface/configs/InterfaceType.hpp"
 #include "cli/modes/Mode.hpp"
-#include "cli/runtime/Configs.h"
+#include "cli/session/Configs.h"
 #include "MockFileSystem.hpp" // Mocked file system interface
 
 using json = nlohmann::ordered_json;

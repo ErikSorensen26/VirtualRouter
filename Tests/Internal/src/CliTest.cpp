@@ -6,10 +6,10 @@ class Internal_CliTest;
 #include <gtest/gtest.h>
 #include <MockConsole.hpp>
 #include <MockFileSystem.hpp>
-#include <cli/runtime/CliEngine.h>
-#include <cli/runtime/CliSession.h>
-#include <cli/runtime/CliUtils.h>
-#include <cli/runtime/Configs.h>
+#include <cli/session/CliEngine.h>
+#include <cli/session/CliSession.h>
+#include <cli/session/CliUtils.h>
+#include <cli/session/Configs.h>
 #include <cli/modes/Mode.hpp>
 #include <core/Global.h>
 #include <configs/registry/global/GlobalRegistry.h>

@@ -12,7 +12,7 @@
 #include <linux/sockios.h>
 
 #include "HardwareManager.h"
-#include "cli/runtime/Configs.h"
+#include "cli/session/Configs.h"
 #include "interface/Interface.h"
 #include "interface/configs/InterfaceType.hpp"
 #include "hardware/Ifname.h"
