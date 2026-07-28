@@ -9,14 +9,12 @@ endif()
 set(VR_ROOT     ${CMAKE_CURRENT_SOURCE_DIR})
 set(VR_SRC      ${VR_ROOT}/src)
 set(VR_COMMON   ${VR_ROOT}/common)
-set(VR_EXTERNAL ${VR_ROOT}/external)
 set(VR_TYPES    ${VR_ROOT}/types)
 
 # Base roots (always exposed)
 set(VR_PUBLIC_INCLUDE_ROOTS
     ${VR_SRC}
     ${VR_COMMON}
-    ${VR_EXTERNAL}
     ${VR_TYPES}
     ${TELNET_INCLUDE_DIR}
 )
@@ -40,7 +38,6 @@ endforeach()
 # ----- Sources: dynamic, cpp-only -----
 file(GLOB_RECURSE VR_SRC_CPP      CONFIGURE_DEPENDS ${VR_SRC}/*.cpp)
 file(GLOB_RECURSE VR_COMMON_CPP   CONFIGURE_DEPENDS ${VR_COMMON}/*.cpp)
-file(GLOB_RECURSE VR_EXTERNAL_CPP CONFIGURE_DEPENDS ${VR_EXTERNAL}/*.cpp)
 file(GLOB_RECURSE VR_TYPES_CPP    CONFIGURE_DEPENDS ${VR_TYPES}/*.cpp)
 
 # Remove main.cpp from library so it compiles alone
@@ -49,7 +46,6 @@ list(FILTER VR_SRC_CPP EXCLUDE REGEX "/main\\.cpp$")
 add_library(VirtualRouter STATIC
     ${VR_SRC_CPP}
     ${VR_COMMON_CPP}
-    ${VR_EXTERNAL_CPP}
     ${VR_TYPES_CPP}
 )
 

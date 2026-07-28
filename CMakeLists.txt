@@ -63,7 +63,6 @@ if (BUILD_STATIC_ROUTER)
     file(GLOB_RECURSE VR_SOURCES CONFIGURE_DEPENDS
         ${CMAKE_CURRENT_SOURCE_DIR}/VirtualRouter/src/*.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/VirtualRouter/common/*.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/VirtualRouter/external/*.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/VirtualRouter/types/*.cpp
     )
 
@@ -72,8 +71,6 @@ if (BUILD_STATIC_ROUTER)
         ${CMAKE_CURRENT_SOURCE_DIR}/VirtualRouter/src/*.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/VirtualRouter/common/*.h
         ${CMAKE_CURRENT_SOURCE_DIR}/VirtualRouter/common/*.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/VirtualRouter/external/*.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/VirtualRouter/external/*.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/VirtualRouter/types/*.h
         ${CMAKE_CURRENT_SOURCE_DIR}/VirtualRouter/types/*.hpp
     )
