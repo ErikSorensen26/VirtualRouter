@@ -19,7 +19,7 @@
 
 #include <string_view>
 #include <array>
-#include <json.hpp>
+#include <span>
 
 #define CLI_MODE_TABLE \
     X(None,                             "") \
@@ -42,13 +42,13 @@
     X(RouterEigrpNamed,                 "(config-router)#", "eigrp_named") \
     X(RouterEigrpClassicV4,             "(config-router)#", "eigrp_classic") \
     X(RouterEigrpClassicV6,             "(config-rtr)#", "eigrp_classic") \
-    X(RouterEigrpClassicVRF,            "(config-router-af)#", "eigrp", "eigrp_classic_vrf") \
-    X(RouterEigrpAddressFamilyV4,       "(config-router-af)#", "eigrp", "ipv4") \
-    X(RouterEigrpAddressFamilyV6,       "(config-router-af)#", "eigrp", "ipv6") \
-    X(RouterEigrpInterfaceV4,           "(config-router-af-interface)#", "ipv4") \
-    X(RouterEigrpInterfaceV6,           "(config-router-af-interface)#", "ipv6") \
-    X(RouterEigrpTopologyV4,            "(config-router-af-topology)#", "eigrp", "ipv4") \
-    X(RouterEigrpTopologyV6,            "(config-router-af-topology)#", "eigrp", "ipv6") \
+    X(RouterEigrpAddressFamilyV4,       "(config-router-af)#", "eigrp-ipv4") \
+    X(RouterEigrpAddressFamilyV6,       "(config-router-af)#", "eigrp-ipv6") \
+    X(RouterEigrpClassicVRF,            "(config-router-af)#", "eigrp-eigrp-vrf") \
+    X(RouterEigrpInterfaceV4,           "(config-router-af-interface)#", "eigrp-ipv4") \
+    X(RouterEigrpInterfaceV6,           "(config-router-af-interface)#", "eigrp-ipv6") \
+    X(RouterEigrpTopologyV4,            "(config-router-af-topology)#", "eigrp-ipv4") \
+    X(RouterEigrpTopologyV6,            "(config-router-af-topology)#", "eigrp-ipv6") \
 /*Ospf*/ \
 
 namespace cli

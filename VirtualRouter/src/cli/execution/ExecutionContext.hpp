@@ -3,7 +3,7 @@
  * @brief Instantiates the concrete `ExecutionManager` type alias for the router CLI.
  *
  * Aggregates every registered `CliModeParser` specialization into a single
- * `cli::Executor` template instantiation.  All mode parsers must be listed
+ * `cli::execution::Executor` template instantiation.  All mode parsers must be listed
  * here; adding a new mode requires only appending its parser type to the
  * `ExecutionManager` alias.
  */
@@ -20,19 +20,19 @@
 #include "configs/RegistryReference.hpp"
 #include "cli/execution/Executor.hpp"
 
-#include "cli/commands/global/GlobalCommands.h"
-#include "cli/commands/interface/InterfaceCommands.h"
-#include "cli/commands/PrivilegedExecCommands.h"
-#include "cli/commands/UserExecCommands.h"
+#include "cli/execution/commands/global/GlobalCommands.h"
+#include "cli/execution/commands/interface/InterfaceCommands.h"
+#include "cli/execution/commands/PrivilegedExecCommands.h"
+#include "cli/execution/commands/UserExecCommands.h"
 
 
-#include "cli/commands/router/RouterEigrpClassicCommands.h"
-#include "cli/commands/router/RouterEigrpNamedCommands.h"
-#include "cli/commands/router/RouterEigrpAddressFamilyCommands.h"
-#include "cli/commands/router/RouterEigrpInterfaceCommands.h"
-#include "cli/commands/router/RouterEigrpTopologyCommands.h"
+#include "cli/execution/commands/router/RouterEigrpClassicCommands.h"
+#include "cli/execution/commands/router/RouterEigrpNamedCommands.h"
+#include "cli/execution/commands/router/RouterEigrpAddressFamilyCommands.h"
+#include "cli/execution/commands/router/RouterEigrpInterfaceCommands.h"
+#include "cli/execution/commands/router/RouterEigrpTopologyCommands.h"
 
-namespace cli
+namespace cli::execution
 {
 /**
  * @brief Concrete `Executor` instantiation that binds all registered CLI mode parsers.
@@ -48,7 +48,7 @@ namespace cli
  *
  * @ingroup CLI
  */
-using ExecutionManager = cli::Executor<
+using ExecutionManager = cli::execution::Executor<
     UserExecCommands,
     PrivilegedExecCommands,
     GlobalCommands,

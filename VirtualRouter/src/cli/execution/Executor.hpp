@@ -2,7 +2,7 @@
  * @file Executor.hpp
  * @brief Variadic, compile-time CLI mode dispatcher.
  *
- * Defines `cli::Executor<Parsers...>`, the central command-dispatch engine
+ * Defines `cli::execution::Executor<Parsers...>`, the central command-dispatch engine
  * that owns the active `ContextBase` and routes each token stream to the
  * correct `CLI_MODE_PARSER`.  Mode transitions are O(1) and allocation-safe
  * thanks to a two-slot context ping-pong buffer.
@@ -13,13 +13,12 @@
 
 #include <iostream>
 
-#include "cli/grammar/Token.hpp"
-#include "cli/grammar/CliModeParser.hpp"
+#include "cli/execution/parser/CliModeParser.hpp"
 #include "cli/modes/contexts/Context.hpp"
 #include "cli/modes/Mode.hpp"
 
 /// @brief Namespace enclosing all CLI subsystem types.
-namespace cli
+namespace cli::execution
 {
 
 /**
@@ -71,7 +70,7 @@ template <typename... Parsers>
 class Executor
 {
     static_assert(
-        (cli::is_cli_mode_v<Parsers> && ...),
+        (is_cli_mode_v<Parsers> && ...),
         "All entries must be CliModeParser types"
     );
 

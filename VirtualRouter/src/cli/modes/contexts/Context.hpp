@@ -58,7 +58,7 @@ namespace cli { struct CliModeParserFlag {}; }
 #define EXPAND_ARGS(...) __VA_ARGS__
 
 #define DEFINE_MODE(prefix, mode, context, ...) \
-    using prefix##Commands = cli::CliModeParser<mode, context __VA_ARGS__>;
+    using prefix##Commands = cli::execution::CliModeParser<mode, context __VA_ARGS__>;
 
 // Define a full command grep
 #define DEFINE_CMD_MODE(prefix, context, list) \
