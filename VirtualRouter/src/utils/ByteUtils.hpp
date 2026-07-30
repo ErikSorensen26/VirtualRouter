@@ -14,8 +14,11 @@
 namespace utils
 {
 
-/// True on platforms where the native byte order is little-endian.
-/// Used as a compile-time constant to select the correct byte-swap path.
+/**
+ * @brief True on platforms where the native byte order is little-endian.
+ *
+ * Used as a compile-time constant to select the correct byte-swap path.
+ */
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 constexpr bool isLittleEndian = true;
 #else

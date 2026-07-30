@@ -113,8 +113,10 @@ class Executor
                              FindParserImpl<M, Rest...>>
     {};
 
-    /// @brief Resolves the concrete parser type for a given `CliMode` constant.
-    /// @tparam M  The `CliMode` to look up; a static_assert fires if not found.
+    /**
+     * @brief Resolves the concrete parser type for a given `CliMode` constant.
+     * @tparam M  The `CliMode` to look up; a static_assert fires if not found.
+     */
     template <CliMode M>
     using FindParser = typename FindParserImpl<M, Parsers...>::type;
 
@@ -164,9 +166,6 @@ public:
 
         ctxBuffer[head] = reinterpret_cast<ContextBase*>(ctx);
         currentMode[head] = M;
-
-        std::cout << ctx << std::endl;
-        std::cout << ctxBuffer[head] << std::endl;
     }
 
     /**

@@ -205,7 +205,17 @@ public:
     virtual bool getDemandCircuitIgnore() const = 0;
 
     /**
-     * TODO add doxy comment
+     * @brief Whether Link-Local Signaling blocks should be appended to outgoing
+     *        packets (RFC 5613).
+     *
+     * Controls whether Hello and DD packets carry an LLS data block, which is
+     * how the out-of-band Extended Options bits -- notably the OOB-resync bit
+     * used by graceful restart -- are exchanged.
+     *
+     * `OspfInterface` lets the per-interface setting win where one is
+     * configured, otherwise falling back to the process-wide setting.
+     * `OspfVirtualLink` has no per-interface configuration to consult and reads
+     * the process setting directly.
      */
     virtual bool getLls() const = 0;
 
@@ -223,7 +233,21 @@ public:
     virtual interface::Interface* getTransmitInterface() const = 0;
     
     /**
-     * TODO add doxy comment
+     * @brief Resolves the local address packets should currently be sourced
+     *        from.
+     *
+     * The address counterpart to @ref getTransmitInterface, and used for more
+     * than the source field: it supplies the network mask advertised in v2
+     * Hellos and the Router-LSA link data for this interface.
+     *
+     * `OspfInterface` returns its own bound interface address.
+     * `OspfVirtualLink` has no address of its own and re-resolves one from the
+     * transit area's SPF result on each call (RFC 2328 SS15), so the returned
+     * reference is to a cached value that a later call may overwrite -- read it
+     * out rather than holding the reference across anything that could
+     * re-resolve. If the transit area currently has no intra-area path to the
+     * remote endpoint it resolves to an empty prefix rather than a stale one,
+     * so callers must not assume a usable address comes back.
      */
     virtual const types::IPPrefix& getTransmitAddress() const = 0;
 

@@ -148,9 +148,12 @@ public:
         AddrT   skipMask   {0}; ///< 1-bits for every compressed bit position.
         uint8_t skipLen    {0}; ///< How many bits are compressed.
  
-        /// Cached longest-prefix value for this subtree.
-        /// Written with release; read with relaxed (guarded by the node-pointer
-        /// acquire on the parent's child slot).
+        /**
+         * @brief Cached longest-prefix value for this subtree.
+         *
+         * Written with release; read with relaxed (guarded by the node-pointer
+         * acquire on the parent's child slot).
+         */
         std::atomic<T*> best{nullptr};
  
         // ── Prefix storage ────────────────────────────────────────────────────

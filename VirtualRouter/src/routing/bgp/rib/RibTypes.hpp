@@ -404,43 +404,61 @@ struct OutboundRoute : RouteBase
 
 // PRE-POLICY ADJ-RIB-IN
 
-/// @brief Pre-policy routes per peer, keyed by (NLRI, ADD-PATH ID). Used for soft-reconfiguration.
-/// @tparam N  Prefix type.
+/**
+ * @brief Pre-policy routes per peer, keyed by (NLRI, ADD-PATH ID). Used for
+ *        soft-reconfiguration.
+ * @tparam N  Prefix type.
+ */
 template <typename N>
 using PrePerPeerInTable = std::unordered_map<NlriPath<N>, SoftPreEntry, NlriPathHash<N>>;
 
 // ADJ-RIB-IN
 
-/// @brief Post-policy Adj-RIB-In for one peer, keyed by (NLRI, ADD-PATH ID).
-/// @tparam N  Prefix type.
+/**
+ * @brief Post-policy Adj-RIB-In for one peer, keyed by (NLRI, ADD-PATH ID).
+ * @tparam N  Prefix type.
+ */
 template <typename N>
 using PerPeerInTable = std::unordered_map<NlriPath<N>, InboundRoute<N>, NlriPathHash<N>>;
 
 // ADJ-RIB-OUT
 
-/// @brief Adj-RIB-Out for one peer, keyed by NLRI; value is (ADD-PATH ID, outbound route).
-/// A multimap is used because ADD-PATH allows multiple entries per NLRI.
-/// @tparam N  Prefix type.
+/**
+ * @brief Adj-RIB-Out for one peer, keyed by NLRI; value is (ADD-PATH ID,
+ *        outbound route).
+ *
+ * A multimap is used because ADD-PATH allows multiple entries per NLRI.
+ *
+ * @tparam N  Prefix type.
+ */
 template <typename N>
 using PerPeerOutTable = std::unordered_multimap<N, std::pair<uint32_t, OutboundRoute<N>>>;
 
-/// @brief Per-peer Pre-Adj-RIB-In table indexed by peer Router-ID.
-/// @tparam N  Prefix type.
+/**
+ * @brief Per-peer Pre-Adj-RIB-In table indexed by peer Router-ID.
+ * @tparam N  Prefix type.
+ */
 template <typename N>
 using PreAdjRibInTable = std::unordered_map<uint32_t, PrePerPeerInTable<N>>;
 
-/// @brief Full Adj-RIB-In table indexed by peer Router-ID.
-/// @tparam N  Prefix type.
+/**
+ * @brief Full Adj-RIB-In table indexed by peer Router-ID.
+ * @tparam N  Prefix type.
+ */
 template <typename N>
 using AdjRibInTable = std::unordered_map<uint32_t, PerPeerInTable<N>>;
 
-/// @brief Full Adj-RIB-Out table indexed by peer Router-ID.
-/// @tparam N  Prefix type.
+/**
+ * @brief Full Adj-RIB-Out table indexed by peer Router-ID.
+ * @tparam N  Prefix type.
+ */
 template <typename N>
 using AdjRibOutTable = std::unordered_map<uint32_t, PerPeerOutTable<N>>;
 
-/// @brief Loc-RIB table mapping each NLRI to its best LocalRoute.
-/// @tparam N  Prefix type.
+/**
+ * @brief Loc-RIB table mapping each NLRI to its best LocalRoute.
+ * @tparam N  Prefix type.
+ */
 template <typename N>
 using LocRibTable = std::unordered_map<N, LocalRoute<N>>;
 

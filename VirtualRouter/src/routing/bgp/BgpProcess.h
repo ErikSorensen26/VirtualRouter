@@ -266,9 +266,11 @@ public:
 
     const uint32_t asNumber; ///< Local AS number — immutable after construction.
 
-    /// @name TCP Callbacks
-    /// Static callbacks registered with the TCP stack.  They enqueue work onto
-    /// the scheduler and must never touch FSM state directly.
+    /**
+     * @name TCP Callbacks
+     * Static callbacks registered with the TCP stack.  They enqueue work onto
+     * the scheduler and must never touch FSM state directly.
+     */
     ///@{
     static void onConnectCallback(transport::tcp::ConnCallbackCtx& ctx) noexcept;
     static void onAcceptCallback(transport::tcp::AcceptCallbackCtx& ctx) noexcept;

@@ -43,6 +43,11 @@ file(GLOB_RECURSE VR_TYPES_CPP    CONFIGURE_DEPENDS ${VR_TYPES}/*.cpp)
 # Remove main.cpp from library so it compiles alone
 list(FILTER VR_SRC_CPP EXCLUDE REGEX "/main\\.cpp$")
 
+option(VR_ENABLE_WEB "Build the web/ API (needs a JSON serializer)" OFF)
+if (NOT VR_ENABLE_WEB)
+    list(FILTER VR_SRC_CPP EXCLUDE REGEX "/web/")
+endif()
+
 add_library(VirtualRouter STATIC
     ${VR_SRC_CPP}
     ${VR_COMMON_CPP}
@@ -72,4 +77,9 @@ target_link_libraries(VirtualRouter PRIVATE
 # ----- Executable: isolated compile unit -----
 add_executable(VirtualRouterExec ${VR_SRC}/main.cpp)
 target_link_libraries(VirtualRouterExec PRIVATE VirtualRouter)
+
+if (VR_ENABLE_WEB)
+    target_compile_definitions(VirtualRouter    PUBLIC  VR_ENABLE_WEB)
+    target_compile_definitions(VirtualRouterExec PRIVATE VR_ENABLE_WEB)
+endif()
 

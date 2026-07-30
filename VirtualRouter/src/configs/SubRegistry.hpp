@@ -395,11 +395,14 @@ private:
             return std::forward_as_tuple(parentField);
     }
 
-    /// Constructs all fields (fold expression over index_sequence).
-    /// The `fields()` member initializer has already default-constructed every
-    /// field, so each one must be destroyed before construct_at reconstructs it
-    /// in place -- otherwise fields that allocate (RegistryContainer) orphan
-    /// their first allocation and leak one payload per field, per registry.
+    /**
+     * @brief Constructs all fields (fold expression over index_sequence).
+     *
+     * The `fields()` member initializer has already default-constructed every
+     * field, so each one must be destroyed before construct_at reconstructs it
+     * in place -- otherwise fields that allocate (RegistryContainer) orphan
+     * their first allocation and leak one payload per field, per registry.
+     */
     template <size_t... I>
     void constructFields(std::index_sequence<I...>) noexcept
     {

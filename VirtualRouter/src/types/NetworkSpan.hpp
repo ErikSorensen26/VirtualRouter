@@ -59,8 +59,12 @@ public:
     static constexpr size_t extent = sizeof(T);
 
 private:
-    /// Byte-level iteration direction: -1 on little-endian (reverse physical layout),
-    /// +1 on big-endian (natural layout). This is the only endianness knob.
+    /**
+     * @brief Byte-level iteration direction: -1 on little-endian (reverse
+     *        physical layout), +1 on big-endian (natural layout).
+     *
+     * This is the only endianness knob.
+     */
     static constexpr std::ptrdiff_t stride = (std::endian::native == std::endian::little) ? -1 : 1;
     static_assert(std::endian::native == std::endian::little || std::endian::native == std::endian::big,
                   "mixed-endian systems not supported");

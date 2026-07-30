@@ -16,8 +16,11 @@ namespace routing::ospf
 static constexpr uint8_t ROUTER_INFORMATION_OPAQUE_TYPE = 4;
 /// Opaque instance ID of the single Router Information LSA this router originates (RFC 5250 §3).
 static constexpr uint32_t ROUTER_CAPABILITY_OPAQUE_ID = 0;
-/// Link State ID for the area-scope Router Information Opaque LSA: opaque type in the top
-/// byte, opaque instance ID in the low 24 bits, per RFC 2370 §2.
+/**
+ * @brief Link State ID for the area-scope Router Information Opaque LSA: opaque
+ *        type in the top byte, opaque instance ID in the low 24 bits, per
+ *        RFC 2370 §2.
+ */
 static constexpr uint32_t ROUTER_CAPABILITY_LINK_STATE_ID =
     (static_cast<uint32_t>(ROUTER_INFORMATION_OPAQUE_TYPE) << 24) | ROUTER_CAPABILITY_OPAQUE_ID;
 

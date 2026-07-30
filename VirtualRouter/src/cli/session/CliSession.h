@@ -8,12 +8,16 @@
 
 #include <string>
 #include <vector>
-#include <json.hpp>
+#include <cstddef>
 
 #include "cli/terminal/Console.h"
-#include "CommandTree.h"
 #include "cli/modes/Mode.hpp"
 #include "cli/execution/ExecutionContext.hpp"
+#include "cli/tree/Command.h"
+#include "cli/tree/ModeEntry.h"
+#include "TreeNavigator.hpp"
+
+class Internal_CliTest;
 
 namespace core { class VirtualRouter; }
 namespace interface { class Interface; }
@@ -28,7 +32,7 @@ class CommandProcessor;
 class CliEngine;
 class Configs;
 struct Token;
-struct Com;
+
 
 /**
  * @brief Represents a single interactive CLI user session.
@@ -59,7 +63,7 @@ struct Com;
 class CliSession : public Console
 {
 public:
-    friend class Internal_CliTest;
+    friend class ::Internal_CliTest;
     friend class CommandProcessor;
     friend class CliEngine;
     friend Configs;
@@ -98,64 +102,21 @@ public:
      */
     bool handleInput(std::string input = "");
 
-    /**
-     * @brief Transitions to a new CLI mode and pushes the current mode onto the nav stack.
-     *
-     * Updates the working directory pointer and prompt string, captures the current
-     * mode into the nav stack, then delegates to @ref ExecutionManager::changeMode.
-     * Use this for all normal sub-mode entries (interface, router, address-family, etc.)
-     * so that `popMode()` can return here automatically.
-     *
-     * @tparam T  Target @ref CliMode enum value.
-     * @tparam S  Registry type for the new mode.
-     */
+
+    // MODE MANAGEMENT (forwards to the navigation stack; called by command handlers)
+
+    /// Enters a sub-mode, pushing the current one so `popMode` can return here.
     template <CliMode T, typename S>
     requires config::IsSubRegistryWrapper<S>
-    bool changeMode(S& configs)
-    {
-        if (execution.hasMode() && navTop < NAV_STACK_DEPTH)
-            navStack[navTop++] = { execution.captureCurrentMode(), currentPrompt, workingDirectory, configNode };
+    bool changeMode(S& configs) { return nav.changeMode<T, S>(configs); }
 
-        std::span<const std::string_view> path = getPath(T);
-        if (!setCommandDirectory(path))
-        {
-            if (navTop > 0) --navTop;
-            return false;
-        }
-        execution.changeMode<T, S>(configs);
-        return true;
-    }
-
-    /**
-     * @brief Pops the navigation stack and restores the previous CLI mode.
-     *
-     * Called by `exit` handlers. Restores the mode, prompt, working directory, and
-     * config node exactly as they were when `changeMode` entered the current mode.
-     *
-     * @return True if there was a mode to pop; false if already at the bottom.
-     */
-    bool popMode();
-
-    /**
-     * @brief Transitions to a mode without pushing or popping the nav stack.
-     *
-     * Used for hard resets (`end`, Ctrl-Z) that jump to a fixed mode regardless
-     * of navigation depth. Clears the entire nav stack first so subsequent
-     * `popMode()` calls find an empty stack.
-     *
-     * @tparam T  Target @ref CliMode enum value.
-     * @tparam S  Registry type for the new mode.
-     */
+    /// Jumps to a fixed mode and clears the nav stack (`end`, Ctrl-Z).
     template <CliMode T, typename S>
     requires config::IsSubRegistryWrapper<S>
-    bool resetAndChangeMode(S& configs)
-    {
-        navTop = 0;
-        std::span<const std::string_view> path = getPath(T);
-        if (!setCommandDirectory(path)) return false;
-        execution.changeMode<T, S>(configs);
-        return true;
-    }
+    bool resetAndChangeMode(S& configs) { return nav.resetAndChangeMode<T, S>(configs); }
+
+    /// Returns to the previous mode; false if already at the bottom.
+    bool popMode() { return nav.popMode(); }
 
     // PUBLIC STATE (read by command handlers after execution)
 
@@ -181,7 +142,7 @@ private:
             INVALID,    ///< Bad token — print caret at markerCommand position.
             AMBIGUOUS,  ///< Ambiguous token — print message.
             INCOMPLETE, ///< Valid prefix but command not finished.
-            GLOBLA_CMD, ///< Standalone ? or vk_tab — already handled.
+            GLOBAL_CMD, ///< Standalone ? or vk_tab — already handled.
             DO_COMMAND, ///< "do <rest>" — re-execute in privileged mode.
         };
 
@@ -193,7 +154,7 @@ private:
         bool defaulted = false;
 
         // Help / Tab path
-        std::vector<Com> helpList;
+        std::vector<tree::Command> helpList;
         std::string      nextLine;
 
         // Invalid path
@@ -230,50 +191,30 @@ private:
 
     // MODE MANAGEMENT
 
-    bool    setCommandDirectory(std::span<const std::string_view>& dir);
     CliMode getMode();
-    void    historyToGlobal();
 
     // DISPLAY
 
-    void displayCommands(std::vector<Com>& list); ///< Enqueues list for pagination.
+    void displayCommands(std::vector<tree::Command>& list);
     bool handlePagination(char ch = '\0');
 
-    // SESSION-LEVEL STATE
-
-    /// @brief One entry in the navigation history stack.
-    struct NavFrame
-    {
-        cli::NavEntry             executorEntry;   ///< Execution state (mode, dispatch, construct, config ptr).
-        std::string               savedPrompt;     ///< Prompt string active when this mode was entered.
-        const nlohmann::ordered_json* savedWorkingDir = nullptr; ///< Command-tree node for this mode.
-        const nlohmann::ordered_json* savedConfigNode = nullptr; ///< Config-tree root for this mode.
-    };
-
-    static constexpr size_t NAV_STACK_DEPTH = 10; ///< Maximum navigation depth (UserExec → deepest sub-mode).
-
-    NavFrame navStack[NAV_STACK_DEPTH]; ///< Fixed-size navigation history; avoids heap allocation.
-    size_t   navTop = 0;               ///< Number of valid frames currently on the stack.
-
-    cli::ExecutionManager execution; ///< Owns the active mode object and dispatches token lists.
-
-    const nlohmann::ordered_json* workingDirectory = nullptr; ///< Current command-tree array for the active mode.
+    cli::execution::ExecutionManager execution; ///< Owns the active mode object and dispatches token lists.
 
     // CONFIG-TREE TRACKING
 
-    const nlohmann::ordered_json* prevConfig = nullptr; ///< Command-tree root before the last tryGlobalCommand detour.
-    const nlohmann::ordered_json* configNode = nullptr; ///< Root node of the engine's full command tree.
-    std::vector<const nlohmann::ordered_json*> modeHistory; ///< Stack of config-tree roots visited during mode transitions.
-
-    std::string currentPrompt; ///< Mode-specific prompt suffix appended to the hostname.
+    tree::Command prevConfig; ///< Command-tree root before the last tryGlobalCommand detour.
+    tree::CommandTree& commandTree; ///< Root node of the engine's full command tree.
+    TreeNavigation nav; 
 
     // PAGINATION
 
-    std::vector<Com> paginationList; ///< Remaining commands to display; non-empty while paging.
-    size_t           maxNameLength = 0; ///< Widest name in paginationList, used to align descriptions.
-    void*            previousMode = nullptr; ///< Pointer to the previous config object.
+    std::vector<tree::Command> paginationList; ///< Remaining commands to display; non-empty while paging.
+    size_t  maxNameLength = 0; ///< Widest name in paginationList, used to align descriptions.
+    void*   previousMode = nullptr; ///< Pointer to the previous config object.
 
     std::vector<std::string> executionHistory; ///< Resolved command strings for commands that mutate list-type config.
+
+    
 };
 } // namespace cli
 

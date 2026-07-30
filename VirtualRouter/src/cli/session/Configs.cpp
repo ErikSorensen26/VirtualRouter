@@ -21,44 +21,13 @@ Configs::Configs(FileSystem& fs)
 
 void Configs::initConfigs(const StartupFiles& stfs, bool enableDummies)
 {
-    // Reset all variables before
-    root.clear();
+    recover.clear();
 
     hwManager.addHardware(stfs.hwConfigFile, fileSystem, enableDummies);
 
-    /*if (configSchema.is_null() || !configSchema.is_object())
-    {
-        configSchema = nlohmann::ordered_json::object();
-    }*/
-
     routerConfigFilename = stfs.routerConfigFile;
 
-    // Load JSON configuration file into doc
-    if (fileSystem.fileExists(stfs.startupFile))
-    {
-        std::string content;
-        if (fileSystem.readFile(stfs.startupFile, content))
-        {
-            try
-            {
-                root = nlohmann::ordered_json::parse(content);
-            }
-            catch (json::parse_error& e)
-            {
-                root = nlohmann::ordered_json::object();
-            }
-        }
-    }
-    else 
-    {
-        root = nlohmann::ordered_json::object();
-    }
-}
-
-
-std::vector<std::string> Configs::recoverConfigs(nlohmann::ordered_json* json)
-{
-    // TODO
+    // TODO reload the startup configuration once utils::json supports serialization
 }
 
 }

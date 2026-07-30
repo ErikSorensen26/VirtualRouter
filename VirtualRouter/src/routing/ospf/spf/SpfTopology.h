@@ -82,8 +82,12 @@ public:
     std::unordered_map<uint64_t, std::vector<const typename Policy::RouterLsa*>> rtr; ///< Router-ID → all Router-LSAs for that router (multiple LSAs possible in graceful-restart scenarios).
     std::unordered_map<uint64_t, const typename Policy::NetworkLsa*> net;             ///< Packed network vertex ID → Network-LSA.
 
-    /// OSPFv2 supplementary index: LS-ID → (advRouter, LsaRecord*, NetworkLsa*) used to
-    /// resolve back-links where only the LS-ID is encoded in the Router-LSA link data.
+    /**
+     * @brief OSPFv2 supplementary index: LS-ID → (advRouter, LsaRecord*, NetworkLsa*).
+     *
+     * Used to resolve back-links where only the LS-ID is encoded in the
+     * Router-LSA link data.
+     */
     struct NetV2ByLsId { uint32_t advRouter; const LsaRecord* rec; const typename Policy::NetworkLsa* lsa; };
     std::unordered_map<uint32_t, NetV2ByLsId> netV2ByLsId;
 

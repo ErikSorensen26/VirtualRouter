@@ -1,5 +1,7 @@
 // InterfaceConfigs.cpp
 
+#include <cmath>
+
 #include <Global.h>
 #include <VirtualRouter.h>
 #include "configs/registry/global/GlobalRegistry.h"

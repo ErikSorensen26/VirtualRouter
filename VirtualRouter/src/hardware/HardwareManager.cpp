@@ -3,9 +3,13 @@
 #include <stdexcept>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
+#include <sys/eventfd.h>
 #include <linux/if.h>
 #include <unistd.h>
+#include <poll.h>
+#include <cerrno>
 #include <cstring>
+#include <cmath>
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
 #include <linux/ethtool.h>
@@ -28,40 +32,29 @@ void HardwareManager::addHardware(const std::string& hwConfigFile, cli::FileSyst
         std::string content;
         if (fileSystem.readFile(hwConfigFile, content))
         {
-            try
-            {
-                configJson = json::parse(content);
-            }
-            catch (json::parse_error& e)
-            {
-                configJson = json::object();
-            }
+            configJson = utils::json::parse(content);
         }
-    }
-    else 
-    {
-        configJson = json::object();
     }
 
     // Load interface configurations from JSON data
-    if (!configJson.is_object() || !configJson.contains("Interface") || !configJson["Interface"].is_object())
+    if (!configJson.isObject() || !configJson.contains("Interface") || !configJson["Interface"].isObject())
         return;
 
-    nlohmann::ordered_json& interfaces = configJson["Interface"];
+    utils::json::JsonNode interfaces = configJson["Interface"];
 
-    for (auto& [key, value] : interfaces.items())
+    for (auto& value : interfaces)
     {
-        interface::InterfaceType type = interface::getInterfaceType(key);
+        interface::InterfaceType type = interface::getInterfaceType(value.name);
         if (type == interface::InterfaceType::UNDEFINED) continue;
 
-        if (!value.is_array()) continue;
+        if (!value.isArray()) continue;
         for (const auto& obj : value)
         {
             std::string nic{};
-            if (obj.is_string())
-                nic = obj.get<std::string>();
-            else if (obj.contains("nic") && obj["nic"].is_string())
-                nic = obj["nic"].get<std::string>();
+            if (obj.isString())
+                nic = obj.asString();
+            else if (obj.contains("nic") && obj["nic"].isString())
+                nic = obj["nic"].asString();
             else
                 continue;
 
@@ -109,6 +102,15 @@ void HardwareManager::addHardware(const std::string& hwConfigFile, cli::FileSyst
         return;
     }
 
+    nlWakeFd = ::eventfd(0, EFD_CLOEXEC);
+    if (nlWakeFd < 0)
+    {
+        perror("eventfd");
+        ::close(nlSock);
+        nlSock = -1;
+        return;
+    }
+
     if (!nlThread.joinable())
     {
         nlThreadRunning.store(true);
@@ -120,15 +122,26 @@ HardwareManager::~HardwareManager()
 {
     nlThreadRunning.store(false);
 
-    if (nlSock >= 0)
+    if (nlWakeFd >= 0)
     {
-        ::shutdown(nlSock, SHUT_RDWR);
-        ::close(nlSock);
-        nlSock = -1;
+        uint64_t one = 1;
+        (void)::write(nlWakeFd, &one, sizeof(one));
     }
 
     if (nlThread.joinable())
         nlThread.join();
+
+    if (nlWakeFd >= 0)
+    {
+        ::close(nlWakeFd);
+        nlWakeFd = -1;
+    }
+
+    if (nlSock >= 0)
+    {
+        ::close(nlSock);
+        nlSock = -1;
+    }
 }
 
 const HwIfaceInfo* HardwareManager::getHwInfo(interface::InterfaceKey key) const
@@ -368,10 +381,30 @@ void HardwareManager::netlinkMonitorThread()
 
     while (nlThreadRunning.load())
     {
+        pollfd fds[2] = {};
+        fds[0].fd = nlSock;
+        fds[0].events = POLLIN;
+        fds[1].fd = nlWakeFd;
+        fds[1].events = POLLIN;
+
+        int ready = poll(fds, 2, -1);
+        if (ready < 0)
+        {
+            if (errno == EINTR)
+                continue;
+            break;
+        }
+
+        if (fds[1].revents != 0)
+            break;
+
+        if ((fds[0].revents & POLLIN) == 0)
+            continue;
+
         ssize_t len = recv(nlSock, buffer, sizeof(buffer), 0);
         if (len <= 0)
             continue;
-        
+
         nlmsghdr* nh;
         for (nh = reinterpret_cast<nlmsghdr*>(buffer); NLMSG_OK(nh, len); nh = NLMSG_NEXT(nh, len))
         {

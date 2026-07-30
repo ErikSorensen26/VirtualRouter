@@ -37,6 +37,8 @@ Global::Global(cli::FileSystem& fs, const cli::StartupFiles& stfs, bool enableRo
     rxMgr.setCorePool({4, 5, 6, 7});
     rxMgr.setCpuPolicy(qos::ingress::RxQueueManager::CpuPolicy::EqualShare);
 
+    setHostname(DEFAULT_HOSTNAME);
+
     // Load VRFs out of global configs
     routingInstanceRefresh();
     // Load Interfaces out of global scope and assign correct VRFs
@@ -54,14 +56,12 @@ Global::~Global()
 
 void Global::setHostname(const std::string& name)
 {
-    std::unique_lock<std::shared_mutex> lock(hostnameMutex);
-    hostname = name;
+    getConfigs().get<config::Global::HOSTNAME>().set(name);
 }
 
 std::string Global::getHostname()
 {
-    std::shared_lock<std::shared_mutex> lock(hostnameMutex);
-    return hostname;
+    return getConfigs().get<config::Global::HOSTNAME>().load();
 }
 
 void Global::reset()

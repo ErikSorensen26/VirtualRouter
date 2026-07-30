@@ -224,12 +224,16 @@ void Console::rewriteTail(const std::string& input, size_t startPosition, bool b
     
     size_t width = getTerminalWidth();
     size_t currentColumn = (startPosition + initialLineLength) % width;
-    
+
+    const std::string& text = insert ? insertString : input;
+
+    const bool hasTail = startPosition < text.size();
+
     // Save the current cursor position
     controller.saveCursorPosition();
 
     // Rewrite the input from the start position
-    for (size_t i = startPosition; i < (insert ? insertString.size() : input.size()); ++i)
+    for (size_t i = startPosition; i < text.size(); ++i)
     {
         if (currentColumn >= width)
         {
@@ -237,14 +241,16 @@ void Console::rewriteTail(const std::string& input, size_t startPosition, bool b
             controller.moveCursorToStart();
             currentColumn = 0;
         }
-        controller.print(std::string(1, (insert ? insertString : input)[i]));
+        controller.print(std::string(1, text[i]));
+        ++currentColumn;
     }
 
-    // Clear any leftover characters on the current line and subsequent lines
-    size_t leftoverSpace = (width > currentColumn) ? (width - currentColumn) : 0;
-    if (leftoverSpace && leftoverSpace > 0)
+    // Clear whatever the old, longer line left on screen past the new tail.
+    if (hasTail)
     {
-        controller.print(std::string(leftoverSpace, ' '));
+        size_t leftoverSpace = (width > currentColumn) ? (width - currentColumn) : 0;
+        if (leftoverSpace)
+            controller.print(std::string(leftoverSpace, ' '));
     }
 
     // Clear leftover characters
@@ -277,14 +283,13 @@ std::string Console::input(std::string testInput, bool pagination)
             }
 
             // 1. Handle single-char special keys (Enter, Tab, '?', Backspace, Delete)
-            std::string result = handleSpecialKey(hInput, input);
-            if (!result.empty())
+            if (handleSpecialKey(hInput, input))
             {
                 historyIndex = history.size();
                 browsingHistory = false;
                 inputCache.clear();
-                // If we got a non-empty string, return now
-                return result;
+                // The key ended the line; hand it back even when it is empty.
+                return input;
             }
 
             // 2. If it's an escape sequence
@@ -311,7 +316,7 @@ std::string Console::input(std::string testInput, bool pagination)
     return input;
 }
 
-std::string Console::handleSpecialKey(char hInput, std::string& input)
+bool Console::handleSpecialKey(char hInput, std::string& input)
 {
     auto backspace([&]()
     {
@@ -349,13 +354,13 @@ std::string Console::handleSpecialKey(char hInput, std::string& input)
             // Print '?' and return, so we exit the input loop
             controller.print("?");
             input += "?";
-            return input;
+            return true;
         }
         case '\x09': // Tab
         {
-            // Return the input with 
+            // Return the input with
             input += "\t";
-            return input;
+            return true;
         }
         case '\x0a': // Enter
         {
@@ -364,14 +369,7 @@ std::string Console::handleSpecialKey(char hInput, std::string& input)
                 history.push_back(input);
             }
             lastCommand = input;
-            if (input.empty())
-            {
-                return input + "\t";
-            }
-            else
-            {
-                return input;
-            }
+            return true;
         }
         case '\x08': // Control-h
         case '\x15':
@@ -394,8 +392,8 @@ std::string Console::handleSpecialKey(char hInput, std::string& input)
             // Not recognized => do nothing
             break;
     }
-    // Return empty => keep reading input
-    return "";
+    // Nothing terminated the line => keep reading input
+    return false;
 }
 
 void Console::handleEscapeSequence(std::string& input, std::string testKey)

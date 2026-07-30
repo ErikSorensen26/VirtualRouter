@@ -154,9 +154,11 @@ protected:
      *
      * @param hInput The character representing the special key pressed.
      * @param input Reference to the current input string to be modified.
-     * @return std::string The updates input string if a terminating condition is met; otherwise, an empty string.
+     * @return Whether the key ended the line. The line is returned in @p input,
+     *         which may legitimately be empty (a blank Enter), so completion is
+     *         reported separately rather than inferred from the string.
      */
-    std::string handleSpecialKey(char hInput, std::string& input);
+    bool handleSpecialKey(char hInput, std::string& input);
 
     /**
      * @brief Handles escape sequences for arrow keys and other special inputs.

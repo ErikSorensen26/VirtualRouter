@@ -46,7 +46,10 @@ protected:
     std::string getInsertString() {return console->insertString;}
     void rewriteTail(std::string& input, size_t& startPosition) {console->rewriteTail(input, startPosition);}
     void handlePrintableChar(char hInput, std::string& input) {console->handlePrintableChar(hInput, input);}
-    std::string handleSpecialKey(char hInput, std::string& input) {return console->handleSpecialKey(hInput, input);}
+    std::string handleSpecialKey(char hInput, std::string& input)
+    {
+        return console->handleSpecialKey(hInput, input) ? input : std::string();
+    }
     void handleEscapeSequence(std::string& input, std::string test) {console->handleEscapeSequence(input, test);}
     std::vector<std::string> getHistory() {return console->history;}
     void setHistory(std::vector<std::string> newHistory) {console->history = newHistory;}

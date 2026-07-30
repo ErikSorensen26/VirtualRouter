@@ -18,17 +18,21 @@
 
 #include <string>
 #include <vector>
-#include <json.hpp>
+#include <Json.hpp>
 #include <Time.h>
 #include <condition_variable>
 #include <Mock.hpp>
 #include "Configs.h"
-#include "CommandTree.h"
+#include "cli/tree/CommandTree.h"
 #include "cli/terminal/ConsoleController.hpp"
+
+#define COMMAND_TREE_BIN "./configs/Commands.bin"
+#define COMMAND_TREE "./configs/Commands.json"
 
 namespace interface { class Interface; enum class InterfaceType : uint8_t; }
 
 static std::string_view CARRIAGE_RETURN = "<cr>";
+static constexpr std::string_view DO_EXEC_KEYWORD = "do-exec";
 
 namespace cli
 {
@@ -115,7 +119,6 @@ class CliEngine : public Configs
 {
 public:
     friend class Internal_CliTest;
-    Com carriageReturnCommand{CARRIAGE_RETURN};  ///< Represents a carriage return '<cr>>' used by the CLI engine as a structural placeholder.
 
     static std::string defaultMode; ///< Default operational mode for newly created sessions (typically user EXEC).
 
@@ -157,23 +160,6 @@ public:
      * surrounding router context is torn down.
      */
     ~CliEngine();
-
-    // INITIALIZATION LOGIC
-
-    /**
-     * @brief Performs complete initialization of CLI engine resources.
-     *
-     * Responsibilities:
-     * - Initializes configuration subsystems via `Configs::initConfigs()`
-     * - Loads command-tree JSON (CBOR or text) and writes CBOR cache
-     * - Loads configuration schema JSON
-     * - Calls `initTree()` to finalize variable interpolation
-     * - Calls `recoverState()` to rebuild CLI-driven configuration from history
-     *
-     * Preconditions:
-     * - Files referenced in `StartupFiles` should be accessible.
-     */
-    void initEngine(const StartupFiles& stfs);
 
     // SESSION MANAGEMENT
 
@@ -218,25 +204,7 @@ public:
      *
      * @return The loaded command map.
      */
-    const nlohmann::ordered_json& getCommandTree() const { return commandTree.root(); }
-
-    /**
-     * @brief Returns the command tree object itself, for parser construction.
-     *
-     * Immutable after initialization, so it is safe to hand out by const reference.
-     *
-     * @return Const reference to the loaded command tree.
-     */
-    const CommandTree& getCommandTreeRef() const { return commandTree; }
-
-    /**
-     * @brief Returns the configuration schema.
-     *
-     * This provides the structural validation layer for configuration modes.
-     *
-     * @return Const reference to the configuration schema JSON.
-     */
-    const nlohmann::ordered_json& getConfigSchema() const;
+    tree::CommandTree& getCommandTree() const { return commandTree; }
 
     // UTILITIES
 
@@ -299,7 +267,7 @@ private:
      */
     void recoverState();
 
-    CommandTree commandTree; ///< Loaded command tree describing the full CLI grammar.
+    mutable tree::CommandTree commandTree; ///< Loaded command tree describing the full CLI grammar.
     std::condition_variable stateCondition; ///< Condition variable reserved for future synchronization.
 };
 }

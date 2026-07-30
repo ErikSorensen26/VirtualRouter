@@ -193,8 +193,11 @@ public:
      */
     void runDccCheck();
 
-    /// Whether any configured neighbor has DISABLE_CONNECTION_CHECK enabled.
-    /// Read by the TCP accept path; see Concurrency Model in the class doc.
+    /**
+     * @brief Whether any configured neighbor has DISABLE_CONNECTION_CHECK enabled.
+     *
+     * Read by the TCP accept path; see Concurrency Model in the class doc.
+     */
     bool disableConnectionCheck = false;
 
     // PEER GROUP AND TEMPLATE MANAGEMENT

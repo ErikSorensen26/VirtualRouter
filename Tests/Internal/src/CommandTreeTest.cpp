@@ -2,7 +2,7 @@
 #include <cli/tree/CommandTree.h>
 #include <cli/tree/ModeEntry.h>
 #include <cli/tree/Command.h>
-#include <utils/JsonParser.hpp>
+#include <utils/Json.hpp>
 #include <string>
 
 using namespace cli::tree;
@@ -282,4 +282,109 @@ TEST_F(Internal_CommandTreeTest, TruncatedBufferIsRejected)
     bytes.resize(bytes.size() - 4);
 
     EXPECT_THROW(CommandTree(std::move(bytes)), std::runtime_error);
+}
+
+// RUNTIME PORT NUMBERING
+
+namespace
+{
+constexpr const char* PORT_GRAMMAR = R"({
+    "(config)#": [
+        { "name": "interface", "subcommands": [
+            { "name": "GigabitEthernet", "description": "Gigabit port", "subcommands": [
+                { "name": "<0>", "description": "Interface number" }
+            ]},
+            { "name": "FastEthernet", "subcommands": [
+                { "name": "<0>", "description": "Interface number" }
+            ]}
+        ]}
+    ]
+})";
+
+// The "<N>" child hanging off the named interface type.
+Command portNode(const CommandTree& t, std::string_view ifaceType)
+{
+    Command iface = t.modeEntry(0).commands().at(0);
+    return iface.at(iface.find(ifaceType)).at(0);
+}
+}
+
+TEST_F(Internal_CommandTreeTest, PortPlaceholderExpandsToConfiguredCount)
+{
+    CommandTree t = build(PORT_GRAMMAR);
+    EXPECT_EQ(portNode(t, "GigabitEthernet").name(), "<0>");
+
+    t.applyPortCounts({{"GigabitEthernet", 10}});
+    EXPECT_EQ(portNode(t, "GigabitEthernet").name(), "<0-9>");
+}
+
+TEST_F(Internal_CommandTreeTest, PortPlaceholderIsNumberedPerInterfaceType)
+{
+    CommandTree t = build(PORT_GRAMMAR);
+    t.applyPortCounts({{"GigabitEthernet", 10}, {"FastEthernet", 4}});
+
+    // Same placeholder text in the grammar, different hardware behind each.
+    EXPECT_EQ(portNode(t, "GigabitEthernet").name(), "<0-9>");
+    EXPECT_EQ(portNode(t, "FastEthernet").name(), "<0-3>");
+}
+
+TEST_F(Internal_CommandTreeTest, UnconfiguredInterfaceTypeKeepsItsPlaceholder)
+{
+    CommandTree t = build(PORT_GRAMMAR);
+    t.applyPortCounts({{"GigabitEthernet", 10}});
+
+    // A type the hardware does not have gets no range, so no port number can
+    // match it -- which is the correct answer for a port that does not exist.
+    EXPECT_EQ(portNode(t, "FastEthernet").name(), "<0>");
+}
+
+TEST_F(Internal_CommandTreeTest, PatchedNodeKeepsItsDescription)
+{
+    CommandTree t = build(PORT_GRAMMAR);
+    t.applyPortCounts({{"GigabitEthernet", 10}});
+
+    // The name moves to a separate buffer, and desc() reads at a fixed offset
+    // past it, so the description has to travel with it.
+    EXPECT_EQ(portNode(t, "GigabitEthernet").desc(), "Interface number");
+}
+
+TEST_F(Internal_CommandTreeTest, PatchingLeavesSiblingNamesIntact)
+{
+    CommandTree t = build(PORT_GRAMMAR);
+    t.applyPortCounts({{"GigabitEthernet", 10}, {"FastEthernet", 4}});
+
+    // Names are packed contiguously in the blob, so a widened name written in
+    // place would run into whatever follows it.
+    Command iface = t.modeEntry(0).commands().at(0);
+    EXPECT_EQ(iface.name(), "interface");
+    EXPECT_EQ(iface.at(0).name(), "GigabitEthernet");
+    EXPECT_EQ(iface.at(0).desc(), "Gigabit port");
+    EXPECT_EQ(iface.at(1).name(), "FastEthernet");
+}
+
+TEST_F(Internal_CommandTreeTest, ExistingRangeIsNotAPlaceholder)
+{
+    CommandTree t = build(R"({
+        "(config)#": [
+            { "name": "interface", "subcommands": [
+                { "name": "GigabitEthernet", "subcommands": [
+                    { "name": "<1-99>", "description": "Interface number" }
+                ]}
+            ]}
+        ]
+    })");
+
+    t.applyPortCounts({{"GigabitEthernet", 10}});
+    EXPECT_EQ(portNode(t, "GigabitEthernet").name(), "<1-99>");
+}
+
+TEST_F(Internal_CommandTreeTest, ApplyingPortCountsTwiceIsIdempotent)
+{
+    CommandTree t = build(PORT_GRAMMAR);
+    t.applyPortCounts({{"GigabitEthernet", 10}});
+    t.applyPortCounts({{"GigabitEthernet", 10}});
+
+    // The second pass reads the mapping, not the patch, so the already-expanded
+    // range is not mistaken for a placeholder and expanded again.
+    EXPECT_EQ(portNode(t, "GigabitEthernet").name(), "<0-9>");
 }

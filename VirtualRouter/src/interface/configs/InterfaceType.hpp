@@ -193,8 +193,10 @@ struct InterfaceKey
     /// Returns the raw 32-bit encoded value.
     uint32_t getId() const { return id; }
 
-    /// Decodes the key into its component type and interface number.
-    /// @see decodeInterfaceKey
+    /**
+     * @brief Decodes the key into its component type and interface number.
+     * @see decodeInterfaceKey
+     */
     std::pair<InterfaceType, float> decode() const { return decodeInterfaceKey(id); }
 
 private:
@@ -204,11 +206,13 @@ private:
 
 namespace std
 {
-/// @brief `std::hash` specialisation for @ref interface::InterfaceKey.
-///
-/// Delegates to `std::hash<uint32_t>` on the raw encoded key value, making
-/// `InterfaceKey` directly usable in `std::unordered_map` and
-/// `std::unordered_set` without a custom hash argument.
+/**
+ * @brief `std::hash` specialisation for @ref interface::InterfaceKey.
+ *
+ * Delegates to `std::hash<uint32_t>` on the raw encoded key value, making
+ * `InterfaceKey` directly usable in `std::unordered_map` and
+ * `std::unordered_set` without a custom hash argument.
+ */
 template<>
 struct hash<interface::InterfaceKey>
 {

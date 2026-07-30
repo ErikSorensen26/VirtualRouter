@@ -2,7 +2,7 @@
 #include <iostream>
 #include <chrono>
 #include <ctime>
-#include <json.hpp>
+#include <Json.hpp>
 #include <fstream>
 #include <iomanip> // for std::put_time
 #include <arpa/inet.h> // for inet_pton
@@ -55,25 +55,15 @@ void Logger::initialize(bool start, bool isolateMode)
 
     isolatedMode = isolateMode;
 
-    nlohmann::json configJson;
+    json::JsonNode configJson;
     std::string configPath = CONFIG_FILE;
-    std::fstream configFile(configPath);
-    if (configFile.is_open())
+    try
     {
-        try
-        {
-            configFile >> configJson;
-            configFile.close();
-        }
-        catch(nlohmann::json::parse_error &e)
-        {
-            std::cerr << "JSON Parse Error: " << e.what() << std::endl;
-            return;
-        }
+        configJson = json::load(configPath);
     }
-    else
+    catch(const std::exception &e)
     {
-        std::cerr << "Failed to open file: " << configPath << std::endl;
+        std::cerr << "JSON Parse Error: " << e.what() << std::endl;
         return;
     }
 
@@ -81,8 +71,8 @@ void Logger::initialize(bool start, bool isolateMode)
     {
         if (configJson["Logger"].contains("IP") && configJson["Logger"].contains("Port"))
         {
-            serverIP_ = configJson["Logger"]["IP"].get<std::string>();
-            int tempPort  = configJson["Logger"]["Port"].get<int>();
+            serverIP_ = std::string(configJson["Logger"]["IP"].asString());
+            int tempPort  = static_cast<int>(configJson["Logger"]["Port"].asNumber());
             if (tempPort < 0)
             {
                 std::cerr << "Invalid port number in config file: " << tempPort << std::endl;
@@ -102,7 +92,7 @@ void Logger::initialize(bool start, bool isolateMode)
         // Log Level
         if (configJson["Logger"].contains("LogLevel"))
         {
-            std::string levelStr = configJson["Logger"]["LogLevel"].get<std::string>();
+            std::string levelStr = std::string(configJson["Logger"]["LogLevel"].asString());
             if (levelStr == "INFO")
             {
                 minLogLevel_ = LogLevel::INFO;
@@ -129,7 +119,7 @@ void Logger::initialize(bool start, bool isolateMode)
         // Timestamp Format
         if (configJson["Logger"].contains("TimestampFormat"))
         {
-            std::string formatStr = configJson["Logger"]["TimestampFormat"].get<std::string>();
+            std::string formatStr = std::string(configJson["Logger"]["TimestampFormat"].asString());
             // Validate the format string if necessary
             timestampFormat_ = formatStr;
         }

@@ -11,8 +11,11 @@
 
 namespace routing::ospf
 {
-/// Link State ID for this interface's Grace-LSA: opaque type in the top byte,
-/// opaque instance ID (this interface's index) in the low 24 bits, per RFC 2370 SS2.
+/**
+ * @brief Link State ID for this interface's Grace-LSA: opaque type in the top
+ *        byte, opaque instance ID (this interface's index) in the low 24 bits,
+ *        per RFC 2370 SS2.
+ */
 static uint32_t graceLinkStateId(uint32_t interfaceId)
 {
     return (static_cast<uint32_t>(GRACE_LSA_OPAQUE_TYPE) << 24) | (interfaceId & 0x00FFFFFF);

@@ -94,12 +94,20 @@ bool parseIPv6(std::string_view s, __uint128_t& addr)
             if (p + 1 < end && *(p + 1) == ':')
             {
                 if (compress != -1) return false;
+                if (hexDigits > 0)
+                {
+                    if (idx >= 8) return false;
+                    parts[idx++] = value;
+                    value = 0;
+                    hexDigits = 0;
+                }
                 compress = idx;
                 ++p;
             }
             else
             {
                 if (hexDigits == 0) return false;
+                if (idx >= 8) return false;
                 parts[idx++] = value;
                 value = 0;
                 hexDigits = 0;
@@ -112,7 +120,10 @@ bool parseIPv6(std::string_view s, __uint128_t& addr)
     }
     
     if (hexDigits > 0)
+    {
+        if (idx >= 8) return false;
         parts[idx++] = value;
+    }
 
     if (compress != -1)
     {
@@ -312,7 +323,7 @@ bool matchNumericRange(std::string_view input, std::string_view pattern)
 {
     if (pattern.size() < 5 || pattern.front() != '<' || pattern.back() != '>')
         return false;
-    std::string_view range = pattern.substr(1, pattern.size() - 1);
+    std::string_view range = pattern.substr(1, pattern.size() - 2);
     size_t dashPos = range.find('-');
     if (dashPos == std::string_view::npos) return false;
     uint64_t lo = 0, hi = 0;

@@ -1,33 +1,49 @@
 // CliSession.cpp
 
 #include <algorithm>
-#include <regex>
+#include <cctype>
 #include <sstream>
 
 #include <Global.h>
-#include "configs/registry/global/GlobalRegistry.h"
 
-#include "cli/grammar/Token.hpp"
 #include "CliSession.h"
 #include "CliEngine.h"
-#include "CliUtils.h"
-#include "CommandTree.h"
+#include "cli/execution/parser/Token.hpp"
 #include "cli/modes/Mode.hpp"
+#include "TraversalContext.hpp"
 
 namespace cli
 {
-using cli::utils::getLastWord;
-using cli::utils::lowerCmp;
-using cli::utils::lowerStr;
-using cli::utils::partialLowerCmp;
-using cli::utils::trimLeft;
+static std::string lowerStr(std::string s)
+{
+    std::transform(s.begin(), s.end(), s.begin(),
+        [](unsigned char c){ return static_cast<unsigned char>(std::tolower(c)); });
+    return s;
+}
+
+static std::string trimLeft(const std::string& s)
+{
+    auto it = std::find_if(s.begin(), s.end(),
+        [](unsigned char c){ return !std::isspace(c); });
+    return std::string(it, s.end());
+}
+
+static std::string getLastWord(const std::string& s)
+{
+    std::istringstream ss(s);
+    std::string w, last;
+    while (ss >> w) last = w;
+    return last;
+}
 
 CliSession::CliSession(CliEngine& engine, ConsoleController& controller, bool enableDebug)
-    : Console(controller), engine(engine), execution(*this)
+    : Console(controller),
+      engine(engine),
+      execution(*this),
+      commandTree(engine.getCommandTree()),
+      nav(commandTree, execution)
 {
-    configNode = &engine.getCommandTree();
-    modeHistory.push_back(configNode);
-    changeMode<CliMode::UserExec>(engine.global.getConfigs());
+    nav.changeMode<CliMode::UserExec>(engine.global.getConfigs());
     initConsole();
 
 #ifdef DEBUG
@@ -39,7 +55,7 @@ CliSession::CliSession(CliEngine& engine, ConsoleController& controller, bool en
 
 void CliSession::handlePrompt()
 {
-    setPrompt(engine.global.getHostname() + currentPrompt);
+    setPrompt(engine.global.getHostname() + std::string(nav.getPrompt()));
 
     insert = false;
     insertString.clear();
@@ -63,7 +79,7 @@ bool CliSession::handleInput(std::string test)
 
     if (userCommand == "CRT-Z" && getMode() != CliMode::UserExec)
     {
-        if (!resetAndChangeMode<CliMode::PrivilegedExec>(engine.global.getConfigs()))
+        if (!nav.resetAndChangeMode<CliMode::PrivilegedExec>(engine.global.getConfigs()))
         {
             controller.print("\r\n");
             return false;
@@ -98,7 +114,7 @@ bool CliSession::handleInput(std::string test)
 CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
 {
     ParseResult result;
-    ParseContext ctx(engine.getCommandTreeRef(), engine.carriageReturnCommand, workingDirectory);
+    TraversalContext ctx(engine, nav.getCurrentMode());
 
     std::vector<std::string_view> words = ctx.tokenize(rawInput);
     if (words.empty()) return result;
@@ -106,10 +122,20 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
     // Detect help or tab taken
     const bool hasHelpToken = words.back() == "?" || words.back() == "\t";
 
+    if (hasHelpToken)
+        ctx.inputMode = words.back() == "?" ? TraversalContext::InputMode::HELP
+                                            : TraversalContext::InputMode::TAB;
+
+    if (hasHelpToken)
+    {
+        const size_t markerOff = static_cast<size_t>(words.back().data() - rawInput.data());
+        ctx.nwh = markerOff == 0 || std::isspace(static_cast<unsigned char>(rawInput[markerOff - 1]));
+    }
+
     // Handle "no" and "default"
     auto handlePrefix = [&](const std::string& prefix, bool& flag)
     {
-        if (!lowerCmp(words[0], prefix) || words.size() < 2) return;
+        if (!utils::lowerCmp(words[0], prefix) || words.size() < 2) return;
         const CliMode m = execution.getMode();
         if (m != CliMode::UserExec && m != CliMode::PrivilegedExec)
         {
@@ -120,10 +146,11 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
     handlePrefix("no", result.negate);
     handlePrefix("default", result.defaulted);
 
-    // Handle "do-exec"
-    if (!hasHelpToken && words.size() >= 2 && lowerStr(std::string(words[0])) == "do-exec")
+    if (!hasHelpToken && words.size() >= 2 && utils::partialLowerCmp(words[0], DO_EXEC_KEYWORD))
     {
-        const size_t pos = rawInput.find_first_not_of(" \t", 7);
+        const size_t after = static_cast<size_t>(words[0].data() - rawInput.data())
+                           + words[0].size();
+        const size_t pos = rawInput.find_first_not_of(" \t", after);
         result.status = ParseResult::Status::DO_COMMAND;
         result.doRemainder = (pos != std::string::npos) ? rawInput.substr(pos) : "";
         return result;
@@ -132,7 +159,7 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
     // if (words[0] == "?" || words[0] == "\t") ctx.matchState = MatchState::EXACT;
 
     std::vector<Token> tokens;
-    std::vector<Com> prevCommands;
+    std::vector<tree::Command> prevCommands;
 
     for (size_t idx = 0; idx < words.size(); idx++)
     {
@@ -144,17 +171,20 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
             ctx.extendLineToken(rawInput, word, hasHelpToken);
         }*/
 
-        ctx.matchState = MatchState::NONE;
-        std::vector<Com> available = ctx.availableAt(word, prevCommands);
+        ctx.matchState = TraversalContext::MatchState::NONE;
+        std::vector<tree::Command> available = ctx.availableAt(word, prevCommands);
+
+        const size_t markerPos = static_cast<size_t>(word.data() - rawInput.data());
 
         // Help
         if (word == "?")
         {
-            prevCommands.swap(available);
-            result.nextLine = rawInput.substr(0, rawInput.size() - 1);
-            if (prevCommands.empty())
+            std::vector<tree::Command>& helpList = ctx.nwh ? available : ctx.prefixMatches;
+
+            result.nextLine = rawInput.substr(0, markerPos);
+            if (helpList.empty())
                 controller.print("\r\n% Unrecognized Command");
-            result.helpList = ctx.nwh ? available : prevCommands;
+            result.helpList = helpList;
             result.status = ParseResult::Status::HELP;
             return result;
         }
@@ -162,22 +192,25 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
         // Tab
         if (word == "\t")
         {
-            if (ctx.nwh || prevCommands.size() != 1)
+            const bool oneCandidate = ctx.prefixMatches.size() == 1;
+
+            const bool completable = oneCandidate && !isVolatile(ctx.prefixMatches[0].name());
+
+            if (ctx.nwh || prevCommands.size() != 1 || !completable)
             {
-                result.nextLine = rawInput.substr(0, rawInput.size() - 1);
+                result.nextLine = rawInput.substr(0, markerPos);
                 result.status = ParseResult::Status::TAB;
                 return result;
             }
 
             // Single match autocomplete
-            std::string_view stripped = rawInput;
-            if (!stripped.empty()) stripped.remove_suffix(1);
+            std::string_view stripped = std::string_view(rawInput).substr(0, markerPos);
             long lastSp = static_cast<long>(stripped.rfind(' '));
             std::string nl;
             if (lastSp < 0)
-                nl = std::string(prevCommands[0].name) + " ";
+                nl = std::string(prevCommands[0].name()) + " ";
             else
-                nl = std::string(stripped.substr(0, static_cast<size_t>(lastSp + 1))) + std::string(prevCommands[0].name) + " ";
+                nl = std::string(stripped.substr(0, static_cast<size_t>(lastSp + 1))) + std::string(prevCommands[0].name()) + " ";
             result.nextLine = nl;
             result.status = ParseResult::Status::TAB;
             return result;
@@ -198,40 +231,30 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
         }
 
         // Match available commands
-        std::vector<Com> matches;
+        std::vector<tree::Command> matches;
         for (const auto& cmd : available)
         {
-            if (ctx.isPatternMatching() && cmd.name == ctx.currentPattern)
+            if (ctx.isPatternMatching() && cmd.name() == ctx.currentPattern)
                 matches.push_back(cmd);
-            else if (cmd.name.size() >= word.size() && partialLowerCmp(word, cmd.name))
+            else if (!isVolatile(cmd.name()) &&
+                     cmd.name().size() >= word.size() && utils::partialLowerCmp(word, cmd.name()))
                 matches.push_back(cmd);
         }
 
         prevCommands = matches.empty() ? available : matches;
 
-        // Match quality
-        if (prevCommands.size() == 1 && !matches.empty())
-        {
-            if (ctx.isPatternMatching() && ctx.currentPattern == matches[0].name)
-                ctx.matchState = MatchState::PATTERN;
-            else if (matches[0].isExact())
-                ctx.matchState = MatchState::EXACT;
-            else
-                ctx.matchState = MatchState::PARTIAL;
-        }
-    
         // Append token
         if (matches.size() <= 1)
         {
             if (ctx.isPatternMatching() && !matches.empty())
             {
                 tokens.emplace_back(word, ctx.currentPattern);
-                ctx.previousMatch = matches[0].name;
+                ctx.previousMatch = matches[0].name();
             }
             else if (matches.size() == 1)
             {
-                tokens.emplace_back(matches[0].name);
-                ctx.previousMatch = matches[0].name;
+                tokens.emplace_back(matches[0].name());
+                ctx.previousMatch = matches[0].name();
             }
             else if (matches.empty() && ctx.eoc)
             {
@@ -239,13 +262,12 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
             }
             else if (matches.empty())
             {
-                tokens.clear();
                 tokens.emplace_back(word);
             }
             else
             {
-                tokens.emplace_back(matches[0].name);
-                ctx.previousMatch = matches[0].name;
+                tokens.emplace_back(matches[0].name());
+                ctx.previousMatch = matches[0].name();
             }
         }
         else
@@ -255,12 +277,12 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
 
         if (idx == 0)
         {
-            if (lowerCmp(word, "no") && result.negate) ctx.currentDirectory = ctx.workingDirectory;
-            if (lowerCmp(word, "default") && result.defaulted) ctx.currentDirectory = ctx.workingDirectory;
+            if (utils::lowerCmp(word, "no") && result.negate) ctx.currentDirectory = ctx.currentMode.commands();
+            if (utils::lowerCmp(word, "default") && result.defaulted) ctx.currentDirectory = ctx.currentMode.commands();
         }
     }
 
-    if (ctx.eoc) ctx.commandState = CommandState::COMPLETE;
+    if (ctx.eoc) ctx.commandState = TraversalContext::CommandState::COMPLETE;
 
     // Final validation
     if (ctx.isHelpActive() && ctx.isRunning())
@@ -331,12 +353,11 @@ bool CliSession::executeCommand(std::string& command)
             controller.print("\r\n% Incomplete Command");
             return false;
 
-        case ParseResult::Status::GLOBLA_CMD:
+        case ParseResult::Status::GLOBAL_CMD:
             return true;
 
         case ParseResult::Status::DO_COMMAND:
-            tryDoCommand(parsed.doRemainder);
-            return false;
+            return tryDoCommand(parsed.doRemainder);
 
         case ParseResult::Status::OK_:
             break;
@@ -352,9 +373,9 @@ bool CliSession::executeCommand(std::string& command)
     textLine = std::any_of(parsed.tokens.begin(), parsed.tokens.end(),
         [](const Token& t){ return t.isLine(); });
 
-    // Build exec token list, skipping the leading "no"/"default" prefix
-    std::span<Token> execTokens = (parsed.negate || parsed.defaulted)
-        ? std::span<Token>(parsed.tokens.begin() + 1, parsed.tokens.size() - 1)
+    const bool skipPrefix = (parsed.negate || parsed.defaulted) && parsed.tokens.size() > 1;
+    std::span<Token> execTokens = skipPrefix
+        ? std::span<Token>(parsed.tokens).subspan(1)
         : std::span<Token>(parsed.tokens);
 
     if (execTokens.empty()) return false;
@@ -362,37 +383,14 @@ bool CliSession::executeCommand(std::string& command)
     return executeModeParser(execTokens);
 }
 
-bool CliSession::popMode()
-{
-    if (navTop == 0) return false;
-
-    const NavFrame& frame = navStack[--navTop];
-    execution.restoreFromEntry(frame.executorEntry);
-    currentPrompt    = frame.savedPrompt;
-    workingDirectory = frame.savedWorkingDir;
-    configNode       = frame.savedConfigNode;
-    isModeChanged    = true;
-    return true;
-}
-
 bool CliSession::tryDoCommand(const std::string& remainder)
 {
-    const std::string savedPrompt = currentPrompt;
-    const json*       savedDir    = workingDirectory;
-    const json*       savedCfg    = configNode;
-    const size_t      savedNavTop = navTop;   // temp transition: undo nav push on return
-
-    if (!changeMode<CliMode::PrivilegedExec>(engine.global.getConfigs()))
+    if (!nav.saveAndChangeMode<CliMode::PrivilegedExec>(engine.global.getConfigs()))
         return false;
 
     std::string cmd = remainder;
     const bool ok   = executeCommand(cmd);
-
-    execution.revert();
-    navTop           = savedNavTop;
-    currentPrompt    = savedPrompt;
-    workingDirectory = savedDir;
-    configNode       = savedCfg;
+    nav.restore();
 
     return ok;
 }
@@ -407,60 +405,19 @@ bool CliSession::tryGlobalCommand(const std::string& rawInput)
     if (lowerStr(rawInput) == "exit")
         return false;
 
-    const std::string savedPrompt = currentPrompt;
-    const json*       savedDir    = workingDirectory;
-    const json*       savedCfg    = configNode;
-    const size_t      savedNavTop = navTop;   // may revert if command fails
-
-    changeMode<CliMode::GlobalConfiguration>(engine.global.getConfigs());
-    historyToGlobal();
+    nav.save();
+    nav.saveAndChangeMode<CliMode::GlobalConfiguration>(engine.global.getConfigs());
 
     std::string cmd = rawInput;
     const bool ok   = executeCommand(cmd);
 
     if (getMode() == CliMode::GlobalConfiguration && !ok)
     {
-        execution.revert();
-        navTop           = savedNavTop;
-        currentPrompt    = savedPrompt;
-        workingDirectory = savedDir;
-        configNode       = savedCfg;
+        nav.restore();
         return false;
     }
 
     return ok;
-}
-
-bool CliSession::setCommandDirectory(std::span<const std::string_view>& dir)
-{
-    auto& base = engine.getCommandTree();
-    if (dir.empty() || !base.contains(dir[0]) || !base[dir[0]].is_array())
-        return false;
-
-    bool first = true;
-    for (auto& step : dir)
-    {
-        if (first)
-        {
-            workingDirectory = &base[step];
-            currentPrompt    = step;
-            first            = false;
-        }
-        else
-        {
-            workingDirectory = &(*workingDirectory)[0][step];
-        }
-    }
-    isModeChanged = true;
-
-    if (!modeHistory.empty() && configNode != modeHistory.back())
-        modeHistory.push_back(configNode);
-    else
-    {
-        modeHistory.clear();
-        modeHistory.push_back(&engine.getCommandTree());
-    }
-    return true;
 }
 
 CliMode CliSession::getMode()
@@ -468,20 +425,12 @@ CliMode CliSession::getMode()
     return execution.getMode();
 }
 
-void CliSession::historyToGlobal()
-{
-    prevConfig = configNode;
-    modeHistory.clear();
-    modeHistory.push_back(&engine.getCommandTree());
-    configNode = &engine.getCommandTree();
-}
-
-void CliSession::displayCommands(std::vector<Com>& list)
+void CliSession::displayCommands(std::vector<tree::Command>& list)
 {
     paginationList = list;
     maxNameLength  = 0;
     for (const auto& c : paginationList)
-        if (c.name.size() > maxNameLength) maxNameLength = c.name.size();
+        if (c.name().size() > maxNameLength) maxNameLength = c.name().size();
 }
 
 bool CliSession::handlePagination(char nextch)
@@ -492,14 +441,14 @@ bool CliSession::handlePagination(char nextch)
 
         if (nextch == '\x20')
         {
-            controller.print("\033[2k\033[1G");
+            controller.print("\033[2K\033[1G");
             controller.print("\033[1A");
         }
         else
         {
-            controller.print("\033[2k\033[1G");
+            controller.print("\033[2K\033[1G");
             controller.print(std::string(10, ' '));
-            controller.print("\033[2k\033[1G");
+            controller.print("\033[2K\033[1G");
             paginationList.clear();
             handlePrompt();
             return false;
@@ -513,12 +462,13 @@ bool CliSession::handlePagination(char nextch)
 
     for (size_t i = 0; i < paginationList.size() && i < pageSize; ++i)
     {
-        const Com& cmd = paginationList[i];
-        std::string display = std::string("\r\n  ") + std::string(cmd.name);
-        for (size_t j = 0; j <= (maxNameLength - cmd.name.size() + 5); ++j)
+        const tree::Command& cmd = paginationList[i];
+        const std::string_view name = cmd.name();
+        std::string display = std::string("\r\n  ") + std::string(name);
+        for (size_t j = 0; j <= (maxNameLength - name.size() + 5); ++j)
             display += ' ';
 
-        const std::string_view desc = cmd.description;
+        const std::string_view desc = cmd.desc();
         if (desc.empty() || termWidth == 0 || descCol + desc.size() <= termWidth)
         {
             display += desc;
@@ -559,7 +509,7 @@ bool CliSession::handlePagination(char nextch)
     if (paginationList.size() > pageSize)
     {
         paginationList.erase(paginationList.begin(),
-            paginationList.begin() + static_cast<ptrdiff_t>(engine.paginationCount));
+            paginationList.begin() + static_cast<ptrdiff_t>(pageSize));
         paginationList.shrink_to_fit();
         controller.print("\r\n  --More--");
         controller.flush();

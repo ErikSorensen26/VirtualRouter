@@ -11,17 +11,13 @@
 
 #include <string>
 
-#include <json.hpp>
+#include <Json.hpp>
 #include <hardware/HardwareManager.h>
 #include <FileSystem.hpp>
-
-#include "CommandTree.h"
 
 #define HW_CONFIG_FILE "./configs/Configs.json"
 #define ROUTER_CONFIG_FILE "./dir/configs.json"
 #define MODE_KEY "commands"
-
-using json = nlohmann::ordered_json;
 
 namespace core { class Global; }
 namespace hardware { class HardwareManager; }
@@ -137,7 +133,7 @@ public:
      * @param json Optional JSON root for recovery. If null, uses internal `root`.
      * @return Ordered list of canonical CLI commands.
      */
-    std::vector<std::string> recoverConfigs(nlohmann::ordered_json* json = nullptr);
+    //std::vector<std::string> recoverConfigs(nlohmann::ordered_json* json = nullptr);
 
     /**
      * @brief Emits the current configuration tree for diagnostic purposes.
@@ -147,8 +143,8 @@ public:
     void printConfig();
 
     std::string routerConfigFilename{};     ///< Current persistent configuration file path.
-    json root;                              ///< Root of hierarchical router configuration.
-    json configSchema;                      ///< Active schema controlling command ordering.
+    //json root;                              ///< Root of hierarchical router configuration.
+    //json configSchema;                      ///< Active schema controlling command ordering.
     FileSystem& fileSystem;                ///< Filesystem interface used for persistence.
     hardware::HardwareManager hwManager;    ///< Hardware abstraction subsystem.
 

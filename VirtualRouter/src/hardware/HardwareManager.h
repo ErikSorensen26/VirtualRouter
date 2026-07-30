@@ -8,8 +8,8 @@
 
 #include <vector>
 #include <string>
-#include <json.hpp>
-#include <map>
+#include <optional>
+#include <Json.hpp>
 #include <thread>
 #include <atomic>
 #include <Mac.hpp>
@@ -84,8 +84,9 @@ public:
     /**
      * @brief Destroys the HardwareManager and stops the netlink monitor thread.
      *
-     * Signals @c nlThread to exit and joins it. Any carrier events that arrive
-     * after destruction are silently dropped.
+     * Signals @c nlThread through @c nlWakeFd and joins it before closing the
+     * netlink socket. Any carrier events that arrive after destruction are
+     * silently dropped.
      */
     ~HardwareManager();
 
@@ -205,10 +206,11 @@ private:
     std::unordered_map<interface::InterfaceType, std::vector<uint32_t>> physicalInterfaces; ///< Type → list of kernel ifindices.
     std::unordered_map<uint32_t, HwIfaceInfo> hwInfo;                                       ///< ifindex → hardware metadata.
 
-    nlohmann::ordered_json configJson; ///< Parsed hardware configuration JSON.
+    utils::json::JsonNode configJson; ///< Parsed hardware configuration JSON.
     bool allowDummies;                 ///< Whether dummy interface creation is permitted.
 
     int nlSock = -1;                          ///< Netlink socket file descriptor for RTMGRP_LINK.
+    int nlWakeFd = -1;                        ///< eventfd signalled to break the monitor out of poll().
     std::thread nlThread;                     ///< Thread running @ref netlinkMonitorThread().
     std::atomic<bool> nlThreadRunning{false}; ///< Controls the netlink monitor loop.
 };

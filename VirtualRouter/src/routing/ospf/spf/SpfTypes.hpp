@@ -12,14 +12,22 @@
 
 #include "ospf/database/LsaKey.hpp"
 
-/// When true, ECMP parent sets are sorted before being stored so that the
-/// shortest-path tree is deterministic across recomputes. Disable only if
-/// profiling shows the sort cost is unacceptable on very large topologies.
+/**
+ * @brief When true, ECMP parent sets are sorted before being stored so that the
+ *        shortest-path tree is deterministic across recomputes.
+ *
+ * Disable only if profiling shows the sort cost is unacceptable on very large
+ * topologies.
+ */
 #define OSPF_DETERMINISTIC_PARENT_ORDER true
 
-/// When true, a Network-LSA missing from the LSDB for an apparent transit
-/// network is treated as a hard error and the link is dropped. When false
-/// (the default), the link is silently skipped, matching most implementations.
+/**
+ * @brief When true, a Network-LSA missing from the LSDB for an apparent transit
+ *        network is treated as a hard error and the link is dropped.
+ *
+ * When false (the default), the link is silently skipped, matching most
+ * implementations.
+ */
 #define OSPF_STRICT_MISSING_NETWORK_LSA false
 
 namespace routing::ospf

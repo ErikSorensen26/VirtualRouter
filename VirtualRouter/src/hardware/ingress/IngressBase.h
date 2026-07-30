@@ -210,8 +210,11 @@ protected:
     std::thread       ingressThread;  ///< The dedicated RX thread.
 
 private:
-    /// Small per-thread batch — avoids per-frame returnToDevice() overhead.
-    /// 64 entries is enough to amortise the cost without adding latency.
+    /**
+     * @brief Small per-thread batch — avoids per-frame returnToDevice() overhead.
+     *
+     * 64 entries is enough to amortise the cost without adding latency.
+     */
     static constexpr uint32_t RETURN_BATCH = 64;
     uint32_t returnBuf[RETURN_BATCH]; ///< Pending frame indices awaiting return.
     uint32_t returnCount = 0;         ///< Number of valid entries in returnBuf.

@@ -5,18 +5,21 @@
 
 #include "CliEngine.h"
 #include "CliSession.h"
-#include "interface/configs/InterfaceType.hpp"
 #include "hardware/HardwareManager.h"
 
 namespace cli
 {
 CliEngine::CliEngine(core::Global& global, const StartupFiles& stfs, FileSystem& fs, bool test)
-    : Configs(fs), global(global)
+    : Configs(fs), global(global),
+      commandTree(COMMAND_TREE, COMMAND_TREE_BIN)
 {
+    commandTree.applyPortCounts(tree::CommandTree::readPortCounts(stfs.hwConfigFile));
+
     // Set debug mode based on the input parameter
     global.addRoutingInstance("default");
     if (!test) {
-        initEngine(stfs);
+        initConfigs(stfs);
+        recoverState(); //TODO
     }
 }
 
@@ -27,34 +30,6 @@ CliEngine::~CliEngine()
         delete i;
     }
     sessions.clear();
-}
-
-void CliEngine::initEngine(const StartupFiles& stfs)
-{
-    // Initialize the base console
-    initConfigs(stfs);
-
-    // Initialize default error and carriage return commands
-    carriageReturnCommand.name = CARRIAGE_RETURN;
-
-    // ----- Load Command Tree -----
-    commandTree.load(fileSystem);
-    commandTree.initTree(hwManager);
-
-    /*// ----- Load Config Schema JSON (if used) -----
-    configSchema.clear();
-    std::string schemaStream;
-    if (fileSystem->fileExists(CONFIG_SCHEMA) && fileSystem->readFile(CONFIG_SCHEMA, schemaStream))
-    {
-        configSchema = nlohmann::ordered_json::parse(schemaStream);
-    }
-    else
-    {
-        std::cerr << "Failed to open configuration schema file: " << CONFIG_SCHEMA << std::endl;
-        configSchema = json::object();
-    }*/
-
-    recoverState(); //TODO
 }
 
 CliSession* CliEngine::createSession(bool debug)

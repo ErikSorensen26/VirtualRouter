@@ -3,12 +3,16 @@
 #include <Logger.h>
 #include <Global.h>
 #include <getopt.h>
+#include <iostream>
 #include <CrashHandler.hpp>
 #include <RCU.hpp>
 
 #include "cli/session/CliEngine.h"
 #include "cli/session/CliSession.h"
+
+#ifdef VR_ENABLE_WEB
 #include "web/WebSessionManager.hpp"
+#endif
 
 #include <VirtualRouter.h>
 
@@ -122,8 +126,13 @@ int main(int argc, char* argv[])
 
     if (!opts.unixPath.empty())
     {
+#ifdef VR_ENABLE_WEB
         web::WebSessionManager* webMgr = new web::WebSessionManager(*global, opts.unixPath);
         webMgr->loop(10);
+#else
+        std::cerr << "This build has no web support: rebuild with -DVR_ENABLE_WEB=ON to use --unix-path.\n";
+        return 1;
+#endif
     }
     else if (!opts.noDefault)
     {

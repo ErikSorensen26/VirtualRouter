@@ -164,6 +164,34 @@ struct OwnedListFieldFlag {};
  */
 struct IgnoreCompareFlag {};
 
+/**
+ * @brief Carries the optional live-notification applier for a field type.
+ * @ingroup CONFIG
+ *
+ * Every field template takes an `H` parameter that is either `nullptr` or an
+ * @ref ApplyFn. Deriving from `ApplierHolder<Flag, H>` keeps the two cases in a
+ * single class definition: the primary template contributes nothing but the
+ * flag base, while the `ApplyFn` partial specialization adds the static
+ * `applier` member that @ref RequiresContext detects.
+ *
+ * `applier` must be public. @ref RequiresContext is a namespace-scope concept
+ * with no friendship, and concept satisfaction honours access control, so a
+ * private or protected `applier` makes `requires { T::applier; }` silently
+ * false and disables every applier-firing branch that guards on it.
+ *
+ * @tparam Flag  Field-category flag base (e.g. `AtomicFieldFlag`).
+ * @tparam H     `nullptr` for no notification, or an `ApplyFn` to install.
+ */
+template <typename Flag, auto H>
+struct ApplierHolder : Flag {};
+
+/// @brief `ApplierHolder` specialization that installs the applier callback.
+template <typename Flag, ApplyFn H>
+struct ApplierHolder<Flag, H> : Flag
+{
+    static constexpr ApplyFn applier = H; ///< Callback invoked whenever the effective value changes.
+};
+
 // FIELD CONCEPTS
 
 /**
@@ -391,11 +419,7 @@ private:
  * @see SubRegistry
  */
 template <typename T CONFIG_INDEX_PARAM, auto H = nullptr>
-class AtomicField;
-
-/// @brief `AtomicField` specialization without a live-notification applier.
-template <typename T CONFIG_INDEX_PARAM>
-class AtomicField<T CONFIG_INDEX_ARG(F), nullptr> : public AtomicFieldFlag
+class AtomicField : public ApplierHolder<AtomicFieldFlag, H>
 {
 public:
     using type = T;
@@ -407,28 +431,7 @@ private:
     template <IsAtomicField>
     friend class AtomicFieldAccessor;
 
-    std::atomic<T> value{T{}};                     ///< Stored value; valid only when state == SET.
-    std::atomic<FieldState> state{FieldState::INHERIT}; ///< Whether a local override is active.
-    const AtomicField* mask = nullptr;
-};
-
-/// @brief `AtomicField` specialization with a live-notification applier callback.
-template <typename T CONFIG_INDEX_PARAM, ApplyFn H>
-class AtomicField<T CONFIG_INDEX_ARG(F), H> : public AtomicFieldFlag
-{
-public:
-    using type = T;
-    CONFIG_INDEX_MEMBER
-    void setMask(const AtomicField* p) noexcept { mask = p; }
-private:
-    template <typename, typename, ApplyFn, typename>
-    friend class SubRegistry;
-    template <IsAtomicField>
-    friend class AtomicFieldAccessor;
-
-    static constexpr ApplyFn applier = H; ///< Callback invoked whenever the effective value changes.
-
-    std::atomic<T> value{T{}};                        ///< Stored value; valid only when state == SET.
+    std::atomic<T> value{T{}};                          ///< Stored value; authoritative when state == CANNED.
     std::atomic<FieldState> state{FieldState::INHERIT}; ///< Whether a local override is active.
     const AtomicField* mask = nullptr;
 };
@@ -448,11 +451,7 @@ private:
  * @see AtomicField
  */
 template <typename T CONFIG_INDEX_PARAM, auto H = nullptr>
-class OptionalAtomicField;
-
-/// @brief `OptionalAtomicField` specialization without a live-notification applier.
-template <typename T CONFIG_INDEX_PARAM>
-class OptionalAtomicField<T CONFIG_INDEX_ARG(F), nullptr> : public OptionalAtomicFieldFlag
+class OptionalAtomicField : public ApplierHolder<OptionalAtomicFieldFlag, H>
 {
 public:
     using type = T;
@@ -464,29 +463,8 @@ private:
     template <IsOptionalAtomicField>
     friend class OptionalAtomicFieldAccessor;
 
-    std::atomic<T> value{};                             ///< Stored value; only valid when state == SET.
-    std::atomic<FieldState> state{FieldState::INHERIT};  ///< Whether a local value has been set.
-    const OptionalAtomicField* mask = nullptr;
-};
-
-/// @brief `OptionalAtomicField` specialization with a live-notification applier callback.
-template <typename T CONFIG_INDEX_PARAM, ApplyFn H>
-class OptionalAtomicField<T CONFIG_INDEX_ARG(F), H> : public OptionalAtomicFieldFlag
-{
-public:
-    using type = T;
-    CONFIG_INDEX_MEMBER
-    void setMask(const OptionalAtomicField* p) noexcept { mask = p; }
-private:
-    template <typename, typename, ApplyFn, typename>
-    friend class SubRegistry;
-    template <IsOptionalAtomicField>
-    friend class OptionalAtomicFieldAccessor;
-
-    static constexpr ApplyFn applier = H; ///< Callback invoked whenever the effective value changes.
-
-    std::atomic<T> value{};                            ///< Stored value; only valid when state == SET.
-    std::atomic<FieldState> state{FieldState::INHERIT};  ///< Whether a local value has been set.
+    std::atomic<T> value{};                             ///< Stored value; authoritative when state == CANNED.
+    std::atomic<FieldState> state{FieldState::INHERIT}; ///< Whether a local value has been set.
     const OptionalAtomicField* mask = nullptr;
 };
 
@@ -501,8 +479,9 @@ private:
  * `hasValue()` must be checked before calling `load()`.
  *
  * ## Concurrency Model
- * Same as @ref ListField — `mu` is a reference to the owning `SubRegistry`'s
- * shared mutex.
+ * Same as @ref ListField — the mutex lives in the owning `SubRegistry` and is
+ * handed to the accessor; the field stores only the value pointer and its
+ * inheritance state. The destructor deletes the value without locking.
  *
  * @tparam T  Value type (non-trivially copyable or too large for `std::atomic`).
  * @tparam H  Optional applier callback; see @ref AtomicField for details.
@@ -511,18 +490,16 @@ private:
  * @see OptionalAtomicField
  */
 template <typename T CONFIG_INDEX_PARAM, auto H = nullptr>
-class ValueField;
-
-/// @brief `ValueField` specialization without a live-notification applier.
-template <typename T CONFIG_INDEX_PARAM>
-class ValueField<T CONFIG_INDEX_ARG(F), nullptr> : public ValueFieldFlag
+class ValueField : public ApplierHolder<ValueFieldFlag, H>
 {
 public:
     using type = T;
     CONFIG_INDEX_MEMBER
     void setMask(const ValueField* p) noexcept { mask = p; }
 
-    // value is a raw owning pointer; the last set() has no other owner to free it
+    // value is a raw owning pointer; the last set() has no other owner to free it.
+    // Destruction does not take the registry mutex, so the owning SubRegistry must
+    // outlive every thread that can reach this field through an accessor.
     ~ValueField() { delete value.load(std::memory_order_relaxed); }
 private:
     template <typename, typename, ApplyFn, typename>
@@ -530,31 +507,7 @@ private:
     template <IsValueField>
     friend class ValueFieldAccessor;
 
-    std::atomic<T*> value = nullptr;                                         ///< Guarded value; valid only when state == SET.
-    std::atomic<FieldState> state{FieldState::INHERIT};  ///< Whether a local value has been set.
-    const ValueField* mask = nullptr;
-};
-
-/// @brief `ValueField` specialization with a live-notification applier callback.
-template <typename T CONFIG_INDEX_PARAM, ApplyFn H>
-class ValueField<T CONFIG_INDEX_ARG(F), H> : public ValueFieldFlag
-{
-public:
-    using type = T;
-    CONFIG_INDEX_MEMBER
-    void setMask(const ValueField* p) noexcept { mask = p; }
-
-    // value is a raw owning pointer; the last set() has no other owner to free it
-    ~ValueField() { delete value.load(std::memory_order_relaxed); }
-private:
-    template <typename, typename, ApplyFn, typename>
-    friend class SubRegistry;
-    template <IsValueField>
-    friend class ValueFieldAccessor;
-
-    static constexpr ApplyFn applier = H; ///< Callback invoked whenever the effective value changes.
-
-    std::atomic<T*> value{};                                         ///< Guarded value; valid only when state == SET.
+    std::atomic<T*> value = nullptr;                     ///< Guarded value; authoritative when state == CANNED.
     std::atomic<FieldState> state{FieldState::INHERIT};  ///< Whether a local value has been set.
     const ValueField* mask = nullptr;
 };
@@ -565,17 +518,21 @@ private:
  *
  * Use `ListField<T>` when `T` cannot be held in a `std::atomic` — for
  * example, `std::string`, `std::vector`, or other heap-allocated types.
- * Reads and writes go through `withRead()` / `withWrite()` lambdas that hold
- * `mu` for the duration of the call.
+ * Reads and writes go through the accessor's `withRead()` / `withWrite()`
+ * lambdas, which hold the owning registry's mutex for the duration of the call.
  *
- * Like @ref AtomicField, `ListField` supports parent-inheritance and an
- * optional `ApplyFn` callback.
+ * Unlike @ref AtomicField, `ListField` does not participate in parent
+ * inheritance: it has no `state` or `mask` member, and an unwritten list simply
+ * holds a null pointer. It does support the optional `ApplyFn` callback.
  *
  * ## Concurrency Model
- * - `mu` is a reference to the `SubRegistry::mu` shared by all `ListField`
- *   and `ValueField` members in the same registry struct.
- * - `withRead()` and `withWrite()` both take a `std::lock_guard` on `mu`.
+ * - The mutex lives in the owning `SubRegistry` and is handed to
+ *   @ref ListFieldAccessor on construction; the field itself stores only the
+ *   value pointer. All `ListField` and `ValueField` members of the same
+ *   registry share that one mutex.
+ * - `withRead()` and `withWrite()` both take a `std::lock_guard` on it.
  *   Do not call one from inside the other.
+ * - The destructor deletes the list without locking; see the ownership note below.
  *
  * @tparam T  Value type (heap-allocated or non-atomic-capable).
  * @tparam H  Optional applier callback; see @ref AtomicField for details.
@@ -584,18 +541,16 @@ private:
  * @see SubRegistry
  */
 template <typename T CONFIG_INDEX_PARAM, auto H = nullptr>
-class ListField;
-
-/// @brief `ListField` specialization without a live-notification applier.
-template <typename T CONFIG_INDEX_PARAM>
-class ListField<T CONFIG_INDEX_ARG(F), nullptr> : public ListFieldFlag
+class ListField : public ApplierHolder<ListFieldFlag, H>
 {
 public:
     using type = std::vector<T>;
     using node = T;
     CONFIG_INDEX_MEMBER
 
-    // value is a raw owning pointer; the list withWrite() allocates has no other owner
+    // value is a raw owning pointer; the list withWrite() allocates has no other owner.
+    // Destruction does not take the registry mutex, so the owning SubRegistry must
+    // outlive every thread that can reach this field through an accessor.
     ~ListField() { delete value.load(std::memory_order_relaxed); }
 private:
     template <typename, typename, ApplyFn, typename>
@@ -603,48 +558,26 @@ private:
     template <IsListField>
     friend class ListFieldAccessor;
 
-    std::atomic<std::vector<T>*> value = nullptr; ///< Guarded value; valid when state == SET.
-};
-
-/// @brief `ListField` specialization with a live-notification applier callback.
-template <typename T CONFIG_INDEX_PARAM, ApplyFn H>
-class ListField<T CONFIG_INDEX_ARG(F), H> : public ListFieldFlag
-{
-public:
-    using type = std::vector<T>;
-    using node = T;
-    CONFIG_INDEX_MEMBER
-
-    // value is a raw owning pointer; the list withWrite() allocates has no other owner
-    ~ListField() { delete value.load(std::memory_order_relaxed); }
-private:
-    template <typename, typename, ApplyFn, typename>
-    friend class SubRegistry;
-    template <IsListField>
-    friend class ListFieldAccessor;
-
-    static constexpr ApplyFn applier = H; ///< Callback invoked whenever the effective value changes.
-
-    std::atomic<std::vector<T>*> value = nullptr;                     ///< Guarded value; valid when state == SET.
-    std::atomic<FieldState> state{FieldState::INHERIT};  ///< Whether a local override is active.
+    std::atomic<std::vector<T>*> value = nullptr; ///< Guarded value; null until the first withWrite().
 };
 
 /**
  * @brief Registry field that owns an ordered map of child config scopes.
  * @ingroup CONFIG
  *
- * `OwnedListField` stores a `std::unordered_map<K, Reference<T>>` of
- * child registry entries indexed by key `K` (e.g. AS number, area ID).
- * Like all registry fields it supports parent-inheritance: when in INHERIT
- * state, `get()` returns the parent's map.
+ * `OwnedListField` stores a `std::unordered_map<K, T*>` of child registry
+ * entries indexed by key `K` (e.g. AS number, area ID). Unlike @ref AtomicField
+ * it does not participate in parent inheritance: it has no `state` or `mask`
+ * member, and the map is always the field's own.
  *
- * Mutations go through `getMutable()`, which transitions the field to SET
- * state and returns a writable reference to the local children map.
- * @ref RegistryDatabase::emplaceBack is the recommended entry point.
+ * Mutations go through @ref OwnedListFieldAccessor — `emplaceBack()` inserts or
+ * returns an existing child, and `erase()` / `clear()` remove them.
  *
  * ## Lifecycle & Ownership
- * Each `Reference<T>` in `children` increments the corresponding bucket
- * slot's refcount. Erasing or clearing the map releases those references.
+ * The field owns its children outright. `delFn` is installed on the first
+ * `emplaceBack()` and is what frees an entry, so it is called on `erase()`,
+ * `clear()`, and for every remaining child in the destructor. Copying is
+ * deleted to keep that ownership single.
  *
  * ## Callback variant
  * When the optional `H` template parameter is set to an `ApplyFn`, the field
@@ -661,11 +594,7 @@ private:
  * @see Reference
  */
 template <typename T, typename K CONFIG_INDEX_PARAM, auto H = nullptr>
-class OwnedListField;
-
-/// @brief `OwnedListField` specialization without a live-notification applier.
-template <typename T, typename K CONFIG_INDEX_PARAM>
-class OwnedListField<T, K CONFIG_INDEX_ARG(F), nullptr> : public OwnedListFieldFlag
+class OwnedListField : public ApplierHolder<OwnedListFieldFlag, H>
 {
 public:
     using type = T; ///< Child entry type.
@@ -684,34 +613,6 @@ private:
     friend class SubRegistry;
     template <IsOwnedListField>
     friend class OwnedListFieldAccessor;
-
-    std::unordered_map<key, type*> children{}; ///< Pointer-owning child entries; ownership managed via delFn.
-    void(*delFn)(type*) = nullptr; ///< Deleter set on first emplaceBack; called in destructor and erase.
-};
-
-/// @brief `OwnedListField` specialization with a live-notification applier callback.
-template <typename T, typename K CONFIG_INDEX_PARAM, ApplyFn H>
-class OwnedListField<T, K CONFIG_INDEX_ARG(F), H> : public OwnedListFieldFlag
-{
-public:
-    using type = T; ///< Child entry type.
-    using key = K;  ///< Key type used to look up children.
-    CONFIG_INDEX_MEMBER
-
-    ~OwnedListField() {
-        for (auto& [k, v] : children)
-            if (delFn) delFn(v);
-    }
-    OwnedListField(const OwnedListField&) = delete;
-    OwnedListField& operator=(const OwnedListField&) = delete;
-    OwnedListField() = default;
-private:
-    template <typename, typename, ApplyFn, typename>
-    friend class SubRegistry;
-    template <IsOwnedListField>
-    friend class OwnedListFieldAccessor;
-
-    static constexpr ApplyFn applier = H; ///< Callback invoked after every structural change.
 
     std::unordered_map<key, type*> children{}; ///< Pointer-owning child entries; ownership managed via delFn.
     void(*delFn)(type*) = nullptr; ///< Deleter set on first emplaceBack; called in destructor and erase.
@@ -744,7 +645,7 @@ struct IgnoreCompare : public IgnoreCompareFlag
 
     // Implicit conversion to T
     operator T&() { return value; }
-    operator const T&() { return value; }
+    operator const T&() const { return value; }
 
     // Assignment
     IgnoreCompare& operator=(const T& v) { value = v; return *this; }

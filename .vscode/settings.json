@@ -1,4 +1,9 @@
 {
+    "cmake.debugConfig": {
+        "type": "lldb",
+        "request": "launch",
+        "stopAtEntry": false
+    },
     "cmake.cmakePath": "cmake",
     "files.associations": {
         "iostream": "cpp",
@@ -98,7 +103,7 @@
         "__debug": "cpp",
         "locale": "cpp"
     },
-    "cmake.sourceDirectory": "/home/erik/VirtualRouter",
+    "cmake.sourceDirectory": "/home/erik/VirtualRouterTest",
     "cmake.generator": "Unix Makefiles",
     "cmake.buildArgs": ["-j", "10"]
 }

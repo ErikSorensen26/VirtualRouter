@@ -43,6 +43,24 @@ bool PrivilegedExec_ShowHistory_Handler(PRIVILEGED_EXEC_PARAMS)
     return true;
 }
 
+bool PrivilegedExec_ShowRunningConfig_Handler(PRIVILEGED_EXEC_PARAMS)
+{
+    UNUSED(segs);
+    return true;
+}
+
+bool PrivilegedExec_ShowInterface_Handler(PRIVILEGED_EXEC_PARAMS)
+{
+    UNUSED(segs);
+    return true;
+}
+
+bool PrivilegedExec_Ping_Handler(PRIVILEGED_EXEC_PARAMS)
+{
+    UNUSED(segs);
+    return true;
+}
+
 bool PrivilegedExec_ShowClock_Handler(PRIVILEGED_EXEC_PARAMS)
 {
     UNUSED(segs);
@@ -75,8 +93,11 @@ bool PrivilegedExec_TerminalWidth_Handler(PRIVILEGED_EXEC_PARAMS)
 #define PRIVILEGED_EXEC_LIST(X, Y) \
     X(Y, (COMMAND, ConfigureTerm, "configure"_tok, "terminal"_tok)) \
     X(Y, (COMMAND, Exit, "exit"_tok)) \
-    X(Y, (COMMAND, ShowHistory, "show"_tok)) \
+    X(Y, (COMMAND, ShowHistory, "show"_tok, "history"_tok)) \
     X(Y, (COMMAND, ShowClock, "show"_tok, "clock"_tok)) \
+    X(Y, (COMMAND, ShowRunningConfig, "show"_tok, "running-config"_tok)) \
+    X(Y, (COMMAND, ShowInterface, "show"_tok, "interfaces"_tok)) \
+    X(Y, (COMMAND, Ping, "ping"_tok, P_ARG)) \
     X(Y, (COMMAND, WriteMem, "write"_tok, "memory"_tok)) \
     X(Y, (COMMAND, TerminalWidth, "terminal"_tok, "width"_tok))
 
