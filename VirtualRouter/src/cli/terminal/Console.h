@@ -17,6 +17,7 @@
 #include <vector>
 #include <Mock.hpp>
 #include "ConsoleController.hpp"
+#include "FrameBuffer.hpp"
 
 class ConsoleTest;
 
@@ -44,6 +45,12 @@ public:
      * @param term Terminal deciding whether it's simulated or not
      */
     explicit Console(ConsoleController& term);
+
+    /**
+     * @brief Destructor. Restores the terminal's original (cooked) mode if
+     * initConsole() put it into raw mode.
+     */
+    ~Console();
 
     /**
      * @brief Initializes the console settings.
@@ -137,17 +144,6 @@ public:
 protected:
 
     /**
-     * @brief Rewrites the tail of the input line starting from a specific position.
-     *
-     * Updates the display by rewriting characters from the start position to the end,
-     * handling line wrapping as necessary.
-     *
-     * @param input The current input string.
-     * @param startPos The starting position of the rewrite
-     */
-    void rewriteTail(const std::string& input, size_t startPos, bool backspace = false);
-
-    /**
      * @brief Handles special key inputs such as Enter, Tab, Backspace, etc.
      *
      * Processes special keys and updates the input string accorsingly.
@@ -200,6 +196,22 @@ protected:
     bool kbhit();
 
     /**
+     * @brief Reads a single byte straight from the terminal file descriptor.
+     *
+     * Bypasses stdio deliberately. The terminal runs in raw mode with
+     * VMIN=0/VTIME=0, so a read with nothing pending returns zero bytes, which
+     * stdio reports as end of file and then latches -- after that every
+     * getchar() returns EOF without ever reading again and the console stops
+     * responding to input entirely.
+     *
+     * @param wait When true, waits briefly (via kbhit()) for a byte to arrive
+     *             before reading. Use this for the continuation bytes of an
+     *             escape sequence, which may still be in flight.
+     * @return The byte read as an unsigned value, or -1 if none was available.
+     */
+    int readByte(bool wait = true);
+
+    /**
      * @brief Moves the cursor to the start of the current line.
      *
      * If the cursor is not already at the start, it moves the cursor left to the beginning.
@@ -223,24 +235,6 @@ protected:
      * @param steps the number of positions to move the cursor right.
      */
     void moveCursorRight(size_t steps, std::string* input = nullptr);
-
-    /**
-     * @brief Moves the cursor up by a specified number of steps.
-     *
-     * Sends ANSI escape codes to move the cursor right on the terminal.
-     *
-     * @param steps the number of positions to move the cursor up.
-     */
-    void moveCursorUp(size_t steps);
-
-    /**
-     * @brief Moves the cursor down by a specified number of steps.
-     *
-     * Sends ANSI escape codes to move the cursor right on the terminal.
-     *
-     * @param steps the number of positions to move the cursor down.
-     */
-    void moveCursorDown(size_t steps);
 
     /**
      * @brief Moves the cursor to the start of the current line.
@@ -311,6 +305,16 @@ protected:
      */
     void navigateHistory(std::string& input, bool moveUp);
 
+    /**
+     * @brief Renders the given input text into the frame buffer and commits
+     * it - this is the ONE place that talks to the terminal for the input
+     * region. Every editing/navigation path funnels through here exactly
+     * once per keystroke.
+     *
+     * @param input The full, current input string to render.
+     */
+    void renderInput(const std::string& input);
+
     CursorPosition startPos;       ///< Starting cursor position.
     size_t cursorPos = 0;          ///< Logical cursor position within inputBuffer.
     size_t terminalWidth = 80;     ///< Current terminal width.
@@ -335,6 +339,10 @@ protected:
 
     // Options for autocompletion
     std::vector<std::string> autocompleteOptions {"end", "exit"}; ///< List of options for autocompletion
+
+    FrameBuffer frameBuffer;    ///< Owns rendering for the prompt+input region.
+    termios savedTermios{};     ///< Terminal mode as it was before initConsole() ran.
+    bool rawModeActive = false; ///< Whether savedTermios needs restoring on destruction.
 };
 }
 

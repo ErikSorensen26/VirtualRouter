@@ -35,8 +35,6 @@ protected:
     bool isCursorAtLineEnd() {return console->isCursorAtLineEnd();}
     void moveCursorLeft(size_t siz) {console->moveCursorLeft(siz);}
     void moveCursorRight(size_t siz, std::string* input = nullptr) {console->moveCursorRight(siz, input);}
-    void moveCursorUp(size_t siz) {console->moveCursorUp(siz);}
-    void moveCursorDown(size_t siz) {console->moveCursorDown(siz);}
     void moveCursorToStart() {console->moveCursorToStart();}
     void moveCursorToEnd(std::string& input) {console->moveCursorToEnd(input);}
     void skipWordLeft(std::string& input) {console->skipWordLeft(input);}
@@ -44,7 +42,16 @@ protected:
     void toggleInsertMode(std::string& input) {handleEscapeSequence(input, "[2~");}
     bool getInsertMode() {return console->insert;}
     std::string getInsertString() {return console->insertString;}
-    void rewriteTail(std::string& input, size_t& startPosition) {console->rewriteTail(input, startPosition);}
+    void renderInput(const std::string& input) {console->renderInput(input);}
+    void setInitialLineLength(size_t len) {console->initialLineLength = len;}
+
+    void seedDisplay(const std::string& text, size_t cursor)
+    {
+        setCursorPos(text.size());
+        console->renderInput(text);
+        setCursorPos(cursor);
+        mockConsole->resetCapturedOutput();
+    }
     void handlePrintableChar(char hInput, std::string& input) {console->handlePrintableChar(hInput, input);}
     std::string handleSpecialKey(char hInput, std::string& input)
     {
@@ -144,16 +151,11 @@ TEST_F(Internal_ConsoleTest, IsCursorAtLineEnd_AfterMultipleMovements_ShouldRetu
     setCursorPos(40);
     EXPECT_FALSE(isCursorAtLineEnd());
 
-    EXPECT_CALL(*mockConsole, moveCursorRight(1)).Times(39);
-    EXPECT_CALL(*mockConsole, moveCursorDown(1)).Times(1);
-    EXPECT_CALL(*mockConsole, moveCursorToStart()).Times(1);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(0);
 
     moveCursorRight(40, nullptr);
     EXPECT_EQ(getCursorPos(), 80);
     EXPECT_TRUE(isCursorAtLineEnd());
-
-    EXPECT_CALL(*mockConsole, moveCursorRight(80)).Times(1);
-    EXPECT_CALL(*mockConsole, moveCursorUp(1)).Times(1);
 
     moveCursorLeft(1);
     EXPECT_EQ(getCursorPos(), 79);
@@ -220,10 +222,7 @@ TEST_F(Internal_ConsoleTest, MoveCursorLeft_AcrossLineBoundaries_ShouldHandleLin
     setCursorPos(81); // One character into the second line
     size_t moveCount = 2;
 
-    // Expect the counsol's moveCursorLeft to be called once normally and once across lines
-    EXPECT_CALL(*mockConsole, moveCursorLeft(1)).Times(1);
-    EXPECT_CALL(*mockConsole, moveCursorUp(1)).Times(1);
-    EXPECT_CALL(*mockConsole, moveCursorRight(80)).Times(1);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(0);
 
     moveCursorLeft(moveCount);
 
@@ -267,68 +266,75 @@ TEST_F(Internal_ConsoleTest, MoveCursorRight_AcrossLineBoundaries_ShouldHandleLi
     size_t moveCount = 2;
     std::string input = std::string(85, ' ');
 
-    // Expect the consol's moveCursorRight to be called twice, moving the cursor to the next line
-    EXPECT_CALL(*mockConsole, moveCursorDown(1)).Times(1);
-    EXPECT_CALL(*mockConsole, moveCursorToStart()).Times(1);
-    EXPECT_CALL(*mockConsole, moveCursorRight(1)).Times(1);
+    // Cursor movement is now purely logical: the terminal is not touched here,
+    // FrameBuffer repositions on the next render.
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(0);
 
     moveCursorRight(moveCount, &input);
+
+    EXPECT_EQ(getCursorPos(), 81);
 }
 
-// Test moveCursorUp with valid steps
-TEST_F(Internal_ConsoleTest, MoveCursorUp_WithValidSteps_ShouldMoveCursorUpProperly)
+// Test that a render spanning multiple rows moves the cursor down
+TEST_F(Internal_ConsoleTest, RenderInput_SpanningRows_ShouldEmitDownwardCursorMove)
 {
-    size_t moveCount = 2;
+    // Width 80 with an 8-column prompt: 75 chars of input reach the second row.
+    setInitialLineLength(8);
+    std::string input(75, 'x');
+    setCursorPos(input.size());
 
-    // Expect the consol's moveCursorUp method to be called moveCount times
-    EXPECT_CALL(*mockConsole, moveCursorUp(2)).Times(1);
+    renderInput(input);
 
-    moveCursorUp(moveCount);
-
-    // No change to cursorPos as moveCursorUp does not affect it directly
-    EXPECT_EQ(getCursorPos(), 0);
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "\033[9G" + input);
 }
 
-// Test moveCursorUp with zero steps
-TEST_F(Internal_ConsoleTest, MoveCursorUp_ZeroSteps_ShouldNotMoveCursor)
+// Test that re-rendering identical content emits nothing
+TEST_F(Internal_ConsoleTest, RenderInput_UnchangedContent_ShouldEmitNothing)
 {
-    size_t moveCount = 0;
+    setInitialLineLength(8);
+    std::string input = "hello";
+    setCursorPos(input.size());
 
-    // Expect the console's moveCursorUp not to be called
-    EXPECT_CALL(*mockConsole, moveCursorUp(::testing::_)).Times(0);
+    renderInput(input);
+    mockConsole->resetCapturedOutput();
 
-    moveCursorUp(moveCount);
+    // The frame diff suppresses output when nothing changed.
+    renderInput(input);
 
-    // Verify internal state remains unchanged
-    EXPECT_EQ(getCursorPos(), 0);
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "");
 }
 
-// Test moveCursorDown with valid steps
-TEST_F(Internal_ConsoleTest, MoveCursorDown_WithValidSteps_ShouldMoveCursorDownProperly)
+// Test that shortening the input erases the characters left behind
+TEST_F(Internal_ConsoleTest, RenderInput_ShorterContent_ShouldEraseTrailingCharacters)
 {
-    size_t moveCount = 3;
+    setInitialLineLength(8);
+    std::string first = "abc";
+    setCursorPos(first.size());
+    renderInput(first);
+    mockConsole->resetCapturedOutput();
 
-    // Expect the consol's moveCursorDown method to be called moveCount times
-    EXPECT_CALL(*mockConsole, moveCursorDown(3)).Times(1);
+    std::string second = "zz";
+    setCursorPos(second.size());
+    renderInput(second);
 
-    moveCursorDown(moveCount);
-
-    // Nochange to cursorPos as moveCursorDown does not effect it directly
-    EXPECT_EQ(getCursorPos(), 0);
+    // Column 9 (1-based) is the first input cell: rewrite "zz", blank the orphaned
+    // 'c', then park the cursor back at column 11.
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "\033[9Gzz \033[11G");
 }
 
-// Test moveCursorDown with zero steps
-TEST_F(Internal_ConsoleTest, MoveCursorDown_ZeroSteps_ShouldNotMoveCursor)
+// Test that editing mid-string only rewrites from the edit point
+TEST_F(Internal_ConsoleTest, RenderInput_MidStringEdit_ShouldRewriteOnlyTheChangedTail)
 {
-    size_t moveCount = 0;
+    setInitialLineLength(8);
+    setCursorPos(3);
+    renderInput("helo");
+    mockConsole->resetCapturedOutput();
 
-    // Expect the console's moveCursorDown not to be called
-    EXPECT_CALL(*mockConsole, moveCursorDown(::testing::_)).Times(0);
+    setCursorPos(4);
+    renderInput("hello");
 
-    moveCursorDown(moveCount);
-
-    // Verify internal state remains unchanged
-    EXPECT_EQ(getCursorPos(), 0);
+    // "hel" is unchanged, so only "lo" is redrawn before the cursor is restored.
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "lo\033[13G");
 }
 
 // Test moveCursorToStart from middle
@@ -489,60 +495,47 @@ TEST_F(Internal_ConsoleTest, GetTerminalWidth_ShouldReturnTerminalWidth)
 }
 
 #pragma endregion
-#pragma region RewriteTail
+#pragma region RenderInput
 
-// Test rewriteTail from a specific position
-TEST_F(Internal_ConsoleTest, RewriteTail_FromSpecificPosition_ShouldRewriteInputCorrectly)
+// Test that appending only emits the newly added characters
+TEST_F(Internal_ConsoleTest, RenderInput_AppendedTail_ShouldEmitOnlyTheNewCharacters)
 {
-    std::string input = "Hello World";
-    size_t startPosition = 6; // After "Hello "
+    setInitialLineLength(0);
+    setCursorPos(6);
+    renderInput("Hello ");
+    mockConsole->resetCapturedOutput();
 
-    // Expected behavior:
-    // - Save cursor position
-    // - Print characters from startPosition
-    // - Clear leftover space
-    // - Restore cursor position
-
-    // Setup expectations
-     EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-     EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(5);
-     EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
-
-    rewriteTail(input, startPosition);
+    setCursorPos(11);
+    renderInput("Hello World");
 
     EXPECT_EQ(mockConsole->getCapturedOutput(), "World");
 }
 
-// Test rewriteTail with startPosition beyond input size
-TEST_F(Internal_ConsoleTest, RewriteTail_StartPositionBeyondInput_ShouldDoNothing)
+// Test that rendering the same text twice is a no-op
+TEST_F(Internal_ConsoleTest, RenderInput_RepeatedIdenticalRender_ShouldDoNothing)
 {
-    std::string input = "Hello";
-    size_t startPosition = 10; // Beyond input size
+    setInitialLineLength(0);
+    setCursorPos(5);
+    renderInput("Hello");
+    mockConsole->resetCapturedOutput();
 
-    // Expect no printing
-     EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(0);
-     EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(0);
-     EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(0);
-
-    rewriteTail(input, startPosition);
+    renderInput("Hello");
 
     EXPECT_EQ(mockConsole->getCapturedOutput(), "");
 }
 
-// Test rewriteTail with partially overlapping input
-TEST_F(Internal_ConsoleTest, RewriteTail_PartiallyOverlappingInput_ShouldRewriteCorrectly)
+// Test that a changed interior character redraws from the change onward
+TEST_F(Internal_ConsoleTest, RenderInput_PartiallyOverlappingInput_ShouldRewriteFromFirstDifference)
 {
-    std::string input = "Hello World";
-    size_t startPosition = 5; // After "Hello"
+    setInitialLineLength(0);
+    setCursorPos(11);
+    renderInput("Hello World");
+    mockConsole->resetCapturedOutput();
 
-    // Expect saveCursorPosition and restoreCursorPosition to be called
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(6); // Assuming space and "World"
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
+    renderInput("Hellx World");
 
-    rewriteTail(input, startPosition);
-
-    EXPECT_EQ(mockConsole->getCapturedOutput(), " World");
+    // Only column 5 (1-based) differs; the cursor then returns to column 12.
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "\033[5Gx\033[12G");
 }
 
 #pragma endregion
@@ -623,12 +616,11 @@ TEST_F(Internal_ConsoleTest, HandlePrintableChar_ShouldInsertCharacterAtEndOfInp
     char newChar = 'd';
     std::string ch = std::string(1, newChar);
 
+    seedDisplay(input, 10);
 
     EXPECT_CALL(*mockConsole, print("d", ::testing::_)).Times(1);
     EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
     EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
-
-    setCursorPos(10);
 
     handlePrintableChar(newChar, input);
 
@@ -643,16 +635,13 @@ TEST_F(Internal_ConsoleTest, HandlePrintableChar_ShouldInsertCharacter)
     std::string input = "Hell World";
     char newChar = 'o';
 
-    EXPECT_CALL(*mockConsole, print("o", ::testing::_)).Times(2);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    EXPECT_CALL(*mockConsole, print(::testing::Ne("o"), ::testing::_)).Times(5);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
-
-    setCursorPos(4); // Position between 'Hell' and ' World'
+    seedDisplay(input, 4); // Position between 'Hell' and ' World'
 
     handlePrintableChar(newChar, input);
 
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "o World");
+    // One render seeks to the insertion point, rewrites the tail from there,
+    // then puts the cursor back just after the inserted character.
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "\033[5Go World\033[6G");
     EXPECT_EQ(input, "Hello World");
     EXPECT_EQ(getCursorPos(), 5);
 }
@@ -663,24 +652,17 @@ TEST_F(Internal_ConsoleTest, HandlePrintableChar_WithMultipleCharacters_ShouldIn
     std::string input = "Hell World";
     char newChar1 = 'o';
     char newChar2 = '!';
-    setCursorPos(4); // Between 'Hell' and ' World'
+    seedDisplay(input, 4); // Between 'Hell' and ' World'
 
-    // Expect the console's print method to be called with 'o' and '!'
-    EXPECT_CALL(*mockConsole, print("o", ::testing::_)).Times(3);
-    EXPECT_CALL(*mockConsole, print("!", ::testing::_)).Times(1);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(2);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(2);
-    EXPECT_CALL(*mockConsole, print(::testing::Not(::testing::AnyOf(
-        ::testing::Eq("o"),
-        ::testing::Eq("!")
-    )), ::testing::_)).Times(10);
+    // One render per inserted character.
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(2);
 
     handlePrintableChar(newChar1, input);
     handlePrintableChar(newChar2, input);
 
     EXPECT_EQ(input, "Hello! World");
     EXPECT_EQ(getCursorPos(), 6);
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "o World! World");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "\033[5Go World\033[6G! World\033[7G");
 }
 
 // Test handlePrintableChar with non-printable characters
@@ -705,18 +687,15 @@ TEST_F(Internal_ConsoleTest, HandlePrintableChar_AfterMoveLeft_ShouldInsertAtNew
 {
     std::string input = "Helo World";
     char newChar = 'l';
-    setCursorPos(3); // Between 'e' and 'l'
+    seedDisplay(input, 3); // Between 'e' and 'l'
 
-    // Expect the console's print method to be called with 'l'
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(8);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(1);
 
     handlePrintableChar(newChar, input);
 
     EXPECT_EQ(input, "Hello World");
     EXPECT_EQ(getCursorPos(), 4);
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "lo World");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "\033[4Glo World\033[5G");
 }
 
 // Test handlePrintableChar with empty input
@@ -745,13 +724,14 @@ TEST_F(Internal_ConsoleTest, HandlePrintableChar_MultipleInsertions_ExceedTermin
     setCursorPos(0);
     std::string expectedOutput = "";
 
+    // Appending at the end of the line, so each render emits exactly the one
+    // new character and nothing else.
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(81);
+
     // Insert 80 characters to fill the first line
     for (int i = 0; i < 80; ++i)
     {
         char newChar = 'a';
-        EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-        EXPECT_CALL(*mockConsole, print("a", ::testing::_)).Times(1);
-        EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
         expectedOutput += "a";
         handlePrintableChar(newChar, input);
     }
@@ -762,9 +742,6 @@ TEST_F(Internal_ConsoleTest, HandlePrintableChar_MultipleInsertions_ExceedTermin
 
     // Insert one more character to wrap to the next line
     char newChar = 'b';
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    EXPECT_CALL(*mockConsole, print("b", ::testing::_)).Times(1);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
     expectedOutput += "b";
     handlePrintableChar(newChar, input);
 
@@ -780,19 +757,15 @@ TEST_F(Internal_ConsoleTest, HandlePrintableChar_WithWrapping_ShouldRewriteTailC
     std::string input = std::string(80, 'A');
     size_t startPosition = 70;
 
-    // Set cursor position
-    setCursorPos(startPosition);
+    seedDisplay(input, startPosition);
 
-    // Expect saveCursorPosition and restoreCursorPosition to be called
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    EXPECT_CALL(*mockConsole, print("A", ::testing::_)).Times(10); // Insert 'A'
-    EXPECT_CALL(*mockConsole, print("B", ::testing::_)).Times(1); // Insert 'B'
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(1);
 
     handlePrintableChar('B', input);
     EXPECT_EQ(input, std::string(70, 'A') + "B" + std::string(10, 'A'));
     EXPECT_EQ(getCursorPos(), 71);
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "B" + std::string(10, 'A'));
+    EXPECT_EQ(mockConsole->getCapturedOutput(),
+              "\033[1A\033[71GB\033[1B\033[1GA\033[1A\033[72G");
 }
 
 // Test handlePrintableChar after deleting all characters
@@ -824,18 +797,15 @@ TEST_F(Internal_ConsoleTest, HandlePrintableChar_UppercaseAndLowercase_ShouldHan
     char newChar3 = 'R';
     char newChar4 = 'l';
     char newChar5 = 'd';
-    setCursorPos(5);
+    seedDisplay(input, 5);
 
-    // Expect the console's print method to be called with each character
+    // Appending at the end, so each render emits just its one new character.
     EXPECT_CALL(*mockConsole, print(" ", ::testing::_)).Times(0);
     EXPECT_CALL(*mockConsole, print("W", ::testing::_)).Times(1);
     EXPECT_CALL(*mockConsole, print("o", ::testing::_)).Times(1);
     EXPECT_CALL(*mockConsole, print("R", ::testing::_)).Times(1);
     EXPECT_CALL(*mockConsole, print("l", ::testing::_)).Times(1);
     EXPECT_CALL(*mockConsole, print("d", ::testing::_)).Times(1);
-
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(5);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(5);
 
     handlePrintableChar(newChar1, input);
     handlePrintableChar(newChar2, input);
@@ -857,13 +827,14 @@ TEST_F(Internal_ConsoleTest, HandlePrintableChar_CursorWrappingMultipleLines_Sho
     size_t terminalWidth = 40; // Mock terminal width to 40 for testing
     mockConsole->setTerminalWidth(terminalWidth);
 
+    // Appending at the end of the line, so each render emits exactly the one
+    // new character and nothing else.
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(80);
+
     // Insert 80 characters to wrap twice
     for (size_t i = 0; i < 80; ++i)
     {
         char newChar = 'a';
-        EXPECT_CALL(*mockConsole, print("a", ::testing::_)).Times(1);
-        EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-        EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
         expectedOutput += "a";
         handlePrintableChar(newChar, input);
     }
@@ -897,24 +868,19 @@ TEST_F(Internal_ConsoleTest, HandlePrintableChar_VariousCursorPositions_ShouldHa
     char newChar = 'X';
 
     // Insert at position 0
-    setCursorPos(0);
-    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(6);
-    EXPECT_CALL(*mockConsole, saveCursorPosition());
-    EXPECT_CALL(*mockConsole, restoreCursorPosition());
+    seedDisplay(input, 0);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(2);
     handlePrintableChar(newChar, input);
     EXPECT_EQ(input, "XABCDE");
     EXPECT_EQ(getCursorPos(), 1);
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "XABCDE");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "\033[1GXABCDE\033[2G");
 
     // Insert at position 3
     setCursorPos(3);
-    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(4);
-    EXPECT_CALL(*mockConsole, saveCursorPosition());
-    EXPECT_CALL(*mockConsole, restoreCursorPosition());
     handlePrintableChar(newChar, input);
     EXPECT_EQ(input, "XABXCDE");
     EXPECT_EQ(getCursorPos(), 4);
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "XABCDEXCDE");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "\033[1GXABCDE\033[2GABXCDE\033[5G");
 }
 
 #pragma endregion
@@ -925,20 +891,17 @@ TEST_F(Internal_ConsoleTest, HandlePrintableChar_OverwriteMode_CursorAtStart_Sho
 {
     std::string input = "Hello";
     char newChar = 'Y';
-    setCursorPos(0);
+    seedDisplay(input, 0);
     toggleInsertMode(input); // Overwrite mode
 
-    // Expect the console's print method to be called with 'Y'
-    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(5);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(1);
 
     handlePrintableChar(newChar, input);
 
     EXPECT_EQ(input, "Yello");
     EXPECT_EQ(getCursorPos(), 1);
     EXPECT_EQ(getInsertString(), "Hello");
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "Yello");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "\033[1GY");
 }
 
 // Test handlePrintableChar with mixed insert and overwrite modes
@@ -946,29 +909,23 @@ TEST_F(Internal_ConsoleTest, HandlePrintableChar_MixedModes_ShouldHandleCorrectl
 {
     std::string input = "Hell World";
     char newChar1 = 'o';
-    setCursorPos(4); // Between 'Hell' and ' World'
+    seedDisplay(input, 4); // Between 'Hell' and ' World'
 
-    // Expect the console's print method to be called with 'o'
-    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(7);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(2);
     handlePrintableChar(newChar1, input);
     EXPECT_EQ(input, "Hello World");
     EXPECT_EQ(getCursorPos(), 5);
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "o World");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "\033[5Go World\033[6G");
 
     // Switch to overwrite mode
     toggleInsertMode(input);
     setCursorPos(6); // Before 'W'
     char newChar2 = 'A';
-    
-    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(5);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
+
     handlePrintableChar(newChar2, input);
     EXPECT_EQ(input, "Hello Aorld");
     EXPECT_EQ(getCursorPos(), 7);
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "o WorldAorld");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "\033[5Go World\033[6G A");
 }
 
 // Test handlePrintableChar with multiple overwrites beyond input length
@@ -976,13 +933,11 @@ TEST_F(Internal_ConsoleTest, HandlePrintableChar_OverwriteMode_BeyondInputLength
 {
     std::string input = "Hello";
     char newChar = '!';
-    setCursorPos(5); // End of input
+    seedDisplay(input, 5); // End of input
     toggleInsertMode(input); // Overwrite mode
 
     // Expect the console's print method to be called with '!'
     EXPECT_CALL(*mockConsole, print("!", ::testing::_)).Times(1);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
 
     handlePrintableChar(newChar, input);
 
@@ -999,38 +954,32 @@ TEST_F(Internal_ConsoleTest, HandlePrintableChar_MixedModesAndCursorPositions_Sh
     char newChar1 = ' ';
     char newChar2 = 'C';
     char newChar3 = '!';
-    setCursorPos(5); // Between 'Hello' and 'World'
+    seedDisplay(input, 5); // Between 'Hello' and 'World'
+
+    // One render per inserted character.
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(3);
 
     // Insert ' ', expect 'Hello World'
-    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(6);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
     handlePrintableChar(newChar1, input);
     EXPECT_EQ(input, "Hello World");
     EXPECT_EQ(getCursorPos(), 6);
-    EXPECT_EQ(mockConsole->getCapturedOutput(), " World");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "\033[6G World\033[7G");
 
     // Switch to overwrite mode and insert 'C'
     toggleInsertMode(input);
-    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(5);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
     handlePrintableChar(newChar2, input);
     EXPECT_EQ(input, "Hello Corld");
     EXPECT_EQ(getInsertString(), "Hello World");
     EXPECT_EQ(getCursorPos(), 7);
-    EXPECT_EQ(mockConsole->getCapturedOutput(), " WorldCorld");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "\033[6G World\033[7GC");
 
     // Switch back to insert mode and insert '!'
     toggleInsertMode(input);
-    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(5);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
     handlePrintableChar(newChar3, input);
     EXPECT_EQ(input, "Hello C!orld");
     EXPECT_EQ(getInsertString(), "");
     EXPECT_EQ(getCursorPos(), 8);
-    EXPECT_EQ(mockConsole->getCapturedOutput(), " WorldCorld!orld");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "\033[6G World\033[7GC!orld\033[9G");
 }
 
 #pragma endregion
@@ -1041,10 +990,6 @@ TEST_F(Internal_ConsoleTest, HandleSpecialKey_Enter_ShouldAddToHistoryAndReturnI
 {
     std::string input = "TestCommand";
     setCursorPos(11); // End of input
-
-    // Expect history to be updated
-    // Since history is a private member, assume it's accessible or use friend tests
-    // For demonstration, skip internal history verification
 
     // Call handleSpecialKey with Enter key
     std::string result = handleSpecialKey('\x0a', input);
@@ -1058,14 +1003,10 @@ TEST_F(Internal_ConsoleTest, HandleSpecialKey_Enter_ShouldAddToHistoryAndReturnI
 TEST_F(Internal_ConsoleTest, HandleSpecialKey_Backspace_ShouldEraseCharacter)
 {
     std::string input = "Hello World";
-    setCursorPos(11); // End of input
+    seedDisplay(input, 11); // End of input
 
-    // Expect moveCursorLeft to be called once
-    EXPECT_CALL(*mockConsole, moveCursorLeft(1)).Times(1);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    // Expect rewriteTail to be called to erase 'd'
-    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(1); // Print space to erase
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
+    // One render erases the last character.
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(1);
 
     // Call handleSpecialKey with Backspace key
     std::string result = handleSpecialKey('\x7f', input);
@@ -1073,7 +1014,9 @@ TEST_F(Internal_ConsoleTest, HandleSpecialKey_Backspace_ShouldEraseCharacter)
     EXPECT_EQ(result, "");
     EXPECT_EQ(input, "Hello Worl");
     EXPECT_EQ(getCursorPos(), 10);
-    EXPECT_EQ(mockConsole->getCapturedOutput(), " ");
+    // Seeks to the dropped 'd', writes a space over it, then steps the cursor
+    // back onto that column.
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "\033[11G \033[11G");
 }
 
 // Test handleSpecialKey with Backspace key in overwrite mode
@@ -1082,23 +1025,21 @@ TEST_F(Internal_ConsoleTest, HandleSpecialKey_BackspaceInOverwriteMode_ShouldEra
     std::string input = "Hello World";
     setCursorPos(7); // Right before 'o'
     toggleInsertMode(input); // Toggle overwrite mode
-    
+
     // New input after character was inserted
     input = "Hello Aorld";
+    seedDisplay(input, 7);
 
-    // Expect moveCursorLeft to be called once
-    EXPECT_CALL(*mockConsole, moveCursorLeft(1)).Times(1);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    // Expect rewriteTail to be called to erase 'd'
-    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(6); // Print space to erase
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
-    
+    // One render restores the overwritten character.
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(1);
+
     std::string result = handleSpecialKey('\x7f', input);
 
     EXPECT_EQ(result, "");
     EXPECT_EQ(input, "Hello World");
     EXPECT_EQ(getInsertString(), "Hello World");
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "World ");
+    // Backspace in overwrite mode restores the original 'W' in place.
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "\033[7GW\033[7G");
 }
 
 // Test handleSpecialKey with Tab key
@@ -1358,48 +1299,29 @@ TEST_F(Internal_ConsoleTest, NavigateHistory_Up_ShouldSetInputFromHistory)
 
     setCursorPos(0);
 
-    // Now, simulate navigating up to get "second command"
-    // Simulate escape sequence for Up Arrow: '\x1b', '[', 'A'
-    EXPECT_CALL(*mockConsole, moveCursorToStart()).Times(1);
-    EXPECT_CALL(*mockConsole, clearLineAfterCursor()).Times(1);
-    EXPECT_CALL(*mockConsole, moveCursorDown(1)).Times(1);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    EXPECT_CALL(*mockConsole, print("third command", ::testing::_)).Times(1);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
-
     input = "";
     handleEscapeSequence(input, "[A");
+    EXPECT_EQ(input, "third command");
+    EXPECT_NE(mockConsole->getCapturedOutput().find("third command"), std::string::npos);
+    EXPECT_EQ(getCursorPos(), input.size());
 
-    // Similarly, simulate navigating up to get "second command"
-    EXPECT_CALL(*mockConsole, moveCursorLeft(1)).Times(13);
-    EXPECT_CALL(*mockConsole, moveCursorToStart()).Times(1);
-    EXPECT_CALL(*mockConsole, clearLineAfterCursor()).Times(1);
-    EXPECT_CALL(*mockConsole, moveCursorDown(1)).Times(1);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    EXPECT_CALL(*mockConsole, print("second command", ::testing::_)).Times(1);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
-
-    input = "third command";
+    mockConsole->resetCapturedOutput();
     handleEscapeSequence(input, "[A");
+    EXPECT_EQ(input, "second command");
+    EXPECT_NE(mockConsole->getCapturedOutput().find("second command"), std::string::npos);
+    EXPECT_EQ(getCursorPos(), input.size());
 
-    // Similarly, simulate navigating up to get "first command"
-    EXPECT_CALL(*mockConsole, moveCursorLeft(1)).Times(14);
-    EXPECT_CALL(*mockConsole, moveCursorToStart()).Times(1);
-    EXPECT_CALL(*mockConsole, clearLineAfterCursor()).Times(1);
-    EXPECT_CALL(*mockConsole, moveCursorDown(1)).Times(1);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    EXPECT_CALL(*mockConsole, print("first command", ::testing::_)).Times(1);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
-
-    input = "second command";
+    mockConsole->resetCapturedOutput();
     handleEscapeSequence(input, "[A");
+    EXPECT_EQ(input, "first command");
+    EXPECT_NE(mockConsole->getCapturedOutput().find("first command"), std::string::npos);
+    EXPECT_EQ(getCursorPos(), input.size());
 
-    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(0);
-
-    input = "first command";
+    // Already at the oldest entry: nothing changes and nothing is emitted.
+    mockConsole->resetCapturedOutput();
     handleEscapeSequence(input, "[A");
-
-    SUCCEED();
+    EXPECT_EQ(input, "first command");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "");
 }
 
 // Test navigateHistory moving down
@@ -1430,56 +1352,25 @@ TEST_F(Internal_ConsoleTest, NavigateHistory_Down_ShouldSetInputFromHistory)
 
     setCursorPos(0);
 
-    // Now, simulate navigating up to get "second command"
-    // Simulate escape sequence for Up Arrow: '\x1b', '[', 'A'
-    EXPECT_CALL(*mockConsole, moveCursorToStart()).Times(1);
-    EXPECT_CALL(*mockConsole, clearLineAfterCursor()).Times(1);
-    EXPECT_CALL(*mockConsole, moveCursorDown(1)).Times(1);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    EXPECT_CALL(*mockConsole, print("third command", ::testing::_)).Times(1);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
-
     input = "";
     handleEscapeSequence(input, "[A");
+    EXPECT_EQ(input, "third command");
 
-    // Similarly, simulate navigating up to get "second command"
-    EXPECT_CALL(*mockConsole, moveCursorLeft(1)).Times(13);
-    EXPECT_CALL(*mockConsole, moveCursorToStart()).Times(1);
-    EXPECT_CALL(*mockConsole, clearLineAfterCursor()).Times(1);
-    EXPECT_CALL(*mockConsole, moveCursorDown(1)).Times(1);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    EXPECT_CALL(*mockConsole, print("second command", ::testing::_)).Times(1);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
-
-    input = "third command";
     handleEscapeSequence(input, "[A");
+    EXPECT_EQ(input, "second command");
+    EXPECT_EQ(getCursorPos(), input.size());
 
-    // Simulate navigating down to "third command"
-    EXPECT_CALL(*mockConsole, moveCursorLeft(1)).Times(14);
-    EXPECT_CALL(*mockConsole, moveCursorToStart()).Times(1);
-    EXPECT_CALL(*mockConsole, clearLineAfterCursor()).Times(1);
-    EXPECT_CALL(*mockConsole, moveCursorDown(1)).Times(1);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    EXPECT_CALL(*mockConsole, print("third command", ::testing::_)).Times(1);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
-
-    input = "second command";
+    mockConsole->resetCapturedOutput();
     handleEscapeSequence(input, "[B");
+    EXPECT_EQ(input, "third command");
+    EXPECT_NE(mockConsole->getCapturedOutput().find("third command"), std::string::npos);
+    EXPECT_EQ(getCursorPos(), input.size());
 
-    // Simulate navigating down to ""
-    EXPECT_CALL(*mockConsole, moveCursorLeft(1)).Times(13);
-    EXPECT_CALL(*mockConsole, moveCursorToStart()).Times(1);
-    EXPECT_CALL(*mockConsole, clearLineAfterCursor()).Times(1);
-    EXPECT_CALL(*mockConsole, moveCursorDown(1)).Times(1);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    EXPECT_CALL(*mockConsole, print("", ::testing::_)).Times(1);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
-
-
-    input = "third command";
+    // Stepping past the newest entry restores the cached (empty) input.
+    mockConsole->resetCapturedOutput();
     handleEscapeSequence(input, "[B");
-
-    SUCCEED();
+    EXPECT_EQ(input, "");
+    EXPECT_EQ(getCursorPos(), 0u);
 }
 
 // Test updateDisplayInput after navigating history
@@ -1487,15 +1378,6 @@ TEST_F(Internal_ConsoleTest, UpdateDisplayInput_ShouldUpdateInputDisplayCorrectl
 {
     std::string oldInput = "OldCommand";
     std::string newInput = "NewCommand";
-
-    // Expect moveCursorToStart and clearLineAfterCursor
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
-    EXPECT_CALL(*mockConsole, moveCursorDown(1)).Times(1);
-    EXPECT_CALL(*mockConsole, moveCursorToStart()).Times(1);
-    EXPECT_CALL(*mockConsole, clearLineAfterCursor()).Times(1);
-    // Expect print with new input
-    EXPECT_CALL(*mockConsole, print(newInput, ::testing::_)).Times(1);
 
     updateDisplayInput(oldInput, newInput);
 

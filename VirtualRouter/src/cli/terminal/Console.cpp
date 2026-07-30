@@ -12,7 +12,16 @@
 
 namespace cli
 {
-Console::Console(ConsoleController& term) : controller(term) {}
+Console::Console(ConsoleController& term)
+    : controller(term),
+      frameBuffer(term.getTerminalWidth())
+{}
+
+Console::~Console()
+{
+    if (rawModeActive)
+        tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios);
+}
 
 void Console::setPrompt(const std::string& newPrompt)
 {
@@ -23,6 +32,9 @@ void Console::setPrompt(const std::string& newPrompt)
     // Clear current input on the screen and pring new prompt
     controller.print(prompt, Color::PROMPT);
     std::cout.flush();
+
+    frameBuffer.setWidth(getTerminalWidth());
+    frameBuffer.reset(initialLineLength);
 }
 
 bool Console::isCursorAtLineEnd()
@@ -33,9 +45,17 @@ bool Console::isCursorAtLineEnd()
 
 void Console::initConsole()
 {
+    tcgetattr(STDIN_FILENO, &savedTermios);
+    termios raw = savedTermios;
+    raw.c_lflag &= static_cast<tcflag_t>(~(ICANON | ECHO));
+    raw.c_cc[VMIN] = 0;
+    raw.c_cc[VTIME] = 0;
+    tcsetattr(STDIN_FILENO, TCSANOW, &raw);
+    rawModeActive = true;
+
     // Clear the screen once
-    controller.clearScreen(); // ANSI escape to clear and move cursor to top
-    controller.enableLineWrapping(); // Enable line wrapping
+    controller.clearScreen();
+    controller.enableLineWrapping();
 
     // Initialize inputBuffer as empty
     cursorPos = 0;
@@ -43,6 +63,9 @@ void Console::initConsole()
     // Print the prompt
     controller.print(prompt, Color::PROMPT);
     std::cout.flush();
+
+    frameBuffer.setWidth(getTerminalWidth());
+    frameBuffer.reset(initialLineLength);
 }
 
 void Console::clearLineAfterCursor() 
@@ -58,28 +81,28 @@ CursorPosition Console::getCursorPosition()
     return controller.getCursorPosition();
 }
 
-bool Console::kbhit() 
+int Console::readByte(bool wait)
 {
-    termios oldt, newt;
-    tcgetattr(STDIN_FILENO, &oldt);
-    newt = oldt;
-    newt.c_lflag &= static_cast<tcflag_t>(~(ICANON | ECHO));
-    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+    if (wait && !kbhit()) return -1;
 
-    int oldf = fcntl(STDIN_FILENO, F_GETFL, 0);
-    fcntl(STDIN_FILENO, F_SETFL, oldf | O_NONBLOCK);
+    unsigned char byte = 0;
+    ssize_t n = ::read(STDIN_FILENO, &byte, 1);
+    if (n == 1) return byte;
+    return -1;
+}
 
-    int ch = getchar();
+bool Console::kbhit()
+{
+    fd_set fds;
+    FD_ZERO(&fds);;
+    FD_SET(STDIN_FILENO, &fds);
 
-    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
-    fcntl(STDIN_FILENO, F_SETFL, oldf);
+    timeval tv{};
+    tv.tv_sec = 0;
+    tv.tv_usec = 20000;
 
-    if (ch != EOF)
-    {
-        ungetc(ch, stdin);
-        return 1;
-    }
-    return 0;
+    int ret = select(STDIN_FILENO + 1, &fds, nullptr, nullptr, &tv);
+    return ret > 0 && FD_ISSET(STDIN_FILENO, &fds);
 }
 
 size_t Console::getTerminalWidth() 
@@ -92,71 +115,23 @@ void Console::moveCursorLeft(size_t steps)
     for (size_t i = 0; i < steps; ++i)
     {
         if (cursorPos > 0)
-        {
-            auto tempCursorPos = cursorPos;
-            if ((cursorPos + initialLineLength) % getTerminalWidth() == 0)
-            {
-                // Move to the previous line
-                controller.moveCursorUp(1);
-                controller.moveCursorRight(getTerminalWidth());
-            }
-            else
-            {
-                // Move left
-                controller.moveCursorLeft(1);
-            }
-            cursorPos = tempCursorPos - 1;
-        }
+            cursorPos--;
     }
 }
 
 void Console::moveCursorRight(size_t steps, std::string* input)
 {
-    size_t width = getTerminalWidth();
     for (size_t i = 0; i < steps; ++i)
     {
         if (!input || (input && cursorPos < (input->size())))
-        {
-            auto tempCursorPos = cursorPos;
-            if ((cursorPos + initialLineLength) % width == width - 1)
-            {
-                // Move to the next line
-                controller.moveCursorDown(1);
-                controller.moveCursorToStart();
-            }
-            else
-            {
-                // Move right
-                controller.moveCursorRight(1);
-            }
-            cursorPos = tempCursorPos + 1;
-        }
-    }
-}
-
-void Console::moveCursorUp(size_t steps) 
-{
-    if (steps > 0) 
-    {
-        controller.moveCursorUp(steps);
-    }
-}
-
-void Console::moveCursorDown(size_t steps) 
-{
-    // Move cursor left 'cursorPos' times to reach the beginning
-    if (steps > 0) 
-    {
-        controller.moveCursorDown(steps);
+            cursorPos++;
     }
 }
 
 void Console::moveCursorToStart()
 {
     if (cursorPos > 0)
-    {
         moveCursorLeft(cursorPos);
-    }
 }
 
 void Console::moveCursorToEnd(std::string& input)
@@ -178,16 +153,12 @@ void Console::skipWordLeft(std::string& input)
     if (newPos > 0 && input[newPos - 1] == ' ')
     {
         while (newPos > 0 && input[newPos - 1] == ' ')
-        {
             newPos--;
-        }
     }
 
     // Skip trailing spaces
     while (newPos > 0 && input[newPos - 1] != ' ')
-    {
         newPos--;
-    }
     size_t steps = cursorPos - newPos;
     moveCursorLeft(steps);
 }
@@ -202,65 +173,34 @@ void Console::skipWordRight(std::string& input)
     if (input[newPos] != ' ')
     {
         while (newPos < input.size() && input[newPos] != ' ')
-        {
             newPos++;
-        }
     }
     // Skip any spaces if on them
     while (newPos < input.size() && input[newPos] == ' ')
-    {
         newPos++;
-    }
     size_t steps = newPos - cursorPos;
     moveCursorRight(steps);
 }
 
-void Console::rewriteTail(const std::string& input, size_t startPosition, bool backspace)
+void Console::renderInput(const std::string& text)
 {
-    if (startPosition > input.size())
-    {
-        return;
-    }
-    
     size_t width = getTerminalWidth();
-    size_t currentColumn = (startPosition + initialLineLength) % width;
+    frameBuffer.setWidth(width);
 
-    const std::string& text = insert ? insertString : input;
+    size_t rows = (text.size() + initialLineLength) / width + 1;
+    frameBuffer.beginFrame(rows, initialLineLength);
 
-    const bool hasTail = startPosition < text.size();
-
-    // Save the current cursor position
-    controller.saveCursorPosition();
-
-    // Rewrite the input from the start position
-    for (size_t i = startPosition; i < text.size(); ++i)
+    for (size_t i = 0; i < text.size(); ++i)
     {
-        if (currentColumn >= width)
-        {
-            controller.moveCursorDown(1);
-            controller.moveCursorToStart();
-            currentColumn = 0;
-        }
-        controller.print(std::string(1, text[i]));
-        ++currentColumn;
+        size_t absPos = i + initialLineLength;
+        frameBuffer.set(absPos / width, absPos % width, text[i], Color::NONE);
     }
 
-    // Clear whatever the old, longer line left on screen past the new tail.
-    if (hasTail)
-    {
-        size_t leftoverSpace = (width > currentColumn) ? (width - currentColumn) : 0;
-        if (leftoverSpace)
-            controller.print(std::string(leftoverSpace, ' '));
-    }
+    size_t curAbs = cursorPos + initialLineLength;
+    frameBuffer.commit(controller, curAbs / width, curAbs % width);
 
-    // Clear leftover characters
-    if (backspace)
-    {
-        controller.print(" ");
-    }
-
-    // Restore the cursor position
-    controller.restoreCursorPosition();
+    oldInputLength = text.size();
+    std::cout.flush();
 }
 
 std::string Console::input(std::string testInput, bool pagination)
@@ -270,17 +210,14 @@ std::string Console::input(std::string testInput, bool pagination)
     // For loop and while loop, if testInput is empty it will act as a true while loop
     for (size_t i = 0; (testInput.empty()) || (i < testInput.length()); (testInput.empty()) ? (i) : (++i))
     {
-        maxCommandLength = getTerminalWidth() - initialLineLength;
-
-        // Non-blocking check for keypress
-        if (kbhit() || !(testInput.empty()))
+        if (!testInput.empty() || kbhit())
         {
-            char hInput = testInput.empty() ? static_cast<char>(getchar()) : testInput[i];
+            maxCommandLength = getTerminalWidth() - initialLineLength;
+
+            char hInput = testInput.empty() ? static_cast<char>(readByte()) : testInput[i];
 
             if (pagination)
-            {
                 return std::string(1, hInput);
-            }
 
             // 1. Handle single-char special keys (Enter, Tab, '?', Backspace, Delete)
             if (handleSpecialKey(hInput, input))
@@ -294,20 +231,14 @@ std::string Console::input(std::string testInput, bool pagination)
 
             // 2. If it's an escape sequence
             if (hInput == '\x1b')
-            {
                 handleEscapeSequence(input);
-            }
 
             // 3. If It's a normal printable char, handle in one go
             else if (std::isprint(static_cast<unsigned char>(hInput)))
-            {
                 handlePrintableChar(hInput, input);
-            }
 
             if (!browsingHistory)
-            {
                 inputCache = input;
-            }
 
             // Flush once per key
             std::cout.flush();
@@ -318,33 +249,15 @@ std::string Console::input(std::string testInput, bool pagination)
 
 bool Console::handleSpecialKey(char hInput, std::string& input)
 {
-    auto backspace([&]()
+    auto backspaceChar([&]()
     {
+        if (cursorPos > input.size())
+            cursorPos = input.size();
         cursorPos--;
-
-        if ((cursorPos + initialLineLength + 1) % getTerminalWidth() == 0)
-        {
-            controller.moveCursorUp(1);
-            controller.moveCursorRight(getTerminalWidth());
-        }
-        else
-        {
-            controller.moveCursorLeft(1);
-        }
-
         if (!insert)
-        {
             input.erase(cursorPos, 1);
-            rewriteTail(input, cursorPos, true);
-        }
-        else
-        {
-            if (input.size() > cursorPos)
-            {
-                input[cursorPos] = insertString[cursorPos];
-            }
-            rewriteTail(insertString, cursorPos, true);
-        }
+        else if (input.size() > cursorPos)
+            input[cursorPos] = insertString[cursorPos];
     });
 
     switch (hInput)
@@ -365,26 +278,24 @@ bool Console::handleSpecialKey(char hInput, std::string& input)
         case '\x0a': // Enter
         {
             if (!input.empty() && input != lastCommand)
-            {
                 history.push_back(input);
-            }
             lastCommand = input;
             return true;
         }
         case '\x08': // Control-h
         case '\x15':
         {
-            while (cursorPos > 0)
-            {
-                backspace();
-            }
+            input.erase(0, cursorPos);
+            cursorPos = 0;
+            renderInput(input);
             break;
         }
         case '\x7f': // Backspace
         {
             if (cursorPos > 0)
             {
-                backspace();
+                backspaceChar();
+                renderInput(input);
             }
             break;
         }
@@ -400,20 +311,16 @@ void Console::handleEscapeSequence(std::string& input, std::string testKey)
 {
     // Reset insert if able to
     if (insert)
-    {
         insertString = input;
-    }
 
     bool test = !(testKey.empty());
 
-    if (!kbhit() && !test) return; // no next char => bail
-
-    char bracket = test ? testKey[0] : static_cast<char>(getchar());
+    // readByte() already waits for the byte to show up and reports -1 if none
+    // does, so the continuation bytes need no separate kbhit() guard.
+    char bracket = test ? testKey[0] : static_cast<char>(readByte());
     if (bracket != '[') return; // Not arrow or known seq
 
-    if (!kbhit() && !test) return;
-
-    char nextch = test ? testKey[1] : static_cast<char>(getchar());
+    char nextch = test ? testKey[1] : static_cast<char>(readByte());
     switch(nextch)
     {
         case 'A':
@@ -427,68 +334,78 @@ void Console::handleEscapeSequence(std::string& input, std::string testKey)
         case 'C':
             // Right arrow
             moveCursorRight(1, &input);
+            renderInput(input);
             break;
         case 'D':
             // Left arrow
             if (cursorPos > 0)
             {
                 moveCursorLeft(1);
+                renderInput(input);
             }
             break;
         case 'H':
             moveCursorToStart();
+            renderInput(input);
             break;
         case 'F':
             moveCursorToEnd(input);
+            renderInput(input);
             break;
         case 'O':
         {
-            char lastChar = test ? (testKey.size() >= 3 ? testKey[2] : '\x00') : static_cast<char>(getchar());
+            char lastChar = test ? (testKey.size() >= 3 ? testKey[2] : '\x00') : static_cast<char>(readByte());
             if (lastChar == 'H')
             {
                 moveCursorToStart();
+                renderInput(input);
             }
             break;
         }
         case '1':
         {
-            char nextchar = test ? ((testKey.size() >= 3) ? testKey[2] : '\x00') : static_cast<char>(getchar());
+            char nextchar = test ? ((testKey.size() >= 3) ? testKey[2] : '\x00') : static_cast<char>(readByte());
             if (nextchar == '~')
             {
                 // Home
                 moveCursorToStart();
+                renderInput(input);
             }
             else if (nextchar == ';')
             {
-                nextchar = test ? ((testKey.size() >= 4) ? testKey[3] : '\x00') : static_cast<char>(getchar());
+                nextchar = test ? ((testKey.size() >= 4) ? testKey[3] : '\x00') : static_cast<char>(readByte());
                 if (nextchar == '5')
                 {
-                    nextchar = test ? ((testKey.size() >= 5) ? testKey[4] : '\x00') : static_cast<char>(getchar());
+                    nextchar = test ? ((testKey.size() >= 5) ? testKey[4] : '\x00') : static_cast<char>(readByte());
                     if (nextchar == 'C')
                     {
                         skipWordRight(input);
+                        renderInput(input);
                     }
                     else if (nextchar == 'D')
                     {
                         skipWordLeft(input);
+                        renderInput(input);
                     }
                 }
             }
             else if (nextchar == 'H')
             {
                 moveCursorToStart();
+                renderInput(input);
             }
             break;
         }
         case '4':
-            if ((test ? ((testKey.size() >= 3) ? testKey[2] : '\x00') : static_cast<char>(getchar())) == '~')
+            if ((test ? ((testKey.size() >= 3) ? testKey[2] : '\x00') : static_cast<char>(readByte())) == '~')
             {
                 // End
                 moveCursorToEnd(input);
+                renderInput(input);
             }
             break;
         case '2':
-            if ((test ? ((testKey.size() >= 3) ? testKey[2] : '\x00') : static_cast<char>(getchar())) == '~')
+            if ((test ? ((testKey.size() >= 3) ? testKey[2] : '\x00') : static_cast<char>(readByte())) == '~')
             {
                 // Insert toggle
                 insert = !insert;
@@ -516,14 +433,12 @@ void Console::navigateHistory(std::string& input, bool moveUp)
 
     // if moving up in history
     if (moveUp && historyIndex > 0)
-    {
         --historyIndex;
-    }
+
     // If moving down in history
     else if (!moveUp && historyIndex < history.size() - 1)
-    {
         ++historyIndex;
-    }
+
     // If at the end of history, disable browsing
     else if (!moveUp && historyIndex == history.size() - 1)
     {
@@ -533,10 +448,7 @@ void Console::navigateHistory(std::string& input, bool moveUp)
         updateDisplayInput(oldInput, input);
         return;
     }
-    else
-    {
-        return;
-    }
+    else return;
 
     // Update input with the selected history item
     input = history[historyIndex];
@@ -546,32 +458,8 @@ void Console::navigateHistory(std::string& input, bool moveUp)
 
 void Console::updateDisplayInput(std::string& oldInput, std::string& input)
 {
-    // Calculate how many lines the input spans
-    size_t oldLines = (oldInput.size() + initialLineLength) / terminalWidth + 1;
-
-    // Move cursor to the start of the current line
-    moveCursorToStart();
-
-    // Save the starting position
-    controller.saveCursorPosition();
-
-    // Clear all lines occupied by the input
-    for (size_t i = 0; i < oldLines; ++i)
-    {
-        controller.clearLineAfterCursor(); // Clear the current line
-        if (i < oldLines)
-        {
-            controller.moveCursorDown(1); // Move down one line
-            controller.moveCursorToStart();
-        }
-    }
-
-    // Move back up to the starting position
-    controller.restoreCursorPosition();
-
-    // Write the updated input
-    controller.print(input);
     cursorPos = input.size();
+    renderInput(input);
 }
 
 void Console::handlePrintableChar(char hInput, std::string& input)
@@ -580,6 +468,9 @@ void Console::handlePrintableChar(char hInput, std::string& input)
     if (!std::isprint(static_cast<unsigned char>(hInput))) {
         return; // Not a printable character
     }
+
+    if (cursorPos > input.size())
+        cursorPos = input.size();
 
     // Reject specific control characters
     switch (hInput) {
@@ -600,18 +491,14 @@ void Console::handlePrintableChar(char hInput, std::string& input)
     if (insert && cursorPos < input.size())
     {
         input[cursorPos] = hInput;
-        cursorPos++;
-        controller.print(std::string(1, hInput), Color::TERMINAL);
-        rewriteTail(input, cursorPos);
     }
     else
     {
         // Append or insert at the cursor
         input.insert(cursorPos, 1, hInput);
-        cursorPos++;
-        controller.print(std::string(1, hInput), Color::TERMINAL);
-        rewriteTail(input, cursorPos);
     }
+    cursorPos++;
+    renderInput(input);
 }
 
 std::string Console::getHistory(bool& his) 
@@ -641,9 +528,8 @@ std::string Console::getHistory(bool& his)
 
 void Console::clearCurrentLine(std::string& input, std::string& nextConsoleLine) 
 {
-    moveCursorToStart();
-    controller.clearLineAfterCursor();
     input = nextConsoleLine;
     cursorPos = input.length();
+    renderInput(input);
 }
 }

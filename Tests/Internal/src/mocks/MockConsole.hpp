@@ -20,8 +20,6 @@ public:
     MOCK_METHOD(void, moveCursorToStart, (), (override));
     MOCK_METHOD(void, moveCursorLeft, (size_t count), (override));
     MOCK_METHOD(void, moveCursorRight, (size_t count), (override));
-    MOCK_METHOD(void, moveCursorUp, (size_t count), (override));
-    MOCK_METHOD(void, moveCursorDown, (size_t count), (override));
     MOCK_METHOD(void, print, (const std::string& str, Color color), (override));
     MOCK_METHOD(CursorPosition, getCursorPosition, (), (override));
     MOCK_METHOD(void, beep, (), (override)); // Remove or comment out if not used
@@ -82,8 +80,6 @@ public:
     void moveCursorToStart() override {}
     void moveCursorLeft(size_t) override {}
     void moveCursorRight(size_t) override {}
-    void moveCursorUp(size_t) override {}
-    void moveCursorDown(size_t) override {}
     CursorPosition getCursorPosition() override {return CursorPosition{};}
     void beep() override {}
     void flush() override {}

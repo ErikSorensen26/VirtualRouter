@@ -107,20 +107,6 @@ public:
         }
     }
 
-    CONSOLE_MOCK void moveCursorUp(size_t count)
-    {
-        if (count > 0) {
-            print("\033[" + std::to_string(count) + "A"); // Move cursor up
-        }
-    }
-
-    CONSOLE_MOCK void moveCursorDown(size_t count)
-    {
-        if (count > 0) {
-            print("\033[" + std::to_string(count) + "B"); // Move cursor down
-        }
-    }
-
     CONSOLE_MOCK void print(const std::string& str, Color color = Color::NONE)
     {
         switch (color)
@@ -182,13 +168,9 @@ public:
         while (i < sizeof(buf) - 1)
         {
             if (read(STDIN_FILENO, buf + i, 1) != 1)
-            {
                 break;
-            }
             if (buf[i] == 'R')
-            {
                 break;
-            }
             i++;
         }
         buf[i] = '\0';
@@ -198,9 +180,7 @@ public:
 
         // Parse row, col from e.g. "/033[12;40R"
         if (buf[0] == '\033' && buf[1] == '[')
-        {
             std::sscanf(buf, "\033[%d;%dR", &pos.row, &pos.col);
-        }
         return pos;
     }
 

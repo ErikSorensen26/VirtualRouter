@@ -65,9 +65,8 @@ void CliSession::handlePrompt()
     if (!nextLine.empty())
     {
         preload = nextLine;
-        cursorPos      = preload.size();
-        oldInputLength = preload.size();
-        controller.print(preload);
+        cursorPos = preload.size();
+        renderInput(preload);
         nextLine.clear();
     }
     inputCacheBuffer = preload;
@@ -336,6 +335,8 @@ bool CliSession::executeCommand(std::string& command)
 
         case ParseResult::Status::INVALID:
         {
+            if (tryGlobalCommand(command)) return true;
+
             const std::string marker =
                 "\r\n"
                 + std::string(initialLineLength + parsed.markerCommand.size(), ' ')
@@ -405,17 +406,13 @@ bool CliSession::tryGlobalCommand(const std::string& rawInput)
     if (lowerStr(rawInput) == "exit")
         return false;
 
-    nav.save();
     nav.saveAndChangeMode<CliMode::GlobalConfiguration>(engine.global.getConfigs());
 
     std::string cmd = rawInput;
     const bool ok   = executeCommand(cmd);
 
-    if (getMode() == CliMode::GlobalConfiguration && !ok)
-    {
+    if (getMode() == CliMode::GlobalConfiguration)
         nav.restore();
-        return false;
-    }
 
     return ok;
 }

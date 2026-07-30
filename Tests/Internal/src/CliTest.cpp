@@ -430,6 +430,38 @@ TEST_F(Internal_CliTest, DoCommand_FromSubMode_ShouldExecuteCommandWithinSubMode
     EXPECT_EQ(mockConsole->getCapturedOutput(), "interface GigabitEthernet 1\r\nrouter(config-if)#do show interface GigabitEthernet 1\r\nrouter(config-if)#");
 }
 
+// A global command typed in a sub-mode runs against global config rather than
+// being rejected, and leaves the session in the sub-mode it was typed from.
+TEST_F(Internal_CliTest, GlobalSwap_UnknownInSubMode_ShouldExecuteInGlobalConfig)
+{
+    changeMode(CliMode::GlobalConfiguration);
+    std::string enterSubMode = "interface GigabitEthernet 1\n";
+    ASSERT_TRUE(handleInput(enterSubMode));
+    ASSERT_EQ(getCurrentMode(), CliMode::Interface);
+
+    std::string hostnameCmd = "hostname SwapBox";
+    EXPECT_TRUE(handleInput(hostnameCmd));
+
+    EXPECT_EQ(getHostname(), "SwapBox");
+    EXPECT_EQ(getCurrentMode(), CliMode::Interface);
+}
+
+// A command that is genuinely unknown everywhere is still rejected -- the
+// detour through global config must not turn typos into silent successes.
+TEST_F(Internal_CliTest, GlobalSwap_UnknownEverywhere_ShouldStillBeInvalid)
+{
+    changeMode(CliMode::GlobalConfiguration);
+    std::string enterSubMode = "interface GigabitEthernet 1\n";
+    ASSERT_TRUE(handleInput(enterSubMode));
+
+    std::string bogus = "notacommand foo";
+    EXPECT_FALSE(handleInput(bogus));
+    EXPECT_EQ(getCurrentMode(), CliMode::Interface);
+}
+
+
+
+
 #pragma endregion
 #pragma region AutoComplete
 
