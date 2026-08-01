@@ -12,8 +12,8 @@ set(CMAKE_BUILD_PARALLEL_LEVEL 8)
 add_compile_options(-Wall -Wno-unused-parameter -fno-strict-aliasing)
 add_link_options(-fuse-ld=mold -Wl,--thread-count=8)
 
-option(BUILD_STATIC_ROUTER "Build only a full static VirtualRouterExec" OFF)
-option(ENABLE_DEBUG_SYMBOLS "Include -g and -rdynamic for crash backtrace" ON)
+option(BUILD_STATIC_ROUTER "Build only a full static VirtualRouterExec" ON)
+option(ENABLE_DEBUG_SYMBOLS "Include -g and -rdynamic for crash backtrace" OFF)
 
 add_custom_target(copy_resources ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -32,17 +32,6 @@ if (BUILD_STATIC_ROUTER)
     set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
     set(BUILD_SHARED_LIBS OFF)
 
-    # Libpcap
-    set(PCAP_ROOT /opt/static-libs/libpcap)
-    find_library(PCAP_LIBRARY pcap
-        HINTS ${PCAP_ROOT}/lib
-        NO_DEFAULT_PATH
-    )
-    find_path(PCAP_INCLUDE_DIR pcap/pcap.h
-        HINTS ${PCAP_ROOT}/include
-        NO_DEFAULT_PATH
-    )
-
     # Paths to static OpenSSL
     set(OPENSSL_ROOT_DIR /opt/static-libs/openssl)
     set(OPENSSL_INCLUDE_DIR /opt/static-libs/openssl/include)
@@ -51,63 +40,20 @@ if (BUILD_STATIC_ROUTER)
         /opt/static-libs/openssl/lib64/libcrypto.a
     )
 
-    # Paths to static cURL
-    set(CURL_INCLUDE_DIR /opt/static-libs/curl/include)
-    set(CURL_LIBRARY /opt/static-libs/curl/lib/libcurl.a)
-
-    # Paths to static ZLIB
-    set(ZLIB_LIBRARY /opt/static-libs/zlib/lib/libz.a)
-    set(ZLIB_INCLUDE_DIR /opt/static-libs/zlib/include)
-
-    # Collect all sourced directly instead of a library
-    file(GLOB_RECURSE VR_SOURCES CONFIGURE_DEPENDS
-        ${CMAKE_CURRENT_SOURCE_DIR}/VirtualRouter/src/*.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/VirtualRouter/common/*.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/VirtualRouter/types/*.cpp
-    )
-
-    file(GLOB_RECURSE VR_HEADERS CONFIGURE_DEPENDS
-        ${CMAKE_CURRENT_SOURCE_DIR}/VirtualRouter/src/*.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/VirtualRouter/src/*.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/VirtualRouter/common/*.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/VirtualRouter/common/*.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/VirtualRouter/types/*.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/VirtualRouter/types/*.hpp
-    )
-
-    set(VR_INCLUDE_DIRS "")
-    foreach(header ${VR_HEADERS})
-        get_filename_component(HEADER_DIR ${header} DIRECTORY)
-        list(APPEND VR_INCLUDE_DIRS ${HEADER_DIR})
-    endforeach()
-    list(REMOVE_DUPLICATES VR_INCLUDE_DIRS)
-
     if (ENABLE_DEBUG_SYMBOLS)
         message(STATUS "Including debug symbols (-g -gsplit-dwarf -rdynamic)")
-        #add_compile_options(-g -gsplit-dwarf -rdynamic)
+        add_compile_options(-g -gsplit-dwarf)
     else()
         message(STATUS "Debug symbols disabled (release / stripped build)")
+        add_compile_options(-O2 -ffunction-sections -fdata-sections -ffat-lto-objects)
+        add_link_options(-Wl,--gc-sections -s)
+        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
     endif()
 
-    add_executable(VirtualRouterExec ${VR_SOURCES})
-    target_link_options(VirtualRouterExec PRIVATE -static)
-    target_include_directories(VirtualRouterExec PRIVATE
-        ${VR_INCLUDE_DIRS}
-        ${OPENSSL_INCLUDE_DIR}
-        ${CURL_INCLUDE_DIR}
-        ${PCAP_INCLUDE_DIR}
-        ${ZLIB_INCLUDE_DIR}
-    )
-    target_link_libraries(VirtualRouterExec PRIVATE
-        ${PCAP_LIBRARY}
-        ${OPENSSL_LIBRARIES}
-        ${CURL_LIBRARY}
-        ${ZLIB_LIBRARY}
-        pthread
-    )
+    add_subdirectory(VirtualRouter)
 
 else()
-    set(cmake_interprocedural_optimization false)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION FALSE)
 
     # keep your debug-ish flags as-is
     add_compile_options(
@@ -131,7 +77,6 @@ else()
 
     # External Dependencies (visible to subdirs)
     find_package(PkgConfig REQUIRED)
-    pkg_check_modules(PCAP REQUIRED libpcap)
     find_package(ZLIB REQUIRED)
     find_package(OpenSSL REQUIRED)
     find_package(CURL REQUIRED)
