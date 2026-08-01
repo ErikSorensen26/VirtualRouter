@@ -15,6 +15,7 @@
 
 #include <IPAddress.h>
 #include "configs/RegistryTypes.hpp"
+#include "configs/RegistryBuilder.hpp"
 #include "configs/RegistryReference.hpp"
 #include "VrfRegistry.h"
 #include "configs/TupleSchema.hpp"
@@ -135,406 +136,6 @@ enum class IPOption : uint8_t
 
 void globalInterface(void*);
 
-/**
- * @brief Configuration fields for the global system scope.
- * @ingroup CONFIG_GLOBAL
- *
- * This enum indexes every configurable parameter at the global level — from banners
- * and hostname through IP routing, ACLs, prefix-lists, route-maps, and protocol
- * process containers. Fields marked `// TODO` are schema placeholders whose registry
- * types are not yet fully implemented.
- */
-enum class Global
-{
-    ARCHIVE, // TODO
-    BANNER, // TODO
-    BANNER_CONFIG_SAVE, // TODO
-    BANNER_EXEC, // TODO
-    BANNER_INCOMING, // TODO
-    BANNER_LOGIN, // TODO
-    BANNER_MOTD, // TODO
-    BANNER_PROMPT_TIMEOUT, // TODO
-    BFD_SLOW_TIMERS, // TODO
-    BFD_SINGLE_HOP_TEMPLATES, // TODO
-    CEF_TABLE, // TODO
-    CLASS_MAP, // TODO
-    CLOCK_CALENDAR_VALID, // TODO
-    CLOCK_SUMMER_TIME, // TODO
-    CLOCK_TIME_ZONE, // TODO
-    CONFIG_REGISTER, // TODO
-    CONTROL_PLANE, // TODO
-    CRYPTO, // TODO
-    EAP_PROFILE, // TODO
-    ENABLE_PASSWORD, // TODO
-    ENABLE_SECRET, // TODO
-    FLOW_EXPORTER, // TODO
-    FLOW_MONITOR, // TODO
-    FLOW_RECORD, // TODO
-    FLOW_SAMPLER_MAP, // TODO
-    HOSTNAME, // TODO
-    INTERFACE,
-    IP_ACCESS_LIST_EXTENDED,
-    IP_ACCESS_LIST_HELPER_EGRESS_CHECK, // TODO
-    IP_ACCESS_LIST_LOG_UPDATE_THRESHOLD, // TODO
-    IP_ACCESS_LIST_LOGGING_HASH_GENERATION, // TODO
-    IP_ACCESS_LIST_LOGGING_INTERVAL, // TODO
-    IP_ACCESS_LIST_MATCH_LOCAL_TRAFFIC, // TODO
-    IP_ACCESS_LIST_ROLE_BASED, // TODO
-    IP_ACCESS_LIST_STANDARD,
-    IP_ACCOUNTING_LIST, // TODO
-    IP_ACCOUNTING_THRESHOLD, // TODO
-    IP_ACCOUNTING_TRANSITS, // TODO
-    IP_ADDRESS_POOL_DHCP, // TODO
-    IP_ADDRESS_POOL_DHCP_PROXY, // TODO
-    IP_ADDRESS_POOL_LOCAL, // TODO
-    IP_ARP_GRATUITOUS, // TODO
-    IP_ARP_INCOMPLETE, // TODO
-    IP_ARP_INCOMPLETE_ENTRIES, // TODO
-    IP_ARP_INCOMPLETE_RETRY, // TODO
-    IP_ARP_PROXY, // TODO
-    IP_ARP_QUEUE, // TODO
-    IP_AS_PATH_ACCESS_LIST, // TODO
-    IP_BGP_COMMUNITY_NEW_FORMAT, // TODO
-    IP_CEF, // TODO
-    IP_CLASSLESS, // TODO
-    IP_COMMUNITY_LIST, // TODO
-    IP_DEFAULT_NETWORK, // TODO
-    IP_DEFAULT_GATEWAY, // TODO
-    IP_DHCP, // TODO
-    IP_DHCP_CLIENT, // TODO
-    IP_DHCP_RELAY, // TODO
-    IP_DHCP_SERVER, // TODO
-    IP_DOMAIN_LOOKUP_NSAP, // TODO
-    IP_DOMAIN_LOOKUP_RECURSIVE, // TODO
-    IP_DOMAIN_MULTICAST, // TODO
-    IP_DOMAIN_RECURSIVE_ALLOW_SOA, // TODO
-    IP_DOMAIN_RECURSIVE_RETRY, // TODO
-    IP_DOMAIN_RETRY, // TODO
-    IP_DOMAIN_ROUND_ROBIN, // TODO
-    IP_DOMAIN_TIMEOUT, // TODO
-    IP_EXPLICIT_PATH_IDENTIFIER, // TODO
-    IP_EXPLICIT_PATH_NAME, // TODO
-    IP_EXTCOMMUNITY_LIST, // TODO
-    IP_FLOW_AGGREGATION_CACHE, // TODO
-    IP_FLOW_CACHE_ENTRIES, // TODO
-    IP_FLOW_CACHE_MPLS, // TODO
-    IP_FLOW_CACHE_TIMEOUT_ACTIVE, // TODO
-    IP_FLOW_CACHE_TIMEOUT_INACTIVE, // TODO
-    IP_FLOW_CAPTURE_FRAGMENT_OFFSET, // TODO
-    IP_FLOW_CAPTURE_ICMP, // TODO
-    IP_FLOW_CAPTURE_IP_ID, // TODO
-    IP_FLOW_CAPTURE_MAC, // TODO
-    IP_FLOW_CAPTURE_PACKET_LENGTH, // TODO
-    IP_FLOW_CAPTURE_TTL, // TODO
-    IP_FLOW_CAPTURE_VLAN_ID, // TODO
-    IP_FLOW_CAPTURE_EGRESS_INPUT_INTERFACE, // TODO
-    IP_FLOW_EXPORT_DESTINATION, // TODO
-    IP_FLOW_EXPORT_SOURCE, // TODO
-    IP_FLOW_EXPORT_TEMPLATE_OPTIONS_EXPORT_STATS, // TODO
-    IP_FLOW_EXPORT_TEMPLATE_OPTIONS_REFRESH_RATE, // TODO
-    IP_FLOW_EXPORT_TEMPLATE_OPTIONA_TIMEOUT_RATE, // TODO
-    IP_FLOW_EXPORT_TEMPLATE_REFRESH_RATE, // TODO
-    IP_FLOW_EXPORT_TEMPLATE_TIMEOUT_RATE, // TODO
-    IP_FLOW_EXPORT_VERSION, // TODO
-    IP_FLOW_EXPORT_VERSION_BGP_NEXT_HOP, // TODO
-    IP_FLOW_EXPORT_VERSION_ORIGIN_AS, // TODO
-    IP_FLOW_EXPORT_VERSION_PEER_AS, // TODO
-    IP_FLOW_TOP_TALKERS, // TODO
-    IP_HOSTNAME_STRICT, // TODO
-    IP_HTTP, // TODO
-    IP_ICMP_RATE_LIMIT_UNREACHABLE_PER_MS, // TODO
-    IP_ICMP_RATE_LIMIT_UNREACHABLE_DF, // TODO
-    IP_ICMP_RATE_LIMIT_UNREACHABLE_LOG, // TODO
-    IP_ICMP_RATE_LIMIT_UNREACHABLE_TRIGGER, // TODO
-    IP_ICMP_RATE_LIMIT_UNREACHABLE_LOG_PER_MS, // TODO
-    IP_ICMP_REDIRECT_HOST, // TODO
-    IP_ICMP_REDIRECT_SUBNET, // TODO
-    IP_KERBEROS_SOURCE_INTERFACE, // TODO
-    IP_LOCAL_POLICY_ROUTE_MAP, // TODO
-    IP_LOCAL_POOL, // TODO
-    IP_MFIB, // TODO
-    IP_NAT, // TODO
-    IP_NBAR, // TODO
-    IP_OSPF_NAME_LOOKUP, // TODO
-    IP_POLICY_LIST, // TODO
-    IP_PREFIX_LIST,
-    IP_REFLEXIVE_LIST_TIMEOUT, // TODO
-    IP_ROUTING, // TODO
-    IP_ROUTING_PROTOCOL_PURGE_INTERFACE, // TODO
-    IP_RSVP, // TODO
-    IP_SCP_SERVER, // TODO
-    IP_SECURITY_ESO_INFO_SOURCE, // TODO
-    IP_SECURITY_ESO_INFO_MAX_C_BYTES, // TODO
-    IP_SECURITY_ESO_INFO_DEFAULT_BIT, // TODO
-    IP_SLA, // TODO
-    IP_SSH, // TODO
-    IP_STICKY_ARP, // TODO
-    IP_SUBNET_ZERO, // TODO
-    IP_TACACS_SOURCE_INTERFACE, // TODO
-    IP_TCP, // TODO
-    IP_TELNET, // TODO
-    IP_TFTP, // TODO
-    IP_TRAFFIC_EXPORT_PROFILE, // TODO
-    IP_VERIFY_DROP_RATE_COMPUTE_INTERVAL, // TODO
-    IP_VERIFY_DROP_RATE_COMPUTE_WINDOW, // TODO
-    IP_VERIFY_DROP_RATE_NOTIFY_HOLD_DOWN, // TODO
-    IP_VRF, // TODO
-    IPV6_ACCESS_LIST,
-    IPV6_ACCESS_LIST_LOG_UPDATE_THRESHOLD, // TODO
-    IPV6_ACCESS_LIST_ROLE_BASED, // TODO
-    IPV6_CEF, // TODO
-    IPV6_DHCP, // TODO
-    IPV6_DHCP_CLIENT, // TODO
-    IPV6_DHCP_RELAY, // TODO
-    IPV6_FLOWSET, // TODO
-    IPV6_GENERAL_PREFIX, // TODO
-    IPV6_HOP_LIMIT, // TODO
-    IPV6_HOST, // TODO
-    IPV6_ICMP_ERROR_INTERVAL, // TODO
-    IPV6_ICMP_BUCKET_SIZE, //TODO uint16
-    IPV6_LOCAL_POLICY_ROUTE_MAP, // TODO
-    IPV6_MFIB, // TODO
-    IPV6_ND, // TODO
-    IPV6_NEIGHBOR, // TODO
-    IPV6_OSPF_NAME_LOOKUP, // TODO
-    IPV6_PREFIX_LIST,
-    IPV6_PREFIX_POOL, // TODO
-    IPV6_RADIUS_SOURCE_INTERFACE, // TODO
-    IPV6_SPD_QUEUE_MAX_THRESHOLD, // TODO
-    IPV6_SPD_QUEUE_MIN_THRESHOLD, // TODO
-    IPV6_TACACS_SOURCE_INTERFACE, // TODO
-    IPV6_TRAFFIC_INTERFACE_STATISTICS, // TODO
-    IPV6_TRAFFIC_INTERFACE_STATISTICS_UNCLEARABLE, // TODO
-    KERBEROS, // TODO
-    KEY_CHAIN, // TODO
-    KEY_CONFIG_KEY, // TODO
-    KRON, // TODO
-    L2_PSEUDOWIRE_ROUTING, // TODO
-    L2_ROUTER_ID, // TODO
-    L2_VFI, // TODO
-    L2VPN_PSEUDOWIRE_STATIC_OAM_CLASS, // TODO
-    L2VPN_VFI_CONTEXT, // TODO
-    L2VPN_XCONNECT_CONTEXT, // TODO
-    L3VPN_ENCAPSULATION_IP_PROFILE, // TODO
-    LINE_RANGE, // TODO
-    LINE_AUX, // TODO
-    LINE_CONSOLE, // TODO
-    LINE_VTY, // TODO
-    LOGGING, // TODO
-    LOGIN_BLOCK_FOR_TIME, // TODO
-    LOGIN_BLOCK_FOR_ATTEMPTS, // TODO
-    LOGIN_BLOCK_FOR_WITHIN, // TODO
-    LOGIN_DELAY, // TODO
-    LOGIN_ON_FAILURE, // TODO
-    LOGIN_ON_FAILURE_LOG, // TODO
-    LOGIN_ON_FAILURE_LOG_EVERY, // TODO
-    LOGIN_ON_SUCCESS, // TODO
-    LOGIN_ON_SUCCESS_LOG, // TODO
-    LOGIN_ON_SUCCESS_LOG_EVERY, // TODO
-    LOGIN_QUITE_MODE_ACCESS_CLASS, // TODO
-    LOGIN_STRING_NAME, // TODO
-    LOGIN_STRING_LINE, // TODO
-    MLS_RP_IP, // TODO
-    MLS_RP_IP_INPUT_ACL, // TODO
-    MLS_RP_IP_ROUTE_MAP, // TODO
-    MLS_RP_NDE_ADDRESS, // TODO
-    MONITOR_EVENT_TRACE, // TODO
-    MPLS, // TODO
-    NETCONF_FORMAT, // TODO
-    NETCONF_LOCKTIME, // TODO
-    NETCONF_MAX_MESSAGE, // TODO
-    NETCONF_MAX_SESSIONS, // TODO
-    NTP, // TODO
-    OBJECT_GROUP_SECURITY, // TODO
-    PASSWORD_ENCRYPTION_AES, // TODO
-    PASSWORD_LOGGING, // TODO
-    POLICY_MAP, // TODO
-    PRIVILEGED, // TODO
-    QOS_POLICE_ORDER_PARENT_FIRST, // TODO
-    QOS_SHAME_TIMER, // TODO
-    ROUTE_MAP,
-    ROUTE_TAG_LIST, // TODO
-    ROUTE_TAG_NOTATION_DOTTED_DECIMAL, // TODO
-    ROUTER_EIGRP_NAMED,
-    ROUTER_OSPFV3_DEFAULT,
-    SAMPLER, // TODO
-    SASL_PROFILE, // TODO
-    SCRIPTING_TCL_ENCDIR, // TODO
-    SCRIPTING_TCL_INIT, // TODO
-    SCRIPTING_TCL_LOW_MEMORY, // TODO
-    SECURITY_AUTH_FAILURE_RATE_THRESHOLD, // TODO
-    SECURITY_AUTH_FAILURE_RATE_THRESHOLD_LOG, // TODO
-    SECURITY_PASSWORDS_MIN_LENGTH, // TODO
-    SERVICE, // TODO
-    SERVICE_POLICY_TYPE_CONTROL, // TODO
-    SNMP_IFMIB_IFALIAS_LONG, // TODO
-    SNMP_IFMIB_IFINDEX_PERSIST, // TODO
-    SNMP_IFMIB_TRAP_THROTTLE, // TODO
-    SNMP_MIB, // TODO
-    SNMP_SERVER, // TODO
-    STANDBY_BFD_ALL_INTERFACES, // TODO
-    STANDBY_REDIRECTS, // TODO
-    TACACS_SERVER, // TODO
-    TIME_RANGE, // TODO
-    TRACK_OBJECT, // TODO
-    TRACK_RESOLUTION_IP_ROUTE_BGP, // TODO
-    TRACK_RESOLUTION_IP_ROUTE_EIGRP, // TODO
-    TRACK_RESOLUTION_IP_ROUTE_OSPF, // TODO
-    TRACK_RESOLUTION_IP_ROUTE_STATIC, // TODO
-    USERNAME, // TODO
-    VRF_CONFIGS,
-    VRF_LIST, // TODO
-    VRF_SELECTION, // TODO
-    WARM_REBOOT, // TODO
-    WARM_REBOOT_COUNT, // TODO
-    WARM_REBOOT_UPTIME, // TODO
-    XCONNECT_LOGGING_PSEUDOWIRE_STATUS, // TODO
-    XCONNECT_LOGGING_REDUNDANCY, // TODO
-    COUNT
-};
-
-#define GLOBAL_DEFAULTS(X) \
-    /* BANNER */ \
-    X(Global, ARCHIVE, false) \
-    X(Global, BFD_SLOW_TIMERS, 0) \
-    X(Global, CLOCK_CALENDAR_VALID, false) \
-    X(Global, CONFIG_REGISTER, 0x2102) \
-    X(Global, CONTROL_PLANE, false) \
-    X(Global, HOSTNAME, "Router") \
-    /* IP */ \
-    X(Global, IP_ACCESS_LIST_HELPER_EGRESS_CHECK, false) \
-    X(Global, IP_ACCESS_LIST_LOG_UPDATE_THRESHOLD, 0) \
-    X(Global, IP_ACCESS_LIST_LOGGING_HASH_GENERATION, false) \
-    X(Global, IP_ACCESS_LIST_LOGGING_INTERVAL, 0) \
-    X(Global, IP_ACCESS_LIST_MATCH_LOCAL_TRAFFIC, false) \
-    X(Global, IP_ACCOUNTING_THRESHOLD, false) \
-    X(Global, IP_ACCOUNTING_TRANSITS, false) \
-    X(Global, IP_ADDRESS_POOL_DHCP, false) \
-    X(Global, IP_ADDRESS_POOL_DHCP_PROXY, false) \
-    X(Global, IP_ADDRESS_POOL_LOCAL, true) \
-    X(Global, IP_ARP_GRATUITOUS, true) \
-    X(Global, IP_ARP_INCOMPLETE, true) \
-    X(Global, IP_ARP_INCOMPLETE_RETRY, 3) \
-    X(Global, IP_ARP_PROXY, false) \
-    X(Global, IP_ARP_QUEUE, 512) \
-    X(Global, IP_BGP_COMMUNITY_NEW_FORMAT, false) \
-    X(Global, IP_DEFAULT_GATEWAY, false) \
-    X(Global, IP_DOMAIN_LOOKUP_NSAP, false) \
-    X(Global, IP_DOMAIN_LOOKUP_RECURSIVE, false) \
-    X(Global, IP_DOMAIN_RECURSIVE_ALLOW_SOA, false) \
-    X(Global, IP_DOMAIN_RECURSIVE_RETRY, 0) \
-    X(Global, IP_DOMAIN_RETRY, 0) \
-    X(Global, IP_DOMAIN_ROUND_ROBIN, false) \
-    X(Global, IP_DOMAIN_TIMEOUT, 0) \
-    X(Global, IP_FLOW_CACHE_ENTRIES, 4096) \
-    X(Global, IP_FLOW_CACHE_TIMEOUT_ACTIVE, 30) \
-    X(Global, IP_FLOW_CACHE_TIMEOUT_INACTIVE, 15) \
-    X(Global, IP_FLOW_CAPTURE_FRAGMENT_OFFSET, false) \
-    X(Global, IP_FLOW_CAPTURE_ICMP, false) \
-    X(Global, IP_FLOW_CAPTURE_IP_ID, false) \
-    X(Global, IP_FLOW_CAPTURE_MAC, false) \
-    X(Global, IP_FLOW_CAPTURE_PACKET_LENGTH, false) \
-    X(Global, IP_FLOW_CAPTURE_TTL, false) \
-    X(Global, IP_FLOW_CAPTURE_VLAN_ID, false) \
-    X(Global, IP_FLOW_CAPTURE_EGRESS_INPUT_INTERFACE, false) \
-    X(Global, IP_FLOW_EXPORT_TEMPLATE_OPTIONS_EXPORT_STATS, false) \
-    X(Global, IP_FLOW_EXPORT_TEMPLATE_OPTIONS_REFRESH_RATE, 0) \
-    X(Global, IP_FLOW_EXPORT_TEMPLATE_OPTIONA_TIMEOUT_RATE, 0) \
-    X(Global, IP_FLOW_EXPORT_TEMPLATE_REFRESH_RATE, 0) \
-    X(Global, IP_FLOW_EXPORT_TEMPLATE_TIMEOUT_RATE, 0) \
-    X(Global, IP_FLOW_EXPORT_VERSION, 5) \
-    X(Global, IP_FLOW_EXPORT_VERSION_BGP_NEXT_HOP, false) \
-    X(Global, IP_FLOW_EXPORT_VERSION_ORIGIN_AS, false) \
-    X(Global, IP_FLOW_EXPORT_VERSION_PEER_AS, false) \
-    X(Global, IP_FLOW_TOP_TALKERS, false) \
-    X(Global, IP_HOSTNAME_STRICT, false) \
-    X(Global, IP_ICMP_RATE_LIMIT_UNREACHABLE_PER_MS, 0) \
-    X(Global, IP_ICMP_RATE_LIMIT_UNREACHABLE_DF, false) \
-    X(Global, IP_ICMP_RATE_LIMIT_UNREACHABLE_LOG, false) \
-    X(Global, IP_ICMP_RATE_LIMIT_UNREACHABLE_TRIGGER, 0) \
-    X(Global, IP_ICMP_RATE_LIMIT_UNREACHABLE_LOG_PER_MS, 0) \
-    X(Global, IP_ICMP_REDIRECT_HOST, false) \
-    X(Global, IP_ICMP_REDIRECT_SUBNET, false) \
-    X(Global, IP_MFIB, false) \
-    X(Global, IP_OSPF_NAME_LOOKUP, false) \
-    X(Global, IP_REFLEXIVE_LIST_TIMEOUT, 0) \
-    X(Global, IP_ROUTING, true) \
-    X(Global, IP_SCP_SERVER, false) \
-    X(Global, IP_SECURITY_ESO_INFO_SOURCE, 0) \
-    X(Global, IP_SECURITY_ESO_INFO_MAX_C_BYTES, 0) \
-    X(Global, IP_SECURITY_ESO_INFO_DEFAULT_BIT, 0) \
-    X(Global, IP_STICKY_ARP, false) \
-    X(Global, IP_SUBNET_ZERO, false) \
-    X(Global, IP_VERIFY_DROP_RATE_COMPUTE_INTERVAL, 0) \
-    X(Global, IP_VERIFY_DROP_RATE_COMPUTE_WINDOW, 0) \
-    X(Global, IP_VERIFY_DROP_RATE_NOTIFY_HOLD_DOWN, 0) \
-    /* IPv6 */ \
-    X(Global, IPV6_ACCESS_LIST_LOG_UPDATE_THRESHOLD, 0) \
-    X(Global, IPV6_FLOWSET, false) \
-    X(Global, IPV6_HOP_LIMIT, 64) \
-    X(Global, IPV6_ICMP_ERROR_INTERVAL, 0) \
-    X(Global, IPV6_ICMP_BUCKET_SIZE, 0) \
-    X(Global, IPV6_MFIB, false) \
-    X(Global, IPV6_OSPF_NAME_LOOKUP, false) \
-    X(Global, IPV6_SPD_QUEUE_MAX_THRESHOLD, 0) \
-    X(Global, IPV6_SPD_QUEUE_MIN_THRESHOLD, 0) \
-    X(Global, IPV6_TRAFFIC_INTERFACE_STATISTICS, false) \
-    X(Global, IPV6_TRAFFIC_INTERFACE_STATISTICS_UNCLEARABLE, false) \
-    /* L2/L3VPN */ \
-    X(Global, L2_PSEUDOWIRE_ROUTING, false) \
-    /* LOGIN */ \
-    X(Global, LOGIN_BLOCK_FOR_TIME, 0) \
-    X(Global, LOGIN_BLOCK_FOR_ATTEMPTS, 0) \
-    X(Global, LOGIN_BLOCK_FOR_WITHIN, 0) \
-    X(Global, LOGIN_DELAY, 0) \
-    X(Global, LOGIN_ON_FAILURE, false) \
-    X(Global, LOGIN_ON_FAILURE_LOG, false) \
-    X(Global, LOGIN_ON_FAILURE_LOG_EVERY, 0) \
-    X(Global, LOGIN_ON_SUCCESS, false) \
-    X(Global, LOGIN_ON_SUCCESS_LOG, false) \
-    X(Global, LOGIN_ON_SUCCESS_LOG_EVERY, 0) \
-    /* MLS */ \
-    X(Global, MLS_RP_IP, false) \
-    X(Global, MLS_RP_IP_INPUT_ACL, false) \
-    X(Global, MLS_RP_IP_ROUTE_MAP, false) \
-    /* NETCONF */ \
-    X(Global, NETCONF_LOCKTIME, 0) \
-    X(Global, NETCONF_MAX_MESSAGE, 0) \
-    X(Global, NETCONF_MAX_SESSIONS, 0) \
-    /* PASSWORD */ \
-    X(Global, PASSWORD_ENCRYPTION_AES, false) \
-    X(Global, PASSWORD_LOGGING, false) \
-    /* QOS */ \
-    X(Global, QOS_POLICE_ORDER_PARENT_FIRST, false) \
-    X(Global, QOS_SHAME_TIMER, 0) \
-    /* ROUTE */ \
-    X(Global, ROUTE_TAG_NOTATION_DOTTED_DECIMAL, false) \
-    /* SECURITY */ \
-    X(Global, SECURITY_AUTH_FAILURE_RATE_THRESHOLD, 0) \
-    X(Global, SECURITY_AUTH_FAILURE_RATE_THRESHOLD_LOG, false) \
-    X(Global, SECURITY_PASSWORDS_MIN_LENGTH, 0) \
-    /* SNMP */ \
-    X(Global, SNMP_IFMIB_IFALIAS_LONG, false) \
-    X(Global, SNMP_IFMIB_IFINDEX_PERSIST, false) \
-    X(Global, SNMP_IFMIB_TRAP_THROTTLE, false) \
-    /* STANDBY */ \
-    X(Global, STANDBY_BFD_ALL_INTERFACES, false) \
-    X(Global, STANDBY_REDIRECTS, false) \
-    /* TRACK */ \
-    X(Global, TRACK_RESOLUTION_IP_ROUTE_BGP, 0) \
-    X(Global, TRACK_RESOLUTION_IP_ROUTE_EIGRP, 0) \
-    X(Global, TRACK_RESOLUTION_IP_ROUTE_OSPF, 0) \
-    X(Global, TRACK_RESOLUTION_IP_ROUTE_STATIC, 0) \
-    /* WARM REBOOT */ \
-    X(Global, WARM_REBOOT, false) \
-    X(Global, WARM_REBOOT_COUNT, 0) \
-    X(Global, WARM_REBOOT_UPTIME, 0) \
-    /* XCONNECT */ \
-    X(Global, XCONNECT_LOGGING_PSEUDOWIRE_STATUS, false) \
-    X(Global, XCONNECT_LOGGING_REDUNDANCY, false)
-
-CONFIG_DEFAULT_TABLE(GLOBAL_DEFAULTS);
-
 #define IP_EXTENDED_ACL_FIELDS(X) \
     X(uint32_t,    sequence) \
     X(bool,        permit) \
@@ -544,266 +145,276 @@ CONFIG_DEFAULT_TABLE(GLOBAL_DEFAULTS);
     X(bool,              logInput) \
     X(global::Dscp,      dscp) \
     X(bool,              fragments)
-    // TODO continue
 
 DEFINE_TUPLE_SCHEMA(IPExtendedAcl, IP_EXTENDED_ACL_FIELDS)
 
-struct GlobalFields : FieldTuple<
-    AtomicField<bool CONFIG_INDEX_ARG(Global::ARCHIVE)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Global::BANNER)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Global::BANNER_CONFIG_SAVE)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Global::BANNER_EXEC)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Global::BANNER_INCOMING)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Global::BANNER_LOGIN)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Global::BANNER_MOTD)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Global::BANNER_PROMPT_TIMEOUT)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Global::BFD_SLOW_TIMERS)>,
-    OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::BFD_SINGLE_HOP_TEMPLATES)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::CEF_TABLE)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::CLASS_MAP)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::CLOCK_CALENDAR_VALID)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::CLOCK_SUMMER_TIME)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::CLOCK_TIME_ZONE)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Global::CONFIG_REGISTER)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::CONTROL_PLANE)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::CRYPTO)>,
-    OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::EAP_PROFILE)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::ENABLE_PASSWORD)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::ENABLE_SECRET)>,
-    OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::FLOW_EXPORTER)>,
-    OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::FLOW_MONITOR)>,
-    OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::FLOW_RECORD)>,
-    OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::FLOW_SAMPLER_MAP)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Global::HOSTNAME)>,
-    OwnedListField<InterfaceRegistry, interface::InterfaceKey CONFIG_INDEX_ARG(Global::INTERFACE), globalInterface>,
-    OwnedListField<ExtendedACLRegistry, std::string CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_EXTENDED)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_HELPER_EGRESS_CHECK)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_LOG_UPDATE_THRESHOLD)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_LOGGING_HASH_GENERATION)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_LOGGING_INTERVAL)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_MATCH_LOCAL_TRAFFIC)>,
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_ROLE_BASED)>,
-    OwnedListField<StandardACLRegistry, std::string CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_STANDARD)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_ACCOUNTING_LIST)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ACCOUNTING_THRESHOLD)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ACCOUNTING_TRANSITS)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ADDRESS_POOL_DHCP)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ADDRESS_POOL_DHCP_PROXY)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ADDRESS_POOL_LOCAL)>,
-    AtomicField<int CONFIG_INDEX_ARG(Global::IP_ARP_GRATUITOUS)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ARP_INCOMPLETE)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_ARP_INCOMPLETE_ENTRIES)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_ARP_INCOMPLETE_RETRY)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ARP_PROXY)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_ARP_QUEUE)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_AS_PATH_ACCESS_LIST)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_BGP_COMMUNITY_NEW_FORMAT)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_CEF)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_CLASSLESS)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_COMMUNITY_LIST)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_DEFAULT_NETWORK)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_DEFAULT_GATEWAY)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_DHCP)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_DHCP_CLIENT)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_DHCP_RELAY)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_DHCP_SERVER)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_DOMAIN_LOOKUP_NSAP)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_DOMAIN_LOOKUP_RECURSIVE)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Global::IP_DOMAIN_MULTICAST)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_DOMAIN_RECURSIVE_ALLOW_SOA)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Global::IP_DOMAIN_RECURSIVE_RETRY)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Global::IP_DOMAIN_RETRY)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_DOMAIN_ROUND_ROBIN)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Global::IP_DOMAIN_TIMEOUT)>,
-    OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::IP_EXPLICIT_PATH_IDENTIFIER)>,
-    OwnedListField<EmptyRegistry, int CONFIG_INDEX_ARG(Global::IP_EXPLICIT_PATH_NAME)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_EXTCOMMUNITY_LIST)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_FLOW_AGGREGATION_CACHE)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_FLOW_CACHE_ENTRIES)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_FLOW_CACHE_MPLS)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Global::IP_FLOW_CACHE_TIMEOUT_ACTIVE)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Global::IP_FLOW_CACHE_TIMEOUT_INACTIVE)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_FLOW_CAPTURE_FRAGMENT_OFFSET)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_FLOW_CAPTURE_ICMP)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_FLOW_CAPTURE_IP_ID)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_FLOW_CAPTURE_MAC)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_FLOW_CAPTURE_PACKET_LENGTH)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_FLOW_CAPTURE_TTL)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_FLOW_CAPTURE_VLAN_ID)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_FLOW_CAPTURE_EGRESS_INPUT_INTERFACE)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_FLOW_EXPORT_DESTINATION)>,
-    ValueField<interface::InterfaceKey CONFIG_INDEX_ARG(Global::IP_FLOW_EXPORT_SOURCE)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_FLOW_EXPORT_TEMPLATE_OPTIONS_EXPORT_STATS)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Global::IP_FLOW_EXPORT_TEMPLATE_OPTIONS_REFRESH_RATE)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Global::IP_FLOW_EXPORT_TEMPLATE_OPTIONA_TIMEOUT_RATE)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Global::IP_FLOW_EXPORT_TEMPLATE_REFRESH_RATE)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Global::IP_FLOW_EXPORT_TEMPLATE_TIMEOUT_RATE)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Global::IP_FLOW_EXPORT_VERSION)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_FLOW_EXPORT_VERSION_BGP_NEXT_HOP)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_FLOW_EXPORT_VERSION_ORIGIN_AS)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_FLOW_EXPORT_VERSION_PEER_AS)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_FLOW_TOP_TALKERS)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_HOSTNAME_STRICT)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_HTTP)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_ICMP_RATE_LIMIT_UNREACHABLE_PER_MS)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ICMP_RATE_LIMIT_UNREACHABLE_DF)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ICMP_RATE_LIMIT_UNREACHABLE_LOG)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_ICMP_RATE_LIMIT_UNREACHABLE_TRIGGER)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_ICMP_RATE_LIMIT_UNREACHABLE_LOG_PER_MS)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ICMP_REDIRECT_HOST)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ICMP_REDIRECT_SUBNET)>,
-    ValueField<interface::InterfaceKey CONFIG_INDEX_ARG(Global::IP_KERBEROS_SOURCE_INTERFACE)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Global::IP_LOCAL_POLICY_ROUTE_MAP)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_LOCAL_POOL)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_MFIB)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_NAT)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_NBAR)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_OSPF_NAME_LOOKUP)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_POLICY_LIST)>,
-    OwnedListField<PrefixListRegistry<types::IPv4Prefix>, std::string CONFIG_INDEX_ARG(Global::IP_PREFIX_LIST)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_REFLEXIVE_LIST_TIMEOUT)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ROUTING)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_ROUTING_PROTOCOL_PURGE_INTERFACE)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_RSVP)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_SCP_SERVER)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Global::IP_SECURITY_ESO_INFO_SOURCE)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Global::IP_SECURITY_ESO_INFO_MAX_C_BYTES)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Global::IP_SECURITY_ESO_INFO_DEFAULT_BIT)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_SLA)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_SSH)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_STICKY_ARP)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IP_SUBNET_ZERO)>,
-    ValueField<interface::InterfaceKey CONFIG_INDEX_ARG(Global::IP_TACACS_SOURCE_INTERFACE)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_TCP)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_TELNET)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_TFTP)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Global::IP_TRAFFIC_EXPORT_PROFILE)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Global::IP_VERIFY_DROP_RATE_COMPUTE_INTERVAL)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Global::IP_VERIFY_DROP_RATE_COMPUTE_WINDOW)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Global::IP_VERIFY_DROP_RATE_NOTIFY_HOLD_DOWN)>,
-    OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::IP_VRF)>,
-    OwnedListField<ExtendedACLRegistry, std::string CONFIG_INDEX_ARG(Global::IPV6_ACCESS_LIST)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IPV6_ACCESS_LIST_LOG_UPDATE_THRESHOLD)>,
-    OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::IPV6_ACCESS_LIST_ROLE_BASED)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_CEF)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_DHCP)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_DHCP_CLIENT)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_DHCP_RELAY)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IPV6_FLOWSET)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_GENERAL_PREFIX)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Global::IPV6_HOP_LIMIT)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_HOST)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IPV6_ICMP_ERROR_INTERVAL)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Global::IPV6_ICMP_BUCKET_SIZE)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Global::IPV6_LOCAL_POLICY_ROUTE_MAP)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IPV6_MFIB)>,
-    RegistryContainer<NdpBaseRegistry CONFIG_INDEX_ARG(Global::IPV6_ND)>,
-    ListField<std::tuple<types::IPv6Address, interface::InterfaceKey, types::Mac> CONFIG_INDEX_ARG(Global::IPV6_NEIGHBOR)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IPV6_OSPF_NAME_LOOKUP)>,
-    OwnedListField<PrefixListRegistry<types::IPv6Prefix>, std::string CONFIG_INDEX_ARG(Global::IPV6_PREFIX_LIST)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_PREFIX_POOL)>,
-    ValueField<interface::InterfaceKey CONFIG_INDEX_ARG(Global::IPV6_RADIUS_SOURCE_INTERFACE)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Global::IPV6_SPD_QUEUE_MAX_THRESHOLD)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Global::IPV6_SPD_QUEUE_MIN_THRESHOLD)>,
-    ValueField<interface::InterfaceKey CONFIG_INDEX_ARG(Global::IPV6_TACACS_SOURCE_INTERFACE)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IPV6_TRAFFIC_INTERFACE_STATISTICS)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::IPV6_TRAFFIC_INTERFACE_STATISTICS_UNCLEARABLE)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::KERBEROS)>,
-    OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::KEY_CHAIN)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Global::KEY_CONFIG_KEY)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::KRON)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::L2_PSEUDOWIRE_ROUTING)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Global::L2_ROUTER_ID)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::L2_VFI)>,
-    OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::L2VPN_PSEUDOWIRE_STATIC_OAM_CLASS)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::L2VPN_VFI_CONTEXT)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::L2VPN_XCONNECT_CONTEXT)>,
-    OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::L3VPN_ENCAPSULATION_IP_PROFILE)>,
-    ValueField<std::pair<uint16_t, uint16_t> CONFIG_INDEX_ARG(Global::LINE_RANGE)>,
-    OwnedListField<EmptyRegistry, uint16_t CONFIG_INDEX_ARG(Global::LINE_AUX)>,
-    OwnedListField<EmptyRegistry, uint16_t CONFIG_INDEX_ARG(Global::LINE_CONSOLE)>,
-    OwnedListField<EmptyRegistry, uint16_t CONFIG_INDEX_ARG(Global::LINE_VTY)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::LOGGING)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Global::LOGIN_BLOCK_FOR_TIME)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Global::LOGIN_BLOCK_FOR_ATTEMPTS)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Global::LOGIN_BLOCK_FOR_WITHIN)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Global::LOGIN_DELAY)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::LOGIN_ON_FAILURE)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::LOGIN_ON_FAILURE_LOG)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Global::LOGIN_ON_FAILURE_LOG_EVERY)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::LOGIN_ON_SUCCESS)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::LOGIN_ON_SUCCESS_LOG)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Global::LOGIN_ON_SUCCESS_LOG_EVERY)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Global::LOGIN_QUITE_MODE_ACCESS_CLASS)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Global::LOGIN_STRING_NAME)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Global::LOGIN_STRING_LINE)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::MLS_RP_IP)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::MLS_RP_IP_INPUT_ACL)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::MLS_RP_IP_ROUTE_MAP)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Global::MLS_RP_NDE_ADDRESS)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::MONITOR_EVENT_TRACE)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::MPLS)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::NETCONF_FORMAT)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Global::NETCONF_LOCKTIME)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Global::NETCONF_MAX_MESSAGE)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Global::NETCONF_MAX_SESSIONS)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::NTP)>,
-    OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::OBJECT_GROUP_SECURITY)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::PASSWORD_ENCRYPTION_AES)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::PASSWORD_LOGGING)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::POLICY_MAP)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::PRIVILEGED)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::QOS_POLICE_ORDER_PARENT_FIRST)>,
-    AtomicField<int CONFIG_INDEX_ARG(Global::QOS_SHAME_TIMER)>, // 1 or 4
-    OwnedListField<RouteMapRegistry, std::string CONFIG_INDEX_ARG(Global::ROUTE_MAP)>,
-    OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::ROUTE_TAG_LIST)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::ROUTE_TAG_NOTATION_DOTTED_DECIMAL)>,
-    OwnedListField<EigrpNamedRegistry, std::string CONFIG_INDEX_ARG(Global::ROUTER_EIGRP_NAMED)>,
-    OwnedListField<OspfRegistry, uint16_t CONFIG_INDEX_ARG(Global::ROUTER_OSPFV3_DEFAULT)>,
-    OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::SAMPLER)>,
-    OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::SASL_PROFILE)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::SCRIPTING_TCL_ENCDIR)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::SCRIPTING_TCL_INIT)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Global::SCRIPTING_TCL_LOW_MEMORY)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Global::SECURITY_AUTH_FAILURE_RATE_THRESHOLD)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::SECURITY_AUTH_FAILURE_RATE_THRESHOLD_LOG)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Global::SECURITY_PASSWORDS_MIN_LENGTH)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::SERVICE)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Global::SERVICE_POLICY_TYPE_CONTROL)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::SNMP_IFMIB_IFALIAS_LONG)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::SNMP_IFMIB_IFINDEX_PERSIST)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::SNMP_IFMIB_TRAP_THROTTLE)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::SNMP_MIB)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::SNMP_SERVER)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::STANDBY_BFD_ALL_INTERFACES)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::STANDBY_REDIRECTS)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::TACACS_SERVER)>,
-    OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::TIME_RANGE)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::TRACK_OBJECT)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Global::TRACK_RESOLUTION_IP_ROUTE_BGP)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Global::TRACK_RESOLUTION_IP_ROUTE_EIGRP)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Global::TRACK_RESOLUTION_IP_ROUTE_OSPF)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Global::TRACK_RESOLUTION_IP_ROUTE_STATIC)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::USERNAME)>,
-    OwnedListField<VrfRegistry, std::string CONFIG_INDEX_ARG(Global::VRF_CONFIGS)>,
-    OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::VRF_LIST)>,
-    ListField<Incomplete CONFIG_INDEX_ARG(Global::VRF_SELECTION)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::WARM_REBOOT)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Global::WARM_REBOOT_COUNT)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Global::WARM_REBOOT_UPTIME)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::XCONNECT_LOGGING_PSEUDOWIRE_STATUS)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Global::XCONNECT_LOGGING_REDUNDANCY)>
-> {};
+#define GLOBAL_IPV6_NEIGHBOR_FIELDS(X) \
+    X(types::IPv6Address,       address) \
+    X(interface::InterfaceKey,  iface) \
+    X(types::Mac,               mac)
+
+DEFINE_TUPLE_SCHEMA(GlobalIPv6Neighbor, GLOBAL_IPV6_NEIGHBOR_FIELDS);
 
 /**
- * @brief Registry slot for the global configuration scope.
+ * @brief Configuration fields for the global system scope.
  * @ingroup CONFIG_GLOBAL
  *
- * Owns a `SubRegistry<Global, ...>` that holds every system-wide configuration field.
- * The global registry is constructed once at startup and shared across all VRFs and
- * protocol processes via the `RegistryDatabase`.
+ * This enum indexes every configurable parameter at the global level — from banners
+ * and hostname through IP routing, ACLs, prefix-lists, route-maps, and protocol
+ * process containers. Fields marked `// TODO` are schema placeholders whose registry
+ * types are not yet fully implemented.
  */
-struct GlobalRegistry : SubRegistry<GlobalRegistry, Global, nullptr, GlobalFields> {};
+// Aliased because VALUE_FIELD() is fixed arity and cannot absorb the type's comma.
+using GlobalLineRange = std::pair<uint16_t, uint16_t>;
+
+#define GLOBAL_FIELD_LIST(X, Y) \
+    ATOMIC_FIELD(X, Y, ARCHIVE, bool, false) TODO \
+    VALUE_FIELD(X, Y, BANNER, std::string) TODO \
+    VALUE_FIELD(X, Y, BANNER_CONFIG_SAVE, std::string) TODO \
+    VALUE_FIELD(X, Y, BANNER_EXEC, std::string) TODO \
+    VALUE_FIELD(X, Y, BANNER_INCOMING, std::string) TODO \
+    VALUE_FIELD(X, Y, BANNER_LOGIN, std::string) TODO \
+    VALUE_FIELD(X, Y, BANNER_MOTD, std::string) TODO \
+    VALUE_FIELD(X, Y, BANNER_PROMPT_TIMEOUT, std::string) TODO \
+    ATOMIC_FIELD(X, Y, BFD_SLOW_TIMERS, uint16_t, 0) TODO \
+    OWNED_LIST_FIELD(X, Y, BFD_SINGLE_HOP_TEMPLATES, EmptyRegistry, std::string) TODO \
+    LIST_FIELD(X, Y, CEF_TABLE, Incomplete) TODO \
+    LIST_FIELD(X, Y, CLASS_MAP, Incomplete) TODO \
+    ATOMIC_FIELD(X, Y, CLOCK_CALENDAR_VALID, bool, false) TODO \
+    LIST_FIELD(X, Y, CLOCK_SUMMER_TIME, Incomplete) TODO \
+    LIST_FIELD(X, Y, CLOCK_TIME_ZONE, Incomplete) TODO \
+    ATOMIC_FIELD(X, Y, CONFIG_REGISTER, uint16_t, 0x2102) TODO \
+    ATOMIC_FIELD(X, Y, CONTROL_PLANE, bool, false) TODO \
+    LIST_FIELD(X, Y, CRYPTO, Incomplete) TODO \
+    OWNED_LIST_FIELD(X, Y, EAP_PROFILE, EmptyRegistry, std::string) TODO \
+    LIST_FIELD(X, Y, ENABLE_PASSWORD, Incomplete) TODO \
+    LIST_FIELD(X, Y, ENABLE_SECRET, Incomplete) TODO \
+    OWNED_LIST_FIELD(X, Y, FLOW_EXPORTER, EmptyRegistry, std::string) TODO \
+    OWNED_LIST_FIELD(X, Y, FLOW_MONITOR, EmptyRegistry, std::string) TODO \
+    OWNED_LIST_FIELD(X, Y, FLOW_RECORD, EmptyRegistry, std::string) TODO \
+    OWNED_LIST_FIELD(X, Y, FLOW_SAMPLER_MAP, EmptyRegistry, std::string) TODO \
+    VALUE_FIELD(X, Y, HOSTNAME, std::string) TODO \
+    OWNED_LIST_FIELD_CB(X, Y, INTERFACE, InterfaceRegistry, interface::InterfaceKey, globalInterface) \
+    OWNED_LIST_FIELD(X, Y, IP_ACCESS_LIST_EXTENDED, ExtendedACLRegistry, std::string) \
+    ATOMIC_FIELD(X, Y, IP_ACCESS_LIST_HELPER_EGRESS_CHECK, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_ACCESS_LIST_LOG_UPDATE_THRESHOLD, uint32_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, IP_ACCESS_LIST_LOGGING_HASH_GENERATION, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_ACCESS_LIST_LOGGING_INTERVAL, uint32_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, IP_ACCESS_LIST_MATCH_LOCAL_TRAFFIC, bool, false) TODO \
+    VALUE_FIELD(X, Y, IP_ACCESS_LIST_ROLE_BASED, Incomplete) TODO \
+    OWNED_LIST_FIELD(X, Y, IP_ACCESS_LIST_STANDARD, StandardACLRegistry, std::string) \
+    LIST_FIELD(X, Y, IP_ACCOUNTING_LIST, Incomplete) TODO \
+    ATOMIC_FIELD(X, Y, IP_ACCOUNTING_THRESHOLD, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_ACCOUNTING_TRANSITS, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_ADDRESS_POOL_DHCP, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_ADDRESS_POOL_DHCP_PROXY, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_ADDRESS_POOL_LOCAL, bool, true) TODO \
+    ATOMIC_FIELD(X, Y, IP_ARP_GRATUITOUS, int, true) TODO \
+    ATOMIC_FIELD(X, Y, IP_ARP_INCOMPLETE, bool, true) TODO \
+    OPTIONAL_ATOMIC_FIELD(X, Y, IP_ARP_INCOMPLETE_ENTRIES, uint32_t) TODO \
+    ATOMIC_FIELD(X, Y, IP_ARP_INCOMPLETE_RETRY, uint32_t, 3) TODO \
+    ATOMIC_FIELD(X, Y, IP_ARP_PROXY, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_ARP_QUEUE, uint32_t, 512) TODO \
+    LIST_FIELD(X, Y, IP_AS_PATH_ACCESS_LIST, Incomplete) TODO \
+    ATOMIC_FIELD(X, Y, IP_BGP_COMMUNITY_NEW_FORMAT, bool, false) TODO \
+    LIST_FIELD(X, Y, IP_CEF, Incomplete) TODO \
+    LIST_FIELD(X, Y, IP_CLASSLESS, Incomplete) TODO \
+    LIST_FIELD(X, Y, IP_COMMUNITY_LIST, Incomplete) TODO \
+    OPTIONAL_ATOMIC_FIELD(X, Y, IP_DEFAULT_NETWORK, uint32_t) TODO \
+    ATOMIC_FIELD(X, Y, IP_DEFAULT_GATEWAY, bool, false) TODO \
+    LIST_FIELD(X, Y, IP_DHCP, Incomplete) TODO \
+    LIST_FIELD(X, Y, IP_DHCP_CLIENT, Incomplete) TODO \
+    LIST_FIELD(X, Y, IP_DHCP_RELAY, Incomplete) TODO \
+    LIST_FIELD(X, Y, IP_DHCP_SERVER, Incomplete) TODO \
+    ATOMIC_FIELD(X, Y, IP_DOMAIN_LOOKUP_NSAP, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_DOMAIN_LOOKUP_RECURSIVE, bool, false) TODO \
+    VALUE_FIELD(X, Y, IP_DOMAIN_MULTICAST, std::string) TODO \
+    ATOMIC_FIELD(X, Y, IP_DOMAIN_RECURSIVE_ALLOW_SOA, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_DOMAIN_RECURSIVE_RETRY, uint8_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, IP_DOMAIN_RETRY, uint8_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, IP_DOMAIN_ROUND_ROBIN, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_DOMAIN_TIMEOUT, uint16_t, 0) TODO \
+    OWNED_LIST_FIELD(X, Y, IP_EXPLICIT_PATH_IDENTIFIER, EmptyRegistry, std::string) TODO \
+    OWNED_LIST_FIELD(X, Y, IP_EXPLICIT_PATH_NAME, EmptyRegistry, int) TODO \
+    LIST_FIELD(X, Y, IP_EXTCOMMUNITY_LIST, Incomplete) TODO \
+    LIST_FIELD(X, Y, IP_FLOW_AGGREGATION_CACHE, Incomplete) TODO \
+    ATOMIC_FIELD(X, Y, IP_FLOW_CACHE_ENTRIES, uint32_t, 4096) TODO \
+    LIST_FIELD(X, Y, IP_FLOW_CACHE_MPLS, Incomplete) TODO \
+    ATOMIC_FIELD(X, Y, IP_FLOW_CACHE_TIMEOUT_ACTIVE, uint8_t, 30) TODO \
+    ATOMIC_FIELD(X, Y, IP_FLOW_CACHE_TIMEOUT_INACTIVE, uint8_t, 15) TODO \
+    ATOMIC_FIELD(X, Y, IP_FLOW_CAPTURE_FRAGMENT_OFFSET, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_FLOW_CAPTURE_ICMP, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_FLOW_CAPTURE_IP_ID, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_FLOW_CAPTURE_MAC, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_FLOW_CAPTURE_PACKET_LENGTH, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_FLOW_CAPTURE_TTL, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_FLOW_CAPTURE_VLAN_ID, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_FLOW_CAPTURE_EGRESS_INPUT_INTERFACE, bool, false) TODO \
+    LIST_FIELD(X, Y, IP_FLOW_EXPORT_DESTINATION, Incomplete) TODO \
+    VALUE_FIELD(X, Y, IP_FLOW_EXPORT_SOURCE, interface::InterfaceKey) TODO \
+    ATOMIC_FIELD(X, Y, IP_FLOW_EXPORT_TEMPLATE_OPTIONS_EXPORT_STATS, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_FLOW_EXPORT_TEMPLATE_OPTIONS_REFRESH_RATE, uint16_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, IP_FLOW_EXPORT_TEMPLATE_OPTIONA_TIMEOUT_RATE, uint16_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, IP_FLOW_EXPORT_TEMPLATE_REFRESH_RATE, uint16_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, IP_FLOW_EXPORT_TEMPLATE_TIMEOUT_RATE, uint16_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, IP_FLOW_EXPORT_VERSION, uint8_t, 5) TODO \
+    ATOMIC_FIELD(X, Y, IP_FLOW_EXPORT_VERSION_BGP_NEXT_HOP, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_FLOW_EXPORT_VERSION_ORIGIN_AS, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_FLOW_EXPORT_VERSION_PEER_AS, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_FLOW_TOP_TALKERS, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_HOSTNAME_STRICT, bool, false) TODO \
+    LIST_FIELD(X, Y, IP_HTTP, Incomplete) TODO \
+    ATOMIC_FIELD(X, Y, IP_ICMP_RATE_LIMIT_UNREACHABLE_PER_MS, uint32_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, IP_ICMP_RATE_LIMIT_UNREACHABLE_DF, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_ICMP_RATE_LIMIT_UNREACHABLE_LOG, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_ICMP_RATE_LIMIT_UNREACHABLE_TRIGGER, uint32_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, IP_ICMP_RATE_LIMIT_UNREACHABLE_LOG_PER_MS, uint32_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, IP_ICMP_REDIRECT_HOST, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_ICMP_REDIRECT_SUBNET, bool, false) TODO \
+    VALUE_FIELD(X, Y, IP_KERBEROS_SOURCE_INTERFACE, interface::InterfaceKey) TODO \
+    VALUE_FIELD(X, Y, IP_LOCAL_POLICY_ROUTE_MAP, std::string) TODO \
+    LIST_FIELD(X, Y, IP_LOCAL_POOL, Incomplete) TODO \
+    ATOMIC_FIELD(X, Y, IP_MFIB, bool, false) TODO \
+    LIST_FIELD(X, Y, IP_NAT, Incomplete) TODO \
+    LIST_FIELD(X, Y, IP_NBAR, Incomplete) TODO \
+    ATOMIC_FIELD(X, Y, IP_OSPF_NAME_LOOKUP, bool, false) TODO \
+    LIST_FIELD(X, Y, IP_POLICY_LIST, Incomplete) TODO \
+    OWNED_LIST_FIELD(X, Y, IP_PREFIX_LIST, PrefixListRegistry<types::IPv4Prefix>, std::string) \
+    ATOMIC_FIELD(X, Y, IP_REFLEXIVE_LIST_TIMEOUT, uint32_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, IP_ROUTING, bool, true) TODO \
+    LIST_FIELD(X, Y, IP_ROUTING_PROTOCOL_PURGE_INTERFACE, Incomplete) TODO \
+    LIST_FIELD(X, Y, IP_RSVP, Incomplete) TODO \
+    ATOMIC_FIELD(X, Y, IP_SCP_SERVER, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_SECURITY_ESO_INFO_SOURCE, uint8_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, IP_SECURITY_ESO_INFO_MAX_C_BYTES, uint8_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, IP_SECURITY_ESO_INFO_DEFAULT_BIT, uint8_t, 0) TODO \
+    LIST_FIELD(X, Y, IP_SLA, Incomplete) TODO \
+    LIST_FIELD(X, Y, IP_SSH, Incomplete) TODO \
+    ATOMIC_FIELD(X, Y, IP_STICKY_ARP, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IP_SUBNET_ZERO, bool, false) TODO \
+    VALUE_FIELD(X, Y, IP_TACACS_SOURCE_INTERFACE, interface::InterfaceKey) TODO \
+    LIST_FIELD(X, Y, IP_TCP, Incomplete) TODO \
+    LIST_FIELD(X, Y, IP_TELNET, Incomplete) TODO \
+    LIST_FIELD(X, Y, IP_TFTP, Incomplete) TODO \
+    VALUE_FIELD(X, Y, IP_TRAFFIC_EXPORT_PROFILE, std::string) TODO \
+    ATOMIC_FIELD(X, Y, IP_VERIFY_DROP_RATE_COMPUTE_INTERVAL, uint16_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, IP_VERIFY_DROP_RATE_COMPUTE_WINDOW, uint16_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, IP_VERIFY_DROP_RATE_NOTIFY_HOLD_DOWN, uint16_t, 0) TODO \
+    OWNED_LIST_FIELD(X, Y, IP_VRF, EmptyRegistry, std::string) TODO \
+    OWNED_LIST_FIELD(X, Y, IPV6_ACCESS_LIST, ExtendedACLRegistry, std::string) \
+    ATOMIC_FIELD(X, Y, IPV6_ACCESS_LIST_LOG_UPDATE_THRESHOLD, uint32_t, 0) TODO \
+    OWNED_LIST_FIELD(X, Y, IPV6_ACCESS_LIST_ROLE_BASED, EmptyRegistry, std::string) TODO \
+    LIST_FIELD(X, Y, IPV6_CEF, Incomplete) TODO \
+    LIST_FIELD(X, Y, IPV6_DHCP, Incomplete) TODO \
+    LIST_FIELD(X, Y, IPV6_DHCP_CLIENT, Incomplete) TODO \
+    LIST_FIELD(X, Y, IPV6_DHCP_RELAY, Incomplete) TODO \
+    ATOMIC_FIELD(X, Y, IPV6_FLOWSET, bool, false) TODO \
+    LIST_FIELD(X, Y, IPV6_GENERAL_PREFIX, Incomplete) TODO \
+    ATOMIC_FIELD(X, Y, IPV6_HOP_LIMIT, uint8_t, 64) TODO \
+    LIST_FIELD(X, Y, IPV6_HOST, Incomplete) TODO \
+    ATOMIC_FIELD(X, Y, IPV6_ICMP_ERROR_INTERVAL, uint32_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, IPV6_ICMP_BUCKET_SIZE, uint16_t, 0) TODO \
+    VALUE_FIELD(X, Y, IPV6_LOCAL_POLICY_ROUTE_MAP, std::string) TODO \
+    ATOMIC_FIELD(X, Y, IPV6_MFIB, bool, false) TODO \
+    REGISTRY_CONTAINER(X, Y, IPV6_ND, NdpBaseRegistry) TODO \
+    LIST_FIELD(X, Y, IPV6_NEIGHBOR, GlobalIPv6Neighbor) TODO \
+    ATOMIC_FIELD(X, Y, IPV6_OSPF_NAME_LOOKUP, bool, false) TODO \
+    OWNED_LIST_FIELD(X, Y, IPV6_PREFIX_LIST, PrefixListRegistry<types::IPv6Prefix>, std::string) \
+    LIST_FIELD(X, Y, IPV6_PREFIX_POOL, Incomplete) TODO \
+    VALUE_FIELD(X, Y, IPV6_RADIUS_SOURCE_INTERFACE, interface::InterfaceKey) TODO \
+    ATOMIC_FIELD(X, Y, IPV6_SPD_QUEUE_MAX_THRESHOLD, uint16_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, IPV6_SPD_QUEUE_MIN_THRESHOLD, uint16_t, 0) TODO \
+    VALUE_FIELD(X, Y, IPV6_TACACS_SOURCE_INTERFACE, interface::InterfaceKey) TODO \
+    ATOMIC_FIELD(X, Y, IPV6_TRAFFIC_INTERFACE_STATISTICS, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, IPV6_TRAFFIC_INTERFACE_STATISTICS_UNCLEARABLE, bool, false) TODO \
+    LIST_FIELD(X, Y, KERBEROS, Incomplete) TODO \
+    OWNED_LIST_FIELD(X, Y, KEY_CHAIN, EmptyRegistry, std::string) TODO \
+    VALUE_FIELD(X, Y, KEY_CONFIG_KEY, std::string) TODO \
+    LIST_FIELD(X, Y, KRON, Incomplete) TODO \
+    ATOMIC_FIELD(X, Y, L2_PSEUDOWIRE_ROUTING, bool, false) TODO \
+    OPTIONAL_ATOMIC_FIELD(X, Y, L2_ROUTER_ID, uint32_t) TODO \
+    LIST_FIELD(X, Y, L2_VFI, Incomplete) TODO \
+    OWNED_LIST_FIELD(X, Y, L2VPN_PSEUDOWIRE_STATIC_OAM_CLASS, EmptyRegistry, std::string) TODO \
+    LIST_FIELD(X, Y, L2VPN_VFI_CONTEXT, Incomplete) TODO \
+    LIST_FIELD(X, Y, L2VPN_XCONNECT_CONTEXT, Incomplete) TODO \
+    OWNED_LIST_FIELD(X, Y, L3VPN_ENCAPSULATION_IP_PROFILE, EmptyRegistry, std::string) TODO \
+    VALUE_FIELD(X, Y, LINE_RANGE, GlobalLineRange) TODO \
+    OWNED_LIST_FIELD(X, Y, LINE_AUX, EmptyRegistry, uint16_t) TODO \
+    OWNED_LIST_FIELD(X, Y, LINE_CONSOLE, EmptyRegistry, uint16_t) TODO \
+    OWNED_LIST_FIELD(X, Y, LINE_VTY, EmptyRegistry, uint16_t) TODO \
+    LIST_FIELD(X, Y, LOGGING, Incomplete) TODO \
+    ATOMIC_FIELD(X, Y, LOGIN_BLOCK_FOR_TIME, uint16_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, LOGIN_BLOCK_FOR_ATTEMPTS, uint16_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, LOGIN_BLOCK_FOR_WITHIN, uint16_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, LOGIN_DELAY, uint8_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, LOGIN_ON_FAILURE, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, LOGIN_ON_FAILURE_LOG, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, LOGIN_ON_FAILURE_LOG_EVERY, uint16_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, LOGIN_ON_SUCCESS, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, LOGIN_ON_SUCCESS_LOG, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, LOGIN_ON_SUCCESS_LOG_EVERY, uint16_t, 0) TODO \
+    VALUE_FIELD(X, Y, LOGIN_QUITE_MODE_ACCESS_CLASS, std::string) TODO \
+    VALUE_FIELD(X, Y, LOGIN_STRING_NAME, std::string) TODO \
+    VALUE_FIELD(X, Y, LOGIN_STRING_LINE, std::string) TODO \
+    ATOMIC_FIELD(X, Y, MLS_RP_IP, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, MLS_RP_IP_INPUT_ACL, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, MLS_RP_IP_ROUTE_MAP, bool, false) TODO \
+    OPTIONAL_ATOMIC_FIELD(X, Y, MLS_RP_NDE_ADDRESS, uint32_t) TODO \
+    LIST_FIELD(X, Y, MONITOR_EVENT_TRACE, Incomplete) TODO \
+    LIST_FIELD(X, Y, MPLS, Incomplete) TODO \
+    LIST_FIELD(X, Y, NETCONF_FORMAT, Incomplete) TODO \
+    ATOMIC_FIELD(X, Y, NETCONF_LOCKTIME, uint16_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, NETCONF_MAX_MESSAGE, uint32_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, NETCONF_MAX_SESSIONS, uint8_t, 0) TODO \
+    LIST_FIELD(X, Y, NTP, Incomplete) TODO \
+    OWNED_LIST_FIELD(X, Y, OBJECT_GROUP_SECURITY, EmptyRegistry, std::string) TODO \
+    ATOMIC_FIELD(X, Y, PASSWORD_ENCRYPTION_AES, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, PASSWORD_LOGGING, bool, false) TODO \
+    LIST_FIELD(X, Y, POLICY_MAP, Incomplete) TODO \
+    LIST_FIELD(X, Y, PRIVILEGED, Incomplete) TODO \
+    ATOMIC_FIELD(X, Y, QOS_POLICE_ORDER_PARENT_FIRST, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, QOS_SHAME_TIMER, int, 0) TODO \
+    OWNED_LIST_FIELD(X, Y, ROUTE_MAP, RouteMapRegistry, std::string) \
+    OWNED_LIST_FIELD(X, Y, ROUTE_TAG_LIST, EmptyRegistry, std::string) TODO \
+    ATOMIC_FIELD(X, Y, ROUTE_TAG_NOTATION_DOTTED_DECIMAL, bool, false) TODO \
+    OWNED_LIST_FIELD(X, Y, ROUTER_EIGRP_NAMED, EigrpNamedRegistry, std::string) \
+    OWNED_LIST_FIELD(X, Y, ROUTER_OSPFV3_DEFAULT, OspfRegistry, uint16_t) \
+    OWNED_LIST_FIELD(X, Y, SAMPLER, EmptyRegistry, std::string) TODO \
+    OWNED_LIST_FIELD(X, Y, SASL_PROFILE, EmptyRegistry, std::string) TODO \
+    LIST_FIELD(X, Y, SCRIPTING_TCL_ENCDIR, Incomplete) TODO \
+    LIST_FIELD(X, Y, SCRIPTING_TCL_INIT, Incomplete) TODO \
+    OPTIONAL_ATOMIC_FIELD(X, Y, SCRIPTING_TCL_LOW_MEMORY, uint32_t) TODO \
+    ATOMIC_FIELD(X, Y, SECURITY_AUTH_FAILURE_RATE_THRESHOLD, uint16_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, SECURITY_AUTH_FAILURE_RATE_THRESHOLD_LOG, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, SECURITY_PASSWORDS_MIN_LENGTH, uint8_t, 0) TODO \
+    LIST_FIELD(X, Y, SERVICE, Incomplete) TODO \
+    VALUE_FIELD(X, Y, SERVICE_POLICY_TYPE_CONTROL, std::string) TODO \
+    ATOMIC_FIELD(X, Y, SNMP_IFMIB_IFALIAS_LONG, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, SNMP_IFMIB_IFINDEX_PERSIST, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, SNMP_IFMIB_TRAP_THROTTLE, bool, false) TODO \
+    LIST_FIELD(X, Y, SNMP_MIB, Incomplete) TODO \
+    LIST_FIELD(X, Y, SNMP_SERVER, Incomplete) TODO \
+    ATOMIC_FIELD(X, Y, STANDBY_BFD_ALL_INTERFACES, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, STANDBY_REDIRECTS, bool, false) TODO \
+    LIST_FIELD(X, Y, TACACS_SERVER, Incomplete) TODO \
+    OWNED_LIST_FIELD(X, Y, TIME_RANGE, EmptyRegistry, std::string) TODO \
+    LIST_FIELD(X, Y, TRACK_OBJECT, Incomplete) TODO \
+    ATOMIC_FIELD(X, Y, TRACK_RESOLUTION_IP_ROUTE_BGP, uint32_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, TRACK_RESOLUTION_IP_ROUTE_EIGRP, uint32_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, TRACK_RESOLUTION_IP_ROUTE_OSPF, uint32_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, TRACK_RESOLUTION_IP_ROUTE_STATIC, uint32_t, 0) TODO \
+    LIST_FIELD(X, Y, USERNAME, Incomplete) TODO \
+    OWNED_LIST_FIELD(X, Y, VRF_CONFIGS, VrfRegistry, std::string) \
+    OWNED_LIST_FIELD(X, Y, VRF_LIST, EmptyRegistry, std::string) TODO \
+    LIST_FIELD(X, Y, VRF_SELECTION, Incomplete) TODO \
+    ATOMIC_FIELD(X, Y, WARM_REBOOT, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, WARM_REBOOT_COUNT, uint8_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, WARM_REBOOT_UPTIME, uint8_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, XCONNECT_LOGGING_PSEUDOWIRE_STATUS, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, XCONNECT_LOGGING_REDUNDANCY, bool, false) TODO
+
+DEFINE_CONFIG_GROUP(Global, GLOBAL_FIELD_LIST)
+
 }
 
 #endif // GLOBAL_REGISTRY_HPP

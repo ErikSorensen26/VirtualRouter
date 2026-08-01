@@ -8,45 +8,23 @@
 #define ARP_REGISTRY
 
 #include "configs/RegistryTypes.hpp"
-#include "configs/SubRegistry.hpp"
+#include "configs/RegistryBuilder.hpp"
 
 namespace config
 {
+#define ARP_FIELD_LIST(X, Y) \
+    ATOMIC_FIELD(X, Y, AUTHORIZED, bool, false) \
+    ATOMIC_FIELD(X, Y, LOG_THRESHOLD_ENTRIES, uint32_t, 32) \
+    ATOMIC_FIELD(X, Y, PACKET_PRIORITY, bool, true) \
+    ATOMIC_FIELD(X, Y, PROBE_INTERVAL, uint8_t, 30) \
+    ATOMIC_FIELD(X, Y, PROBE_COUNT, uint8_t, 2) \
+    ATOMIC_FIELD(X, Y, TIMEOUT, uint32_t, 14400)
+
 /**
  * @brief Per-interface ARP configuration fields.
  * @ingroup CONFIG_INTERFACE
  */
-enum class Arp
-{
-    AUTHORIZED,
-    LOG_THRESHOLD_ENTRIES,
-    PACKET_PRIORITY,
-    PROBE_INTERVAL,
-    PROBE_COUNT,
-    TIMEOUT,
-    COUNT
-};
-
-#define ARP_DEFAULTS(X) \
-    X(Arp, AUTHORIZED, false) \
-    X(Arp, LOG_THRESHOLD_ENTRIES, 32) \
-    X(Arp, PACKET_PRIORITY, true) \
-    X(Arp, PROBE_INTERVAL, 30) \
-    X(Arp, PROBE_COUNT, 2) \
-    X(Arp, TIMEOUT, 14400)
-
-CONFIG_DEFAULT_TABLE(ARP_DEFAULTS);
-
-struct ArpFields : FieldTuple<
-    AtomicField<bool CONFIG_INDEX_ARG(Arp::AUTHORIZED)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Arp::LOG_THRESHOLD_ENTRIES)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Arp::PACKET_PRIORITY)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Arp::PROBE_INTERVAL)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Arp::PROBE_COUNT)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Arp::TIMEOUT)>
-> {};
-
-struct ArpRegistry : SubRegistry<ArpRegistry, Arp, nullptr, ArpFields> {};
+DEFINE_CONFIG_GROUP(Arp, ARP_FIELD_LIST)
 }
 
 #endif // ARP_REGISTRY

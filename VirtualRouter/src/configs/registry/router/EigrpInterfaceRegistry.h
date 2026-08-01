@@ -14,9 +14,9 @@
 #include <IPAddress.h>
 
 #include "configs/RegistryTypes.hpp"
-#include "configs/RegistryDefaultTable.hpp"
+#include "configs/RegistryBuilder.hpp"
 #include "configs/RegistryReference.hpp"
-#include "configs/SubRegistry.hpp"
+#include "configs/TupleSchema.hpp"
 
 namespace config
 {
@@ -30,66 +30,36 @@ enum class AuthType : uint16_t
 };
 }
 
-enum class EigrpInterface
-{
-    AUTHENTICATION_KEYCHAIN,
-    AUTHENTICATION_MODE,
-    BANDWIDTH_PERCENTAGE,
-    BFD,
-    DAMPENING_CHANGE,
-    DAMPENING_CHANGE_PERCENT,
-    DAMPENING_INTERVAL,
-    DAMPENING_INTERVAL_TIME,
-    HELLO_INTERVAL,
-    HOLD_TIME,
-    NEXT_HOP_SELF,
-    PASSIVE_INTERFACE,
-    SHUTDOWN,
-    SPLIT_HORIZON,
-    SUMMARY_ADDRESS,
-    COUNT
-};
-
-#define EIGRP_INTERFACE_DEFAULTS(X) \
-    X(EigrpInterface, AUTHENTICATION_MODE,      config::eigrp::AuthType::NONE) \
-    X(EigrpInterface, BANDWIDTH_PERCENTAGE,     50) \
-    X(EigrpInterface, BFD,                      false) \
-    X(EigrpInterface, DAMPENING_CHANGE,         false) \
-    X(EigrpInterface, DAMPENING_CHANGE_PERCENT, 50) \
-    X(EigrpInterface, DAMPENING_INTERVAL,       false) \
-    X(EigrpInterface, DAMPENING_INTERVAL_TIME,  30) \
-    X(EigrpInterface, HELLO_INTERVAL,           5) \
-    X(EigrpInterface, HOLD_TIME,                15) \
-    X(EigrpInterface, NEXT_HOP_SELF,            false) \
-    X(EigrpInterface, PASSIVE_INTERFACE,        false) \
-    X(EigrpInterface, SHUTDOWN,                 false) \
-    X(EigrpInterface, SPLIT_HORIZON,            true)
-
-CONFIG_DEFAULT_TABLE(EIGRP_INTERFACE_DEFAULTS);
-
 void EigrpIfacePassive(void* i);
 void EigrpIfaceShutdown(void* i);
 void EigrpIfaceSummary(void* i);
 
-struct EigrpInterfaceFields : FieldTuple<
-    ValueField<std::string CONFIG_INDEX_ARG(EigrpInterface::AUTHENTICATION_KEYCHAIN)>,
-    AtomicField<config::eigrp::AuthType CONFIG_INDEX_ARG(EigrpInterface::AUTHENTICATION_MODE)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(EigrpInterface::BANDWIDTH_PERCENTAGE)>,
-    AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::BFD)>,
-    AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::DAMPENING_CHANGE)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(EigrpInterface::DAMPENING_CHANGE_PERCENT)>,
-    AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::DAMPENING_INTERVAL)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(EigrpInterface::DAMPENING_INTERVAL_TIME)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(EigrpInterface::HELLO_INTERVAL)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(EigrpInterface::HOLD_TIME)>,
-    AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::NEXT_HOP_SELF)>,
-    AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::PASSIVE_INTERFACE), EigrpIfacePassive>,
-    AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::SHUTDOWN), EigrpIfaceShutdown>,
-    AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::SPLIT_HORIZON)>,
-    ListField<std::tuple<types::IPPrefix, std::optional<std::string>> CONFIG_INDEX_ARG(EigrpInterface::SUMMARY_ADDRESS), EigrpIfaceSummary>
-> {};
+#define EIGRP_SUMMARY_ADDRESS_FIELDS(X) \
+    X(types::IPPrefix,                prefix) \
+    X(std::optional<std::string>,     leakMap)
 
-struct EigrpInterfaceRegistry : SubRegistry<EigrpInterfaceRegistry, EigrpInterface, nullptr, EigrpInterfaceFields> {};
+DEFINE_TUPLE_SCHEMA(EigrpSummaryAddress, EIGRP_SUMMARY_ADDRESS_FIELDS);
+
+// AUTHENTICATION_KEYCHAIN and SUMMARY_ADDRESS carried no default row: absence is
+// what a ValueField and a ListField already store before configuration.
+#define EIGRP_INTERFACE_FIELD_LIST(X, Y) \
+    VALUE_FIELD(X, Y, AUTHENTICATION_KEYCHAIN, std::string) \
+    ATOMIC_FIELD(X, Y, AUTHENTICATION_MODE, config::eigrp::AuthType, config::eigrp::AuthType::NONE) \
+    ATOMIC_FIELD(X, Y, BANDWIDTH_PERCENTAGE, uint32_t, 50) \
+    ATOMIC_FIELD(X, Y, BFD, bool, false) \
+    ATOMIC_FIELD(X, Y, DAMPENING_CHANGE, bool, false) \
+    ATOMIC_FIELD(X, Y, DAMPENING_CHANGE_PERCENT, uint8_t, 50) \
+    ATOMIC_FIELD(X, Y, DAMPENING_INTERVAL, bool, false) \
+    ATOMIC_FIELD(X, Y, DAMPENING_INTERVAL_TIME, uint16_t, 30) \
+    ATOMIC_FIELD(X, Y, HELLO_INTERVAL, uint16_t, 5) \
+    ATOMIC_FIELD(X, Y, HOLD_TIME, uint16_t, 15) \
+    ATOMIC_FIELD(X, Y, NEXT_HOP_SELF, bool, false) \
+    ATOMIC_FIELD_CB(X, Y, PASSIVE_INTERFACE, bool, false, EigrpIfacePassive) \
+    ATOMIC_FIELD_CB(X, Y, SHUTDOWN, bool, false, EigrpIfaceShutdown) \
+    ATOMIC_FIELD(X, Y, SPLIT_HORIZON, bool, true) \
+    LIST_FIELD_CB(X, Y, SUMMARY_ADDRESS, EigrpSummaryAddress, EigrpIfaceSummary)
+
+DEFINE_CONFIG_GROUP(EigrpInterface, EIGRP_INTERFACE_FIELD_LIST)
 }
 
 #endif // EIGRP_INTERFACE_REGISTRY_H

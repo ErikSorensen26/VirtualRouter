@@ -8,44 +8,51 @@
 #define TUPLE_SCHEMA_HPP
 
 #include <tuple>
-#include <utility>      // std::declval, std::forward
+#include <utility>      // std::declval
 #include <cstddef>      // std::size_t
-#include <type_traits>  // std::tuple_size_v, std::is_nothrow_constructible_v
+#include <type_traits>  // std::tuple_element_t
 
-// ============================================================
-//
-// Usage:
-//
-//   #define MY_FIELDS(X) \
-//       X(int,    Foo)   \
-//       X(double, Bar)
-//
-//   DEFINE_TUPLE_SCHEMA(MySchema, MY_FIELDS);
-//
-//   MySchemaTuple t = MakeMySchema(1, 3.14);
-//   auto& foo = MySchema::Foo(t);
-//   auto& bar = MySchema::get<MySchemaIndex::Index_Bar>(t);
-//
-// ============================================================
+/**
+ * Usage:
+ *
+ *   #define MY_FIELDS(X) \
+ *       X(int,    Foo)   \
+ *       X(double, Bar)
+ *
+ *   DEFINE_TUPLE_SCHEMA(MySchema, MY_FIELDS);
+ *
+ *   MySchema::Tuple t{ 1, 3.14 };
+ *   auto& foo = MySchema::Foo(t);
+ *
+ * If a field type contains a top level comma the preprocessor would read it as
+ * two arguments, so parenthesize it. The parentheses are stripped by TS_TYPE
+ * and are not part of the resulting type.
+ *
+ *       X((std::variant<A, B>), Foo)
+ */
+namespace config::ts
+{
+/**
+ * void(T) is a function type taking one parameter; peel T back out of it.
+ * This is what lets a parenthesized (T) survive as a single macro argument.
+ */
+template <typename> struct Unparen;
+template <typename T> struct Unparen<void(T)> { using type = T; };
 
+template <typename T> using Unparen_t = typename Unparen<T>::type;
+}
 
-// ------------------------------------------------------------
-// Internal X-macro expanders (do not call directly)
-// ------------------------------------------------------------
+// Accepts either a bare type or a parenthesized one: TS_TYPE(int), TS_TYPE((A<x,y>)).
+#define TS_TYPE(T) config::ts::Unparen_t<void(T)>
 
-// enum indices (trailing comma OK in enum lists)
-#define TS_INDEX_ELEM(T, Name) Index_##Name,
+#define TS_INDEX_ELEM(T, Name)    Index_##Name,
+#define TS_TUPLE_ELEM(T, Name)    std::declval<std::tuple<TS_TYPE(T)>>(),
 
-// for building a tuple type without needing comma-joining logic:
-// we build it as decltype(tuple_cat(tuple<T1>, tuple<T2>, ..., tuple<>))
-#define TS_TUPLE_CAT_ELEM(T, Name) std::declval<std::tuple<T>>(),
-
-// named accessor methods (inside Schema struct)
-#define TS_NAMED_ACCESSOR(T, Name)                                                        \
-    static T& Name(Tuple& t) noexcept {                                                   \
+#define TS_ACCESSOR_ELEM(T, Name)                                                         \
+    static TS_TYPE(T)& Name(Tuple& t) noexcept {                                          \
         return std::get<static_cast<std::size_t>(Index::Index_##Name)>(t);                \
     }                                                                                     \
-    static const T& Name(const Tuple& t) noexcept {                                       \
+    static const TS_TYPE(T)& Name(const Tuple& t) noexcept {                              \
         return std::get<static_cast<std::size_t>(Index::Index_##Name)>(t);                \
     }
 
@@ -56,9 +63,8 @@
             Count                                                                         \
         };                                                                                \
                                                                                           \
-        /* Build std::tuple<T...> without needing separator-aware macros. */              \
         using Tuple = decltype(std::tuple_cat(                                            \
-            FIELD_LIST(TS_TUPLE_CAT_ELEM)                                                 \
+            FIELD_LIST(TS_TUPLE_ELEM)                                                     \
             std::declval<std::tuple<>>()                                                  \
         ));                                                                               \
                                                                                           \
@@ -67,27 +73,7 @@
         template <Index I>                                                                \
         using FieldType = std::tuple_element_t<static_cast<std::size_t>(I), Tuple>;       \
                                                                                           \
-        template <Index I>                                                                \
-        static decltype(auto) get(Tuple& t) noexcept {                                    \
-            return std::get<static_cast<std::size_t>(I)>(t);                              \
-        }                                                                                 \
-        template <Index I>                                                                \
-        static decltype(auto) get(const Tuple& t) noexcept {                              \
-            return std::get<static_cast<std::size_t>(I)>(t);                              \
-        }                                                                                 \
-                                                                                          \
-        /* Named accessors: Schema::FieldName(tuple) */                                   \
-        FIELD_LIST(TS_NAMED_ACCESSOR)                                                     \
-                                                                                          \
-        template <typename... Args>                                                       \
-        static Tuple make(Args&&... args)                                                 \
-            noexcept(noexcept(Tuple{ std::forward<Args>(args)... }))                      \
-        {                                                                                 \
-            static_assert(sizeof...(Args) == Count,                                       \
-                          "Make<Schema>: argument count must match schema field count");  \
-            return Tuple{ std::forward<Args>(args)... };                                  \
-        }                                                                                 \
-    };                                                                                    \
+        FIELD_LIST(TS_ACCESSOR_ELEM)                                                      \
+    };
 
 #endif // TUPLE_SCHEMA_HPP
-

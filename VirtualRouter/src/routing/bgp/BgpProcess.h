@@ -25,7 +25,7 @@
 #include "bgp/af/AddressFamilyInstance.h" // IWYU pragma: keep
 
 namespace core { class VirtualRouter; }
-namespace config { struct BgpBaseRegistry; struct BgpRegistry; }
+namespace config { struct BgpTransportBaseRegistry; struct BgpRegistry; }
 
 /**
  * @namespace routing::bgp

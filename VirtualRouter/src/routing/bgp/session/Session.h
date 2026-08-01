@@ -346,7 +346,7 @@ public:
     Neighbor& getNeighbor() noexcept { return neighbor; }
     const Neighbor& getNeighbor() const noexcept { return neighbor; }
     SessionTimers& getTimers() noexcept { return timers; }
-    const config::BgpBaseRegistry& getBaseConfig() const noexcept { return base; }
+    const config::BgpTransportBaseRegistry& getBaseConfig() const noexcept { return base; }
 
     transport::tcp::Connection* getPrimaryConnection() noexcept { return primaryConn; }
     const transport::tcp::Connection* getPrimaryConnection() const noexcept { return primaryConn; }
@@ -416,7 +416,7 @@ private:
 
     // REFERENCES
     Neighbor& neighbor;             ///< Owning neighbor; provides configuration and AF-instance access.
-    config::BgpBaseRegistry& base;  ///< Base BGP session configuration (timers, AS, router-id, etc.).
+    config::BgpTransportBaseRegistry& base;  ///< Base BGP session configuration (timers, AS, router-id, etc.).
 
     // PROTOCOL STATE
     Fsm fsm;            ///< RFC 4271 finite-state machine; all state transitions go through here.

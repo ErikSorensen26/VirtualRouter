@@ -18,8 +18,8 @@
 #include <variant>
 
 #include "configs/RegistryTypes.hpp"
-#include "configs/RegistryDefaultTable.hpp"
-#include "configs/SubRegistry.hpp"
+#include "configs/RegistryBuilder.hpp"
+#include "configs/TupleSchema.hpp"
 
 namespace config
 {
@@ -82,128 +82,70 @@ using ProtocolMatch = std::variant<
  * @brief Fields for a single standard ACL entry (permit/deny a source prefix).
  * @ingroup CONFIG_POLICY
  */
-enum class StandardACE
-{
-    PERMIT, ///< True = permit, false = deny.
-    PREFIX, ///< Source IPv4 prefix to match.
-    LOG,    ///< Generate a log message on match.
-    COUNT
-};
+#define STANDARD_ACE_FIELD_LIST(X, Y) \
+    ATOMIC_FIELD(X, Y, PERMIT, bool, true) \
+    VALUE_FIELD(X, Y, PREFIX, types::IPv4Prefix) \
+    ATOMIC_FIELD(X, Y, LOG, bool, false)
 
-#define STANDARD_ACE_DEFAULTS(X) \
-    X(StandardACE, PERMIT, true) \
-    X(StandardACE, LOG, false)
+DEFINE_CONFIG_GROUP(StandardACE, STANDARD_ACE_FIELD_LIST)
 
-CONFIG_DEFAULT_TABLE(STANDARD_ACE_DEFAULTS);
-
-struct StandardACEFields : FieldTuple<
-    AtomicField<bool CONFIG_INDEX_ARG(StandardACE::PERMIT)>,
-    ValueField<types::IPv4Prefix CONFIG_INDEX_ARG(StandardACE::PREFIX)>,
-    AtomicField<bool CONFIG_INDEX_ARG(StandardACE::LOG)>
-> {};
-
-/**
- * @brief Registry slot for one standard ACL entry.
- * @ingroup CONFIG_POLICY
- */
-struct StandardACERegistry : SubRegistry<StandardACERegistry, StandardACE, nullptr, StandardACEFields> {};
 
 /**
  * @brief Fields for a named standard access-list (ordered sequence of StandardACEs).
  * @ingroup CONFIG_POLICY
  */
-enum class StandardACL
-{
-    SEQUENCE, ///< Ordered list of ACEs keyed by sequence number.
-    COUNT
-};
+#define STANDARD_ACL_FIELD_LIST(X, Y) \
+    OWNED_LIST_FIELD(X, Y, SEQUENCE, StandardACERegistry, uint32_t)
 
-struct StandardACLFields : FieldTuple<
-    OwnedListField<StandardACERegistry, uint32_t CONFIG_INDEX_ARG(StandardACL::SEQUENCE)>
-> {};
+DEFINE_CONFIG_GROUP(StandardACL, STANDARD_ACL_FIELD_LIST)
 
-/**
- * @brief Registry slot for one named standard ACL.
- * @ingroup CONFIG_POLICY
- */
-struct StandardACLRegistry : SubRegistry<StandardACLRegistry, StandardACL, nullptr, StandardACLFields> {};
+
+
+#define ACL_ENDPOINT_MATCH_FIELDS(X) \
+    X(policy::acl::AclMatchType, kind) \
+    X((std::variant<types::IPPrefix, std::string>), value)
+
+DEFINE_TUPLE_SCHEMA(AclEndpointMatch, ACL_ENDPOINT_MATCH_FIELDS);
+
+#define ACL_TTL_MATCH_FIELDS(X) \
+    X(policy::acl::Operation,   op) \
+    X(std::vector<uint8_t>,     values)
+
+DEFINE_TUPLE_SCHEMA(AclTtlMatch, ACL_TTL_MATCH_FIELDS);
 
 /**
  * @brief Fields for a single extended ACL entry (full 5-tuple + option matching).
  * @ingroup CONFIG_POLICY
  */
-enum class ExtendedACE
-{
-    PROTOCOL,
-    TIMEOUT,
-    REFLECT,
-    AUTH_ACTIVATED,
-    SRC,
-    DST,
-    DSCP,
-    LOG,
-    LOG_INPUT,
-    IP_OPTION,
-    PRECEDENCE,
-    TIME_RANGE,
-    TOS,
-    TTL,
-    PROTOCOL_MATCH,
-    COUNT
-};
+#define EXTENDED_ACE_FIELD_LIST(X, Y) \
+    ATOMIC_FIELD(X, Y, PROTOCOL, uint8_t, 0/*Invalid protocol*/) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, TIMEOUT, uint16_t) \
+    ATOMIC_FIELD(X, Y, REFLECT, bool, false) \
+    ATOMIC_FIELD(X, Y, AUTH_ACTIVATED, bool, false) \
+    VALUE_FIELD(X, Y, SRC, AclEndpointMatch) \
+    VALUE_FIELD(X, Y, DST, AclEndpointMatch) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, DSCP, uint8_t) \
+    ATOMIC_FIELD(X, Y, LOG, bool, false) \
+    ATOMIC_FIELD(X, Y, LOG_INPUT, bool, false) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, IP_OPTION, uint8_t) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, PRECEDENCE, uint8_t) \
+    VALUE_FIELD(X, Y, TIME_RANGE, std::string) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, TOS, uint8_t) \
+    VALUE_FIELD(X, Y, TTL, AclTtlMatch) \
+    VALUE_FIELD(X, Y, PROTOCOL_MATCH, policy::acl::ProtocolMatch)
 
-#define EXTENDED_ACE_DEFAULTS(X) \
-    X(ExtendedACE, PROTOCOL, 0/*Invalid protocol*/) \
-    X(ExtendedACE, REFLECT, false) \
-    X(ExtendedACE, AUTH_ACTIVATED, false) \
-    X(ExtendedACE, LOG, false) \
-    X(ExtendedACE, LOG_INPUT, false)
+DEFINE_CONFIG_GROUP(ExtendedACE, EXTENDED_ACE_FIELD_LIST)
 
-CONFIG_DEFAULT_TABLE(EXTENDED_ACE_DEFAULTS);
-
-struct ExtendedACEFields : FieldTuple<
-    AtomicField<uint8_t CONFIG_INDEX_ARG(ExtendedACE::PROTOCOL)>,
-    OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(ExtendedACE::TIMEOUT)>,
-    AtomicField<bool CONFIG_INDEX_ARG(ExtendedACE::REFLECT)>,
-    AtomicField<bool CONFIG_INDEX_ARG(ExtendedACE::AUTH_ACTIVATED)>,
-    ValueField<std::tuple<policy::acl::AclMatchType, std::variant<types::IPPrefix, std::string>> CONFIG_INDEX_ARG(ExtendedACE::SRC)>,
-    ValueField<std::tuple<policy::acl::AclMatchType, std::variant<types::IPPrefix, std::string>> CONFIG_INDEX_ARG(ExtendedACE::DST)>,
-    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(ExtendedACE::DSCP)>,
-    AtomicField<bool CONFIG_INDEX_ARG(ExtendedACE::LOG)>,
-    AtomicField<bool CONFIG_INDEX_ARG(ExtendedACE::LOG_INPUT)>,
-    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(ExtendedACE::IP_OPTION)>,
-    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(ExtendedACE::PRECEDENCE)>,
-    ValueField<std::string CONFIG_INDEX_ARG(ExtendedACE::TIME_RANGE)>,
-    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(ExtendedACE::TOS)>,
-    ValueField<std::tuple<policy::acl::Operation, std::vector<uint8_t>> CONFIG_INDEX_ARG(ExtendedACE::TTL)>,
-    ValueField<policy::acl::ProtocolMatch CONFIG_INDEX_ARG(ExtendedACE::PROTOCOL_MATCH)>
-> {};
-
-/**
- * @brief Registry slot for one extended ACL entry.
- * @ingroup CONFIG_POLICY
- */
-struct ExtendedACERegistry : SubRegistry<ExtendedACERegistry, ExtendedACE, nullptr, ExtendedACEFields> {};
 
 /**
  * @brief Fields for a named extended access-list (ordered sequence of ExtendedACEs).
  * @ingroup CONFIG_POLICY
  */
-enum class ExtendedACL
-{
-    SEQUENCES, ///< Ordered list of ACEs keyed by sequence number.
-    COUNT
-};
+#define EXTENDED_ACL_FIELD_LIST(X, Y) \
+    OWNED_LIST_FIELD(X, Y, SEQUENCES, ExtendedACERegistry, uint32_t)
 
-struct ExtendedACLFields : FieldTuple<
-    OwnedListField<ExtendedACERegistry, uint32_t CONFIG_INDEX_ARG(ExtendedACL::SEQUENCES)>
-> {};
+DEFINE_CONFIG_GROUP(ExtendedACL, EXTENDED_ACL_FIELD_LIST)
 
-/**
- * @brief Registry slot for one named extended ACL.
- * @ingroup CONFIG_POLICY
- */
-struct ExtendedACLRegistry : SubRegistry<ExtendedACLRegistry, ExtendedACL, nullptr, ExtendedACLFields> {};
 }
 
 #endif // ACCESS_LIST_REGISTRY_HPP

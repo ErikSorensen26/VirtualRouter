@@ -497,9 +497,6 @@ public:
     CONFIG_INDEX_MEMBER
     void setMask(const ValueField* p) noexcept { mask = p; }
 
-    // value is a raw owning pointer; the last set() has no other owner to free it.
-    // Destruction does not take the registry mutex, so the owning SubRegistry must
-    // outlive every thread that can reach this field through an accessor.
     ~ValueField() { delete value.load(std::memory_order_relaxed); }
 private:
     template <typename, typename, ApplyFn, typename>

@@ -13,8 +13,8 @@
 #include "routing/rib/RouteSource.hpp"
 #include "configs/RegistryReference.hpp"
 #include "configs/RegistryTypes.hpp"
-#include "configs/RegistryDefaultTable.hpp"
-#include "configs/SubRegistry.hpp"
+#include "configs/RegistryBuilder.hpp"
+#include "configs/TupleSchema.hpp"
 #include "interface/configs/InterfaceType.hpp"
 
 #undef IPV6_NEXTHOP
@@ -84,33 +84,37 @@ enum class MetricOperation
  *        `set base` and `set default` route-map actions.
  * @ingroup CONFIG_POLICY
  */
-enum class RouteMapSequenceBase
-{
-    INTERFACE,
-    IP_GLOBAL_NEXTHOP,
-    IP_NEXTHOP,
-    IP_VRF,
-    IPV6_GLOBAL_NEXTHOP,
-    IPV6_NEXTHOP,
-    IPV6_VRF,
-    COUNT
-};
+#define ROUTE_MAP_SEQUENCE_BASE_FIELD_LIST(X, Y) \
+    LIST_FIELD(X, Y, INTERFACE, interface::InterfaceKey) \
+    LIST_FIELD(X, Y, IP_GLOBAL_NEXTHOP, types::IPv4Address) \
+    LIST_FIELD(X, Y, IP_NEXTHOP, types::IPv4Address) \
+    VALUE_FIELD(X, Y, IP_VRF, std::string) \
+    LIST_FIELD(X, Y, IPV6_GLOBAL_NEXTHOP, types::IPv6Address) \
+    LIST_FIELD(X, Y, IPV6_NEXTHOP, types::IPv6Address) \
+    VALUE_FIELD(X, Y, IPV6_VRF, std::string)
 
-struct RouteMapSequenceBaseFields : FieldTuple<
-    ListField<interface::InterfaceKey CONFIG_INDEX_ARG(RouteMapSequenceBase::INTERFACE)>,
-    ListField<types::IPv4Address CONFIG_INDEX_ARG(RouteMapSequenceBase::IP_GLOBAL_NEXTHOP)>,
-    ListField<types::IPv4Address CONFIG_INDEX_ARG(RouteMapSequenceBase::IP_NEXTHOP)>,
-    ValueField<std::string CONFIG_INDEX_ARG(RouteMapSequenceBase::IP_VRF)>,
-    ListField<types::IPv6Address CONFIG_INDEX_ARG(RouteMapSequenceBase::IPV6_GLOBAL_NEXTHOP)>,
-    ListField<types::IPv6Address CONFIG_INDEX_ARG(RouteMapSequenceBase::IPV6_NEXTHOP)>,
-    ValueField<std::string CONFIG_INDEX_ARG(RouteMapSequenceBase::IPV6_VRF)>
-> {};
+DEFINE_CONFIG_GROUP(RouteMapSequenceBase, ROUTE_MAP_SEQUENCE_BASE_FIELD_LIST)
 
-/**
- * @brief Registry slot for the `set base` / `set default` next-hop block.
- * @ingroup CONFIG_POLICY
- */
-struct RouteMapSequenceBaseRegistry : SubRegistry<RouteMapSequenceBaseRegistry, RouteMapSequenceBase, nullptr, RouteMapSequenceBaseFields> {};
+#define ROUTE_MAP_APATHS_ADVERTISE_FIELDS(X) \
+    X(bool, all) \
+    X(bool, best) \
+    X((std::optional<std::tuple<uint8_t, uint8_t>>), bestRange)
+
+DEFINE_TUPLE_SCHEMA(RouteMapApathsAdvertise, ROUTE_MAP_APATHS_ADVERTISE_FIELDS);
+
+#define ROUTE_MAP_METRIC_RANGE_FIELDS(X) \
+    X(uint32_t, metric) \
+    X(uint32_t, deviation)
+
+DEFINE_TUPLE_SCHEMA(RouteMapMetricRange, ROUTE_MAP_METRIC_RANGE_FIELDS);
+
+#define ROUTE_MAP_DAMPENING_FIELDS(X) \
+    X(uint8_t,  halfLife) \
+    X(uint16_t, reuse) \
+    X(uint16_t, suppress) \
+    X(uint8_t,  maxSuppressTime)
+
+DEFINE_TUPLE_SCHEMA(RouteMapDampening, ROUTE_MAP_DAMPENING_FIELDS);
 
 /**
  * @brief All configuration fields for a single route-map sequence entry.
@@ -121,222 +125,103 @@ struct RouteMapSequenceBaseRegistry : SubRegistry<RouteMapSequenceBaseRegistry, 
  * controls whether a matching route is permitted or denied. `CONTINUE` redirects
  * evaluation to a different sequence number after this one fires.
  */
-enum class RouteMapSequence
-{
-    PERMIT,
-    DESCRIPTION,
-    CONTINUE,
-    MATCH_APATHS_ADVERTISE_SET,
-    MATCH_AS_PATH,
-    MATCH_COMMUNITY,
-    MATCH_EXTCOMMUNITY,
-    MATCH_INTERFACE,
-    MATCH_IP_ADDRESS_ACL,
-    MATCH_IP_ADDRESS_PREFIX_LIST,
-    MATCH_IP_NEXT_HOP_ACL,
-    MATCH_IP_NEXT_HOP_PREFIX_LIST,
-    MATCH_IP_REDISTRIBUTION_SOURCE_ACL,
-    MATCH_IP_REDISTRIBUTION_SOURCE_PREFIX_LIST,
-    MATCH_IP_ROUTE_SOURCE_ACL,
-    MATCH_IP_ROUTE_SOURCE_PREFIX_LIST,
-    MATCH_IP_ROUTE_REDISTRIBUTION_SOURCE_ACL,
-    MATCH_IP_ROUTE_REDISTRIBUTION_SOURCE_PREFIX_LIST,
-    MATCH_IPV6_ADDRESS_ACL,
-    MATCH_IPV6_ADDRESS_PREFIX_LIST,
-    MATCH_IPV6_NEXT_HOP_ACL,
-    MATCH_IPV6_NEXT_HOP_PREFIX_LIST,
-    MATCH_IPV6_ROUTE_SOURCE_ACL,
-    MATCH_IPV6_ROUTE_SOURCE_PREFIX_LIST,
-    MATCH_MIN_PACKET_LENGTH,
-    MATCH_MAX_PACKET_LENGTH,
-    MATCH_LOCAL_PREFERENCE,
-    MATCH_MDT_GROUP,
-    MATCH_METRIC,
-    MATCH_EXTERNAL_METRIC,
-    MATCH_MPLS_LABEL,
-    MATCH_ROUTE_TYPE_EXTERNAL_TYPE_1,
-    MATCH_ROUTE_TYPE_EXTERNAL_TYPE_2,
-    MATCH_ROUTE_TYPE_INTERNAL,
-    MATCH_ROUTE_TYPE_LEVEL_1,
-    MATCH_ROUTE_TYPE_LEVEL_2,
-    MATCH_ROUTE_TYPE_LOCAL,
-    MATCH_ROUTE_TYPE_NSSA_TYPE_1,
-    MATCH_ROUTE_TYPE_NSSA_TYPE_2,
-    MATCH_RKPI_INVALID,
-    MATCH_RKPI_NOT_FOUND,
-    MATCH_RKPI_VALID,
-    MATCH_SOURCE_PROTOCOL,
-    MATCH_TAG,
-    MATCH_TAG_LIST,
-    SET_AS_PATH_PREPEND,
-    SET_AS_PATH_PREPEND_LAST_AS,
-    SET_AS_PATH_TAG,
-    SET_AUTOMATIC_TAG,
-    SET_COMM_LIST_DEL,
-    SET_COMMUNITY,
-    SET_DAMPENING,
-    SET_EXTCOM_LIST_DEL,
-    SET_EXTCOMMUNITY_COST,
-    SET_EXTCOMMUNITY_COST_ID,
-    SET_EXTCOMMUNITY_COST_ATTR,
-    SET_EXTCOMMUNITY_RT,
-    SET_EXTCOMMUNITY_RT_ADDITIVE,
-    SET_EXTCOMMUNITY_SOO,
-    SET_GLOBAL,
-    SET_IP_ADDRESS_PREFIX_LIST,
-    SET_IP_DF,
-    SET_IP_PRECEDENCE,
-    SET_IP_QOS_GROUP,
-    SET_IP_TOS,
-    SET_IPV6_ADDRESS_PREFIX_LIST,
-    SET_IPV6_PRECEDENCE,
-    SET_LEVEL,
-    SET_LOCAL_PREFERENCE,
-    SET_METRIC,
-    SET_METRIC_OPERATION,
-    SET_METRIC_TYPE,
-    SET_MPLS_LABEL,
-    SET_ORIGIN,
-    SET_TAG,
-    SET_TRAFFIC_INDEX,
-    SET_VRF,
-    SET_WEIGHT,
-    SET_BASE,
-    SET_DEFAULT,
-    COUNT
-};
+// Aliased because LIST_FIELD() is fixed arity and cannot absorb the type's comma.
+using RouteMapSourceProtocol = std::pair<core::RouteSource, uint32_t>;
 
-#define ROUTE_MAP_SEQUENCE_DEFAULTS(X) \
-    X(RouteMapSequence, PERMIT, true) \
-    X(RouteMapSequence, MATCH_MPLS_LABEL, false) \
-    X(RouteMapSequence, MATCH_ROUTE_TYPE_EXTERNAL_TYPE_1, false) \
-    X(RouteMapSequence, MATCH_ROUTE_TYPE_EXTERNAL_TYPE_2, false) \
-    X(RouteMapSequence, MATCH_ROUTE_TYPE_INTERNAL, false) \
-    X(RouteMapSequence, MATCH_ROUTE_TYPE_LEVEL_1, false) \
-    X(RouteMapSequence, MATCH_ROUTE_TYPE_LEVEL_2, false) \
-    X(RouteMapSequence, MATCH_ROUTE_TYPE_LOCAL, false) \
-    X(RouteMapSequence, MATCH_ROUTE_TYPE_NSSA_TYPE_1, false) \
-    X(RouteMapSequence, MATCH_ROUTE_TYPE_NSSA_TYPE_2, false) \
-    X(RouteMapSequence, MATCH_RKPI_INVALID, false) \
-    X(RouteMapSequence, MATCH_RKPI_NOT_FOUND, false) \
-    X(RouteMapSequence, MATCH_RKPI_VALID, false) \
-    X(RouteMapSequence, SET_AS_PATH_TAG, false) \
-    X(RouteMapSequence, SET_AUTOMATIC_TAG, false) \
-    X(RouteMapSequence, SET_EXTCOMMUNITY_RT_ADDITIVE, false) \
-    X(RouteMapSequence, SET_GLOBAL, false) \
-    X(RouteMapSequence, SET_METRIC_OPERATION, policy::MetricOperation::NONE) \
-    X(RouteMapSequence, SET_MPLS_LABEL, false)
+#define ROUTE_MAP_SEQUENCE_FIELD_LIST(X, Y) \
+    ATOMIC_FIELD(X, Y, PERMIT, bool, true) \
+    VALUE_FIELD(X, Y, DESCRIPTION, std::string) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, CONTINUE, uint16_t) \
+    VALUE_FIELD(X, Y, MATCH_APATHS_ADVERTISE_SET, RouteMapApathsAdvertise) \
+    LIST_FIELD(X, Y, MATCH_AS_PATH, uint16_t) \
+    LIST_FIELD(X, Y, MATCH_COMMUNITY, std::string) \
+    LIST_FIELD(X, Y, MATCH_EXTCOMMUNITY, std::string) \
+    LIST_FIELD(X, Y, MATCH_INTERFACE, interface::InterfaceKey) \
+    LIST_FIELD(X, Y, MATCH_IP_ADDRESS_ACL, std::string) \
+    LIST_FIELD(X, Y, MATCH_IP_ADDRESS_PREFIX_LIST, std::string) \
+    LIST_FIELD(X, Y, MATCH_IP_NEXT_HOP_ACL, std::string) \
+    LIST_FIELD(X, Y, MATCH_IP_NEXT_HOP_PREFIX_LIST, std::string) \
+    LIST_FIELD(X, Y, MATCH_IP_REDISTRIBUTION_SOURCE_ACL, std::string) \
+    LIST_FIELD(X, Y, MATCH_IP_REDISTRIBUTION_SOURCE_PREFIX_LIST, std::string) \
+    LIST_FIELD(X, Y, MATCH_IP_ROUTE_SOURCE_ACL, std::string) \
+    LIST_FIELD(X, Y, MATCH_IP_ROUTE_SOURCE_PREFIX_LIST, std::string) \
+    LIST_FIELD(X, Y, MATCH_IP_ROUTE_REDISTRIBUTION_SOURCE_ACL, std::string) \
+    LIST_FIELD(X, Y, MATCH_IP_ROUTE_REDISTRIBUTION_SOURCE_PREFIX_LIST, std::string) \
+    LIST_FIELD(X, Y, MATCH_IPV6_ADDRESS_ACL, std::string) \
+    LIST_FIELD(X, Y, MATCH_IPV6_ADDRESS_PREFIX_LIST, std::string) \
+    LIST_FIELD(X, Y, MATCH_IPV6_NEXT_HOP_ACL, std::string) \
+    LIST_FIELD(X, Y, MATCH_IPV6_NEXT_HOP_PREFIX_LIST, std::string) \
+    LIST_FIELD(X, Y, MATCH_IPV6_ROUTE_SOURCE_ACL, std::string) \
+    LIST_FIELD(X, Y, MATCH_IPV6_ROUTE_SOURCE_PREFIX_LIST, std::string) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, MATCH_MIN_PACKET_LENGTH, uint32_t) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, MATCH_MAX_PACKET_LENGTH, uint32_t) \
+    LIST_FIELD(X, Y, MATCH_LOCAL_PREFERENCE, uint32_t) \
+    LIST_FIELD(X, Y, MATCH_MDT_GROUP, std::string) \
+    LIST_FIELD(X, Y, MATCH_METRIC, RouteMapMetricRange) \
+    LIST_FIELD(X, Y, MATCH_EXTERNAL_METRIC, RouteMapMetricRange) \
+    ATOMIC_FIELD(X, Y, MATCH_MPLS_LABEL, bool, false) \
+    ATOMIC_FIELD(X, Y, MATCH_ROUTE_TYPE_EXTERNAL_TYPE_1, bool, false) \
+    ATOMIC_FIELD(X, Y, MATCH_ROUTE_TYPE_EXTERNAL_TYPE_2, bool, false) \
+    ATOMIC_FIELD(X, Y, MATCH_ROUTE_TYPE_INTERNAL, bool, false) \
+    ATOMIC_FIELD(X, Y, MATCH_ROUTE_TYPE_LEVEL_1, bool, false) \
+    ATOMIC_FIELD(X, Y, MATCH_ROUTE_TYPE_LEVEL_2, bool, false) \
+    ATOMIC_FIELD(X, Y, MATCH_ROUTE_TYPE_LOCAL, bool, false) \
+    ATOMIC_FIELD(X, Y, MATCH_ROUTE_TYPE_NSSA_TYPE_1, bool, false) \
+    ATOMIC_FIELD(X, Y, MATCH_ROUTE_TYPE_NSSA_TYPE_2, bool, false) \
+    ATOMIC_FIELD(X, Y, MATCH_RKPI_INVALID, bool, false) \
+    ATOMIC_FIELD(X, Y, MATCH_RKPI_NOT_FOUND, bool, false) \
+    ATOMIC_FIELD(X, Y, MATCH_RKPI_VALID, bool, false) \
+    LIST_FIELD(X, Y, MATCH_SOURCE_PROTOCOL, RouteMapSourceProtocol) \
+    LIST_FIELD(X, Y, MATCH_TAG, uint32_t) \
+    LIST_FIELD(X, Y, MATCH_TAG_LIST, std::string) \
+    LIST_FIELD(X, Y, SET_AS_PATH_PREPEND, uint32_t) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, SET_AS_PATH_PREPEND_LAST_AS, uint8_t) \
+    ATOMIC_FIELD(X, Y, SET_AS_PATH_TAG, bool, false) \
+    ATOMIC_FIELD(X, Y, SET_AUTOMATIC_TAG, bool, false) \
+    VALUE_FIELD(X, Y, SET_COMM_LIST_DEL, std::string) \
+    LIST_FIELD(X, Y, SET_COMMUNITY, uint32_t) \
+    VALUE_FIELD(X, Y, SET_DAMPENING, RouteMapDampening) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, SET_EXTCOM_LIST_DEL, uint32_t) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, SET_EXTCOMMUNITY_COST, uint32_t) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, SET_EXTCOMMUNITY_COST_ID, uint8_t) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, SET_EXTCOMMUNITY_COST_ATTR, policy::ExtCommunityAttr) \
+    LIST_FIELD(X, Y, SET_EXTCOMMUNITY_RT, uint64_t) \
+    ATOMIC_FIELD(X, Y, SET_EXTCOMMUNITY_RT_ADDITIVE, bool, false) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, SET_EXTCOMMUNITY_SOO, uint64_t) \
+    ATOMIC_FIELD(X, Y, SET_GLOBAL, bool, false) \
+    VALUE_FIELD(X, Y, SET_IP_ADDRESS_PREFIX_LIST, std::string) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, SET_IP_DF, uint8_t) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, SET_IP_PRECEDENCE, uint8_t) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, SET_IP_QOS_GROUP, uint8_t) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, SET_IP_TOS, uint8_t) \
+    VALUE_FIELD(X, Y, SET_IPV6_ADDRESS_PREFIX_LIST, std::string) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, SET_IPV6_PRECEDENCE, uint8_t) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, SET_LEVEL, policy::Level) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, SET_LOCAL_PREFERENCE, uint32_t) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, SET_METRIC, uint32_t) \
+    ATOMIC_FIELD(X, Y, SET_METRIC_OPERATION, policy::MetricOperation, policy::MetricOperation::NONE) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, SET_METRIC_TYPE, policy::MetricType) \
+    ATOMIC_FIELD(X, Y, SET_MPLS_LABEL, bool, false) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, SET_ORIGIN, policy::MetricOperation) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, SET_TAG, uint32_t) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, SET_TRAFFIC_INDEX, uint8_t) \
+    VALUE_FIELD(X, Y, SET_VRF, std::string) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, SET_WEIGHT, uint16_t) \
+    REGISTRY_CONTAINER(X, Y, SET_BASE, RouteMapSequenceBaseRegistry) \
+    REGISTRY_CONTAINER(X, Y, SET_DEFAULT, RouteMapSequenceBaseRegistry)
 
-CONFIG_DEFAULT_TABLE(ROUTE_MAP_SEQUENCE_DEFAULTS);
+DEFINE_CONFIG_GROUP(RouteMapSequence, ROUTE_MAP_SEQUENCE_FIELD_LIST)
 
-struct RouteMapSequenceFields : FieldTuple<
-    AtomicField<bool CONFIG_INDEX_ARG(RouteMapSequence::PERMIT)>,
-    ValueField<std::string CONFIG_INDEX_ARG(RouteMapSequence::DESCRIPTION)>,
-    OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(RouteMapSequence::CONTINUE)>,
-    ValueField<std::tuple<bool, bool, std::optional<std::tuple<uint8_t, uint8_t>>> CONFIG_INDEX_ARG(RouteMapSequence::MATCH_APATHS_ADVERTISE_SET)>,
-    ListField<uint16_t CONFIG_INDEX_ARG(RouteMapSequence::MATCH_AS_PATH)>,
-    ListField<std::string CONFIG_INDEX_ARG(RouteMapSequence::MATCH_COMMUNITY)>,
-    ListField<std::string CONFIG_INDEX_ARG(RouteMapSequence::MATCH_EXTCOMMUNITY)>,
-    ListField<interface::InterfaceKey CONFIG_INDEX_ARG(RouteMapSequence::MATCH_INTERFACE)>,
-    ListField<std::string CONFIG_INDEX_ARG(RouteMapSequence::MATCH_IP_ADDRESS_ACL)>,
-    ListField<std::string CONFIG_INDEX_ARG(RouteMapSequence::MATCH_IP_ADDRESS_PREFIX_LIST)>,
-    ListField<std::string CONFIG_INDEX_ARG(RouteMapSequence::MATCH_IP_NEXT_HOP_ACL)>,
-    ListField<std::string CONFIG_INDEX_ARG(RouteMapSequence::MATCH_IP_NEXT_HOP_PREFIX_LIST)>,
-    ListField<std::string CONFIG_INDEX_ARG(RouteMapSequence::MATCH_IP_REDISTRIBUTION_SOURCE_ACL)>,
-    ListField<std::string CONFIG_INDEX_ARG(RouteMapSequence::MATCH_IP_REDISTRIBUTION_SOURCE_PREFIX_LIST)>,
-    ListField<std::string CONFIG_INDEX_ARG(RouteMapSequence::MATCH_IP_ROUTE_SOURCE_ACL)>,
-    ListField<std::string CONFIG_INDEX_ARG(RouteMapSequence::MATCH_IP_ROUTE_SOURCE_PREFIX_LIST)>,
-    ListField<std::string CONFIG_INDEX_ARG(RouteMapSequence::MATCH_IP_ROUTE_REDISTRIBUTION_SOURCE_ACL)>,
-    ListField<std::string CONFIG_INDEX_ARG(RouteMapSequence::MATCH_IP_ROUTE_REDISTRIBUTION_SOURCE_PREFIX_LIST)>,
-    ListField<std::string CONFIG_INDEX_ARG(RouteMapSequence::MATCH_IPV6_ADDRESS_ACL)>,
-    ListField<std::string CONFIG_INDEX_ARG(RouteMapSequence::MATCH_IPV6_ADDRESS_PREFIX_LIST)>,
-    ListField<std::string CONFIG_INDEX_ARG(RouteMapSequence::MATCH_IPV6_NEXT_HOP_ACL)>,
-    ListField<std::string CONFIG_INDEX_ARG(RouteMapSequence::MATCH_IPV6_NEXT_HOP_PREFIX_LIST)>,
-    ListField<std::string CONFIG_INDEX_ARG(RouteMapSequence::MATCH_IPV6_ROUTE_SOURCE_ACL)>,
-    ListField<std::string CONFIG_INDEX_ARG(RouteMapSequence::MATCH_IPV6_ROUTE_SOURCE_PREFIX_LIST)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(RouteMapSequence::MATCH_MIN_PACKET_LENGTH)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(RouteMapSequence::MATCH_MAX_PACKET_LENGTH)>,
-    ListField<uint32_t CONFIG_INDEX_ARG(RouteMapSequence::MATCH_LOCAL_PREFERENCE)>,
-    ListField<std::string CONFIG_INDEX_ARG(RouteMapSequence::MATCH_MDT_GROUP)>,
-    ListField<std::tuple<uint32_t, uint32_t> CONFIG_INDEX_ARG(RouteMapSequence::MATCH_METRIC)>,
-    ListField<std::tuple<uint32_t, uint32_t> CONFIG_INDEX_ARG(RouteMapSequence::MATCH_EXTERNAL_METRIC)>,
-    AtomicField<bool CONFIG_INDEX_ARG(RouteMapSequence::MATCH_MPLS_LABEL)>,
-    AtomicField<bool CONFIG_INDEX_ARG(RouteMapSequence::MATCH_ROUTE_TYPE_EXTERNAL_TYPE_1)>,
-    AtomicField<bool CONFIG_INDEX_ARG(RouteMapSequence::MATCH_ROUTE_TYPE_EXTERNAL_TYPE_2)>,
-    AtomicField<bool CONFIG_INDEX_ARG(RouteMapSequence::MATCH_ROUTE_TYPE_INTERNAL)>,
-    AtomicField<bool CONFIG_INDEX_ARG(RouteMapSequence::MATCH_ROUTE_TYPE_LEVEL_1)>,
-    AtomicField<bool CONFIG_INDEX_ARG(RouteMapSequence::MATCH_ROUTE_TYPE_LEVEL_2)>,
-    AtomicField<bool CONFIG_INDEX_ARG(RouteMapSequence::MATCH_ROUTE_TYPE_LOCAL)>,
-    AtomicField<bool CONFIG_INDEX_ARG(RouteMapSequence::MATCH_ROUTE_TYPE_NSSA_TYPE_1)>,
-    AtomicField<bool CONFIG_INDEX_ARG(RouteMapSequence::MATCH_ROUTE_TYPE_NSSA_TYPE_2)>,
-    AtomicField<bool CONFIG_INDEX_ARG(RouteMapSequence::MATCH_RKPI_INVALID)>,
-    AtomicField<bool CONFIG_INDEX_ARG(RouteMapSequence::MATCH_RKPI_NOT_FOUND)>,
-    AtomicField<bool CONFIG_INDEX_ARG(RouteMapSequence::MATCH_RKPI_VALID)>,
-    ListField<std::pair<core::RouteSource, uint32_t> CONFIG_INDEX_ARG(RouteMapSequence::MATCH_SOURCE_PROTOCOL)>,
-    ListField<uint32_t CONFIG_INDEX_ARG(RouteMapSequence::MATCH_TAG)>,
-    ListField<std::string CONFIG_INDEX_ARG(RouteMapSequence::MATCH_TAG_LIST)>,
-    ListField<uint32_t CONFIG_INDEX_ARG(RouteMapSequence::SET_AS_PATH_PREPEND)>,
-    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(RouteMapSequence::SET_AS_PATH_PREPEND_LAST_AS)>,
-    AtomicField<bool CONFIG_INDEX_ARG(RouteMapSequence::SET_AS_PATH_TAG)>,
-    AtomicField<bool CONFIG_INDEX_ARG(RouteMapSequence::SET_AUTOMATIC_TAG)>,
-    ValueField<std::string CONFIG_INDEX_ARG(RouteMapSequence::SET_COMM_LIST_DEL)>,
-    ListField<uint32_t CONFIG_INDEX_ARG(RouteMapSequence::SET_COMMUNITY)>,
-    ValueField<std::tuple<uint8_t, uint16_t, uint16_t, uint8_t> CONFIG_INDEX_ARG(RouteMapSequence::SET_DAMPENING)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(RouteMapSequence::SET_EXTCOM_LIST_DEL)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(RouteMapSequence::SET_EXTCOMMUNITY_COST)>,
-    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(RouteMapSequence::SET_EXTCOMMUNITY_COST_ID)>,
-    OptionalAtomicField<policy::ExtCommunityAttr CONFIG_INDEX_ARG(RouteMapSequence::SET_EXTCOMMUNITY_COST_ATTR)>,
-    ListField<uint64_t CONFIG_INDEX_ARG(RouteMapSequence::SET_EXTCOMMUNITY_RT)>,
-    AtomicField<bool CONFIG_INDEX_ARG(RouteMapSequence::SET_EXTCOMMUNITY_RT_ADDITIVE)>,
-    OptionalAtomicField<uint64_t CONFIG_INDEX_ARG(RouteMapSequence::SET_EXTCOMMUNITY_SOO)>,
-    AtomicField<bool CONFIG_INDEX_ARG(RouteMapSequence::SET_GLOBAL)>,
-    ValueField<std::string CONFIG_INDEX_ARG(RouteMapSequence::SET_IP_ADDRESS_PREFIX_LIST)>,
-    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(RouteMapSequence::SET_IP_DF)>,
-    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(RouteMapSequence::SET_IP_PRECEDENCE)>,
-    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(RouteMapSequence::SET_IP_QOS_GROUP)>,
-    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(RouteMapSequence::SET_IP_TOS)>,
-    ValueField<std::string CONFIG_INDEX_ARG(RouteMapSequence::SET_IPV6_ADDRESS_PREFIX_LIST)>,
-    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(RouteMapSequence::SET_IPV6_PRECEDENCE)>,
-    OptionalAtomicField<policy::Level CONFIG_INDEX_ARG(RouteMapSequence::SET_LEVEL)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(RouteMapSequence::SET_LOCAL_PREFERENCE)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(RouteMapSequence::SET_METRIC)>,
-    AtomicField<policy::MetricOperation CONFIG_INDEX_ARG(RouteMapSequence::SET_METRIC_OPERATION)>,
-    OptionalAtomicField<policy::MetricType CONFIG_INDEX_ARG(RouteMapSequence::SET_METRIC_TYPE)>,
-    AtomicField<bool CONFIG_INDEX_ARG(RouteMapSequence::SET_MPLS_LABEL)>,
-    OptionalAtomicField<policy::MetricOperation CONFIG_INDEX_ARG(RouteMapSequence::SET_ORIGIN)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(RouteMapSequence::SET_TAG)>,
-    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(RouteMapSequence::SET_TRAFFIC_INDEX)>,
-    ValueField<std::string CONFIG_INDEX_ARG(RouteMapSequence::SET_VRF)>,
-    OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(RouteMapSequence::SET_WEIGHT)>,
-    RegistryContainer<RouteMapSequenceBaseRegistry CONFIG_INDEX_ARG(RouteMapSequence::SET_BASE)>,
-    RegistryContainer<RouteMapSequenceBaseRegistry CONFIG_INDEX_ARG(RouteMapSequence::SET_DEFAULT)>
-> {};
-
-/**
- * @brief Registry slot for one route-map sequence entry.
- * @ingroup CONFIG_POLICY
- */
-struct RouteMapSequenceRegistry : SubRegistry<RouteMapSequenceRegistry, RouteMapSequence, nullptr, RouteMapSequenceFields> {};
 
 /**
  * @brief Top-level fields for a named route-map (ordered sequence of RouteMapSequenceRegistry entries).
  * @ingroup CONFIG_POLICY
  */
-enum class RouteMap
-{
-    SEQUENCES, ///< Ordered list of route-map sequences keyed by sequence number.
-    COUNT
-};
+#define ROUTE_MAP_FIELD_LIST(X, Y) \
+    OWNED_LIST_FIELD(X, Y, SEQUENCES, RouteMapSequenceRegistry, uint16_t)
 
-struct RouteMapFields : FieldTuple<
-    OwnedListField<RouteMapSequenceRegistry, uint16_t CONFIG_INDEX_ARG(RouteMap::SEQUENCES)>
-> {};
+DEFINE_CONFIG_GROUP(RouteMap, ROUTE_MAP_FIELD_LIST)
 
-/**
- * @brief Registry slot for one named route-map.
- * @ingroup CONFIG_POLICY
- */
-struct RouteMapRegistry : SubRegistry<RouteMapRegistry, RouteMap, nullptr, RouteMapFields> {};
 }
 
 #endif // ROUTE_MAP_REGISTRY_H

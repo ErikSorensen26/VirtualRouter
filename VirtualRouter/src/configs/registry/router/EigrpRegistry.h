@@ -15,10 +15,10 @@
 #include <EnumBitMap.hpp>
 
 #include "configs/RegistryTypes.hpp"
-#include "configs/RegistryDefaultTable.hpp"
+#include "configs/RegistryBuilder.hpp"
+#include "configs/TupleSchema.hpp"
 #include "interface/configs/InterfaceType.hpp"
 #include "EigrpInterfaceRegistry.h"
-#include "configs/SubRegistry.hpp"
 
 namespace config
 {
@@ -63,143 +63,6 @@ enum Stub
 
 } // namespace config::eigrp
 
-/**
- * @brief EIGRP process-level configuration fields.
- * @ingroup EIGRP
- */
-enum class Eigrp
-{
-    IS_NAMED,
-    AUTO_SUMMARIZATION,
-    AF_INTERFACE,
-    BFD_ALL_INTERFACE,
-    BFD_INTERFACE,
-    DEFAULT_INFORMATION_IN,
-    DEFAULT_INFORMATION_OUT,
-    DEFAULT_METRICS,
-    ADMIN_DISTANCE_RANGES,
-    INTERNAL_ADMIN_DISTANCE,
-    EXTERNAL_ADMIN_DISTANCE,
-    DISTRIBUTE_LIST_IN, // TODO
-    DISTRIBUTE_LIST_IN_INTERFACE,// TODO
-    DISTRIBUTE_LIST_IN_ACL, // TODO bool
-    DISTRIBUTE_LIST_IN_PREFIX,// TODO bool
-    DISTRIBUTE_LIST_IN_GATEWAY,// TODO bool
-    DISTRIBUTE_LIST_OUT,// TODO
-    DISTRIBUTE_LIST_OUT_INTERFACE,// TODO
-    DISTRIBUTE_LIST_OUT_ACL,// TODO bool
-    DISTRIBUTE_LIST_OUT_PREFIX, // TODO bool
-    DISTRIBUTE_LIST_OUT_GATEWAY, // TODO bool
-    MAX_EVENT_LOG_SIZE,
-    DEFAULT_ROUTE_TAG, // TODO implement
-    LOG_NEIGHBOR_CHANGES,
-    LOG_NEIGHBOR_WARNINGS,
-    LOG_NEIGHBOR_WARNINGS_INTERVAL,
-    ROUTER_ID,
-    STUB,
-    STUB_LEAK_MAP,
-    FAST_REROUTE_LOAD_SHARING,
-    FAST_REROUTE_PER_PREFIX_ALL,
-    FAST_REROUTE_PER_PREFIX_ROUTE_MAP,
-    FAST_REROUTE_TIE_BREAK_INTERFACE_DISJOINT,
-    FAST_REROUTE_TIE_BREAK_LINECARD_DISJOINT,
-    FAST_REROUTE_TIE_BREAK_LOWEST_BACKUP_PATH_METRIC,
-    FAST_REROUTE_TIE_BREAK_SRLG_DISJOINT,
-    MAX_PATHS,
-    MAX_HOPS,
-    WEIGHT_K1,
-    WEIGHT_K2,
-    WEIGHT_K3,
-    WEIGHT_K4,
-    WEIGHT_K5,
-    WEIGHT_K6,
-    NEIGHBOR,                   // types::IPAddress, uint32(interface)
-    NETWORK,                    // uint32(address), uint32(wildcard)
-    OFFSET_LIST_IN,             // string
-    OFFSET_LIST_IN_OFFSET,      // uint32
-    OFFSET_LIST_IN_INTERFACE,   // uint32
-    OFFSET_LIST_OUT,
-    OFFSET_LIST_OUT_OFFSET,
-    OFFSET_LIST_OUT_INTERFACE,
-    PASSIVE_INTERFACES,
-    //REDISTRIBUTE,               // TODO
-    SHUTDOWN,
-    SUMMARY_METRIC,             // types::IPAddress, uint8(mask), uint32(bw), uint32(delay), uint8(reliability), uint8(load), uint16(mtu), uint8(distance)
-    ACTIVE_TIME,                // uint16 optional
-    ACTIVE_DISABLED,            // bool
-    GRACEFUL_PURGE_TIME,        // uint16
-    NON_STOP_FORWARDING,        // bool
-    WIDE_METRIC,                // uint32
-    RIB_SCALE,                  // uint8
-    MAXIMUM_PREFIX,
-    DAMPENING,
-    DAMPENING_WARNINGS,
-    DAMPENING_THRESHOLD,
-    DAMPENING_RESET_TIME,
-    DAMPENING_RESTART,
-    DAMPENING_RESTART_COUNT,
-    NEIGHBOR_MAXIMUM_PREFIX,
-    NEIGHBOR_DAMPENING,
-    NEIGHBOR_DAMPENING_WARNINGS,
-    NEIGHBOR_DAMPENING_THRESHOLD,
-    NEIGHBOR_DAMPENING_RESET_TIME,
-    NEIGHBOR_DAMPENING_RESTART,
-    NEIGHBOR_DAMPENING_RESTART_COUNT,
-    TRAFFIC_SHARE,
-    VARIANCE,
-    COUNT
-};
-
-#define EIGRP_DEFAULTS(X) \
-    X(Eigrp, IS_NAMED, false) \
-    X(Eigrp, AUTO_SUMMARIZATION, false) \
-    X(Eigrp, BFD_ALL_INTERFACE, false) \
-    X(Eigrp, DISTRIBUTE_LIST_IN_ACL, false) \
-    X(Eigrp, DISTRIBUTE_LIST_IN_PREFIX, false) \
-    X(Eigrp, DISTRIBUTE_LIST_IN_GATEWAY, false) \
-    X(Eigrp, DISTRIBUTE_LIST_OUT_ACL, false) \
-    X(Eigrp, DISTRIBUTE_LIST_OUT_PREFIX, false) \
-    X(Eigrp, DISTRIBUTE_LIST_OUT_GATEWAY, false) \
-    X(Eigrp, MAX_EVENT_LOG_SIZE, 500) \
-    X(Eigrp, LOG_NEIGHBOR_CHANGES, true) \
-    X(Eigrp, LOG_NEIGHBOR_WARNINGS, false) \
-    X(Eigrp, LOG_NEIGHBOR_WARNINGS_INTERVAL, 10) \
-    X(Eigrp, INTERNAL_ADMIN_DISTANCE, 90) \
-    X(Eigrp, EXTERNAL_ADMIN_DISTANCE, 170) \
-    X(Eigrp, FAST_REROUTE_LOAD_SHARING, false) \
-    X(Eigrp, FAST_REROUTE_PER_PREFIX_ALL, false) \
-    X(Eigrp, MAX_PATHS, 4) \
-    X(Eigrp, MAX_HOPS, 100) \
-    X(Eigrp, WEIGHT_K1, 1) \
-    X(Eigrp, WEIGHT_K2, 0) \
-    X(Eigrp, WEIGHT_K3, 1) \
-    X(Eigrp, WEIGHT_K4, 0) \
-    X(Eigrp, WEIGHT_K5, 0) \
-    X(Eigrp, WEIGHT_K6, 0) \
-    X(Eigrp, SHUTDOWN, false) \
-    X(Eigrp, ACTIVE_DISABLED, false) \
-    X(Eigrp, GRACEFUL_PURGE_TIME, 240) \
-    X(Eigrp, NON_STOP_FORWARDING, false) \
-    X(Eigrp, WIDE_METRIC, 10000000) \
-    X(Eigrp, RIB_SCALE, 128) \
-    X(Eigrp, MAXIMUM_PREFIX, 0) \
-    X(Eigrp, DAMPENING, false) \
-    X(Eigrp, DAMPENING_WARNINGS, false) \
-    X(Eigrp, DAMPENING_THRESHOLD, 75) \
-    X(Eigrp, DAMPENING_RESET_TIME, 0) \
-    X(Eigrp, DAMPENING_RESTART, 0) \
-    X(Eigrp, DAMPENING_RESTART_COUNT, 1) \
-    X(Eigrp, NEIGHBOR_MAXIMUM_PREFIX, 0) \
-    X(Eigrp, NEIGHBOR_DAMPENING, false) \
-    X(Eigrp, NEIGHBOR_DAMPENING_WARNINGS, false) \
-    X(Eigrp, NEIGHBOR_DAMPENING_THRESHOLD, 75) \
-    X(Eigrp, NEIGHBOR_DAMPENING_RESET_TIME, 0) \
-    X(Eigrp, NEIGHBOR_DAMPENING_RESTART, 0) \
-    X(Eigrp, NEIGHBOR_DAMPENING_RESTART_COUNT, 1) \
-    X(Eigrp, TRAFFIC_SHARE, eigrp::TrafficShareMode::BALENCED) \
-    X(Eigrp, VARIANCE, 1)
-
-CONFIG_DEFAULT_TABLE(EIGRP_DEFAULTS);
 
 void EigrpSyncNetworks(void* e);
 void EigrpShutdown(void* e);
@@ -210,120 +73,153 @@ void EigrpSyncPassive(void* e);
 void EigrpSyncRouterId(void* e);
 void EigrpSyncAfInterface(void* e);
 
-struct EigrpFields : FieldTuple<
-    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::IS_NAMED)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::AUTO_SUMMARIZATION)>,
-    OwnedListField<config::EigrpInterfaceRegistry, interface::InterfaceKey CONFIG_INDEX_ARG(Eigrp::AF_INTERFACE)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::BFD_ALL_INTERFACE)>,
-    OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(Eigrp::BFD_INTERFACE)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Eigrp::DEFAULT_INFORMATION_IN)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Eigrp::DEFAULT_INFORMATION_OUT)>,
-    ValueField<std::tuple<uint32_t, uint32_t, uint8_t, uint8_t, uint16_t> CONFIG_INDEX_ARG(Eigrp::DEFAULT_METRICS)>,
-    ListField<std::tuple<uint8_t, types::IPAddress, types::IPAddress, std::string> CONFIG_INDEX_ARG(Eigrp::ADMIN_DISTANCE_RANGES)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::INTERNAL_ADMIN_DISTANCE)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::EXTERNAL_ADMIN_DISTANCE)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_IN)>,
-    OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_IN_INTERFACE)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_IN_ACL)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_IN_PREFIX)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_IN_GATEWAY)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_OUT)>,
-    OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_OUT_INTERFACE)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_OUT_ACL)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_OUT_PREFIX)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::DISTRIBUTE_LIST_OUT_GATEWAY)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::MAX_EVENT_LOG_SIZE)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::DEFAULT_ROUTE_TAG)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::LOG_NEIGHBOR_CHANGES)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::LOG_NEIGHBOR_WARNINGS)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::LOG_NEIGHBOR_WARNINGS_INTERVAL)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::ROUTER_ID), EigrpSyncRouterId>,
-    OptionalAtomicField<types::EnumBitMap<eigrp::Stub>::type CONFIG_INDEX_ARG(Eigrp::STUB)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Eigrp::STUB_LEAK_MAP)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::FAST_REROUTE_LOAD_SHARING)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::FAST_REROUTE_PER_PREFIX_ALL)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Eigrp::FAST_REROUTE_PER_PREFIX_ROUTE_MAP)>,
-    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::FAST_REROUTE_TIE_BREAK_INTERFACE_DISJOINT)>,
-    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::FAST_REROUTE_TIE_BREAK_LINECARD_DISJOINT)>,
-    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::FAST_REROUTE_TIE_BREAK_LOWEST_BACKUP_PATH_METRIC)>,
-    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::FAST_REROUTE_TIE_BREAK_SRLG_DISJOINT)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::MAX_PATHS)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::MAX_HOPS)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_K1), EigrpSyncKValues>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_K2), EigrpSyncKValues>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_K3), EigrpSyncKValues>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_K4), EigrpSyncKValues>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_K5), EigrpSyncKValues>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_K6), EigrpSyncKValues>,
-    ListField<std::tuple<types::IPAddress, interface::InterfaceKey> CONFIG_INDEX_ARG(Eigrp::NEIGHBOR), EigrpSyncNeighbors>,
-    ListField<std::tuple<types::IPAddress, IGNOR(uint8_t)> CONFIG_INDEX_ARG(Eigrp::NETWORK), EigrpSyncNetworks>,
-    ValueField<std::string CONFIG_INDEX_ARG(Eigrp::OFFSET_LIST_IN)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::OFFSET_LIST_IN_OFFSET)>,
-    OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(Eigrp::OFFSET_LIST_IN_INTERFACE)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Eigrp::OFFSET_LIST_OUT)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::OFFSET_LIST_OUT_OFFSET)>,
-    OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(Eigrp::OFFSET_LIST_OUT_INTERFACE)>,
-    ListField<interface::InterfaceKey CONFIG_INDEX_ARG(Eigrp::PASSIVE_INTERFACES), EigrpSyncPassive>,
-    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::SHUTDOWN), EigrpShutdown>,
-    ListField<std::tuple<types::IPAddress, uint8_t, uint32_t, uint32_t, uint8_t, uint8_t, uint16_t, uint8_t> CONFIG_INDEX_ARG(Eigrp::SUMMARY_METRIC)>,
-    OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::ACTIVE_TIME)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::ACTIVE_DISABLED)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::GRACEFUL_PURGE_TIME)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::NON_STOP_FORWARDING)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::WIDE_METRIC)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::RIB_SCALE)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::MAXIMUM_PREFIX)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::DAMPENING)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::DAMPENING_WARNINGS)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::DAMPENING_THRESHOLD)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::DAMPENING_RESET_TIME)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::DAMPENING_RESTART)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::DAMPENING_RESTART_COUNT)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::NEIGHBOR_MAXIMUM_PREFIX)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::NEIGHBOR_DAMPENING)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::NEIGHBOR_DAMPENING_WARNINGS)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::NEIGHBOR_DAMPENING_THRESHOLD)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::NEIGHBOR_DAMPENING_RESET_TIME)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::NEIGHBOR_DAMPENING_RESTART)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::NEIGHBOR_DAMPENING_RESTART_COUNT)>,
-    AtomicField<eigrp::TrafficShareMode CONFIG_INDEX_ARG(Eigrp::TRAFFIC_SHARE)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::VARIANCE), EigrpSyncVariance>
-> {};
+#define EIGRP_DEFAULT_METRICS_FIELDS(X) \
+    X(uint32_t, bandwidth) \
+    X(uint32_t, delay) \
+    X(uint8_t,  reliability) \
+    X(uint8_t,  load) \
+    X(uint16_t, mtu)
+
+DEFINE_TUPLE_SCHEMA(EigrpDefaultMetrics, EIGRP_DEFAULT_METRICS_FIELDS);
+
+#define EIGRP_ADMIN_DISTANCE_RANGE_FIELDS(X) \
+    X(uint8_t,           distance) \
+    X(types::IPAddress,  address) \
+    X(types::IPAddress,  wildcard) \
+    X(std::string,       accessList)
+
+DEFINE_TUPLE_SCHEMA(EigrpAdminDistanceRange, EIGRP_ADMIN_DISTANCE_RANGE_FIELDS);
+
+#define EIGRP_NEIGHBOR_FIELDS(X) \
+    X(types::IPAddress,           address) \
+    X(interface::InterfaceKey,    iface)
+
+DEFINE_TUPLE_SCHEMA(EigrpNeighbor, EIGRP_NEIGHBOR_FIELDS);
+
+#define EIGRP_NETWORK_FIELDS(X) \
+    X(types::IPAddress,  address) \
+    X(IGNOR(uint8_t),    prefixLength)
+
+DEFINE_TUPLE_SCHEMA(EigrpNetwork, EIGRP_NETWORK_FIELDS);
+
+#define EIGRP_SUMMARY_METRIC_FIELDS(X) \
+    X(types::IPAddress, address) \
+    X(uint8_t,          prefixLength) \
+    X(uint32_t,         bandwidth) \
+    X(uint32_t,         delay) \
+    X(uint8_t,          reliability) \
+    X(uint8_t,          load) \
+    X(uint16_t,         mtu) \
+    X(uint8_t,          distance)
+
+DEFINE_TUPLE_SCHEMA(EigrpSummaryMetric, EIGRP_SUMMARY_METRIC_FIELDS);
 
 /**
- * @brief Registry slot for an EIGRP process instance.
+ * @brief EIGRP process-level configuration fields.
  * @ingroup EIGRP
  */
-struct EigrpRegistry : SubRegistry<EigrpRegistry, Eigrp, nullptr, EigrpFields> {};
+#define EIGRP_FIELD_LIST(X, Y) \
+    ATOMIC_FIELD(X, Y, IS_NAMED, bool, false) \
+    ATOMIC_FIELD(X, Y, AUTO_SUMMARIZATION, bool, false) \
+    OWNED_LIST_FIELD(X, Y, AF_INTERFACE, config::EigrpInterfaceRegistry, interface::InterfaceKey) \
+    ATOMIC_FIELD(X, Y, BFD_ALL_INTERFACE, bool, false) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, BFD_INTERFACE, interface::InterfaceKey) \
+    VALUE_FIELD(X, Y, DEFAULT_INFORMATION_IN, std::string) \
+    VALUE_FIELD(X, Y, DEFAULT_INFORMATION_OUT, std::string) \
+    VALUE_FIELD(X, Y, DEFAULT_METRICS, EigrpDefaultMetrics) \
+    LIST_FIELD(X, Y, ADMIN_DISTANCE_RANGES, EigrpAdminDistanceRange) \
+    ATOMIC_FIELD(X, Y, INTERNAL_ADMIN_DISTANCE, uint8_t, 90) \
+    ATOMIC_FIELD(X, Y, EXTERNAL_ADMIN_DISTANCE, uint8_t, 170) \
+    VALUE_FIELD(X, Y, DISTRIBUTE_LIST_IN, std::string) TODO \
+    OPTIONAL_ATOMIC_FIELD(X, Y, DISTRIBUTE_LIST_IN_INTERFACE, interface::InterfaceKey) TODO \
+    ATOMIC_FIELD(X, Y, DISTRIBUTE_LIST_IN_ACL, bool, false) TODO // bool \
+    ATOMIC_FIELD(X, Y, DISTRIBUTE_LIST_IN_PREFIX, bool, false) TODO // bool \
+    ATOMIC_FIELD(X, Y, DISTRIBUTE_LIST_IN_GATEWAY, bool, false) TODO // bool \
+    VALUE_FIELD(X, Y, DISTRIBUTE_LIST_OUT, std::string) TODO \
+    OPTIONAL_ATOMIC_FIELD(X, Y, DISTRIBUTE_LIST_OUT_INTERFACE, interface::InterfaceKey) TODO \
+    ATOMIC_FIELD(X, Y, DISTRIBUTE_LIST_OUT_ACL, bool, false) TODO // bool \
+    ATOMIC_FIELD(X, Y, DISTRIBUTE_LIST_OUT_PREFIX, bool, false) TODO // bool \
+    ATOMIC_FIELD(X, Y, DISTRIBUTE_LIST_OUT_GATEWAY, bool, false) TODO // bool \
+    ATOMIC_FIELD(X, Y, MAX_EVENT_LOG_SIZE, uint32_t, 500) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, DEFAULT_ROUTE_TAG, uint32_t) TODO // implement \
+    ATOMIC_FIELD(X, Y, LOG_NEIGHBOR_CHANGES, bool, true) \
+    ATOMIC_FIELD(X, Y, LOG_NEIGHBOR_WARNINGS, bool, false) \
+    ATOMIC_FIELD(X, Y, LOG_NEIGHBOR_WARNINGS_INTERVAL, uint16_t, 10) \
+    OPTIONAL_ATOMIC_FIELD_CB(X, Y, ROUTER_ID, uint32_t, EigrpSyncRouterId) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, STUB, types::EnumBitMap<eigrp::Stub>::type) \
+    VALUE_FIELD(X, Y, STUB_LEAK_MAP, std::string) \
+    ATOMIC_FIELD(X, Y, FAST_REROUTE_LOAD_SHARING, bool, false) \
+    ATOMIC_FIELD(X, Y, FAST_REROUTE_PER_PREFIX_ALL, bool, false) \
+    VALUE_FIELD(X, Y, FAST_REROUTE_PER_PREFIX_ROUTE_MAP, std::string) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, FAST_REROUTE_TIE_BREAK_INTERFACE_DISJOINT, uint8_t) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, FAST_REROUTE_TIE_BREAK_LINECARD_DISJOINT, uint8_t) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, FAST_REROUTE_TIE_BREAK_LOWEST_BACKUP_PATH_METRIC, uint8_t) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, FAST_REROUTE_TIE_BREAK_SRLG_DISJOINT, uint8_t) \
+    ATOMIC_FIELD(X, Y, MAX_PATHS, uint8_t, 4) \
+    ATOMIC_FIELD(X, Y, MAX_HOPS, uint8_t, 100) \
+    ATOMIC_FIELD_CB(X, Y, WEIGHT_K1, uint8_t, 1, EigrpSyncKValues) \
+    ATOMIC_FIELD_CB(X, Y, WEIGHT_K2, uint8_t, 0, EigrpSyncKValues) \
+    ATOMIC_FIELD_CB(X, Y, WEIGHT_K3, uint8_t, 1, EigrpSyncKValues) \
+    ATOMIC_FIELD_CB(X, Y, WEIGHT_K4, uint8_t, 0, EigrpSyncKValues) \
+    ATOMIC_FIELD_CB(X, Y, WEIGHT_K5, uint8_t, 0, EigrpSyncKValues) \
+    ATOMIC_FIELD_CB(X, Y, WEIGHT_K6, uint8_t, 0, EigrpSyncKValues) \
+    LIST_FIELD_CB(X, Y, NEIGHBOR, EigrpNeighbor, EigrpSyncNeighbors) \
+    LIST_FIELD_CB(X, Y, NETWORK, EigrpNetwork, EigrpSyncNetworks) \
+    VALUE_FIELD(X, Y, OFFSET_LIST_IN, std::string) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, OFFSET_LIST_IN_OFFSET, uint32_t) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, OFFSET_LIST_IN_INTERFACE, interface::InterfaceKey) \
+    VALUE_FIELD(X, Y, OFFSET_LIST_OUT, std::string) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, OFFSET_LIST_OUT_OFFSET, uint32_t) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, OFFSET_LIST_OUT_INTERFACE, interface::InterfaceKey) \
+    LIST_FIELD_CB(X, Y, PASSIVE_INTERFACES, interface::InterfaceKey, EigrpSyncPassive) \
+    ATOMIC_FIELD_CB(X, Y, SHUTDOWN, bool, false, EigrpShutdown) \
+    LIST_FIELD(X, Y, SUMMARY_METRIC, EigrpSummaryMetric) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, ACTIVE_TIME, uint16_t) \
+    ATOMIC_FIELD(X, Y, ACTIVE_DISABLED, bool, false) \
+    ATOMIC_FIELD(X, Y, GRACEFUL_PURGE_TIME, uint16_t, 240) \
+    ATOMIC_FIELD(X, Y, NON_STOP_FORWARDING, bool, false) \
+    ATOMIC_FIELD(X, Y, WIDE_METRIC, uint32_t, 10000000) \
+    ATOMIC_FIELD(X, Y, RIB_SCALE, uint8_t, 128) \
+    ATOMIC_FIELD(X, Y, MAXIMUM_PREFIX, uint32_t, 0) \
+    ATOMIC_FIELD(X, Y, DAMPENING, bool, false) \
+    ATOMIC_FIELD(X, Y, DAMPENING_WARNINGS, bool, false) \
+    ATOMIC_FIELD(X, Y, DAMPENING_THRESHOLD, uint8_t, 75) \
+    ATOMIC_FIELD(X, Y, DAMPENING_RESET_TIME, uint16_t, 0) \
+    ATOMIC_FIELD(X, Y, DAMPENING_RESTART, uint16_t, 0) \
+    ATOMIC_FIELD(X, Y, DAMPENING_RESTART_COUNT, uint16_t, 1) \
+    ATOMIC_FIELD(X, Y, NEIGHBOR_MAXIMUM_PREFIX, uint32_t, 0) \
+    ATOMIC_FIELD(X, Y, NEIGHBOR_DAMPENING, bool, false) \
+    ATOMIC_FIELD(X, Y, NEIGHBOR_DAMPENING_WARNINGS, bool, false) \
+    ATOMIC_FIELD(X, Y, NEIGHBOR_DAMPENING_THRESHOLD, uint8_t, 75) \
+    ATOMIC_FIELD(X, Y, NEIGHBOR_DAMPENING_RESET_TIME, uint16_t, 0) \
+    ATOMIC_FIELD(X, Y, NEIGHBOR_DAMPENING_RESTART, uint16_t, 0) \
+    ATOMIC_FIELD(X, Y, NEIGHBOR_DAMPENING_RESTART_COUNT, uint16_t, 1) \
+    ATOMIC_FIELD(X, Y, TRAFFIC_SHARE, eigrp::TrafficShareMode, eigrp::TrafficShareMode::BALENCED) \
+    ATOMIC_FIELD_CB(X, Y, VARIANCE, uint8_t, 1, EigrpSyncVariance)
+
+DEFINE_CONFIG_GROUP(Eigrp, EIGRP_FIELD_LIST)
+
 
 /**
  * @brief Named-mode EIGRP container fields (IPv4 and IPv6 AF instances, shutdown).
  * @ingroup EIGRP
  */
-enum class EigrpNamed
-{
-    NAMED_INSTANCES_V4,
-    NAMED_INSTANCES_V6,
-    SHUTDOWN,
-    COUNT
-};
+#define EIGRP_NAMED_INSTANCE_FIELDS(X) \
+    X(uint16_t,    autonomousSystem) \
+    X(std::string, vrf)
 
-#define EIGRP_NAMED_DEFAULTS(X) \
-    X(EigrpNamed, SHUTDOWN, false)
+DEFINE_TUPLE_SCHEMA(EigrpNamedInstance, EIGRP_NAMED_INSTANCE_FIELDS);
 
-CONFIG_DEFAULT_TABLE(EIGRP_NAMED_DEFAULTS);
-
-struct EigrpNamedFields : FieldTuple<
-    ListField<std::tuple<uint16_t, std::string> CONFIG_INDEX_ARG(EigrpNamed::NAMED_INSTANCES_V4)>,
-    ListField<std::tuple<uint16_t, std::string> CONFIG_INDEX_ARG(EigrpNamed::NAMED_INSTANCES_V6)>,
-    AtomicField<bool CONFIG_INDEX_ARG(EigrpNamed::SHUTDOWN)>
-> {};
+#define EIGRP_NAMED_FIELD_LIST(X, Y) \
+    LIST_FIELD(X, Y, NAMED_INSTANCES_V4, EigrpNamedInstance) \
+    LIST_FIELD(X, Y, NAMED_INSTANCES_V6, EigrpNamedInstance) \
+    ATOMIC_FIELD(X, Y, SHUTDOWN, bool, false)
 
 /**
- * @brief Registry slot for a named-mode EIGRP container.
+ * @brief Named-mode EIGRP container fields (IPv4 and IPv6 AF instances, shutdown).
  * @ingroup EIGRP
  */
-struct EigrpNamedRegistry : SubRegistry<EigrpNamedRegistry, EigrpNamed, nullptr, EigrpNamedFields> {};
+DEFINE_CONFIG_GROUP(EigrpNamed, EIGRP_NAMED_FIELD_LIST)
 }
 
 #endif // EIGRP_REGISTRY_H
