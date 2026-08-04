@@ -1,0 +1,354 @@
+{
+    "prompt": "(config-std-nacl)#",
+    "commands": [
+        {
+            "description": "Sequence Number",
+            "name": "<1-2147483647>",
+            "subcommands": [
+                {
+                    "description": "Specify packets to reject",
+                    "name": "deny",
+                    "subcommands": [
+                        {
+                            "description": "Address to match",
+                            "name": "A.B.C.D",
+                            "subcommands": [
+                                {
+                                    "description": "Wildcard bits",
+                                    "name": "A.B.C.D",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Any source host",
+                            "name": "any",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "A single host address",
+                            "name": "host",
+                            "subcommands": [
+                                {
+                                    "description": "Host address",
+                                    "name": "A.B.C.D",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Specify packets to forward",
+                    "name": "permit",
+                    "subcommands": [
+                        {
+                            "description": "Address to match",
+                            "name": "A.B.C.D",
+                            "subcommands": [
+                                {
+                                    "description": "Wildcard bits",
+                                    "name": "A.B.C.D",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Any source host",
+                            "name": "any",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "A single host address",
+                            "name": "host",
+                            "subcommands": [
+                                {
+                                    "description": "Host address",
+                                    "name": "A.B.C.D",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Set a command to its defaults",
+            "name": "default",
+            "subcommands": [
+                {
+                    "description": "Specify packets to reject",
+                    "name": "deny",
+                    "subcommands": [
+                        {
+                            "description": "Address to match",
+                            "name": "A.B.C.D",
+                            "subcommands": [
+                                {
+                                    "description": "Wildcard bits",
+                                    "name": "A.B.C.D",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Any source host",
+                            "name": "any",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "A single host address",
+                            "name": "host",
+                            "subcommands": [
+                                {
+                                    "description": "Host address",
+                                    "name": "A.B.C.D",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Specify packets to forward",
+                    "name": "permit",
+                    "subcommands": [
+                        {
+                            "description": "Address to match",
+                            "name": "A.B.C.D",
+                            "subcommands": [
+                                {
+                                    "description": "Wildcard bits",
+                                    "name": "A.B.C.D",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Any source host",
+                            "name": "any",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "A single host address",
+                            "name": "host",
+                            "subcommands": [
+                                {
+                                    "description": "Host address",
+                                    "name": "A.B.C.D",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Specify packets to reject",
+            "name": "deny",
+            "subcommands": [
+                {
+                    "description": "Address to match",
+                    "name": "A.B.C.D",
+                    "subcommands": [
+                        {
+                            "description": "Wildcard bits",
+                            "name": "A.B.C.D",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "Any source host",
+                    "name": "any",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "A single host address",
+                    "name": "host",
+                    "subcommands": [
+                        {
+                            "description": "Host address",
+                            "name": "A.B.C.D",
+                            "subcommands": [
+                                {
+                                    "description": "Specify packets to reject",
+                                    "name": "<cr>deny"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Exit from access-list configuration mode",
+            "name": "exit"
+        },
+        {
+            "description": "Negate a command or set its defaults",
+            "name": "no",
+            "subcommands": []
+        },
+        {
+            "description": "Specify packets to forward",
+            "name": "permit",
+            "subcommands": [
+                {
+                    "description": "Address to match",
+                    "name": "A.B.C.D",
+                    "subcommands": [
+                        {
+                            "description": "Wildcard bits",
+                            "name": "A.B.C.D",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "Any source host",
+                    "name": "any",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "A single host address",
+                    "name": "host",
+                    "subcommands": [
+                        {
+                            "description": "Host address",
+                            "name": "A.B.C.D",
+                            "subcommands": [
+                                {
+                                    "description": "Specify packets to forward",
+                                    "name": "<cr>permit"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Access list entry comment",
+            "name": "remark",
+            "subcommands": [
+                {
+                    "description": "Comment up to 100 characters",
+                    "name": "LINE",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,119 @@
+{
+    "prompt": "(config-prefix)#",
+    "commands": [
+        {
+            "description": "Set the base IPv6 prefix",
+            "name": "base-prefix",
+            "properties": [
+                "negate_all"
+            ],
+            "subcommands": [
+                {
+                    "description": "IPv6 pool prefix x:x::y/<z>",
+                    "name": "X:X:X:X::X/<0-128>",
+                    "subcommands": [
+                        {
+                            "description": "Number of free entries to search",
+                            "name": "cache-size",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<0-65536>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Advertise the same prefix",
+                            "name": "shared",
+                            "subcommands": [
+                                {
+                                    "description": "Number of free entries to search",
+                                    "name": "cache-size",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<0-65536>",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Configure deligation prefix length (e.g., 56 for /56). Must be between the pool base length and 64",
+            "name": "delegation-length",
+            "properties": [
+                "negate_all"
+            ],
+            "subcommands": [
+                {
+                    "description": "Deligation length",
+                    "name": "<1-64>",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Exclude a specific prefix from being deligated",
+            "name": "exclude",
+            "subcommands": [
+                {
+                    "description": "Prefix to exclude x:x::y/<z>",
+                    "name": "X:X:X:X::X/<0-128>",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Exit from DHCPv6 prefix delegation configuration mode",
+            "name": "exit",
+            "subcommands": [
+                {
+                    "description": "",
+                    "name": "<cr>"
+                }
+            ]
+        },
+        {
+            "description": "Negate a command or set its defaults",
+            "name": "no"
+        },
+        {
+            "description": "",
+            "name": "<cr>"
+        }
+    ]
+}

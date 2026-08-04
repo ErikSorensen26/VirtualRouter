@@ -1,0 +1,1340 @@
+{
+    "prompt": "(config-router)#",
+    "variant": "bgp",
+    "Registry": "Bgp",
+    "commands": [
+        {
+            "description": "BGP specific commands",
+            "name": "bgp",
+            "subcommands": [
+                {
+                    "description": "Log neighbor up/down and reset reason",
+                    "name": "log-neighbor-changes",
+                    "config": "Bgp::BGP_LOG_NEIGHBOR_CHANGES",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "Allow redistribution of iBGP into IGPs (dangerous)",
+                    "name": "redistribute-internal",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "Override configured router identifier (peers will reset)",
+                    "name": "router-id",
+                    "subcommands": [
+                        {
+                            "description": "Manually configured router identifier",
+                            "name": "A.B.C.D",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Exit from routing protocol configuration mode",
+            "name": "exit",
+            "subcommands": [
+                {
+                    "description": "",
+                    "name": "<cr>"
+                }
+            ]
+        },
+        {
+            "description": "Specify a neighbor router",
+            "name": "neighbor",
+            "subcommands": [
+                {
+                    "description": "Neighbor address",
+                    "name": "A.B.C.D",
+                    "subcommands": [
+                        {
+                            "description": "Disable the next hop calculation for this neighbor",
+                            "name": "next-hop-self",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Specify a BGP neighbor",
+                            "name": "remote-as",
+                            "subcommands": [
+                                {
+                                    "description": "AS of remote neighbor",
+                                    "name": "<1-65535>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Apply route map to neighbor",
+                            "name": "route-map",
+                            "subcommands": [
+                                {
+                                    "description": "Name of route-map",
+                                    "name": "<route_map>",
+                                    "subcommands": [
+                                        {
+                                            "description": "Apply to incoming routes",
+                                            "name": "in",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "Apply to outgoing routes",
+                                            "name": "out",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Set the address-family for this neighbor",
+                            "name": "activate",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Maximum number of prefixes to accept from this peer",
+                            "name": "maximum-prefix",
+                            "subcommands": [
+                                {
+                                    "description": "Maximum prefix limit",
+                                    "name": "<1-4294967295>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Assign peer to a peer-group",
+                            "name": "peer-group",
+                            "subcommands": [
+                                {
+                                    "description": "Peer-group name",
+                                    "name": "WORD",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Filter routes using a prefix-list",
+                            "name": "prefix-list",
+                            "subcommands": [
+                                {
+                                    "description": "Name of prefix-list",
+                                    "name": "<prefix_list>",
+                                    "subcommands": [
+                                        {
+                                            "description": "Apply to incoming routes",
+                                            "name": "in",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "Apply to outgoing routes",
+                                            "name": "out",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Use keepalive and hold time parameters",
+                            "name": "timers",
+                            "subcommands": [
+                                {
+                                    "description": "Keepalive interval (seconds)",
+                                    "name": "<0-65535>",
+                                    "subcommands": [
+                                        {
+                                            "description": "Hold time (seconds)",
+                                            "name": "<0-65535>",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Configure MD5 authentication",
+                            "name": "password",
+                            "subcommands": [
+                                {
+                                    "description": "Password string",
+                                    "name": "WORD",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Send community attribute to this neighbor",
+                            "name": "send-community",
+                            "subcommands": [
+                                {
+                                    "description": "Send standard community",
+                                    "name": "standard",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "Send extended community",
+                                    "name": "extended",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "Send both standard and extended community",
+                                    "name": "both",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Allow local AS in AS_PATH from this neighbor",
+                            "name": "allowas-in",
+                            "subcommands": [
+                                {
+                                    "description": "Number of occurrences of AS number",
+                                    "name": "<1-10>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Disable a session or reset it",
+                            "name": "shutdown",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Specify BGP update-source interface",
+                            "name": "update-source",
+                            "subcommands": [
+                                {
+                                    "description": "Interface for updates",
+                                    "name": "<interface>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Remove private AS numbers from outbound updates",
+                            "name": "remove-private-as",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Set the description for this BGP neighbor",
+                            "name": "description",
+                            "subcommands": [
+                                {
+                                    "description": "Description string",
+                                    "name": "LINE"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Configure BFD session for this neighbor",
+                            "name": "bfd",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Graceful-restart for this neighbor",
+                            "name": "graceful-restart",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Neighbor IPv6 address",
+                    "name": "X:X:X:X::X",
+                    "subcommands": [
+                        {
+                            "description": "Disable the next hop calculation for this neighbor",
+                            "name": "next-hop-self",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Specify a BGP neighbor",
+                            "name": "remote-as",
+                            "subcommands": [
+                                {
+                                    "description": "AS of remote neighbor",
+                                    "name": "<1-65535>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Apply route map to neighbor",
+                            "name": "route-map",
+                            "subcommands": [
+                                {
+                                    "description": "Name of route-map",
+                                    "name": "<route_map>",
+                                    "subcommands": [
+                                        {
+                                            "description": "Apply to incoming routes",
+                                            "name": "in",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "Apply to outgoing routes",
+                                            "name": "out",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Set the address-family for this neighbor",
+                            "name": "activate",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Maximum number of prefixes to accept from this peer",
+                            "name": "maximum-prefix",
+                            "subcommands": [
+                                {
+                                    "description": "Maximum prefix limit",
+                                    "name": "<1-4294967295>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Assign peer to a peer-group",
+                            "name": "peer-group",
+                            "subcommands": [
+                                {
+                                    "description": "Peer-group name",
+                                    "name": "WORD",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Filter routes using a prefix-list",
+                            "name": "prefix-list",
+                            "subcommands": [
+                                {
+                                    "description": "Name of prefix-list",
+                                    "name": "<prefix_list>",
+                                    "subcommands": [
+                                        {
+                                            "description": "Apply to incoming routes",
+                                            "name": "in",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "Apply to outgoing routes",
+                                            "name": "out",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Use keepalive and hold time parameters",
+                            "name": "timers",
+                            "subcommands": [
+                                {
+                                    "description": "Keepalive interval (seconds)",
+                                    "name": "<0-65535>",
+                                    "subcommands": [
+                                        {
+                                            "description": "Hold time (seconds)",
+                                            "name": "<0-65535>",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Configure MD5 authentication",
+                            "name": "password",
+                            "subcommands": [
+                                {
+                                    "description": "Password string",
+                                    "name": "WORD",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Send community attribute to this neighbor",
+                            "name": "send-community",
+                            "subcommands": [
+                                {
+                                    "description": "Send standard community",
+                                    "name": "standard",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "Send extended community",
+                                    "name": "extended",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "Send both standard and extended community",
+                                    "name": "both",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Allow local AS in AS_PATH from this neighbor",
+                            "name": "allowas-in",
+                            "subcommands": [
+                                {
+                                    "description": "Number of occurrences of AS number",
+                                    "name": "<1-10>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Disable a session or reset it",
+                            "name": "shutdown",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Specify BGP update-source interface",
+                            "name": "update-source",
+                            "subcommands": [
+                                {
+                                    "description": "Interface for updates",
+                                    "name": "<interface>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Remove private AS numbers from outbound updates",
+                            "name": "remove-private-as",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Set the description for this BGP neighbor",
+                            "name": "description",
+                            "subcommands": [
+                                {
+                                    "description": "Description string",
+                                    "name": "LINE"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Configure BFD session for this neighbor",
+                            "name": "bfd",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Graceful-restart for this neighbor",
+                            "name": "graceful-restart",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Specify a network to announce via BGP",
+            "name": "network",
+            "subcommands": [
+                {
+                    "description": "Network number",
+                    "name": "A.B.C.D",
+                    "subcommands": [
+                        {
+                            "description": "Network mask",
+                            "name": "mask",
+                            "subcommands": [
+                                {
+                                    "description": "Network mask",
+                                    "name": "A.B.C.D",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Negate a command or set its defaults",
+            "name": "no",
+            "subcommands": []
+        },
+        {
+            "description": "Redistribute information from another routing protocol",
+            "name": "redistribute",
+            "subcommands": [
+                {
+                    "description": "Border Gateway Protocol (BGP)",
+                    "name": "bgp",
+                    "subcommands": [
+                        {
+                            "description": "Autonomous system number",
+                            "name": "<1-65535>",
+                            "subcommands": [
+                                {
+                                    "description": "Redistribution options",
+                                    "name": "<redistribute_opts>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Connected routes",
+                    "name": "connected",
+                    "subcommands": [
+                        {
+                            "description": "Redistribution options",
+                            "name": "<redistribute_opts>"
+                        }
+                    ]
+                },
+                {
+                    "description": "Enhanced Interior Gateway Routing Protocol",
+                    "name": "eigrp",
+                    "subcommands": [
+                        {
+                            "description": "Autonomous system number",
+                            "name": "<1-65535>",
+                            "subcommands": [
+                                {
+                                    "description": "Redistribution options",
+                                    "name": "<redistribute_opts>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "ISO IS-IS",
+                    "name": "isis",
+                    "subcommands": [
+                        {
+                            "description": "Process ID",
+                            "name": "<1-65535>",
+                            "subcommands": [
+                                {
+                                    "description": "Redistribution options",
+                                    "name": "<redistribute_opts>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Open Shortest Path First (OSPF)",
+                    "name": "ospf",
+                    "subcommands": [
+                        {
+                            "description": "Process ID",
+                            "name": "<1-65535>",
+                            "subcommands": [
+                                {
+                                    "description": "Redistribution of OSPF routes",
+                                    "name": "match",
+                                    "properties": [
+                                        "recursive"
+                                    ],
+                                    "subcommands": [
+                                        {
+                                            "description": "Redistribute OSPF external routes",
+                                            "name": "external",
+                                            "properties": [
+                                                "recursive"
+                                            ],
+                                            "subcommands": [
+                                                {
+                                                    "description": "External type 1",
+                                                    "name": "1",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "description": "External type 2",
+                                                    "name": "2",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "Redistribute OSPF NSSA external routes",
+                                            "name": "nssa-external",
+                                            "properties": [
+                                                "recursive"
+                                            ],
+                                            "subcommands": [
+                                                {
+                                                    "description": "NSSA external type 1",
+                                                    "name": "1",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "description": "NSSA external type 2",
+                                                    "name": "2",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "Redistribute OSPF internal routes",
+                                            "name": "internal",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "Redistribution options",
+                                    "name": "<redistribute_opts>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Open Shortest Path First Version 3 (OSPFv3)",
+                    "name": "ospfv3",
+                    "subcommands": [
+                        {
+                            "description": "Process ID",
+                            "name": "<1-65535>",
+                            "subcommands": [
+                                {
+                                    "description": "Redistribution of OSPF routes",
+                                    "name": "match",
+                                    "properties": [
+                                        "recursive"
+                                    ],
+                                    "subcommands": [
+                                        {
+                                            "description": "Redistribute OSPF external routes",
+                                            "name": "external",
+                                            "properties": [
+                                                "recursive"
+                                            ],
+                                            "subcommands": [
+                                                {
+                                                    "description": "External type 1",
+                                                    "name": "1",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "description": "External type 2",
+                                                    "name": "2",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "Redistribute OSPF NSSA external routes",
+                                            "name": "nssa-external",
+                                            "properties": [
+                                                "recursive"
+                                            ],
+                                            "subcommands": [
+                                                {
+                                                    "description": "NSSA external type 1",
+                                                    "name": "1",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "description": "NSSA external type 2",
+                                                    "name": "2",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "Redistribute OSPF internal routes",
+                                            "name": "internal",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "Redistribution options",
+                                    "name": "<redistribute_opts>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Routing Information Protocol (RIP)",
+                    "name": "rip",
+                    "subcommands": [
+                        {
+                            "description": "Redistribution options",
+                            "name": "<redistribute_opts>"
+                        }
+                    ]
+                },
+                {
+                    "description": "Static routes",
+                    "name": "static",
+                    "subcommands": [
+                        {
+                            "description": "Redistribution options",
+                            "name": "<redistribute_opts>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Perform IGP synchronization",
+            "name": "synchronization",
+            "subcommands": [
+                {
+                    "description": "",
+                    "name": "<cr>"
+                }
+            ]
+        },
+        {
+            "description": "Adjust routing timers",
+            "name": "timers",
+            "subcommands": [
+                {
+                    "description": "BGP timers",
+                    "name": "bgp",
+                    "subcommands": [
+                        {
+                            "description": "Keepalive interval",
+                            "name": "<0-65535>",
+                            "subcommands": [
+                                {
+                                    "description": "Holdtime",
+                                    "name": "<0-65535>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Enter Address Family command mode",
+            "name": "address-family",
+            "subcommands": [
+                {
+                    "description": "Address Family modifier",
+                    "name": "ipv4",
+                    "subcommands": [
+                        {
+                            "description": "Address Family modifier",
+                            "name": "unicast",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Multicast topology",
+                            "name": "multicast",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "VPN Routing/Forwarding instance",
+                            "name": "vrf",
+                            "subcommands": [
+                                {
+                                    "description": "VRF name",
+                                    "name": "WORD",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "Address Family modifier",
+                    "name": "ipv6",
+                    "subcommands": [
+                        {
+                            "description": "Address Family modifier",
+                            "name": "unicast",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Multicast topology",
+                            "name": "multicast",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "VPN Routing/Forwarding instance",
+                            "name": "vrf",
+                            "subcommands": [
+                                {
+                                    "description": "VRF name",
+                                    "name": "WORD",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "VPN unicast",
+                    "name": "vpnv4",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "unicast",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "VPNv6 unicast",
+                    "name": "vpnv6",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "unicast",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Create a BGP peer-group",
+            "name": "peer-group",
+            "subcommands": [
+                {
+                    "description": "Peer-group name",
+                    "name": "WORD",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Aggregate summary prefix",
+            "name": "aggregate-address",
+            "properties": [
+                "negate"
+            ],
+            "subcommands": [
+                {
+                    "description": "Aggregate prefix",
+                    "name": "A.B.C.D",
+                    "subcommands": [
+                        {
+                            "description": "Aggregate mask",
+                            "name": "A.B.C.D",
+                            "properties": [
+                                "recursive"
+                            ],
+                            "subcommands": [
+                                {
+                                    "description": "Filter more-specific routes from updates",
+                                    "name": "summary-only",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "Use AS_SET path attribute",
+                                    "name": "as-set",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Aggregate IPv6 prefix",
+                    "name": "X:X:X:X::X/<0-128>",
+                    "properties": [
+                        "recursive"
+                    ],
+                    "subcommands": [
+                        {
+                            "description": "Filter more-specific routes from updates",
+                            "name": "summary-only",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Use AS_SET path attribute",
+                            "name": "as-set",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Define an administrative distance",
+            "name": "distance",
+            "subcommands": [
+                {
+                    "description": "BGP administrative distance",
+                    "name": "bgp",
+                    "subcommands": [
+                        {
+                            "description": "Distance for eBGP routes",
+                            "name": "<1-255>",
+                            "subcommands": [
+                                {
+                                    "description": "Distance for iBGP routes",
+                                    "name": "<1-255>",
+                                    "subcommands": [
+                                        {
+                                            "description": "Distance for local BGP routes",
+                                            "name": "<1-255>",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Forward packets over multiple paths",
+            "name": "maximum-paths",
+            "subcommands": [
+                {
+                    "description": "Number of parallel paths",
+                    "name": "<1-64>",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "iBGP multipath",
+                    "name": "ibgp",
+                    "subcommands": [
+                        {
+                            "description": "Number of parallel iBGP paths",
+                            "name": "<1-64>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

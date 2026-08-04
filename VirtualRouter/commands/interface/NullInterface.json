@@ -1,0 +1,102 @@
+{
+    "prompt": "(config-if)#",
+    "registry": "Interface",
+    "variant": "null",
+    "commands": [
+        {
+            "description": "Set a command to its defaults",
+            "name": "default",
+            "subcommands": [
+                {
+                    "description": "Interface Internet Protocol config commands",
+                    "name": "ip",
+                    "subcommands": [
+                        {
+                            "description": "Enable sending ICMP Unreachable messages",
+                            "name": "unreachables",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "IPv6 interface subcommands",
+                    "name": "ipv6",
+                    "subcommands": [
+                        {
+                            "description": "Enable sending of ICMP Unreachable messages",
+                            "name": "unreachables",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Exit from interface configuration mode",
+            "name": "exit",
+            "subcommands": [
+                {
+                    "description": "",
+                    "name": "<cr>"
+                }
+            ]
+        },
+        {
+            "description": "Description of the interactive help system",
+            "name": "help",
+            "subcommands": [
+                {
+                    "description": "",
+                    "name": "<cr>"
+                }
+            ]
+        },
+        {
+            "description": "Interface Internet Protocol config commands",
+            "name": "ip",
+            "subcommands": [
+                {
+                    "description": "Enable sending ICMP Unreachable messages",
+                    "name": "unreachables",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "IPv6 interface subcommands",
+            "name": "ipv6",
+            "subcommands": [
+                {
+                    "description": "Enable sending of ICMP Unreachable messages",
+                    "name": "unreachables",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Negate a command or set its defaults",
+            "name": "no",
+            "subcommands": []
+        }
+    ]
+}

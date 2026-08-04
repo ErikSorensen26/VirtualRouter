@@ -105,5 +105,6 @@
     },
     "cmake.sourceDirectory": "/home/erik/VirtualRouterTest",
     "cmake.generator": "Unix Makefiles",
-    "cmake.buildArgs": ["-j", "10"]
+    "cmake.buildArgs": ["-j", "10"],
+    "foldOnOpen.targets": ["AllBlockComments"]
 }

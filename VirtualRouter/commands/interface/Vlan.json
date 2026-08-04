@@ -1,0 +1,1674 @@
+{
+    "prompt": "(config-if)#",
+    "variant": "vlan",
+    "registry": "Interface",
+    "commands": [
+        {
+            "description": "Set arp timeout",
+            "name": "arp",
+            "subcommands": [
+                {
+                    "description": "Set ARP cache timeout",
+                    "name": "timeout",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Set bandwidth informational parameter",
+            "name": "bandwidth",
+            "subcommands": [
+                {
+                    "description": "Bandwidth in kilobits",
+                    "name": "<1-10000000>",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Specify interface throughput delay",
+            "name": "delay",
+            "subcommands": [
+                {
+                    "description": "Throughput delay (tens of microseconds)",
+                    "name": "<1-16777215>",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Interface specific description",
+            "name": "description",
+            "subcommands": [
+                {
+                    "description": "Up to 240 characters describing this interface",
+                    "name": "LINE",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Exit from interface configuration mode",
+            "name": "exit",
+            "subcommands": [
+                {
+                    "description": "",
+                    "name": "<cr>"
+                }
+            ]
+        },
+        {
+            "description": "Interface Internet Protocol config ",
+            "name": "ip",
+            "subcommands": [
+                {
+                    "description": "Specify access control for packets",
+                    "name": "access-group",
+                    "subcommands": [
+                        {
+                            "description": "IP access list (standard or extended)",
+                            "name": "<1-199>",
+                            "subcommands": [
+                                {
+                                    "description": "inbound packets",
+                                    "name": "in",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "outbound packets",
+                                    "name": "out",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Access-list name",
+                            "name": "WORD",
+                            "subcommands": [
+                                {
+                                    "description": "inbound packets",
+                                    "name": "in",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "outbound packets",
+                                    "name": "out",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Set the IP address of an interface",
+                    "name": "address",
+                    "subcommands": [
+                        {
+                            "description": "IP address",
+                            "name": "A.B.C.D",
+                            "subcommands": [
+                                {
+                                    "description": "IP subnet mask",
+                                    "name": "A.B.C.D",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "IP Address negotiated via DHCP",
+                            "name": "dhcp",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "authentication subcommands",
+                    "name": "authentication",
+                    "subcommands": [
+                        {
+                            "description": "key-chain",
+                            "name": "key-chain",
+                            "subcommands": [
+                                {
+                                    "description": "Enhanced Interior Gateway Routing Protocol (EIGRP)",
+                                    "name": "eigrp",
+                                    "subcommands": [
+                                        {
+                                            "description": "AS number",
+                                            "name": "<1-65535>",
+                                            "subcommands": [
+                                                {
+                                                    "description": "name of key-chain",
+                                                    "name": "WORD",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "mode",
+                            "name": "mode",
+                            "subcommands": [
+                                {
+                                    "description": "Enhanced Interior Gateway Routing Protocol (EIGRP)",
+                                    "name": "eigrp",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "NetFlow Related commands",
+                    "name": "flow",
+                    "subcommands": [
+                        {
+                            "description": "Enable outbound NetFlow",
+                            "name": "egress",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Enable inbound NetFlow",
+                            "name": "ingress",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Apply a Flow Monitor to this interface",
+                            "name": "monitor",
+                            "subcommands": [
+                                {
+                                    "description": "User defined flow monitor",
+                                    "name": "WORD",
+                                    "subcommands": [
+                                        {
+                                            "description": "Apply Flow Monitor on input traffic",
+                                            "name": "input",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "Apply Flow Monitor on output traffic",
+                                            "name": "output",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Configures IP-EIGRP hello interval",
+                    "name": "hello-interval",
+                    "subcommands": [
+                        {
+                            "description": "Enhanced Interior Gateway Routing Protocol (EIGRP)",
+                            "name": "eigrp",
+                            "subcommands": [
+                                {
+                                    "description": "Autonomous system number",
+                                    "name": "<1-65535>",
+                                    "subcommands": [
+                                        {
+                                            "description": "Seconds between hello transmissions",
+                                            "name": "<1-65535>",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Specify a destination address for UDP broadcasts",
+                    "name": "helper-address",
+                    "subcommands": [
+                        {
+                            "description": "IP destination address",
+                            "name": "A.B.C.D",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Set IP Maximum Transmission Unit",
+                    "name": "mtu",
+                    "subcommands": [
+                        {
+                            "description": "MTU (bytes)",
+                            "name": "<68-1500>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "NAT interface commands",
+                    "name": "nat",
+                    "subcommands": [
+                        {
+                            "description": "Inside interface for address translation",
+                            "name": "inside",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Outside interface for address translation",
+                            "name": "outside",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "OSPF interface commands",
+                    "name": "ospf",
+                    "subcommands": [
+                        {
+                            "description": "Process ID",
+                            "name": "<1-65535>",
+                            "subcommands": [
+                                {
+                                    "description": "Set the OSPF area ID",
+                                    "name": "area",
+                                    "subcommands": [
+                                        {
+                                            "description": "OSPF area ID as a decimal value",
+                                            "name": "<0-4294967295>",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "OSPF area ID in IP address format",
+                                            "name": "A.B.C.D",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Enable authentication",
+                            "name": "authentication",
+                            "subcommands": [
+                                {
+                                    "description": "Use message-digest authentication",
+                                    "name": "message-digest",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "Use no authentication",
+                                    "name": "null",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Authentication password (key)",
+                            "name": "authentication-key",
+                            "subcommands": [
+                                {
+                                    "description": "Encryption type (0 for not yet encrypted, 7 for proprietary)",
+                                    "name": "<0-7>",
+                                    "subcommands": [
+                                        {
+                                            "description": "The OSPF password (key) (maximum 8 characters)",
+                                            "name": "WORD",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "The OSPF password (key) (maximum 8 characters)",
+                                    "name": "WORD",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Interface cost",
+                            "name": "cost",
+                            "subcommands": [
+                                {
+                                    "description": "Cost",
+                                    "name": "<1-65535>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Interval after which a neighbor is declared dead",
+                            "name": "dead-interval",
+                            "subcommands": [
+                                {
+                                    "description": "Seconds",
+                                    "name": "<1-65535>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Time between HELLO packets",
+                            "name": "hello-interval",
+                            "subcommands": [
+                                {
+                                    "description": "Seconds",
+                                    "name": "<1-65535>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Message digest authentication password (key)",
+                            "name": "message-digest-key",
+                            "subcommands": [
+                                {
+                                    "description": "Key ID",
+                                    "name": "<1-255>",
+                                    "subcommands": [
+                                        {
+                                            "description": "Use MD5 algorithm",
+                                            "name": "md5",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Network type",
+                            "name": "network",
+                            "subcommands": [
+                                {
+                                    "description": "Specify OSPF point-to-point network",
+                                    "name": "point-to-point",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Router priority",
+                            "name": "priority",
+                            "subcommands": [
+                                {
+                                    "description": "Priority",
+                                    "name": "<0-255>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Enable proxy ARP",
+                    "name": "proxy-arp",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "Perform split horizon",
+                    "name": "split-horizon",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "Perform address summarization",
+                    "name": "summary-address",
+                    "subcommands": [
+                        {
+                            "description": "Enhanced Interior Gateway Routing Protocol (EIGRP)",
+                            "name": "eigrp",
+                            "subcommands": [
+                                {
+                                    "description": "Autonomous system number",
+                                    "name": "<1-65535>",
+                                    "subcommands": [
+                                        {
+                                            "description": "IP address",
+                                            "name": "A.B.C.D",
+                                            "subcommands": [
+                                                {
+                                                    "description": "IP network mask",
+                                                    "name": "A.B.C.D",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "Administrative distance",
+                                                            "name": "<1-255>",
+                                                            "subcommands": [
+                                                                {
+                                                                    "description": "",
+                                                                    "name": "<cr>"
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "IPv6 interface subcommands",
+            "name": "ipv6",
+            "subcommands": [
+                {
+                    "description": "Configure IPv6 address on interface",
+                    "name": "address",
+                    "subcommands": [
+                        {
+                            "description": "General prefix name",
+                            "name": "WORD",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "IPv6 link-local address",
+                            "name": "X:X:X:X::X",
+                            "subcommands": [
+                                {
+                                    "description": "Use link-local address",
+                                    "name": "link-local",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "IPv6 prefix",
+                            "name": "X:X:X:X::X/<0-128>",
+                            "subcommands": [
+                                {
+                                    "description": "Configure as an anycast",
+                                    "name": "anycast",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "Use eui-64 interface identifier",
+                                    "name": "eui-64",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Obtain address using autoconfiguration",
+                            "name": "autoconfig",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Obtain a ipv6 address using dhcp",
+                            "name": "dhcp",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "authentication subcommands",
+                    "name": "authentication",
+                    "subcommands": [
+                        {
+                            "description": "key-chain",
+                            "name": "key-chain",
+                            "subcommands": [
+                                {
+                                    "description": "Enhanced Interior Gateway Routing Protocol (EIGRP)",
+                                    "name": "eigrp",
+                                    "subcommands": [
+                                        {
+                                            "description": "AS number",
+                                            "name": "<1-65535>",
+                                            "subcommands": [
+                                                {
+                                                    "description": "name of key-chain",
+                                                    "name": "WORD",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "mode",
+                            "name": "mode",
+                            "subcommands": [
+                                {
+                                    "description": "Enhanced Interior Gateway Routing Protocol (EIGRP)",
+                                    "name": "eigrp",
+                                    "subcommands": [
+                                        {
+                                            "description": "AS number",
+                                            "name": "<1-65535>",
+                                            "subcommands": [
+                                                {
+                                                    "description": "Keyed message digest",
+                                                    "name": "md5",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "IPv6 DHCP interface subcommands",
+                    "name": "dhcp",
+                    "subcommands": [
+                        {
+                            "description": "Act as an IPv6 DHCP client",
+                            "name": "client",
+                            "subcommands": [
+                                {
+                                    "description": "Prefix-Delegation",
+                                    "name": "pd",
+                                    "subcommands": [
+                                        {
+                                            "description": "Prefix name",
+                                            "name": "WORD",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Act as an IPv6 DHCP server",
+                            "name": "server",
+                            "subcommands": [
+                                {
+                                    "description": "Name of IPv6 DHCP pool",
+                                    "name": "WORD",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Configure EIGRP IPv6 on interface",
+                    "name": "eigrp",
+                    "subcommands": [
+                        {
+                            "description": "AS number",
+                            "name": "<1-65535>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Enable IPv6 on interface",
+                    "name": "enable",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "NetFlow Related commands",
+                    "name": "flow",
+                    "subcommands": [
+                        {
+                            "description": "Apply a Flow Monitor to this interface",
+                            "name": "monitor",
+                            "subcommands": [
+                                {
+                                    "description": "User defined flow monitor",
+                                    "name": "WORD",
+                                    "subcommands": [
+                                        {
+                                            "description": "Apply Flow Monitor on input traffic",
+                                            "name": "input",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "Apply Flow Monitor on output traffic",
+                                            "name": "output",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Configures IP-EIGRP hello interval",
+                    "name": "hello-interval",
+                    "subcommands": [
+                        {
+                            "description": "Enhanced Interior Gateway Routing Protocol (EIGRP)",
+                            "name": "eigrp",
+                            "subcommands": [
+                                {
+                                    "description": "Autonomous system number",
+                                    "name": "<1-65535>",
+                                    "subcommands": [
+                                        {
+                                            "description": "Seconds between hello transmissions",
+                                            "name": "<1-65535>",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Apply inspect name",
+                    "name": "inspect",
+                    "subcommands": [
+                        {
+                            "description": "Name of inspection defined",
+                            "name": "WORD",
+                            "subcommands": [
+                                {
+                                    "description": "Inbound inspection",
+                                    "name": "in",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "Outbound inspection",
+                                    "name": "out",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Set IPv6 Maximum Transmission Unit",
+                    "name": "mtu",
+                    "subcommands": [
+                        {
+                            "description": "MTU (bytes)",
+                            "name": "<1280-1500>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Enable IPv6 NAT on interface",
+                    "name": "nat",
+                    "subcommands": [
+                        {
+                            "description": "Configure NAT-PT prefix on interface",
+                            "name": "prefix",
+                            "subcommands": [
+                                {
+                                    "description": "IPv6 prefix",
+                                    "name": "X:X:X:X::X/<0-128>",
+                                    "subcommands": [
+                                        {
+                                            "description": "Use the 32 bits of the destination v6 address",
+                                            "name": "v4-mapped",
+                                            "subcommands": [
+                                                {
+                                                    "description": "Access list name for local addresses",
+                                                    "name": "WORD",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "IPv6 interface Neighbor Discovery subcommands",
+                    "name": "nd",
+                    "subcommands": [
+                        {
+                            "description": "Hosts should use DHCP for address config",
+                            "name": "managed-config-flag",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Other stateful configuration flag",
+                            "name": "other-config-flag",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Router Advertisement control",
+                            "name": "ra",
+                            "subcommands": [
+                                {
+                                    "description": "Suppress IPv6 Router Advertisements",
+                                    "name": "suppress",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "OSPF interface commands",
+                    "name": "ospf",
+                    "subcommands": [
+                        {
+                            "description": "Process ID",
+                            "name": "<1-65535>",
+                            "subcommands": [
+                                {
+                                    "description": "Set the OSPF area ID",
+                                    "name": "area",
+                                    "subcommands": [
+                                        {
+                                            "description": "OSPF area ID as a decimal value",
+                                            "name": "<0-4294967295>",
+                                            "subcommands": [
+                                                {
+                                                    "description": "Set the OSPF instance",
+                                                    "name": "instance",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "Instance ID",
+                                                            "name": "<0-255>",
+                                                            "subcommands": [
+                                                                {
+                                                                    "description": "",
+                                                                    "name": "<cr>"
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "OSPF area ID in IP address format",
+                                            "name": "A.B.C.D",
+                                            "subcommands": [
+                                                {
+                                                    "description": "Set the OSPF instance",
+                                                    "name": "instance",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "Instance ID",
+                                                            "name": "<0-255>",
+                                                            "subcommands": [
+                                                                {
+                                                                    "description": "",
+                                                                    "name": "<cr>"
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Interface cost",
+                            "name": "cost",
+                            "subcommands": [
+                                {
+                                    "description": "Cost",
+                                    "name": "<1-65535>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Interval after which a neighbor is declared dead",
+                            "name": "dead-interval",
+                            "subcommands": [
+                                {
+                                    "description": "Seconds",
+                                    "name": "<1-65535>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Time between HELLO packets",
+                            "name": "hello-interval",
+                            "subcommands": [
+                                {
+                                    "description": "Seconds",
+                                    "name": "<1-65535>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "OSPF neighbor",
+                            "name": "neighbor",
+                            "subcommands": [
+                                {
+                                    "description": "Neighbor IPv6 address",
+                                    "name": "X:X:X:X::X",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Router priority",
+                            "name": "priority",
+                            "subcommands": [
+                                {
+                                    "description": "Priority",
+                                    "name": "<0-255>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Configure RIP routing protocol",
+                    "name": "rip",
+                    "subcommands": [
+                        {
+                            "description": "User selected string identifying this RIP process",
+                            "name": "WORD",
+                            "subcommands": [
+                                {
+                                    "description": "Configure handling of default route",
+                                    "name": "default-information",
+                                    "subcommands": [
+                                        {
+                                            "description": "Originate the default route",
+                                            "name": "originate",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "Enable/disable RIP routing",
+                                    "name": "enable",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Summary prefix",
+                    "name": "summary-address",
+                    "subcommands": [
+                        {
+                            "description": "Enhanced Interior Gateway Routing Protocol (EIGRP)",
+                            "name": "eigrp",
+                            "subcommands": [
+                                {
+                                    "description": "Autonomous system number",
+                                    "name": "<1-65535>",
+                                    "subcommands": [
+                                        {
+                                            "description": "IPv6 prefix",
+                                            "name": "X:X:X:X::X/<0-128>",
+                                            "subcommands": [
+                                                {
+                                                    "description": "Administrative distance",
+                                                    "name": "<1-255>",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Access control list for packets",
+                    "name": "traffic-filter",
+                    "subcommands": [
+                        {
+                            "description": "Access-list name",
+                            "name": "WORD",
+                            "subcommands": [
+                                {
+                                    "description": "inbound packets",
+                                    "name": "in",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "outbound packets",
+                                    "name": "out",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Preferred interface for source address selection",
+                    "name": "unnumbered",
+                    "subcommands": [
+                        {
+                            "description": "IEEE 802.3",
+                            "name": "Ethernet",
+                            "subcommands": [
+                                {
+                                    "description": "Ethernet interface number",
+                                    "name": "<0-9>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "FastEthernet IEEE 802.3",
+                            "name": "FastEthernet",
+                            "subcommands": [
+                                {
+                                    "description": "Ethernet interface number",
+                                    "name": "<0-9>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "GigabitEthernet IEEE 802.3z",
+                            "name": "GigabitEthernet",
+                            "subcommands": [
+                                {
+                                    "description": "GigabitEthernet interface number",
+                                    "name": "<0-9>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Negate a command or set its defaults",
+            "name": "no",
+            "subcommands": []
+        },
+        {
+            "description": "Shutdown the selected interface",
+            "name": "shutdown",
+            "subcommands": [
+                {
+                    "description": "",
+                    "name": "<cr>"
+                }
+            ]
+        },
+        {
+            "description": "HSRP interface configuration commands",
+            "name": "standby",
+            "subcommands": [
+                {
+                    "description": "group number",
+                    "name": "<0-4095>",
+                    "subcommands": [
+                        {
+                            "description": "Enable HSRP and set the virtual IP address",
+                            "name": "ip",
+                            "subcommands": [
+                                {
+                                    "description": "Virtual IP address",
+                                    "name": "A.B.C.D",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Overthrow lower priority Active routers",
+                            "name": "preempt",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Priority level",
+                            "name": "priority",
+                            "subcommands": [
+                                {
+                                    "description": "Priority value",
+                                    "name": "<0-255>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Hello and hold timers",
+                            "name": "timers",
+                            "subcommands": [
+                                {
+                                    "description": "Hello interval in seconds",
+                                    "name": "<1-254>",
+                                    "subcommands": [
+                                        {
+                                            "description": "Hold time in seconds",
+                                            "name": "<2-255>",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Priority Tracking",
+                            "name": "track",
+                            "subcommands": [
+                                {
+                                    "description": "FastEthernet IEEE 802.3",
+                                    "name": "FastEthernet",
+                                    "subcommands": [
+                                        {
+                                            "description": "FastEthernet interface number",
+                                            "name": "<0-9>",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "GigabitEthernet IEEE 802.3z",
+                                    "name": "GigabitEthernet",
+                                    "subcommands": [
+                                        {
+                                            "description": "GigabitEthernet interface number",
+                                            "name": "<0-9>",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "Serial",
+                                    "name": "Serial",
+                                    "subcommands": [
+                                        {
+                                            "description": "Serial interface number",
+                                            "name": "<0-9>",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "VLAN IEEE 802.1q",
+                                    "name": "Vlan",
+                                    "subcommands": [
+                                        {
+                                            "description": "Vlan interface number",
+                                            "name": "<1-4094>",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Enable HSRP and set the virtual IP address",
+                    "name": "ip",
+                    "subcommands": [
+                        {
+                            "description": "Virtual IP address",
+                            "name": "A.B.C.D",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Overthrow lower priority Active routers",
+                    "name": "preempt",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "Priority level",
+                    "name": "priority",
+                    "subcommands": [
+                        {
+                            "description": "Priority value",
+                            "name": "<0-255>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Hello and hold timers",
+                    "name": "timers",
+                    "subcommands": [
+                        {
+                            "description": "Hello interval in seconds",
+                            "name": "<1-254>",
+                            "subcommands": [
+                                {
+                                    "description": "Hold time in seconds",
+                                    "name": "<2-255>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Priority Tracking",
+                    "name": "track",
+                    "subcommands": [
+                        {
+                            "description": "FastEthernet IEEE 802.3",
+                            "name": "FastEthernet",
+                            "subcommands": [
+                                {
+                                    "description": "FastEthernet interface number",
+                                    "name": "<0-9>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "GigabitEthernet IEEE 802.3z",
+                            "name": "GigabitEthernet",
+                            "subcommands": [
+                                {
+                                    "description": "GigabitEthernet interface number",
+                                    "name": "<0-9>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Serial",
+                            "name": "Serial",
+                            "subcommands": [
+                                {
+                                    "description": "Serial interface number",
+                                    "name": "<0-9>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "VLAN IEEE 802.1q",
+                            "name": "Vlan",
+                            "subcommands": [
+                                {
+                                    "description": "Vlan interface number",
+                                    "name": "<1-4094>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "HSRP version",
+                    "name": "version",
+                    "subcommands": [
+                        {
+                            "description": "Version number",
+                            "name": "<1-2>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

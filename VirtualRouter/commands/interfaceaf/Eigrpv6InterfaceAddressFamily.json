@@ -1,0 +1,298 @@
+{
+    "prompt": "(config-router-af-interface)#",
+    "variant": "eigrp-ipv6",
+    "registry": "EigrpInterface",
+    "commands": [
+        {
+            "support": true,
+            "description": "Advertise add paths",
+            "name": "add-paths",
+            "subcommands": [
+                {
+                    "description": "Number of add paths to be advertised",
+                    "name": "<1-4>",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "authentication subcommands",
+            "name": "authentication",
+            "subcommands": [
+                {
+                    "description": "key-chain",
+                    "name": "key-chain",
+                    "subcommands": [
+                        {
+                            "description": "name of key-chain",
+                            "name": "WORD",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "authentication mode",
+                    "name": "mode",
+                    "subcommands": [
+                        {
+                            "description": "HMAC-SHA-256 Authentication",
+                            "name": "hmac-sha-256",
+                            "subcommands": [
+                                {
+                                    "description": "Encryption type (0 to disable encryption, 7 for proprietary)",
+                                    "name": "<0-7>",
+                                    "subcommands": [
+                                        {
+                                            "description": "password",
+                                            "name": "LINE",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "password",
+                                    "name": "LINE",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Keyed message digest",
+                            "name": "md5",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Set percentage of bandwidth percentage limit",
+            "name": "bandwidth-percent",
+            "subcommands": [
+                {
+                    "description": "Maximum bandwidth percentage that EIGRP may use",
+                    "name": "<1-999999>",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Enable Bidirectional Forwarding Detection",
+            "name": "bfd",
+            "subcommands": [
+                {
+                    "description": "",
+                    "name": "<cr>"
+                }
+            ]
+        },
+        {
+            "support": true,
+            "description": "Percent interface metric must change to cause update",
+            "name": "dampening-change",
+            "subcommands": [
+                {
+                    "support": true,
+                    "description": "Percentage of change",
+                    "name": "<1-100>",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "",
+                    "name": "<cr>"
+                }
+            ]
+        },
+        {
+            "support": true,
+            "description": "Time in seconds to check interface metrics",
+            "name": "dampening-interval",
+            "subcommands": [
+                {
+                    "support": true,
+                    "description": "Time in seconds",
+                    "name": "<1-65535>",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "",
+                    "name": "<cr>"
+                }
+            ]
+        },
+        {
+            "support": true,
+            "description": "Exit from Address Family Interface configuration mode",
+            "name": "exit-af-interface",
+            "subcommands": [
+                {
+                    "description": "",
+                    "name": "<cr>"
+                }
+            ]
+        },
+        {
+            "support": true,
+            "description": "Configures hello interval",
+            "name": "hello-interval",
+            "subcommands": [
+                {
+                    "support": true,
+                    "description": "Seconds between hello transmissions",
+                    "name": "<1-65535>",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "support": true,
+            "description": "Configures hold time",
+            "name": "hold-time",
+            "subcommands": [
+                {
+                    "support": true,
+                    "description": "Seconds before neighbor is considered down",
+                    "name": "<1-65535>",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "support": true,
+            "description": "Configures EIGRP next-hop-self",
+            "name": "next-hop-self",
+            "subcommands": [
+                {
+                    "description": "",
+                    "name": "<cr>"
+                }
+            ]
+        },
+        {
+            "description": "Negate a command or set its defaults",
+            "name": "no"
+        },
+        {
+            "support": true,
+            "description": "Suppress address updates on an interface",
+            "name": "passive-interface",
+            "subcommands": [
+                {
+                    "description": "",
+                    "name": "<interface>",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Disable Address-Family on interface",
+            "name": "shutdown",
+            "subcommands": [
+                {
+                    "description": "",
+                    "name": "<cr>"
+                }
+            ]
+        },
+        {
+            "support": true,
+            "description": "Perform split horizon",
+            "name": "split-horizon",
+            "subcommands": [
+                {
+                    "description": "",
+                    "name": "<cr>"
+                }
+            ]
+        },
+        {
+            "support": false,
+            "description": "Perform addresss ummarization",
+            "name": "summary-address",
+            "subcommands": [
+                {
+                    "support": false,
+                    "description": "Summary network prefix",
+                    "name": "X:X:X:X::X/<0-128>",
+                    "subcommands": [
+                        {
+                            "description": "Allow dynamic prefixes based on the leak-map",
+                            "name": "leak-map",
+                            "subcommands": [
+                                {
+                                    "description": "leak-map name",
+                                    "name": "WORD",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

@@ -12,17 +12,20 @@ set(CMAKE_BUILD_PARALLEL_LEVEL 8)
 add_compile_options(-Wall -Wno-unused-parameter -fno-strict-aliasing)
 add_link_options(-fuse-ld=mold -Wl,--thread-count=8)
 
-option(BUILD_STATIC_ROUTER "Build only a full static VirtualRouterExec" ON)
-option(ENABLE_DEBUG_SYMBOLS "Include -g and -rdynamic for crash backtrace" OFF)
+option(BUILD_STATIC_ROUTER "Build only a full static VirtualRouterExec" OFF)
+option(ENABLE_DEBUG_SYMBOLS "Include -g and -rdynamic for crash backtrace" ON)
 
 add_custom_target(copy_resources ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${CMAKE_SOURCE_DIR}/VirtualRouter/configs
             ${CMAKE_BINARY_DIR}/configs
     COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_SOURCE_DIR}/VirtualRouter/commands
+            ${CMAKE_BINARY_DIR}/commands
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${CMAKE_SOURCE_DIR}/VirtualRouter/dir
             ${CMAKE_BINARY_DIR}/dir
-    COMMENT "Copying configs/ and dir/ to build folder"
+    COMMENT "Copying configs/, commands/ and dir/ to build folder"
 )
 
 if (BUILD_STATIC_ROUTER)

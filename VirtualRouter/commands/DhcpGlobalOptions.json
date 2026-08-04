@@ -1,0 +1,104 @@
+{
+    "prompt": "(config-dhcp-global-options)#",
+    "commands": [
+        {
+            "description": "DNS servers",
+            "name": "dns-server",
+            "subcommands": [
+                {
+                    "properties": [
+                        "negate_all"
+                    ],
+                    "description": "Server's name or IP address",
+                    "name": "Hostname or A.B.C.D",
+                    "subcommands": [
+                        {
+                            "description": "Server's name or IP address",
+                            "name": "Hostname or A.B.C.D",
+                            "subcommands": [
+                                {
+                                    "description": "Server's name or IP address",
+                                    "name": "Hostname or A.B.C.D",
+                                    "subcommands": [
+                                        {
+                                            "description": "Server's name or IP address",
+                                            "name": "Hostname or A.B.C.D",
+                                            "subcommands": [
+                                                {
+                                                    "description": "Server's name or IP address",
+                                                    "name": "Hostname or A.B.C.D",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "Server's name or IP address",
+                                                            "name": "Hostname or A.B.C.D",
+                                                            "subcommands": [
+                                                                {
+                                                                    "description": "Server's name or IP address",
+                                                                    "name": "Hostname or A.B.C.D",
+                                                                    "subcommands": [
+                                                                        {
+                                                                            "description": "Server's name or IP address",
+                                                                            "name": "Hostname or A.B.C.D",
+                                                                            "subcommands": [
+                                                                                {
+                                                                                    "description": "",
+                                                                                    "name": "<cr>"
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        {
+                                                                            "description": "",
+                                                                            "name": "<cr>"
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                {
+                                                                    "description": "",
+                                                                    "name": "<cr>"
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Exit from DHCP",
+            "name": "exit",
+            "subcommands": [
+                {
+                    "description": "",
+                    "name": "<cr>"
+                }
+            ]
+        },
+        {
+            "description": "Negate a command or set its defaults",
+            "name": "no"
+        }
+    ]
+}

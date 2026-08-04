@@ -1,0 +1,1483 @@
+{
+    "prompt": "(config-dhcp)#",
+    "commands": [
+        {
+            "description": "Send Accounting Start/Stop messages",
+            "name": "accounting",
+            "subcommands": [
+                {
+                    "description": "Named Accounting list",
+                    "name": "WORD",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Obtain address allocation information from AAA",
+            "name": "authorization",
+            "subcommands": [
+                {
+                    "description": "Specify method list for address allocation information",
+                    "name": "method",
+                    "subcommands": [
+                        {
+                            "description": "Named AAA Authorization method list",
+                            "name": "WORD",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Specify password used for authorization attempts",
+                    "name": "shared-password",
+                    "subcommands": [
+                        {
+                            "description": "Password for authorization attempts",
+                            "name": "WORD",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Describe source of username for authorization",
+                    "name": "username",
+                    "subcommands": [
+                        {
+                            "description": "Format string used to construct username for authorization",
+                            "name": "WORD",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "properties": [
+                "negate_all"
+            ],
+            "description": "Boot file name",
+            "name": "bootfile",
+            "subcommands": [
+                {
+                    "description": "Boot file name",
+                    "name": "WORD",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Specify a DHCP class",
+            "name": "class",
+            "subcommands": [
+                {
+                    "description": "DHCP class name",
+                    "name": "WORD",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Client identifier",
+            "name": "client-identifier",
+            "subcommands": [
+                {
+                    "description": "Dotted-hexadecimal string (aabb.ccdd.eeff ...)",
+                    "name": "WORD",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "properties": [
+                "negate_all"
+            ],
+            "description": "Client name",
+            "name": "client-name",
+            "subcommands": [
+                {
+                    "description": "Client name (domain should not be included)",
+                    "name": "WORD",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "properties": [
+                "negate_all"
+            ],
+            "description": "Default routers",
+            "name": "default-router",
+            "subcommands": [
+                {
+                    "description": "Router's name or IP address",
+                    "name": "Hostname or A.B.C.D",
+                    "subcommands": [
+                        {
+                            "description": "Router's name or IP address",
+                            "name": "Hostname or A.B.C.D",
+                            "subcommands": [
+                                {
+                                    "description": "Router's name or IP address",
+                                    "name": "Hostname or A.B.C.D",
+                                    "subcommands": [
+                                        {
+                                            "description": "Router's name or IP address",
+                                            "name": "Hostname or A.B.C.D",
+                                            "subcommands": [
+                                                {
+                                                    "description": "Router's name or IP address",
+                                                    "name": "Hostname or A.B.C.D",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "Router's name or IP address",
+                                                            "name": "Hostname or A.B.C.D",
+                                                            "subcommands": [
+                                                                {
+                                                                    "description": "Router's name or IP address",
+                                                                    "name": "Hostname or A.B.C.D",
+                                                                    "subcommands": [
+                                                                        {
+                                                                            "description": "Router's name or IP address",
+                                                                            "name": "Hostname or A.B.C.D",
+                                                                            "subcommands": [
+                                                                                {
+                                                                                    "description": "",
+                                                                                    "name": "<cr>"
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        {
+                                                                            "description": "",
+                                                                            "name": "<cr>"
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                {
+                                                                    "description": "",
+                                                                    "name": "<cr>"
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "properties": [
+                "negate_all"
+            ],
+            "description": "DNS servers",
+            "name": "dns-server",
+            "subcommands": [
+                {
+                    "description": "Server's name or IP address",
+                    "name": "Hostname or A.B.C.D",
+                    "subcommands": [
+                        {
+                            "description": "Server's name or IP address",
+                            "name": "Hostname or A.B.C.D",
+                            "subcommands": [
+                                {
+                                    "description": "Server's name or IP address",
+                                    "name": "Hostname or A.B.C.D",
+                                    "subcommands": [
+                                        {
+                                            "description": "Server's name or IP address",
+                                            "name": "Hostname or A.B.C.D",
+                                            "subcommands": [
+                                                {
+                                                    "description": "Server's name or IP address",
+                                                    "name": "Hostname or A.B.C.D",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "Server's name or IP address",
+                                                            "name": "Hostname or A.B.C.D",
+                                                            "subcommands": [
+                                                                {
+                                                                    "description": "Server's name or IP address",
+                                                                    "name": "Hostname or A.B.C.D",
+                                                                    "subcommands": [
+                                                                        {
+                                                                            "description": "Server's name or IP address",
+                                                                            "name": "Hostname or A.B.C.D",
+                                                                            "subcommands": [
+                                                                                {
+                                                                                    "description": "",
+                                                                                    "name": "<cr>"
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        {
+                                                                            "description": "",
+                                                                            "name": "<cr>"
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                {
+                                                                    "description": "",
+                                                                    "name": "<cr>"
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "properties": [
+                "negate_all"
+            ],
+            "description": "Domain name",
+            "name": "domain-name",
+            "subcommands": [
+                {
+                    "description": "Domain name",
+                    "name": "WORD",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Exit from DHCP pool configuration mode",
+            "name": "exit",
+            "subcommands": [
+                {
+                    "description": "",
+                    "name": "<cr>"
+                }
+            ]
+        },
+        {
+            "properties": [
+                "negate_all"
+            ],
+            "description": "Client hardware address",
+            "name": "hardware-address",
+            "subcommands": [
+                {
+                    "description": "Dotted-hexadecimal string (aabb.ccdd.eeff ...)",
+                    "name": "WORD",
+                    "subcommands": [
+                        {
+                            "description": "ARP hardware type from \"Assigned Numbers\" RFC",
+                            "name": "<0-255>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "10Mb Ethernet",
+                            "name": "ethernet",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "IEEE 802 networks",
+                            "name": "ieee802",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "properties": [
+                "negate_all"
+            ],
+            "description": "Client IP address and mask",
+            "name": "host",
+            "subcommands": [
+                {
+                    "description": "IP address in dotted-decimal notation",
+                    "name": "A.B.C.D",
+                    "subcommands": [
+                        {
+                            "description": "Network mask or prefix length",
+                            "name": "/nn or A.B.C.D",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Programatically importing DHCP option parameters",
+            "name": "import",
+            "subcommands": [
+                {
+                    "description": "all DHCP options",
+                    "name": "all",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "properties": [
+                "negate_all"
+            ],
+            "description": "Address lease time",
+            "name": "lease",
+            "subcommands": [
+                {
+                    "description": "Days",
+                    "name": "<0-365>",
+                    "subcommands": [
+                        {
+                            "description": "Hours",
+                            "name": "<0-23>",
+                            "subcommands": [
+                                {
+                                    "description": "Minutes",
+                                    "name": "<0-59>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "Infinite lease",
+                    "name": "infinite",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "properties": [
+                "negate_all"
+            ],
+            "description": "NetBIOS (WINS) name servers",
+            "name": "netbios-name-server",
+            "subcommands": [
+                {
+                    "description": "Server's name or IP address",
+                    "name": "Hostname or A.B.C.D",
+                    "subcommands": [
+                        {
+                            "description": "Server's name or IP address",
+                            "name": "Hostname or A.B.C.D",
+                            "subcommands": [
+                                {
+                                    "description": "Server's name or IP address",
+                                    "name": "Hostname or A.B.C.D",
+                                    "subcommands": [
+                                        {
+                                            "description": "Server's name or IP address",
+                                            "name": "Hostname or A.B.C.D",
+                                            "subcommands": [
+                                                {
+                                                    "description": "Server's name or IP address",
+                                                    "name": "Hostname or A.B.C.D",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "Server's name or IP address",
+                                                            "name": "Hostname or A.B.C.D",
+                                                            "subcommands": [
+                                                                {
+                                                                    "description": "Server's name or IP address",
+                                                                    "name": "Hostname or A.B.C.D",
+                                                                    "subcommands": [
+                                                                        {
+                                                                            "description": "Server's name or IP address",
+                                                                            "name": "Hostname or A.B.C.D",
+                                                                            "subcommands": [
+                                                                                {
+                                                                                    "description": "",
+                                                                                    "name": "<cr>"
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        {
+                                                                            "description": "",
+                                                                            "name": "<cr>"
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                {
+                                                                    "description": "",
+                                                                    "name": "<cr>"
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "properties": [
+                "negate_all"
+            ],
+            "description": "NetBIOS node type",
+            "name": "netbios-node-type",
+            "subcommands": [
+                {
+                    "description": "Hexadecimal number",
+                    "name": "<0-FF>",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "Broadcast node",
+                    "name": "b-node",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "Hybrid node",
+                    "name": "h-node",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "Mixed node",
+                    "name": "m-node",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "Peer-to-peer node",
+                    "name": "p-node",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Network number and mask",
+            "name": "network",
+            "subcommands": [
+                {
+                    "description": "Network number in dotted-decimal notation",
+                    "name": "A.B.C.D",
+                    "subcommands": [
+                        {
+                            "description": "Network mask or prefix length",
+                            "name": "/nn or A.B.C.D",
+                            "subcommands": [
+                                {
+                                    "description": "Configure as secondary subnet",
+                                    "name": "secondary",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "properties": [
+                "negate_all"
+            ],
+            "description": "Next server in boot process",
+            "name": "next-server",
+            "subcommands": [
+                {
+                    "description": "Server's name or IP address",
+                    "name": "Hostname or A.B.C.D",
+                    "subcommands": [
+                        {
+                            "description": "Server's name or IP address",
+                            "name": "Hostname or A.B.C.D",
+                            "subcommands": [
+                                {
+                                    "description": "Server's name or IP address",
+                                    "name": "Hostname or A.B.C.D",
+                                    "subcommands": [
+                                        {
+                                            "description": "Server's name or IP address",
+                                            "name": "Hostname or A.B.C.D",
+                                            "subcommands": [
+                                                {
+                                                    "description": "Server's name or IP address",
+                                                    "name": "Hostname or A.B.C.D",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "Server's name or IP address",
+                                                            "name": "Hostname or A.B.C.D",
+                                                            "subcommands": [
+                                                                {
+                                                                    "description": "Server's name or IP address",
+                                                                    "name": "Hostname or A.B.C.D",
+                                                                    "subcommands": [
+                                                                        {
+                                                                            "description": "Server's name or IP address",
+                                                                            "name": "Hostname or A.B.C.D",
+                                                                            "subcommands": [
+                                                                                {
+                                                                                    "description": "",
+                                                                                    "name": "<cr>"
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        {
+                                                                            "description": "",
+                                                                            "name": "<cr>"
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                {
+                                                                    "description": "",
+                                                                    "name": "<cr>"
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Negate a command or set its defaults",
+            "name": "no"
+        },
+        {
+            "description": "Raw DHCP options",
+            "name": "option",
+            "subcommands": [
+                {
+                    "description": "DHCP option code",
+                    "name": "<0-254>",
+                    "subcommands": [
+                        {
+                            "properties": [
+                                "negate_hide"
+                            ],
+                            "description": "Data is an NVT ASCII string",
+                            "name": "ascii",
+                            "subcommands": [
+                                {
+                                    "description": "NVT ASCII string, truncated to 225 characters",
+                                    "name": "LINE"
+                                }
+                            ]
+                        },
+                        {
+                            "properties": [
+                                "negate_hide"
+                            ],
+                            "description": "Data is a hexadecimal string",
+                            "name": "hex",
+                            "subcommands": [
+                                {
+                                    "description": "Hexadecimal string, truncated to 180 hex characters entered",
+                                    "name": "LINE"
+                                },
+                                {
+                                    "description": "No data",
+                                    "name": "none",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Specify the option instance",
+                            "name": "instance",
+                            "subcommands": [
+                                {
+                                    "properties": [
+                                        "negate_all"
+                                    ],
+                                    "description": "DHCP option instance",
+                                    "name": "<0-255>",
+                                    "subcommands": [
+                                        {
+                                            "description": "Data is an NVT ASCII string",
+                                            "name": "ascii",
+                                            "subcommands": [
+                                                {
+                                                    "description": "NVT ASCII string, truncated to 225 characters",
+                                                    "name": "LINE"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "Data is a hexadecimal string",
+                                            "name": "hex",
+                                            "subcommands": [
+                                                {
+                                                    "description": "Hexadecimal string, truncated to 180 hex characters entered",
+                                                    "name": "LINE"
+                                                },
+                                                {
+                                                    "description": "No data",
+                                                    "name": "none",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "Data is one or more IP addresses",
+                                            "name": "ip",
+                                            "subcommands": [
+                                                {
+                                                    "description": "Server's name or IP address",
+                                                    "name": "Hostname or A.B.C.D",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "Server's name or IP address",
+                                                            "name": "Hostname or A.B.C.D",
+                                                            "subcommands": [
+                                                                {
+                                                                    "description": "Server's name or IP address",
+                                                                    "name": "Hostname or A.B.C.D",
+                                                                    "subcommands": [
+                                                                        {
+                                                                            "description": "Server's name or IP address",
+                                                                            "name": "Hostname or A.B.C.D",
+                                                                            "subcommands": [
+                                                                                {
+                                                                                    "description": "Server's name or IP address",
+                                                                                    "name": "Hostname or A.B.C.D",
+                                                                                    "subcommands": [
+                                                                                        {
+                                                                                            "description": "Server's name or IP address",
+                                                                                            "name": "Hostname or A.B.C.D",
+                                                                                            "subcommands": [
+                                                                                                {
+                                                                                                    "description": "Server's name or IP address",
+                                                                                                    "name": "Hostname or A.B.C.D",
+                                                                                                    "subcommands": [
+                                                                                                        {
+                                                                                                            "description": "Server's name or IP address",
+                                                                                                            "name": "Hostname or A.B.C.D",
+                                                                                                            "subcommands": [
+                                                                                                                {
+                                                                                                                    "description": "",
+                                                                                                                    "name": "<cr>"
+                                                                                                                }
+                                                                                                            ]
+                                                                                                        },
+                                                                                                        {
+                                                                                                            "description": "",
+                                                                                                            "name": "<cr>"
+                                                                                                        }
+                                                                                                    ]
+                                                                                                },
+                                                                                                {
+                                                                                                    "description": "",
+                                                                                                    "name": "<cr>"
+                                                                                                }
+                                                                                            ]
+                                                                                        },
+                                                                                        {
+                                                                                            "description": "",
+                                                                                            "name": "<cr>"
+                                                                                        }
+                                                                                    ]
+                                                                                },
+                                                                                {
+                                                                                    "description": "",
+                                                                                    "name": "<cr>"
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        {
+                                                                            "description": "",
+                                                                            "name": "<cr>"
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                {
+                                                                    "description": "",
+                                                                    "name": "<cr>"
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "properties": [
+                                "negate_hide"
+                            ],
+                            "description": "Data is one or more IP addresses",
+                            "name": "ip",
+                            "subcommands": [
+                                {
+                                    "description": "Server's name or IP address",
+                                    "name": "Hostname or A.B.C.D",
+                                    "subcommands": [
+                                        {
+                                            "description": "Server's name or IP address",
+                                            "name": "Hostname or A.B.C.D",
+                                            "subcommands": [
+                                                {
+                                                    "description": "Server's name or IP address",
+                                                    "name": "Hostname or A.B.C.D",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "Server's name or IP address",
+                                                            "name": "Hostname or A.B.C.D",
+                                                            "subcommands": [
+                                                                {
+                                                                    "description": "Server's name or IP address",
+                                                                    "name": "Hostname or A.B.C.D",
+                                                                    "subcommands": [
+                                                                        {
+                                                                            "description": "Server's name or IP address",
+                                                                            "name": "Hostname or A.B.C.D",
+                                                                            "subcommands": [
+                                                                                {
+                                                                                    "description": "Server's name or IP address",
+                                                                                    "name": "Hostname or A.B.C.D",
+                                                                                    "subcommands": [
+                                                                                        {
+                                                                                            "description": "Server's name or IP address",
+                                                                                            "name": "Hostname or A.B.C.D",
+                                                                                            "subcommands": [
+                                                                                                {
+                                                                                                    "description": "",
+                                                                                                    "name": "<cr>"
+                                                                                                }
+                                                                                            ]
+                                                                                        },
+                                                                                        {
+                                                                                            "description": "",
+                                                                                            "name": "<cr>"
+                                                                                        }
+                                                                                    ]
+                                                                                },
+                                                                                {
+                                                                                    "description": "",
+                                                                                    "name": "<cr>"
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        {
+                                                                            "description": "",
+                                                                            "name": "<cr>"
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                {
+                                                                    "description": "",
+                                                                    "name": "<cr>"
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "extended",
+                    "name": "ext",
+                    "subcommands": [
+                        {
+                            "description": "DHCP option code",
+                            "name": "<0-254>",
+                            "subcommands": [
+                                {
+                                    "description": "Data is an NVT ASCII string",
+                                    "name": "ascii",
+                                    "subcommands": [
+                                        {
+                                            "description": "NVT ASCII string, truncated to 225 characters",
+                                            "name": "LINE"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "Data is a hexadecimal string",
+                                    "name": "hex",
+                                    "subcommands": [
+                                        {
+                                            "description": "Hexadecimal string, truncated to 180 hex characters entered",
+                                            "name": "LINE"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Configure the origin of the pool",
+            "name": "origin",
+            "subcommands": [
+                {
+                    "properties": [
+                        "negate_hide"
+                    ],
+                    "description": "Subnet is from a AAA server",
+                    "name": "aaa",
+                    "subcommands": [
+                        {
+                            "description": "Configure subnet request parameters",
+                            "name": "subnet",
+                            "subcommands": [
+                                {
+                                    "description": "Specify initial and incremental subnet sizes",
+                                    "name": "size",
+                                    "subcommands": [
+                                        {
+                                            "description": "Specify the initial subnet size requested",
+                                            "name": "initial",
+                                            "subcommands": [
+                                                {
+                                                    "description": "Subnet mask of the initial subnet(0 for don't care)",
+                                                    "name": "/nn or A.B.C.D",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "The pool can request more subnets based on demand",
+                                                            "name": "autogrow",
+                                                            "subcommands": [
+                                                                {
+                                                                    "description": "Subnet mask of the second and subsequent subnets (0 for don't",
+                                                                    "name": "/nn or A.B.C.D",
+                                                                    "subcommands": [
+                                                                        {
+                                                                            "description": "",
+                                                                            "name": "<cr>"
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "properties": [
+                        "negate_hide"
+                    ],
+                    "description": "Subnet is from another DHCP server",
+                    "name": "dhcp",
+                    "subcommands": [
+                        {
+                            "description": "Configure subnet request parameters",
+                            "name": "subnet",
+                            "subcommands": [
+                                {
+                                    "description": "Specify initial and incremental subnet sizes",
+                                    "name": "size",
+                                    "subcommands": [
+                                        {
+                                            "description": "Specify the initial subnet size requested",
+                                            "name": "initial",
+                                            "subcommands": [
+                                                {
+                                                    "description": "Subnet mask of the initial subnet(0 for don't care)",
+                                                    "name": "/nn or A.B.C.D",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "The pool can request more subnets based on demand",
+                                                            "name": "autogrow",
+                                                            "subcommands": [
+                                                                {
+                                                                    "description": "Subnet mask of the second and subsequent subnets (0 for don't",
+                                                                    "name": "/nn or A.B.C.D",
+                                                                    "subcommands": [
+                                                                        {
+                                                                            "description": "",
+                                                                            "name": "<cr>"
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "properties": [
+                        "negate_hide"
+                    ],
+                    "description": "Static bindings are read from an external file",
+                    "name": "file",
+                    "subcommands": [
+                        {
+                            "description": "Uniform Resource Locator(URL)",
+                            "name": "WORD",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "properties": [
+                        "negate_hide"
+                    ],
+                    "description": "Subnet is from IPCP subnet negotiation",
+                    "name": "ipcp",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Function as a DHCP relay",
+            "name": "relay",
+            "subcommands": [
+                {
+                    "description": "DHCP remote server address",
+                    "name": "destination",
+                    "subcommands": [
+                        {
+                            "description": "Remote server IP address",
+                            "name": "A.B.C.D",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Global address space",
+                            "name": "global",
+                            "subcommands": [
+                                {
+                                    "description": "Remote server IP address",
+                                    "name": "A.B.C.D",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "description": "VRF of DHCP remote server",
+                            "name": "vrf",
+                            "subcommands": [
+                                {
+                                    "description": "VRF name",
+                                    "name": "WORD",
+                                    "subcommands": [
+                                        {
+                                            "description": "Remote server IP address",
+                                            "name": "A.B.C.D",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Originating subnet to match to address pool",
+                    "name": "source",
+                    "subcommands": [
+                        {
+                            "description": "{/nn || A.B.C.D}  Network address",
+                            "name": "A.B.C.D",
+                            "subcommands": [
+                                {
+                                    "description": "IP prefix mask",
+                                    "name": "A.B.C.D",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Configure renewal policy",
+            "name": "renew",
+            "subcommands": [
+                {
+                    "description": "Deny (NAK) requests from certain clients",
+                    "name": "deny",
+                    "subcommands": [
+                        {
+                            "description": "Renewal policy for unknown clients",
+                            "name": "unknown",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Configure the server ID option value",
+            "name": "server",
+            "subcommands": [
+                {
+                    "description": "Configure the server ID option value",
+                    "name": "id",
+                    "subcommands": [
+                        {
+                            "properties": [
+                                "negate_hide"
+                            ],
+                            "description": "Specify a standby group virtual IP address as server id",
+                            "name": "redundancy",
+                            "subcommands": [
+                                {
+                                    "description": "Standby group name",
+                                    "name": "LINE"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Subnet allocation commands",
+            "name": "subnet",
+            "subcommands": [
+                {
+                    "properties": [
+                        "negate_hide"
+                    ],
+                    "description": "Designate subnet allocation unit size",
+                    "name": "prefix-length",
+                    "subcommands": [
+                        {
+                            "description": "Specify the prefix length",
+                            "name": "<1-31>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Dynamic updates",
+            "name": "update",
+            "subcommands": [
+                {
+                    "description": "Add secure ARP entries",
+                    "name": "arp",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Configure various utilization parameters",
+            "name": "utilization",
+            "subcommands": [
+                {
+                    "description": "Configure thresholds for subnet release or request",
+                    "name": "mark",
+                    "subcommands": [
+                        {
+                            "properties": [
+                                "negate_hide"
+                            ],
+                            "description": "Specify high utilization mark of the pool",
+                            "name": "high",
+                            "subcommands": [
+                                {
+                                    "description": "Percent value",
+                                    "name": "<1-100>",
+                                    "subcommands": [
+                                        {
+                                            "description": "Log a system message each time the high/low state is detected",
+                                            "name": "log",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "properties": [
+                                "negate_hide"
+                            ],
+                            "description": "Specify low utilization mark of the pool",
+                            "name": "low",
+                            "subcommands": [
+                                {
+                                    "description": "Percent value",
+                                    "name": "<1-100>",
+                                    "subcommands": [
+                                        {
+                                            "description": "Log a system message each time the high/low state is detected",
+                                            "name": "log",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "properties": [
+                "negate_hide"
+            ],
+            "description": "Associate this pool with a VRF",
+            "name": "vrf",
+            "subcommands": [
+                {
+                    "description": "VRF name",
+                    "name": "WORD",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

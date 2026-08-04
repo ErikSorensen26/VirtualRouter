@@ -1,0 +1,834 @@
+{
+    "GigabitEthernet": [
+        {
+            "description": "GigabitEthernet interface number",
+            "name": "<0>",
+            "config": "$CONFIG",
+            "mode": "$MODE"
+        }
+    ],
+    "FastEthernet": [
+        {
+            "description": "FastEthernet interface number",
+            "name": "<0>",
+            "config": "$CONFIG",
+            "mode": "$MODE"
+        }
+    ],
+    "Ethernet": [
+        {
+            "description": "Ethernet interface number",
+            "name": "<0>",
+            "config": "$CONFIG",
+            "mode": "$MODE"
+        }
+    ],
+    "interface": [
+        {
+            "support": true,
+            "description": "IEEE 802.3",
+            "name": "Ethernet",
+            "subcommands": [
+                {
+                    "description": "",
+                    "name": "<Ethernet>",
+                    "args": {
+                        "CONFIG": "$ETHERNET_CONFIG",
+                        "MODE": "$ETHERNET_MODE"
+                    }
+                }
+            ]
+        },
+        {
+            "support": true,
+            "description": "FastEthernet IEEE 802.3",
+            "name": "FastEthernet",
+            "subcommands": [
+                {
+                    "description": "",
+                    "name": "<FastEthernet>",
+                    "args": {
+                        "CONFIG": "$FASTETHERNET_CONFIG",
+                        "MODE": "$FASTETHERNET_MODE"
+                    }
+                }
+            ]
+        },
+        {
+            "support": true,
+            "description": "GigabitEthernet IEEE 802.3z",
+            "name": "GigabitEthernet",
+            "subcommands": [
+                {
+                    "description": "",
+                    "name": "<GigabitEthernet>",
+                    "args": {
+                        "CONFIG": "$GIGABITETHERNET_CONFIG",
+                        "MODE": "$GIGABITETHERNET_MODE"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "Loopback interface",
+            "name": "Loopback",
+            "subcommands": [
+                {
+                    "description": "Loopback interface number",
+                    "name": "<0-2147483647>",
+                    "config": "$LOOPBACK_CONFIG",
+                    "mode": "$LOOPBACK_MODE"
+                }
+            ]
+        },
+        {
+            "description": "NAT virtual interface",
+            "name": "NVI",
+            "subcommands": [
+                {
+                    "description": "NVI interface number",
+                    "name": "<0-2147483647>",
+                    "config": "$NVI_CONFIG",
+                    "mode": "$NVI_MODE"
+                }
+            ]
+        },
+        {
+            "description": "Null interface",
+            "name": "Null",
+            "subcommands": [
+                {
+                    "description": "Null interface number",
+                    "name": "<0-0>",
+                    "config": "$NULL_CONFIG",
+                    "mode": "$NULL_MODE"
+                }
+            ]
+        },
+        {
+            "description": "Ethernet Channel of interfaces",
+            "name": "Port-channel",
+            "subcommands": [
+                {
+                    "description": "Port-channel interface number",
+                    "name": "<1-64>",
+                    "config": "$PORTCHANNEL_CONFIG",
+                    "mode": "$PORTCHANNEL_MODE"
+                }
+            ]
+        },
+        {
+            "description": "Pseudowire Interface",
+            "name": "pseudowire",
+            "subcommands": [
+                {
+                    "description": "pseudowire interface number",
+                    "name": "<1-231072>",
+                    "config": "$PSEUDOWIRE_CONFIG",
+                    "mode": "$PSEUDOWIRE_MODE"
+                }
+            ]
+        },
+        {
+            "description": "Tunnel interface",
+            "name": "Tunnel",
+            "subcommands": [
+                {
+                    "description": "Tunnel interface number",
+                    "name": "<0-2147483647>",
+                    "config": "$TUNNEL_CONFIG",
+                    "mode": "$TUNNEL_MODE"
+                }
+            ]
+        },
+        {
+            "description": "Virtual Template interface",
+            "name": "Virtual-Template",
+            "subcommands": [
+                {
+                    "description": "Virtual-Template interface number",
+                    "name": "<1-1000>",
+                    "config": "$VIRTUAL_TEMPLATE_CONFIG",
+                    "mode": "$VIRTUAL_TEMPLATE_MODE",
+                    "subcommands": [
+                        {
+                            "description": "type of the virtual-template",
+                            "name": "type",
+                            "subcommands": [
+                                {
+                                    "description": "Set VT type as ethernet",
+                                    "name": "ethernet",
+                                    "config": "$VIRTUAL_TEMPLATE_TYPE_CONFIG",
+                                    "enum": "$VIRTUAL_TEMPLATE_ETHERNET_ENUM"
+                                },
+                                {
+                                    "description": "Set VT type as tunnel",
+                                    "name": "tunnel",
+                                    "config": "$VIRTUAL_TEMPLATE_TYPE_CONFIG",
+                                    "enum": "$VIRTUAL_TEMPLATE_TUNNEL_ENUM"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Vlan Interface",
+            "name": "Vlan",
+            "subcommands": [
+                {
+                    "description": "Vlan interface number",
+                    "name": "<1-4095>",
+                    "config": "$VLAN_CONFIG",
+                    "mode": "$VLAN_MODE"
+                }
+            ]
+        },
+        {
+            "description": "interface range command",
+            "name": "range"
+        }
+    ],
+    "cef_indirection": [
+        {
+            "properties": [
+                "recursive"
+            ],
+            "description": "shared indirection object for IPv4 labeled prefixes",
+            "name": "IPv4-to-MPLS"
+        },
+        {
+            "properties": [
+                "recursive"
+            ],
+            "description": "shared indirection object for IPv6 labeled prefixes",
+            "name": "IPv6-to-MPLS"
+        },
+        {
+            "properties": [
+                "recursive"
+            ],
+            "description": "shared indirection object for MPLS disposition",
+            "name": "MPLS-end-of-stack"
+        },
+        {
+            "properties": [
+                "recursive"
+            ],
+            "description": "shared indirection object for MPLS label switch",
+            "name": "MPLS-non-end-of-stack"
+        },
+        {
+            "properties": [
+                "recursive"
+            ],
+            "description": "non-recursive prefixes",
+            "name": "non-recursive-prefixes"
+        },
+        {
+            "properties": [
+                "recursive"
+            ],
+            "description": "recursive prefixes",
+            "name": "recursive-prefixes"
+        },
+        {
+            "description": "",
+            "name": "<cr>"
+        }
+    ],
+    "distribute_list": [
+        {
+            "description": "",
+            "name": "<access_list>"
+        },
+        {
+            "description": "",
+            "name": "<access_list_extended>"
+        },
+        {
+            "description": "",
+            "name": "<access_list_named>"
+        },
+        {
+            "description": "Filtering incoming updates based on gateway",
+            "name": "gateway",
+            "subcommands": [
+                {
+                    "description": "",
+                    "name": "<prefix_list>"
+                }
+            ]
+        },
+        {
+            "description": "Filter prefixes in routing updates",
+            "name": "prefix",
+            "subcommands": [
+                {
+                    "description": "Name of an IP prefix-list",
+                    "name": "WORD",
+                    "subcommands": [
+                        {
+                            "description": "Filtering incoming updates based on gateway",
+                            "name": "gateway",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<prefix_list>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Filter incoming routing updates",
+                            "name": "in",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<interface>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "Filter outgoing routing updates",
+                            "name": "out",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<interface>",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "access_list": [
+        {
+            "description": "IP access list number",
+            "name": "<1-199>",
+            "subcommands": [
+                {
+                    "description": "Filter incoming routing updates",
+                    "name": "in",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<interface>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "Filter outgoing routing updates",
+                    "name": "out",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<interface>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "access_list_extended": [
+        {
+            "description": "IP expanded access list number",
+            "name": "<1300-2699>",
+            "subcommands": [
+                {
+                    "description": "Filter incoming routing updates",
+                    "name": "in",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<interface>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "Filter outgoing routing updates",
+                    "name": "out",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<interface>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "access_list_named": [
+        {
+            "description": "Access-list name",
+            "name": "WORD",
+            "subcommands": [
+                {
+                    "description": "Filter incoming routing updates",
+                    "name": "in",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<interface>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "Filter outgoing routing updates",
+                    "name": "out",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<interface>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "prefix_list": [
+        {
+            "description": "Prefix-list name",
+            "name": "WORD",
+            "subcommands": [
+                {
+                    "description": "Filter incoming routing updates",
+                    "name": "in",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<interface>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "Filter outgoing routing updates",
+                    "name": "out",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<interface>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "route_map": [
+        {
+            "description": "route-map name",
+            "name": "WORD",
+            "subcommands": [
+                {
+                    "description": "Filter incoming service updates",
+                    "name": "in",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<interface>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "Filter outgoing service updates",
+                    "name": "out",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<interface>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "route-map name",
+            "name": "WORD",
+            "subcommands": [
+                {
+                    "description": "Filter outgoing service updates",
+                    "name": "out",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<interface>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "",
+                    "name": "<cr>"
+                }
+            ]
+        }
+    ],
+    "redistribute_opts": [
+        {
+            "description": "Metric for redistributed routes",
+            "name": "metric",
+            "properties": [
+                "recursive"
+            ],
+            "subcommands": [
+                {
+                    "description": "Default metric",
+                    "name": "<0-16777214>",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "OSPF exterior metric type for redistributed routes",
+            "name": "metric-type",
+            "properties": [
+                "recursive"
+            ],
+            "subcommands": [
+                {
+                    "description": "Set OSPF External Type 1 metrics",
+                    "name": "1",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                },
+                {
+                    "description": "Set OSPF External Type 2 metrics",
+                    "name": "2",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Use route map to filter/modify redistributed routes",
+            "name": "route-map",
+            "properties": [
+                "recursive"
+            ],
+            "subcommands": [
+                {
+                    "description": "Name of route-map",
+                    "name": "<route_map>",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "Consider subnets for redistribution into classful protocol",
+            "name": "subnets",
+            "properties": [
+                "recursive"
+            ],
+            "subcommands": [
+                {
+                    "description": "",
+                    "name": "<cr>"
+                }
+            ]
+        },
+        {
+            "description": "Tag value for redistributed routes",
+            "name": "tag",
+            "properties": [
+                "recursive"
+            ],
+            "subcommands": [
+                {
+                    "description": "Tag value",
+                    "name": "<0-4294967295>",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "",
+            "name": "<cr>"
+        }
+    ],
+    "snmp_auth": [
+        {
+            "description": "MD5 authentication",
+            "name": "md5",
+            "subcommands": [
+                {
+                    "description": "Authentication password",
+                    "name": "WORD",
+                    "subcommands": [
+                        {
+                            "description": "Data Encryption Standard (DES-56)",
+                            "name": "priv",
+                            "properties": [
+                                "recursive"
+                            ],
+                            "subcommands": [
+                                {
+                                    "description": "DES56 Privacy algorithm",
+                                    "name": "des56",
+                                    "properties": [
+                                        "recursive"
+                                    ],
+                                    "subcommands": [
+                                        {
+                                            "description": "Privacy password",
+                                            "name": "WORD",
+                                            "subcommands": [
+                                                {
+                                                    "description": "",
+                                                    "name": "<cr>"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "AES Privacy algorithm",
+                                    "name": "aes",
+                                    "properties": [
+                                        "recursive"
+                                    ],
+                                    "subcommands": [
+                                        {
+                                            "description": "AES-128",
+                                            "name": "128",
+                                            "subcommands": [
+                                                {
+                                                    "description": "Privacy password",
+                                                    "name": "WORD",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "AES-192",
+                                            "name": "192",
+                                            "subcommands": [
+                                                {
+                                                    "description": "Privacy password",
+                                                    "name": "WORD",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "description": "AES-256",
+                                            "name": "256",
+                                            "subcommands": [
+                                                {
+                                                    "description": "Privacy password",
+                                                    "name": "WORD",
+                                                    "subcommands": [
+                                                        {
+                                                            "description": "",
+                                                            "name": "<cr>"
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": "SHA authentication",
+            "name": "sha",
+            "subcommands": [
+                {
+                    "description": "Authentication password",
+                    "name": "WORD",
+                    "subcommands": [
+                        {
+                            "description": "Privacy",
+                            "name": "priv",
+                            "properties": [
+                                "recursive"
+                            ],
+                            "subcommands": [
+                                {
+                                    "description": "Privacy options",
+                                    "name": "<snmp_auth>"
+                                }
+                            ]
+                        },
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
