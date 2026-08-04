@@ -215,15 +215,15 @@ void ExternalOriginator::syncSummaryConfig()
 
     cfg.withRead([&](const auto& tsList) {
         for (const auto& ts : tsList)
-            for (const auto& [pfx, noAdv, nssaOnly, tag] : ts)
-            {
-                seen.insert(pfx);
+        {
+            const auto& [pfx, noAdv, nssaOnly, tag] = ts;
+            seen.insert(pfx);
 
-                auto& s = active[pfx];
-                s.notAdvertise = noAdv;
-                s.nssaOnly = nssaOnly;
-                s.tag = tag;
-            }
+            auto& s = active[pfx];
+            s.notAdvertise = noAdv;
+            s.nssaOnly = nssaOnly;
+            s.tag = tag;
+        }
     });
 
     for (auto it = active.begin(); it != active.end();)

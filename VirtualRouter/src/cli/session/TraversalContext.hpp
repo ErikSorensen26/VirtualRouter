@@ -55,9 +55,9 @@
 #include "CliSession.h"
 #include "CliEngine.h"
 #include "CliUtils.h"
-#include "cli/execution/parser/Token.hpp"
-#include "cli/tree/Command.h"
-#include "cli/tree/ModeEntry.h"
+#include "cli/session/Token.hpp"
+#include "cli/tree/nodes/Command.h"
+#include "cli/tree/nodes/ModeEntry.h"
 
 namespace cli
 {

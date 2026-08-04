@@ -42,10 +42,6 @@ void TreePatch::patchName(uint32_t index, const CommandNode& base,
     // caller from silently wrapping the length to something shorter.
     if (name.size() > 0xFF) name = name.substr(0, 0xFF);
 
-    // desc() reads at infoOff + nameSiz, so a node's name and description have
-    // to stay adjacent. Moving the name alone would leave the description
-    // resolving against the patch buffer at an offset that holds nothing, so
-    // the description is copied in behind it.
     const size_t start = blob.size();
     blob.append(name);
     blob.append(desc);

@@ -66,6 +66,8 @@ public:
         : bits(storage)
     {}
 
+    friend bool operator==(const EnumBitMap&, const EnumBitMap&) = default;
+
     /// @brief Sets the bit corresponding to `e`.
     void set(Enum e) noexcept
     {

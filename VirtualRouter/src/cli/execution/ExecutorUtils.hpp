@@ -1,21 +1,22 @@
 /**
- * @file CommandUtils.hpp
- * @brief Token-to-field translation helpers used by CLI command handlers.
+ * @file ExecutorUtils.hpp
+ * @brief Token-to-field translation helpers used by the executor.
  * @ingroup CLI_PARSER
  */
 
-#ifndef COMMAND_UTILS_HPP
-#define COMMAND_UTILS_HPP
+#ifndef EXECUTOR_UTILS_HPP
+#define EXECUTOR_UTILS_HPP
 
 #include <type_traits>
-#include <bitset>
 #include <IPAddress.h>
 #include <algorithm>
 #include "cli/session/CliUtils.h"
 #include "configs/RegistryTypes.hpp"
 #include "configs/RegistryDefaultTable.hpp"
-#include "cli/modes/contexts/Context.hpp"
-#include "cli/execution/parser/Token.hpp"
+#include "configs/RegistryTable.hpp"
+#include "cli/modes/Context.hpp"
+#include "cli/modes/Mode.hpp"
+#include "cli/session/Token.hpp"
 #include "configs/FieldAccessor.hpp"
 
 /**
@@ -29,12 +30,37 @@
  */
 namespace cli::execution::utils
 {
-// Command handlers spell both these helpers and the cli::utils string/address
-// helpers as a bare utils::, so pull the latter in here to keep that working.
-using namespace ::cli::utils;
 
-namespace detail
-{
+/**
+ * @brief True when a field's value can be written from a single token.
+ *
+ * Kind is necessary but not sufficient. The accessor's set() compares old
+ * against new to decide whether to fire the live-notification applier, so a
+ * value type without operator!= cannot be written at all -- several struct
+ * valued fields are in that position. Testing the type here keeps those fields
+ * out rather than breaking the build for the whole registry.
+ */
+template <typename Field>
+concept TokenWritable =
+    (config::IsAtomicField<Field>
+  || config::IsOptionalAtomicField<Field>
+  || config::IsValueField<Field>)
+    && requires (typename Field::type a) { { a != a } -> std::convertible_to<bool>; };
+
+/**
+ * @brief True for keys built from two tokens rather than one.
+ *
+ * Kept as an explicit list, matching translateDoubleValue's own branches, so the
+ * two cannot disagree about which types take the double form -- a key that is
+ * double there and single here would parse as a failure rather than as the shape
+ * mismatch it is.
+ */
+template <typename K>
+concept DoubleKeyed =
+    std::is_same_v<K, interface::InterfaceKey>
+ || std::is_same_v<K, types::IPPrefix>
+ || std::is_same_v<K, types::IPv4Prefix>;
+
 /**
  * @brief Converts a single token's string value into the destination type `T`.
  *
@@ -56,21 +82,21 @@ bool translateValue(T& value, const Token& token)
     else if constexpr (std::is_same_v<T, bool>)
         return true;
     else if constexpr (std::is_floating_point_v<T>)
-        return stofloat(value, token.value);
+        return cli::utils::stofloat(value, token.value);
     else if constexpr (std::is_same_v<T, types::Mac>)
-        return extractMacAddress(token.value, value);
+        return cli::utils::extractMacAddress(token.value, value);
     else if constexpr (std::is_same_v<T, types::IPAddress>)
-        return extractIPAddress(token.value, value);
+        return cli::utils::extractIPAddress(token.value, value);
     else if constexpr (std::is_same_v<T, types::IPv4Address>)
-        return extractIPv4Address(token.value, value);
+        return cli::utils::extractIPv4Address(token.value, value);
     else if constexpr (std::is_same_v<T, types::IPv6Address>)
-        return extractIPv6Address(token.value, value);
+        return cli::utils::extractIPv6Address(token.value, value);
     else if constexpr (std::is_same_v<T, types::IPPrefix>)
-        return extractIPPrefix(token.value, value);
+        return cli::utils::extractIPPrefix(token.value, value);
     else if constexpr (std::is_same_v<T, types::IPv4Prefix>)
-        return extractIPv4Prefix(token.value, value);
+        return cli::utils::extractIPv4Prefix(token.value, value);
     else if constexpr (std::is_same_v<T, types::IPv6Prefix>)
-        return extractIPv6Prefix(token.value, value);
+        return cli::utils::extractIPv6Prefix(token.value, value);
     else if constexpr (std::is_unsigned_v<T>)
     {
         if constexpr (std::is_same_v<uint32_t, T>)
@@ -78,18 +104,18 @@ bool translateValue(T& value, const Token& token)
             if (token.pattern == P_IPV4)
             {
                 types::IPv4Address addr;
-                if (extractIPv4Address(token.value, addr))
+                if (cli::utils::extractIPv4Address(token.value, addr))
                 { value = addr.addr; return true; }
                 else return false;
             }
         }
-        return stouint(value, token.value);
+        return cli::utils::stouint(value, token.value);
     }
     else if constexpr (std::is_enum_v<T>)
     {
         using Under = std::underlying_type_t<T>;
         Under tmp{};
-        if (!stoint(tmp, token.value))
+        if (!cli::utils::stoint(tmp, token.value))
             return false;
         value = static_cast<T>(tmp);
         return true;
@@ -118,13 +144,12 @@ template <typename T>
 bool translateDoubleValue(T& value, const Token& token1, const Token& token2)
 {
     if constexpr (std::is_same_v<T, interface::InterfaceKey>)
-        return extractInterfaceId(token1.value, token2.value, value);
+        return cli::utils::extractInterfaceId(token1.value, token2.value, value);
     else if constexpr (std::is_same_v<T, types::IPPrefix>)
-        return extractIPv4Prefix(token1, token2, value);
+        return cli::utils::extractIPv4Prefix(token1, token2, value);
     else if constexpr (std::is_same_v<T, types::IPv4Prefix>)
-        return extractIPv4Prefix(token1, token2, value);
+        return cli::utils::extractIPv4Prefix(token1, token2, value);
     return false;
-} 
 }
 
 /**
@@ -170,7 +195,7 @@ template <typename T>
 requires (config::IsAtomicField<typename T::Field> || config::IsOptionalAtomicField<typename T::Field> || config::IsValueField<typename T::Field>)
 void setToggleValue(T toggle, cli::ContextBase& ctx)
 {
-    static_assert(std::is_same_v<bool, typename config::DefType<typename T::Field>::type>,
+    static_assert(std::is_same_v<bool, typename T::Field::type>,
                   "Field given must hold a boolean type.");
     if (ctx.negate)
     {
@@ -190,7 +215,7 @@ void setToggleValue(T toggle, cli::ContextBase& ctx)
  * @brief Translates a single token into a registry field value.
  *
  * Checks negate/default flags first via @ref handleValueReset. If neither is
- * set, translates the token via @ref detail::translateValue and stores the
+ * set, translates the token via @ref translateValue and stores the
  * result with `field.set()`.
  *
  * @tparam T     Field type.
@@ -206,12 +231,12 @@ bool setFieldValue(T field, cli::ContextBase& ctx, const Token* t)
     if (handleValueReset(field, ctx))
         return true;
 
-    using type = config::DefType<typename T::Field>::type;
+    using type = typename T::Field::type;
 
     if (!t) return false;
 
     type value{};
-    if (!detail::translateValue(value, *t))
+    if (!translateValue(value, *t))
         return false;
 
     field.set(value);
@@ -252,7 +277,7 @@ template <typename T>
 inline bool setValue(T& value, const Token* t)
 {
     if (!t) return false;
-    return detail::translateValue(value, *t);
+    return translateValue(value, *t);
 }
 
 /**
@@ -275,12 +300,12 @@ bool setDoubleFieldValue(T field, cli::ContextBase& ctx, const Token* t1, const 
     if (handleValueReset(field, ctx))
         return true;
     
-    using type = config::DefType<typename T::Field>::type;
+    using type = typename T::Field::type;
 
     if (!t1 || !t2) return false;
 
     type value{};
-    if (!detail::translateDoubleValue(value, *t1, *t2))
+    if (!translateDoubleValue(value, *t1, *t2))
         return false;
 
     field.set(value);
@@ -317,7 +342,7 @@ template <typename T>
 inline bool setDoubleValue(T& value, const Token* t1, const Token* t2)
 {
     if (!t1 || !t2) return false;
-    return detail::translateDoubleValue(value, *t1, *t2);
+    return translateDoubleValue(value, *t1, *t2);
 }
 
 /**
@@ -332,7 +357,7 @@ template <typename T>
 inline bool setTupleElement(T& field, Token* t = nullptr)
 {
     if (!t) return false;
-    return detail::translateValue(field, *t);
+    return translateValue(field, *t);
 }
 
 /**
@@ -348,7 +373,7 @@ template <typename T>
 inline bool setDoubleTupleElement(T& field, Token* t1, Token* t2)
 {
     if (!t1 || !t2) return false;
-    return detail::translateDoubleValue(field, *t1, *t2);
+    return translateDoubleValue(field, *t1, *t2);
 }
 
 template <typename T>
@@ -405,9 +430,9 @@ struct IsTuple<std::tuple<Ts...>> : std::true_type {};
  */
 template <typename T>
 requires config::IsListField<typename T::Field>
-bool setListEntry(T& field, cli::ContextBase& ctx, typename config::DefType<typename T::Field>::node& tup)
+bool setListEntry(T& field, cli::ContextBase& ctx, typename T::Field::node& tup)
 {
-    using type = config::DefType<typename T::Field>::node;
+    using type = typename T::Field::node;
 
     if (ctx.negate || ctx.defaulted)
     {
@@ -454,7 +479,7 @@ bool setListEntry(T& field, cli::ContextBase& ctx, typename config::DefType<type
  */
 template <typename T>
 requires config::IsOwnedListField<typename T::Field>
-void setOwnedField(T& field, cli::ContextBase& ctx, typename config::DefType<typename T::Field>::key& key)
+void setOwnedField(T& field, cli::ContextBase& ctx, typename T::Field::key& key)
 {
     if (ctx.negate || ctx.defaulted)
     {
@@ -465,72 +490,144 @@ void setOwnedField(T& field, cli::ContextBase& ctx, typename config::DefType<typ
     field.emplaceBack(key);
 }
 
+
 /**
- * @brief Tracks which fields in a fixed set have been set during command parsing.
+ * @brief Builds an owned-list key from the tokens that carry it.
  *
- * Used in command handlers that accept several mutually-exclusive or
- * partially-exclusive fields on a single command line. After the handler
- * returns, `clearLeft()` unsets any fields in `Es` that the handler did
- * not populate, ensuring the registry never contains a partial write.
+ * Some keys span two tokens -- an InterfaceKey is the type and the number,
+ * as in `interface Vlan 10` -- and the single-token translation rejects those
+ * outright rather than partially, so the arity is decided from the key type
+ * rather than from how many tokens the line happened to carry.
  *
- * @tparam T   SubRegistry type owning the fields.
- * @tparam Es  Pack of enum constants identifying the fields to track.
+ * The key tokens are the pattern tokens: the field token is the keyword that
+ * named the binding, and the values that follow are what identifies which
+ * instance of it.
  */
-template <typename T, T::type... Es>
-requires config::IsSubRegistryWrapper<T>
-class FieldSetter
+template <typename Key>
+bool resolveKey(std::span<Token> toks, Key& key)
 {
-public:
-    static constexpr size_t N = sizeof...(Es);
-
-    bool set(T::type e, Context<T>& ctx, Token* token = nullptr)
+    Token* last = nullptr;
+    Token* prev = nullptr;
+    for (auto it = toks.rbegin(); it != toks.rend(); ++it)
     {
-        bool isSet = false;
-        auto trySet = [&]<T::type E>() {
-            if (E == e) isSet = setFieldValue(ctx.configs().template get<E>(), ctx, token);
-        };
-        (trySet.template operator()<Es>(), ...);
-        if (auto idx = indexOf(e); isSet && idx)
-            bits.set(*idx);
-        return isSet;
+        if (it->pattern == P_NONE) continue;
+        if (!last)      last = &*it;
+        else if (!prev) prev = &*it;
+        else            break;
     }
 
-    bool set(T::type e, Context<T>& ctx, Token* t1, Token* t2)
+    if (!last) return false;
+
+    if constexpr (DoubleKeyed<Key>)
     {
-        bool isSet = false;
-        auto trySet = [&]<T::type E>() {
-            if (E == e) isSet = setDoubleFieldValue(ctx.configs().template get<E>(), ctx, t1, t2);
-        };
-        (trySet.template operator()<Es>(), ...);
-        if (auto idx = indexOf(e); isSet && idx)
-            bits.set(*idx);
-        return isSet;
-    }
+        if (!prev && last != toks.data())
+            prev = last - 1;
 
-    void clearLeft(Context<T>& ctx)
+        if (!prev) return false;
+        return utils::translateDoubleValue(key, *prev, *last);
+    }
+    else
     {
-        auto tryUnset = [&]<T::type E>() {
-            if (auto idx = indexOf(E); idx && !bits.test(*idx))
-                ctx.configs().template get<E>().unset();
-        };
-        (tryUnset.template operator()<Es>(), ...);
+        return utils::translateValue(key, *last);
     }
-
-private:
-    static constexpr std::array<typename T::type, N> values = {Es...};
-    std::bitset<N> bits{};
-
-
-    static constexpr std::optional<size_t> indexOf(T::type e)
-    {
-        for (size_t i = 0; i < N; ++i)
-        {
-            if (values[i] == e)
-                return i;
-        }
-        return std::nullopt;
-    }
-};
 }
 
-#endif // COMMAND_UTILS_HPP
+/**
+ * @brief End of the run starting at @p i, given what marks a run's head.
+ *
+ * A run is its head token plus the arguments trailing it. Arguments are
+ * recognised by what they lack: a value the user typed carries no binding of
+ * its own, so anything still unbound belongs to the command in front of it.
+ * The run ends at the next token that binds something, which is the next
+ * command rather than more of this one.
+ *
+ * Another head of the same kind also ends the run, so two mode changes on one
+ * line stay two commands instead of the second's key tokens being read as the
+ * first's.
+ */
+template <typename Pred>
+size_t runEnd(std::span<Token> toks, size_t i, Pred head)
+{
+    for (++i; i < toks.size(); ++i)
+        if ((toks[i].*head)() || toks[i].hasNode()) break;
+
+    return i;
+}
+
+/**
+ * @brief Visits one field of one registry, once the type is known.
+ *
+ * The half of the lookup that needs a type. ENUM comes from the list walk, so
+ * the cast and the visit are ordinary compile-time code by the time they run;
+ * the runtime id never appears past this point.
+ *
+ * A registry with no RegistryOf specialization refuses rather than failing to
+ * compile. A templated registry -- PrefixListRegistry<P> is one per family --
+ * has no single type for the void* to be cast back to, and it still holds an
+ * id and its slots, so the alternative is a hole in a lookup the caller is
+ * entitled to make blindly.
+ */
+template <typename ENUM, typename Fn>
+bool visitOne(cli::ContextBase& ctx, uint16_t field, Fn& fn)
+{
+    if constexpr (config::hasRegistryV<ENUM>)
+    {
+        // visit indexes the field tuple directly, and the index came from a
+        // file, so the bound is checked here rather than trusted.
+        if (field >= config::registrySlotsV<ENUM>) return false;
+
+        static_cast<config::RegistryOfT<ENUM>*>(ctx.ctx)->visit(field, fn);
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+/**
+ * @brief Calls @p fn with the accessor for the field @p n binds.
+ *
+ * The registry comes from the node, not the context: ctx is a bare void* with
+ * no tag, and configId already carries the id the tree bound the field
+ * through. Recovering the type from that id is the one thing the pointer
+ * cannot do for itself -- visit already takes the field index at runtime, so
+ * the registry is the only dimension left to resolve.
+ *
+ * It lives here rather than beside the registry list because the erasure is
+ * the CLI's doing. The config layer never loses track of its own types; this
+ * only exists to undo what execution did on the way in.
+ *
+ * @p fn is instantiated once per field of the named registry, so it must
+ * compile against all of them -- an `if constexpr` on the field kind is the
+ * usual shape, and kinds it does not handle should simply do nothing.
+ */
+template <typename Fn>
+bool visitBound(cli::ContextBase& ctx, const tree::CommandNode& n, Fn&& fn)
+{
+    if (!ctx.ctx || !n.hasConfig()) return false;
+
+    const uint16_t reg = n.fieldRegistryId();
+    if (reg >= config::registryCount) return false;
+
+    const uint16_t field = n.enumIndex();
+
+    bool ok = false;
+    config::forEachRegistryId(config::RegistryEntries{}, [&]<typename Entry>()
+    {
+        using ENUM = typename Entry::type;
+        if (config::registryIdV<ENUM> == reg)
+            ok = visitOne<ENUM>(ctx, field, fn);
+    });
+
+    return ok;
+}
+
+/// @brief The mode a mode-change node enters.
+inline CliMode modeOf(const tree::CommandNode& n)
+{
+    return static_cast<CliMode>(n.configExt);
+}
+}
+
+#endif // EXECUTOR_UTILS_HPP

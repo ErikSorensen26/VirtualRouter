@@ -23,13 +23,6 @@ namespace interface
     X(VIRTUAL_TEMPLATE,     "Virtual-Template") \
     X(VLAN,                 "Vlan")
 
-#define INTERFACE_CASE_FIRST(name, str) str##_tok
-#define INTERFACE_CASE_REST(name, str) : case str##_tok
-
-#define ALL_INTERFACE_CASE \
-    INTERFACE_TYPE_FIRST(INTERFACE_CASE_FIRST) \
-    INTERFACE_TYPE_REST(INTERFACE_CASE_REST)
-
 
 /**
  * @enum InterfaceType

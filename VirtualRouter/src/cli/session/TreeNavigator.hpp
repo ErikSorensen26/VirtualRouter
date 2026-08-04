@@ -33,30 +33,39 @@
 
 #include <new>
 #include <cstddef>
-#include "cli/execution/ExecutionContext.hpp"
+#include "cli/modes/Context.hpp"
 #include "cli/tree/CommandTree.h"
+#include "configs/SubRegistry.hpp"
 
 namespace cli
 {
-/// @brief One entry in the navigation history stack.
+/**
+ * @brief One entry in the navigation history stack.
+ *
+ * A mode is which grammar the session reads plus which registry its commands
+ * write to, so a frame is the tree cursor and the config pointer. Field
+ * appliers recover the concrete registry type from the command's configId,
+ * which is why nothing here has to remember that type.
+ */
 struct NavFrame
 {
-    NavFrame(cli::execution::NavEntry nEntry, const tree::ModeEntry& md)
-        : executorEntry(nEntry), modeDir(md)
+    NavFrame(CliMode md, void* cfg, const tree::ModeEntry& dir)
+        : mode(md), configPtr(cfg), modeDir(dir)
     {}
 
-    cli::execution::NavEntry  executorEntry;   ///< Execution state (mode, dispatch, construct, config ptr).
+    CliMode mode = CliMode::None;  ///< Which mode this frame represents.
+    void* configPtr = nullptr;     ///< Registry instance this mode's commands write to.
     const tree::ModeEntry modeDir; ///< Command-tree node for this mode.
 };
 
-class TreeNavigation
+class TreeNavigator
 {
 public:
-    TreeNavigation(tree::CommandTree& tr, execution::ExecutionManager& exc)
-        : tree(tr), execution(exc)
+    TreeNavigator(tree::CommandTree& tr, ContextBase& ctx)
+        : tree(tr), context(ctx)
     {}
 
-    ~TreeNavigation()
+    ~TreeNavigator()
     {
         unwindNavTo(0);
     }
@@ -65,28 +74,43 @@ public:
      * @brief Transitions to a new CLI mode and pushes the current mode onto the nav stack.
      *
      * Updates the working directory pointer and prompt string, captures the current
-     * mode into the nav stack, then delegates to @ref ExecutionManager::changeMode.
+     * mode onto the nav stack, then points the context at the new mode's registry.
      * Use this for all normal sub-mode entries (interface, router, address-family, etc.)
      * so that `popMode()` can return here automatically.
      *
      * @tparam T  Target @ref CliMode enum value.
      * @tparam S  Registry type for the new mode.
      */
-    template <CliMode T, typename S>
-    requires config::IsSubRegistryWrapper<S>
-    bool changeMode(S& configs)
+    bool changeMode(CliMode mode, void* configs)
     {
-        if (execution.hasMode() && execution.getMode() == T)
+        if (hasMode() && activeMode == mode)
         {
-            currentMode = tree.getMode(T);
+            currentMode = tree.getMode(mode);
             return true;
         }
 
-        if (execution.hasMode() && navTop < NAV_STACK_DEPTH)
-            pushNavFrame(execution.captureCurrentMode(), currentMode);
-        currentMode = tree.getMode(T);
-        execution.changeMode<T, S>(configs);
+        if (hasMode() && navTop >= NAV_STACK_DEPTH)
+            return false;
+
+        if (hasMode())
+            pushNavFrame(activeMode, context.ctx, currentMode);
+        currentMode = tree.getMode(mode);
+        bindMode(mode, configs);
         return true;
+    }
+
+    /**
+     * @brief Typed overload; the registry is erased once the wrapper is checked.
+     *
+     * The mode is a plain value -- it is compared, stored, and handed to
+     * getMode(), never used as a type -- so only the registry needs a template,
+     * and only to keep an arbitrary pointer from being passed as a config.
+     */
+    template <typename S>
+    requires config::IsSubRegistryWrapper<S>
+    bool changeMode(CliMode mode, S& configs)
+    {
+        return changeMode(mode, static_cast<void*>(&configs));
     }
 
     /**
@@ -104,15 +128,21 @@ public:
      * @tparam S  Registry type for the new mode.
      * @return True if the mode was entered.
      */
-    template <CliMode T, typename S>
-    requires config::IsSubRegistryWrapper<S>
-    bool saveAndChangeMode(S& configs)
+    bool saveAndChangeMode(CliMode mode, void* configs)
     {
         size_t nav = navTop;
-        bool chMode = changeMode<T>(configs);
+        bool chMode = changeMode(mode, configs);
         if (chMode)
             savedNavTop = nav;
         return chMode;
+    }
+
+    /// @brief Typed overload; see @ref changeMode(CliMode, S&).
+    template <typename S>
+    requires config::IsSubRegistryWrapper<S>
+    bool saveAndChangeMode(CliMode mode, S& configs)
+    {
+        return saveAndChangeMode(mode, static_cast<void*>(&configs));
     }
 
     /**
@@ -125,14 +155,20 @@ public:
      * @tparam T  Target @ref CliMode enum value.
      * @tparam S  Registry type for the new mode.
      */
-    template <CliMode T, typename S>
-    requires config::IsSubRegistryWrapper<S>
-    bool resetAndChangeMode(S& configs)
+    bool resetAndChangeMode(CliMode mode, void* configs)
     {
-        navTop = 0;
-        currentMode = tree.getMode(T);
-        execution.changeMode<T, S>(configs);
+        unwindNavTo(0);
+        currentMode = tree.getMode(mode);
+        bindMode(mode, configs);
         return true;
+    }
+
+    /// @brief Typed overload; see @ref changeMode(CliMode, S&).
+    template <typename S>
+    requires config::IsSubRegistryWrapper<S>
+    bool resetAndChangeMode(CliMode mode, S& configs)
+    {
+        return resetAndChangeMode(mode, static_cast<void*>(&configs));
     }
 
     /**
@@ -148,11 +184,20 @@ public:
         if (navTop == 0) return false;
 
         NavFrame& frame = frameAt(navTop - 1);
-        execution.restoreFromEntry(frame.executorEntry);
+        bindMode(frame.mode, frame.configPtr);
         currentMode = frame.modeDir;
         popNavFrame();
         return true;
     }
+
+    /// @brief The mode the session is currently in.
+    CliMode getMode() const { return activeMode; }
+
+    /// @brief False only before the first mode change, at session init.
+    bool hasMode() const { return activeMode != CliMode::None; }
+
+    /// @brief The context field appliers write through.
+    ContextBase& getContext() { return context; }
 
     /// @brief The current mode's name, which is also the prompt text.
     const std::string_view getPrompt()
@@ -201,9 +246,22 @@ private:
      * A tree::Command has no empty state, so slots stay raw storage until a mode
      * entry gives them a real one.
      */
-    void pushNavFrame(cli::execution::NavEntry entry, const tree::ModeEntry& md)
+    void pushNavFrame(CliMode md, void* cfg, const tree::ModeEntry& dir)
     {
-        new (&navStack[navTop++]) NavFrame(entry, md);
+        new (&navStack[navTop++]) NavFrame(md, cfg, dir);
+    }
+
+    /**
+     * @brief Points the session at a mode and the registry its commands write to.
+     *
+     * Entering and returning to a mode are the same operation here: both land on
+     * a mode plus a config pointer, so popMode and changeMode share this rather
+     * than reconstructing anything.
+     */
+    void bindMode(CliMode md, void* cfg)
+    {
+        activeMode = md;
+        context.ctx = cfg;
     }
 
     /// Destroys the top frame.
@@ -229,9 +287,10 @@ private:
     size_t savedNavTop = 0; ///< Depth @ref restore unwinds to; 0 when no detour is active.
 
     tree::ModeEntry currentMode; ///< Command-tree entry supplying the current mode's commands.
+    CliMode activeMode = CliMode::None; ///< Mode the session is in; None before the first change.
 
     tree::CommandTree& tree;                 ///< Shared grammar; supplies a ModeEntry per mode.
-    execution::ExecutionManager& execution;  ///< Owns the active mode object and its config pointer.
+    ContextBase& context;                    ///< Carries the config pointer appliers write through.
 };
 }
 

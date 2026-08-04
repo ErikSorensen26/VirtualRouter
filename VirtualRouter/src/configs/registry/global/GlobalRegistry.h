@@ -146,7 +146,7 @@ void globalInterface(void*);
     X(global::Dscp,      dscp) \
     X(bool,              fragments)
 
-DEFINE_TUPLE_SCHEMA(IPExtendedAcl, IP_EXTENDED_ACL_FIELDS)
+DEFINE_TUPLE_SCHEMA(IPExtendedAcl, IP_EXTENDED_ACL_FIELDS);
 
 #define GLOBAL_IPV6_NEIGHBOR_FIELDS(X) \
     X(types::IPv6Address,       address) \
@@ -317,7 +317,7 @@ using GlobalLineRange = std::pair<uint16_t, uint16_t>;
     VALUE_FIELD(X, Y, IPV6_LOCAL_POLICY_ROUTE_MAP, std::string) TODO \
     ATOMIC_FIELD(X, Y, IPV6_MFIB, bool, false) TODO \
     REGISTRY_CONTAINER(X, Y, IPV6_ND, NdpBaseRegistry) TODO \
-    LIST_FIELD(X, Y, IPV6_NEIGHBOR, GlobalIPv6Neighbor) TODO \
+    LIST_FIELD(X, Y, IPV6_NEIGHBOR, GlobalIPv6Neighbor::Tuple) TODO \
     ATOMIC_FIELD(X, Y, IPV6_OSPF_NAME_LOOKUP, bool, false) TODO \
     OWNED_LIST_FIELD(X, Y, IPV6_PREFIX_LIST, PrefixListRegistry<types::IPv6Prefix>, std::string) \
     LIST_FIELD(X, Y, IPV6_PREFIX_POOL, Incomplete) TODO \
@@ -378,6 +378,7 @@ using GlobalLineRange = std::pair<uint16_t, uint16_t>;
     OWNED_LIST_FIELD(X, Y, ROUTE_TAG_LIST, EmptyRegistry, std::string) TODO \
     ATOMIC_FIELD(X, Y, ROUTE_TAG_NOTATION_DOTTED_DECIMAL, bool, false) TODO \
     OWNED_LIST_FIELD(X, Y, ROUTER_EIGRP_NAMED, EigrpNamedRegistry, std::string) \
+    OWNED_LIST_FIELD(X, Y, ROUTER_OSPF_DEFAULT, OspfRegistry, uint16_t) \
     OWNED_LIST_FIELD(X, Y, ROUTER_OSPFV3_DEFAULT, OspfRegistry, uint16_t) \
     OWNED_LIST_FIELD(X, Y, SAMPLER, EmptyRegistry, std::string) TODO \
     OWNED_LIST_FIELD(X, Y, SASL_PROFILE, EmptyRegistry, std::string) TODO \

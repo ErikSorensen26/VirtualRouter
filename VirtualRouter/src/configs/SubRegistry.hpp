@@ -283,6 +283,15 @@ public:
         return *static_cast<P*>(parent);
     }
 
+    /**
+     * TODO add doxy comment
+     */
+    template <typename F>
+    void visit(size_t idx, F&& f)
+    {
+        visitImpl(idx, std::forward<F>(f), std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
+    }
+
     mutable std::mutex mu; ///< Synchronization mutex for concurrent field access.
 
     /**
@@ -448,6 +457,19 @@ private:
                 local.setMask(parentField);
             }
         }.template operator()<I>(), ...);
+    }
+
+    /// Visit
+    ///
+    /// Hands the callback the accessor rather than the raw field. A raw field
+    /// keeps its storage private to SubRegistry and its own accessor, so a
+    /// visitor holding one could identify the field but not read or write it.
+    /// Is is a constant here, which is what get<> needs and what the runtime
+    /// index alone cannot supply.
+    template <typename F, std::size_t... Is>
+    void visitImpl(size_t idx, F&& f, std::index_sequence<Is...>)
+    {
+        ((idx == Is ? (void)f(this->template get<static_cast<ENUM>(Is)>()) : void()), ...);
     }
 
     /// Context provider for fields requiring external data.

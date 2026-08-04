@@ -2,7 +2,7 @@
 
 #include "ModeEntry.h"
 #include "Command.h"
-#include "CommandTree.h"
+#include "../CommandTree.h"
 
 namespace cli::tree
 {
@@ -29,9 +29,26 @@ std::string_view ModeEntry::subName() const
     return tree->blobText(e.infoOff + e.modeSiz, e.subSiz);
 }
 
+std::string_view ModeEntry::prompt() const
+{
+    const ModeEntryNode& e = node();
+    if (e.promptSiz == 0) return {};
+    return tree->blobText(e.infoOff + e.modeSiz + e.subSiz, e.promptSiz);
+}
+
 bool ModeEntry::hasSubMode() const
 {
     return node().subSiz != 0;
+}
+
+bool ModeEntry::hasRegistry() const
+{
+    return node().registryId != ModeEntryNode::REGISTRY_NONE;
+}
+
+uint16_t ModeEntry::registryId() const
+{
+    return node().registryId;
 }
 
 size_t ModeEntry::size() const

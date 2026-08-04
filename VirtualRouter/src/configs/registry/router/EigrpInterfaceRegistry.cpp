@@ -40,9 +40,9 @@ void EigrpIfaceSummary(void* i)
 
         std::set<types::IPPrefix> summaries;
         eigrpIface->configs.get<config::EigrpInterface::SUMMARY_ADDRESS>().withRead(
-            [&](const std::vector<std::tuple<types::IPPrefix, std::optional<std::string>>>& v) {
-                for (const auto& [prefix, name] : v)
-                    summaries.emplace(prefix);
+            [&](const std::vector<config::EigrpSummaryAddress::Tuple>& v) {
+                for (const config::EigrpSummaryAddress::Tuple& row : v)
+                    summaries.emplace(config::EigrpSummaryAddress::prefix(row));
             });
         eigrpIface->getAggregator().installSummaries(summaries);
     });

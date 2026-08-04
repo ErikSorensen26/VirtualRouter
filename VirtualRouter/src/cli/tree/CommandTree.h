@@ -2,8 +2,8 @@
  * @file CommandTree.h
  * @brief The CLI grammar, flattened once and mapped read-only at runtime.
  *
- * @c Commands.json is parsed into a flat buffer of fixed-size records and a
- * string blob, cached to disk, and thereafter @c mmap ed. Nothing is allocated
+ * The grammar directory is parsed into a flat buffer of fixed-size records and
+ * a string blob, cached to disk, and thereafter @c mmap ed. Nothing is allocated
  * per traversal: @c ModeEntry and @c Command are cursors into the mapping, and
  * every string is a @c string_view pointing at the blob.
  *
@@ -14,6 +14,10 @@
  *
  * Lookups are keyed by @c CliMode, whose path is either a mode name or a mode
  * plus one submode. Submodes never nest deeper, which keeps the mode table flat.
+ *
+ * The file also carries a registry table and a slot table, which this class only
+ * steps over. They exist so the flattener can reject two commands binding the
+ * same config field; nothing reads them back at runtime.
  *
  * Cursors borrow from the tree and must not outlive it.
  */
@@ -27,8 +31,8 @@
 #include <span>
 #include <unordered_map>
 #include "Storage.h"
-#include "Command.h"
-#include "ModeEntry.h"
+#include "nodes/Command.h"
+#include "nodes/ModeEntry.h"
 #include "TreePatch.h"
 
 #include "cli/modes/Mode.hpp"
@@ -42,7 +46,7 @@ using PortCounts = std::unordered_map<std::string, size_t>;
 
 namespace parser
 {
-std::vector<std::byte> flattenCmds(const ::utils::json::JsonNode& node);
+std::vector<std::byte> flattenDir(const std::string& dir);
 }
 
 struct FileHeader;
@@ -57,22 +61,25 @@ public:
     explicit CommandTree(Storage storage);
 
     /**
-     * @brief Opens the flattened tree, building it from JSON when absent.
+     * @brief Opens the flattened tree, building it from source when absent.
      *
      * Maps binaryPath when it already holds a usable tree. Otherwise parses
-     * jsonPath, writes the flattened result to binaryPath, and maps that, so
+     * sourcePath, writes the flattened result to binaryPath, and maps that, so
      * the parse cost is paid once per grammar change rather than per startup.
      *
      * A binary that is stale, truncated, or from an older format is rebuilt
      * rather than rejected.
      *
-     * @param jsonPath   Source grammar, e.g. configs/Commands.json.
+     * @param sourcePath Directory of per-mode grammar files.
      * @param binaryPath Flattened cache to read or regenerate.
      */
-    CommandTree(const std::string& jsonPath, const std::string& binaryPath);
+    CommandTree(const std::string& sourcePath, const std::string& binaryPath);
 
-    /// @brief Parses jsonPath and writes the flattened tree to binaryPath.
-    static void build(const std::string& jsonPath, const std::string& binaryPath);
+    /**
+     * @brief Parses the grammar directory and writes the flattened tree to
+     *        binaryPath.
+     */
+    static void build(const std::string& sourcePath, const std::string& binaryPath);
 
     /**
      * @brief Reads per-interface-type port counts from a hardware config file.
@@ -112,12 +119,6 @@ public:
 
     /// @brief Index of a submode entry, or NPOS when absent.
     size_t findMode(const std::string_view modeName, std::string_view subName) const;
-
-    /// @brief Flattens a parsed grammar document into the serialized tree.
-    static std::vector<std::byte> flattenCmds(const ::utils::json::JsonNode& node)
-    {
-        return parser::flattenCmds(node);
-    }
 
     static constexpr size_t NPOS = ~size_t{0};
 

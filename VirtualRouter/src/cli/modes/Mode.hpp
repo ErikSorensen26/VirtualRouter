@@ -29,12 +29,17 @@
     X(DhcpGlobalOptions,                "(config-dhcp-global-options)#") \
     X(DhcpConfig,                       "(config-dhcp)#") \
     X(Dhcpv6Config,                     "(config-dhcpv6)#") \
+    X(PrefixConfig,                     "(config-prefix)#") \
     X(FlowExporter,                     "(config-flow-exporter)#") \
     X(FlowMonitor,                      "(config-flow-monitor)#") \
     X(FlowRecord,                       "(config-flow-record)#") \
     X(Interface,                        "(config-if)#", "ethernet") \
+    X(InterfaceNull,                    "(config-if)#", "null") \
+    X(InterfacePortChannel,             "(config-if)#", "Portchannel") \
+    X(InterfaceTunnel,                  "(config-if)#", "Tunnel") \
+    X(InterfaceVlan,                    "(config-if)#", "vlan") \
+    X(InterfaceVirtualTemplate,         "(config-if)#", "virtual-template") \
     X(ClassMap,                         "(config-cmap)#") \
-    X(Dhcp,                             "(config-dhcp)#") \
     X(ExtendedACL,                      "(config-ext-nacl)#") \
     X(StandardACL,                      "(config-std-nacl)#") \
     X(PolicyMap,                        "(config-pmap)#") \
@@ -50,6 +55,15 @@
     X(RouterEigrpTopologyV4,            "(config-router-af-topology)#", "eigrp-ipv4") \
     X(RouterEigrpTopologyV6,            "(config-router-af-topology)#", "eigrp-ipv6") \
 /*Ospf*/ \
+    X(RouterOspf,                       "(config-router)#", "ospf") \
+    X(RouterOspfv3,                     "(config-router)#", "ospfv3") \
+    X(RouterOspfv6,                     "(config-rtr)#", "ospfv6") \
+    X(RouterOspfAddressFamily,          "(config-router-af)#", "ospf-af") \
+    X(RouterOspfAddressFamilyV4,        "(config-router-af)#", "ospf-ipv4") \
+    X(RouterOspfAddressFamilyV6,        "(config-router-af)#", "ospf-ipv6") \
+    X(RouterOspfTopologyV4,             "(config-router-af-topology)#", "ospf-ipv4") \
+/*Bgp*/ \
+    X(RouterBgp,                        "(config-router)#", "bgp") \
 
 namespace cli
 {
@@ -110,6 +124,23 @@ static constexpr std::array<ModePath, static_cast<size_t>(CliMode::Count)> CliMo
 constexpr std::string_view getPrompt(CliMode mode)
 {
     return cli::CliModePaths[static_cast<size_t>(mode)][0];
+}
+
+/**
+ * @brief True for the configuration modes, false for the EXEC ones.
+ *
+ * What `end` unwinds: it returns to privileged EXEC from any configuration
+ * depth, so it pops while this holds rather than popping to the bottom of the
+ * stack, which would carry it past EXEC as well.
+ *
+ * Read off the prompt because that is where the distinction already lives --
+ * every configuration mode prompt starts "(config", and the two EXEC prompts are
+ * ">" and "#". A separate flag column in the table would be a second place to
+ * state the same thing, free to disagree with the first.
+ */
+constexpr bool isConfigurationMode(CliMode mode)
+{
+    return getPrompt(mode).starts_with("(config");
 }
 
 /**

@@ -132,7 +132,7 @@ using RouteMapSourceProtocol = std::pair<core::RouteSource, uint32_t>;
     ATOMIC_FIELD(X, Y, PERMIT, bool, true) \
     VALUE_FIELD(X, Y, DESCRIPTION, std::string) \
     OPTIONAL_ATOMIC_FIELD(X, Y, CONTINUE, uint16_t) \
-    VALUE_FIELD(X, Y, MATCH_APATHS_ADVERTISE_SET, RouteMapApathsAdvertise) \
+    VALUE_FIELD(X, Y, MATCH_APATHS_ADVERTISE_SET, RouteMapApathsAdvertise::Tuple) \
     LIST_FIELD(X, Y, MATCH_AS_PATH, uint16_t) \
     LIST_FIELD(X, Y, MATCH_COMMUNITY, std::string) \
     LIST_FIELD(X, Y, MATCH_EXTCOMMUNITY, std::string) \
@@ -157,8 +157,8 @@ using RouteMapSourceProtocol = std::pair<core::RouteSource, uint32_t>;
     OPTIONAL_ATOMIC_FIELD(X, Y, MATCH_MAX_PACKET_LENGTH, uint32_t) \
     LIST_FIELD(X, Y, MATCH_LOCAL_PREFERENCE, uint32_t) \
     LIST_FIELD(X, Y, MATCH_MDT_GROUP, std::string) \
-    LIST_FIELD(X, Y, MATCH_METRIC, RouteMapMetricRange) \
-    LIST_FIELD(X, Y, MATCH_EXTERNAL_METRIC, RouteMapMetricRange) \
+    LIST_FIELD(X, Y, MATCH_METRIC, RouteMapMetricRange::Tuple) \
+    LIST_FIELD(X, Y, MATCH_EXTERNAL_METRIC, RouteMapMetricRange::Tuple) \
     ATOMIC_FIELD(X, Y, MATCH_MPLS_LABEL, bool, false) \
     ATOMIC_FIELD(X, Y, MATCH_ROUTE_TYPE_EXTERNAL_TYPE_1, bool, false) \
     ATOMIC_FIELD(X, Y, MATCH_ROUTE_TYPE_EXTERNAL_TYPE_2, bool, false) \
@@ -180,7 +180,7 @@ using RouteMapSourceProtocol = std::pair<core::RouteSource, uint32_t>;
     ATOMIC_FIELD(X, Y, SET_AUTOMATIC_TAG, bool, false) \
     VALUE_FIELD(X, Y, SET_COMM_LIST_DEL, std::string) \
     LIST_FIELD(X, Y, SET_COMMUNITY, uint32_t) \
-    VALUE_FIELD(X, Y, SET_DAMPENING, RouteMapDampening) \
+    VALUE_FIELD(X, Y, SET_DAMPENING, RouteMapDampening::Tuple) \
     OPTIONAL_ATOMIC_FIELD(X, Y, SET_EXTCOM_LIST_DEL, uint32_t) \
     OPTIONAL_ATOMIC_FIELD(X, Y, SET_EXTCOMMUNITY_COST, uint32_t) \
     OPTIONAL_ATOMIC_FIELD(X, Y, SET_EXTCOMMUNITY_COST_ID, uint8_t) \
@@ -211,6 +211,11 @@ using RouteMapSourceProtocol = std::pair<core::RouteSource, uint32_t>;
     REGISTRY_CONTAINER(X, Y, SET_DEFAULT, RouteMapSequenceBaseRegistry)
 
 DEFINE_CONFIG_GROUP(RouteMapSequence, ROUTE_MAP_SEQUENCE_FIELD_LIST)
+
+TUPLE_SCHEMA_FOR(RouteMapSequence, RouteMapSequence::MATCH_APATHS_ADVERTISE_SET, RouteMapApathsAdvertise);
+TUPLE_SCHEMA_FOR(RouteMapSequence, RouteMapSequence::MATCH_METRIC, RouteMapMetricRange);
+TUPLE_SCHEMA_FOR(RouteMapSequence, RouteMapSequence::MATCH_EXTERNAL_METRIC, RouteMapMetricRange);
+TUPLE_SCHEMA_FOR(RouteMapSequence, RouteMapSequence::SET_DAMPENING, RouteMapDampening);
 
 
 /**

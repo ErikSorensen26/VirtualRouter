@@ -8,7 +8,7 @@
 
 #include "CliSession.h"
 #include "CliEngine.h"
-#include "cli/execution/parser/Token.hpp"
+#include "cli/session/Token.hpp"
 #include "cli/modes/Mode.hpp"
 #include "TraversalContext.hpp"
 
@@ -28,6 +28,13 @@ static std::string trimLeft(const std::string& s)
     return std::string(it, s.end());
 }
 
+static std::string_view trimRight(std::string_view s)
+{
+    while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back())))
+        s.remove_suffix(1);
+    return s;
+}
+
 static std::string getLastWord(const std::string& s)
 {
     std::istringstream ss(s);
@@ -39,11 +46,12 @@ static std::string getLastWord(const std::string& s)
 CliSession::CliSession(CliEngine& engine, ConsoleController& controller, bool enableDebug)
     : Console(controller),
       engine(engine),
-      execution(*this),
+      context(*this),
       commandTree(engine.getCommandTree()),
-      nav(commandTree, execution)
+      nav(commandTree, context),
+      executor(nav, context)
 {
-    nav.changeMode<CliMode::UserExec>(engine.global.getConfigs());
+    nav.changeMode(CliMode::GlobalConfiguration, engine.global.getConfigs());
     initConsole();
 
 #ifdef DEBUG
@@ -78,7 +86,7 @@ bool CliSession::handleInput(std::string test)
 
     if (userCommand == "CRT-Z" && getMode() != CliMode::UserExec)
     {
-        if (!nav.resetAndChangeMode<CliMode::PrivilegedExec>(engine.global.getConfigs()))
+        if (!nav.resetAndChangeMode(CliMode::PrivilegedExec, engine.global.getConfigs()))
         {
             controller.print("\r\n");
             return false;
@@ -135,15 +143,15 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
     auto handlePrefix = [&](const std::string& prefix, bool& flag)
     {
         if (!utils::lowerCmp(words[0], prefix) || words.size() < 2) return;
-        const CliMode m = execution.getMode();
+        const CliMode m = nav.getMode();
         if (m != CliMode::UserExec && m != CliMode::PrivilegedExec)
         {
             flag = true;
         }
     };
 
-    handlePrefix("no", result.negate);
-    handlePrefix("default", result.defaulted);
+    handlePrefix("no", context.negate);
+    handlePrefix("default", context.defaulted);
 
     if (!hasHelpToken && words.size() >= 2 && utils::partialLowerCmp(words[0], DO_EXEC_KEYWORD))
     {
@@ -164,12 +172,6 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
     {
         std::string_view word = words[idx];
         
-        // Extend line token if active
-        /*if (tokens.back().isLine())
-        {
-            ctx.extendLineToken(rawInput, word, hasHelpToken);
-        }*/
-
         ctx.matchState = TraversalContext::MatchState::NONE;
         std::vector<tree::Command> available = ctx.availableAt(word, prevCommands);
 
@@ -247,16 +249,28 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
         {
             if (ctx.isPatternMatching() && !matches.empty())
             {
-                tokens.emplace_back(word, ctx.currentPattern);
+                if (result.valueStart == tree::CommandTree::NPOS)
+                    result.valueStart = tokens.size();
+
+                // LINE takes the rest of the input as one free-text value.
+                const bool lineToken = matchVolatilePattern(matches[0].name()) == P_LINE;
+                const std::string_view value = lineToken
+                    ? trimRight(std::string_view(rawInput).substr(markerPos))
+                    : word;
+
+                tokens.emplace_back(value, matches[0]);
                 ctx.previousMatch = matches[0].name();
+
+                if (lineToken) break;
             }
             else if (matches.size() == 1)
             {
-                tokens.emplace_back(matches[0].name());
+                tokens.emplace_back(matches[0].name(), matches[0]);
                 ctx.previousMatch = matches[0].name();
             }
             else if (matches.empty() && ctx.eoc)
             {
+                // Synthesized end-of-command marker; no node resolved it.
                 tokens.emplace_back(ctx.endCmdStr);
             }
             else if (matches.empty())
@@ -265,7 +279,7 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
             }
             else
             {
-                tokens.emplace_back(matches[0].name());
+                tokens.emplace_back(matches[0].name(), matches[0]);
                 ctx.previousMatch = matches[0].name();
             }
         }
@@ -276,8 +290,8 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
 
         if (idx == 0)
         {
-            if (utils::lowerCmp(word, "no") && result.negate) ctx.currentDirectory = ctx.currentMode.commands();
-            if (utils::lowerCmp(word, "default") && result.defaulted) ctx.currentDirectory = ctx.currentMode.commands();
+            if (utils::lowerCmp(word, "no") && context.negate) ctx.currentDirectory = ctx.currentMode.commands();
+            if (utils::lowerCmp(word, "default") && context.defaulted) ctx.currentDirectory = ctx.currentMode.commands();
         }
     }
 
@@ -307,12 +321,12 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
     return result;
 }
 
-bool CliSession::executeCommand(std::string& command)
+bool CliSession::executeCommand(std::string& command, bool quiet)
 {
     isModeChanged = false;
     textLine      = false;
-    execution.getContext().negate   = false;
-    execution.getContext().defaulted = false;
+    context.negate   = false;
+    context.defaulted = false;
 
     if (command.empty()) return false;
 
@@ -337,6 +351,8 @@ bool CliSession::executeCommand(std::string& command)
         {
             if (tryGlobalCommand(command)) return true;
 
+            if (quiet) return false;
+
             const std::string marker =
                 "\r\n"
                 + std::string(initialLineLength + parsed.markerCommand.size(), ' ')
@@ -346,11 +362,13 @@ bool CliSession::executeCommand(std::string& command)
         }
 
         case ParseResult::Status::AMBIGUOUS:
+            if (quiet) return false;
             controller.print("\r\n% Ambiguous command: \"" + parsed.ambiguousToken + "\"");
             return false;
 
         case ParseResult::Status::INCOMPLETE:
             if (tryGlobalCommand(command)) return true;
+            if (quiet) return false;
             controller.print("\r\n% Incomplete Command");
             return false;
 
@@ -364,29 +382,23 @@ bool CliSession::executeCommand(std::string& command)
             break;
     }
 
-    // Apply negate/default flags to the context
-    if (parsed.negate)
-        execution.getContext().negate = true;
-    if (parsed.defaulted)
-        execution.getContext().defaulted = true;
-
     // Set textLine from token patterns (LINE already collapsed in parseInput)
     textLine = std::any_of(parsed.tokens.begin(), parsed.tokens.end(),
         [](const Token& t){ return t.isLine(); });
 
-    const bool skipPrefix = (parsed.negate || parsed.defaulted) && parsed.tokens.size() > 1;
+    const bool skipPrefix = (context.negate || context.defaulted) && parsed.tokens.size() > 1;
     std::span<Token> execTokens = skipPrefix
         ? std::span<Token>(parsed.tokens).subspan(1)
         : std::span<Token>(parsed.tokens);
 
     if (execTokens.empty()) return false;
 
-    return executeModeParser(execTokens);
+    return executor.execute(execTokens);
 }
 
 bool CliSession::tryDoCommand(const std::string& remainder)
 {
-    if (!nav.saveAndChangeMode<CliMode::PrivilegedExec>(engine.global.getConfigs()))
+    if (!nav.saveAndChangeMode(CliMode::PrivilegedExec, engine.global.getConfigs()))
         return false;
 
     std::string cmd = remainder;
@@ -406,20 +418,24 @@ bool CliSession::tryGlobalCommand(const std::string& rawInput)
     if (lowerStr(rawInput) == "exit")
         return false;
 
-    nav.saveAndChangeMode<CliMode::GlobalConfiguration>(engine.global.getConfigs());
+    nav.saveAndChangeMode(CliMode::GlobalConfiguration, engine.global.getConfigs());
 
     std::string cmd = rawInput;
-    const bool ok   = executeCommand(cmd);
+    const bool ok   = executeCommand(cmd, /*quiet=*/true);
 
-    if (getMode() == CliMode::GlobalConfiguration)
-        nav.restore();
+    const CliMode landed = getMode();
+    void* const   landedCtx = nav.getContext().ctx;
+    nav.restore();
+
+    if (landed != CliMode::GlobalConfiguration)
+        nav.changeMode(landed, landedCtx);
 
     return ok;
 }
 
 CliMode CliSession::getMode()
 {
-    return execution.getMode();
+    return nav.getMode();
 }
 
 void CliSession::displayCommands(std::vector<tree::Command>& list)
@@ -518,11 +534,6 @@ bool CliSession::handlePagination(char nextch)
         handlePrompt();
     }
     return true;
-}
-
-bool CliSession::executeModeParser(const std::span<Token> tokens)
-{
-    return execution.execute(tokens);
 }
 
 } // namespace cli

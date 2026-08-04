@@ -1,5 +1,19 @@
 /**
- * TODO add doxy comment
+ * @file RegistryBuilder.hpp
+ * @brief The macros a registry is written in, and everything generated from one.
+ * @ingroup CONFIG
+ *
+ * A registry is declared as a single field list -- one line per field, naming
+ * its kind, type and default -- and DEFINE_CONFIG_GROUP expands that one list
+ * into all the parallel things that have to agree about it: the field enum, the
+ * name-hash table the grammar resolves against, the per-field default
+ * specializations, the storage tuple, and the SubRegistry that owns them.
+ *
+ * Deriving them from one list is the point. The enum's order is the tuple's
+ * order is the hash table's order, and a field added in the middle moves all
+ * three together, so there is no way for them to drift apart.
+ *
+ * @see RegistryTable.hpp, which gathers the registries into the id list.
  */
 
 #ifndef REGISTRY_BUILDER_HPP
@@ -9,6 +23,7 @@
 #include <string_view>
 #include <cstdint>
 
+#include "configs/RegistryTraits.hpp" // IWYU pragma: keep
 #include "configs/RegistryDefaultTable.hpp" // IWYU pragma: keep
 #include "configs/SubRegistry.hpp" // IWYU pragma: keep
 #include "configs/RegistryReference.hpp" // IWYU pragma: keep
@@ -90,6 +105,8 @@
     struct NAME##Fields : FieldTuple< \
         CONFIG_STRIP_LEADING_COMMA(LIST(CONFIG_FIELDTUPLE_ENTRY, NAME)) \
     > {}; \
-    struct NAME##Registry : SubRegistry<NAME##Registry, NAME, nullptr, NAME##Fields> {};
+    struct NAME##Registry : SubRegistry<NAME##Registry, NAME, nullptr, NAME##Fields> {}; \
+    template <> \
+    struct RegistryOf<NAME> { using type = NAME##Registry; };
 
 #endif // REGISTRY_BUILDER_HPP

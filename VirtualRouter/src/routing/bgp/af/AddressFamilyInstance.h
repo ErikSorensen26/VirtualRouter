@@ -2527,8 +2527,8 @@ private:
                 {
                     for (const auto& range : rangesList)
                     {
-                        uint8_t rangeDist       = std::get<0>(range);
-                        const auto& pfxList     = std::get<1>(range);
+                        uint8_t rangeDist       = config::BgpDistanceRange::distance(range);
+                        const auto& pfxList     = config::BgpDistanceRange::prefixes(range).value;
                         types::IPPrefix nlriAsPfx(nlri.addr, nlri.prefixLength);
                         for (const auto& [pfx, pfxListName] : pfxList)
                         {

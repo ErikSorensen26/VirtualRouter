@@ -51,23 +51,22 @@ void NeighborTable::syncUnicast()
             }
         });
 
-        // Ospf::NEIGHBORS uses double-nesting (ListField<vector<tuple<...>>>)
         iface.getProcessConfigs().get<config::Ospf::NEIGHBORS>().withRead([&](const auto& nbrsList)
         {
             for (const auto& nbrs : nbrsList)
-                for (const auto& [ip, cost, dbfilter, pollIntv, priority] : nbrs)
-                {
-                    if (!concreteIface.interfaceAddress.contains(ip))
-                        continue;
-                    unicastNbrs.erase(ip);
-                    unicast.try_emplace(
-                        ip,
-                        cost,
-                        dbfilter.value_or(false),
-                        pollIntv.value_or(120),
-                        priority.value_or(0)
-                    );
-                }
+            {
+                const auto& [ip, cost, dbfilter, pollIntv, priority] = nbrs;
+                if (!concreteIface.interfaceAddress.contains(ip))
+                    continue;
+                unicastNbrs.erase(ip);
+                unicast.try_emplace(
+                    ip,
+                    cost,
+                    dbfilter.value_or(false),
+                    pollIntv.value_or(120),
+                    priority.value_or(0)
+                );
+            }
         });
 
         // Erase left over neighbors

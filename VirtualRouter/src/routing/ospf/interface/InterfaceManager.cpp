@@ -198,14 +198,14 @@ void InterfaceManager::refreshInterfaceList()
             std::optional<uint32_t> area{std::nullopt};
             process.configs.get<config::Ospf::NETWORKS>().withRead([&](const auto& networksList) {
                 for (const auto& networks : networksList)
-                    for (const auto& [prefix, a] : networks)
+                {
+                    const auto& [prefix, a] = networks;
+                    if (prefix.contains(ip))
                     {
-                        if (prefix.contains(ip))
-                        {
-                            area = a;
-                            break;
-                        }
+                        area = a;
+                        break;
                     }
+                }
             });
             return area;
         };

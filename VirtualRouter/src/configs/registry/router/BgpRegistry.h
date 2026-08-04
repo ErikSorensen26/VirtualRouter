@@ -107,7 +107,7 @@ void BgpNeighborDefaultOriginate(void*);
     ATOMIC_FIELD(X, Y, NEXT_HOP_SELF_ALL, bool, false) \
     ATOMIC_FIELD(X, Y, NEXT_HOP_UNCHANGED, bool, false) \
     VALUE_FIELD(X, Y, PREFIX_LIST_IN, std::string) TODO \
-    VALUE_FIELD(X, Y, PREFIX_LIST_OUT, std::string) TODO // prefix/distribute list can not co-exist \
+    VALUE_FIELD(X, Y, PREFIX_LIST_OUT, std::string) TODO \
     ATOMIC_FIELD(X, Y, REMOVE_PRIVATE_AS, bool, false) \
     ATOMIC_FIELD(X, Y, REMOVE_PRIVATE_AS_ALL, bool, false) \
     VALUE_FIELD(X, Y, ROUTE_MAP_IN, std::string) TODO \
@@ -146,9 +146,9 @@ DEFINE_TUPLE_SCHEMA(BgpPathAttribute, BGP_PATH_ATTRIBUTE_FIELDS);
     REGISTRY_CONTAINER(X, Y, BGP_BASE, BgpTransportBaseRegistry) \
     VALUE_FIELD(X, Y, DESCRIPTION, std::string) TODO \
     ATOMIC_FIELD(X, Y, DISABLE_CONNECTION_CHECK, bool, false) \
-    ATOMIC_FIELD(X, Y, EBGP_MULTIHOP, bool, false) TODO // need full tcp first \
-    ATOMIC_FIELD(X, Y, EBGP_MAX_HOP_COUNT, uint8_t, 1) TODO // need full tcp first \
-    ATOMIC_FIELD(X, Y, FALL_OVER, bool, false) TODO // needs rib callbacks \
+    ATOMIC_FIELD(X, Y, EBGP_MULTIHOP, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, EBGP_MAX_HOP_COUNT, uint8_t, 1) TODO \
+    ATOMIC_FIELD(X, Y, FALL_OVER, bool, false) TODO \
     ATOMIC_FIELD(X, Y, FALL_OVER_BFD_CHECK_CONTROL_PLANE_FAILURE, bool, false) TODO \
     ATOMIC_FIELD(X, Y, FALL_OVER_BFD_MULTI_HOP, bool, false) TODO \
     ATOMIC_FIELD(X, Y, FALL_OVER_BFD_SINGLE_HOP, bool, false) TODO \
@@ -161,7 +161,7 @@ DEFINE_TUPLE_SCHEMA(BgpPathAttribute, BGP_PATH_ATTRIBUTE_FIELDS);
     ATOMIC_FIELD(X, Y, LOCAL_AS_REPLACE_AS, bool, false) \
     ATOMIC_FIELD(X, Y, LOCAL_AS_DUAL_AS, bool, false) \
     VALUE_FIELD(X, Y, PASSWORD, std::string) TODO \
-    LIST_FIELD_CB(X, Y, PATH_ATTRIBUTE, BgpPathAttribute, BgpNeighborSessionPathAttribute) \
+    LIST_FIELD_CB(X, Y, PATH_ATTRIBUTE, BgpPathAttribute::Tuple, BgpNeighborSessionPathAttribute) \
     VALUE_FIELD(X, Y, PEER_GROUP, std::string) \
     OPTIONAL_ATOMIC_FIELD(X, Y, REMOTE_AS, uint32_t) \
     ATOMIC_FIELD_CB(X, Y, SHUTDOWN, bool, false, BgpNeighborSessionShutdown) \
@@ -173,6 +173,8 @@ DEFINE_TUPLE_SCHEMA(BgpPathAttribute, BGP_PATH_ATTRIBUTE_FIELDS);
 
 DEFINE_CONFIG_GROUP(BgpNeighborSession, BGP_NEIGHBOR_SESSION_FIELD_LIST)
 
+TUPLE_SCHEMA_FOR(BgpNeighborSession, BgpNeighborSession::PATH_ATTRIBUTE, BgpPathAttribute);
+
 
 #define BGP_AGGREGATE_ADDRESS_FIELDS(X) \
     X(types::IPPrefix,    prefix) \
@@ -183,7 +185,7 @@ DEFINE_CONFIG_GROUP(BgpNeighborSession, BGP_NEIGHBOR_SESSION_FIELD_LIST)
     X(bool,        summaryOnly) \
     X(std::string, suppressMap)
 
-DEFINE_TUPLE_SCHEMA(BgpAggregateAddress, BGP_AGGREGATE_ADDRESS_FIELDS)
+DEFINE_TUPLE_SCHEMA(BgpAggregateAddress, BGP_AGGREGATE_ADDRESS_FIELDS);
 
 
 // Aliased because IGNOR() is fixed arity and cannot absorb the type's commas.
@@ -208,7 +210,7 @@ DEFINE_TUPLE_SCHEMA(BgpNetwork, BGP_NETWORK_FIELDS);
  */
 #define BGP_ADDRESS_FAMILY_FIELD_LIST(X, Y) \
     REGISTRY_CONTAINER(X, Y, AF_BASE, BgpAfBaseRegistry) \
-    LIST_FIELD(X, Y, AGGREGATE_ADDRESS, BgpAggregateAddress) \
+    LIST_FIELD(X, Y, AGGREGATE_ADDRESS, BgpAggregateAddress::Tuple) \
     ATOMIC_FIELD(X, Y, BGP_ADDITIONAL_PATHS_INSTALL, bool, false) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y, BGP_ADDITIONAL_PATHS_SELECT, uint8_t) TODO \
     ATOMIC_FIELD(X, Y, BGP_ADDITIONAL_PATHS_SELECT_BACKUP, bool, false) \
@@ -238,7 +240,7 @@ DEFINE_TUPLE_SCHEMA(BgpNetwork, BGP_NETWORK_FIELDS);
     ATOMIC_FIELD(X, Y, BGP_ROUTE_MAP_PRIORITY, bool, false) TODO \
     ATOMIC_FIELD(X, Y, BGP_SOFT_RECONFIG_BACKUP, bool, false) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y, DEFAULT_METRIC, uint32_t) \
-    LIST_FIELD(X, Y, DISTANCE_RANGE, BgpDistanceRange) \
+    LIST_FIELD(X, Y, DISTANCE_RANGE, BgpDistanceRange::Tuple) \
     ATOMIC_FIELD(X, Y, DISTANCE_BGP_EXTERNAL, uint8_t, 20) \
     ATOMIC_FIELD(X, Y, DISTANCE_BGP_INTERNAL, uint8_t, 200) \
     ATOMIC_FIELD(X, Y, DISTANCE_BGP_LOCAL, uint8_t, 200) \
@@ -254,11 +256,15 @@ DEFINE_TUPLE_SCHEMA(BgpNetwork, BGP_NETWORK_FIELDS);
     VALUE_FIELD(X, Y, DISTRIBUTE_LIST_GATEWAY, std::string) TODO \
     ATOMIC_FIELD(X, Y, MAXIMUM_PATHS_EBGP, uint8_t, 1) \
     ATOMIC_FIELD(X, Y, MAXIMUM_PATHS_IBGP, uint8_t, 1) \
-    LIST_FIELD(X, Y, NETWORK, BgpNetwork) \
+    LIST_FIELD(X, Y, NETWORK, BgpNetwork::Tuple) \
     VALUE_FIELD(X, Y, TABLE_MAP, std::string) TODO \
     ATOMIC_FIELD(X, Y, TABLE_MAP_FILTER, bool, false) TODO
 
 DEFINE_CONFIG_GROUP(BgpAddressFamily, BGP_ADDRESS_FAMILY_FIELD_LIST)
+
+TUPLE_SCHEMA_FOR(BgpAddressFamily, BgpAddressFamily::AGGREGATE_ADDRESS, BgpAggregateAddress);
+TUPLE_SCHEMA_FOR(BgpAddressFamily, BgpAddressFamily::DISTANCE_RANGE, BgpDistanceRange);
+TUPLE_SCHEMA_FOR(BgpAddressFamily, BgpAddressFamily::NETWORK, BgpNetwork);
 
 
 
@@ -307,7 +313,7 @@ DEFINE_TUPLE_SCHEMA(BgpRpkiServer, BGP_RPKI_SERVER_FIELDS);
     ATOMIC_FIELD(X, Y, BGP_INJECT_MAP_COPY_ATTRIBUTES, bool, false) TODO \
     ATOMIC_FIELD(X, Y, BGP_LISTEN, bool, false) \
     OPTIONAL_ATOMIC_FIELD(X, Y, BGP_LISTEN_LIMIT, uint16_t) \
-    LIST_FIELD(X, Y, BGP_LISTEN_RANGE, BgpListenRange) \
+    LIST_FIELD(X, Y, BGP_LISTEN_RANGE, BgpListenRange::Tuple) \
     ATOMIC_FIELD(X, Y, BGP_LOG_NEIGHBOR_CHANGES, bool, false) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y, BGP_MAX_AS_LIMIT, uint8_t) \
     OPTIONAL_ATOMIC_FIELD(X, Y, BGP_MAX_COMMUNITY_LIMIT, uint16_t) \
@@ -320,7 +326,7 @@ DEFINE_TUPLE_SCHEMA(BgpRpkiServer, BGP_RPKI_SERVER_FIELDS);
     ATOMIC_FIELD(X, Y, BGP_REFRESH_STALEPATH_TIME, uint16_t, 120) \
     ATOMIC_FIELD(X, Y, BGP_REGEX_DETERMINISTIC, bool, true) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y, BGP_ROUTER_ID, uint32_t) \
-    LIST_FIELD(X, Y, BGP_RPKI_SERVER, BgpRpkiServer) TODO \
+    LIST_FIELD(X, Y, BGP_RPKI_SERVER, BgpRpkiServer::Tuple) TODO \
     ATOMIC_FIELD(X, Y, BGP_SCAN_TIME, uint8_t, 60) \
     ATOMIC_FIELD(X, Y, BGP_SUPPRESS_INACTIVE, bool, false) \
     OPTIONAL_ATOMIC_FIELD(X, Y, BGP_UPDATE_DELAY, uint16_t) \
@@ -331,6 +337,8 @@ DEFINE_TUPLE_SCHEMA(BgpRpkiServer, BGP_RPKI_SERVER_FIELDS);
     OWNED_LIST_FIELD(X, Y, TEMPLATE_PEER_SESSION, BgpNeighborSessionRegistry, std::string) TODO
 
 DEFINE_CONFIG_GROUP(Bgp, BGP_FIELD_LIST)
+
+TUPLE_SCHEMA_FOR(Bgp, Bgp::BGP_LISTEN_RANGE, BgpListenRange);
 
 }
 

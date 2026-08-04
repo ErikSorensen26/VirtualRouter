@@ -632,6 +632,8 @@ TEST_F(Internal_ArpTest, ProxyAllowed_WhenNotDisabled)
     entry->prefix = 0xC0A80000;
     entry->length = 16;
     mockInterface->getVRF()->getRib().addRoute(entry);
+    mockInterface->getVRF()->getRib().wait<uint32_t>();
+
     addArpEntry(ip, readU48(mac));
 
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_)).Times(1);

@@ -1,7 +1,7 @@
 // Command.cpp
 
 #include "Command.h"
-#include "CommandTree.h"
+#include "../CommandTree.h"
 
 constexpr std::string_view CARRIAGE_RETURN = "<cr>";
 

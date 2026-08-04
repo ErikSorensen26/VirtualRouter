@@ -46,12 +46,39 @@ class Command;
  */
 struct ModeEntryNode
 {
-    uint32_t infoOff;  ///< Blob offset of the mode name, immediately followed by the submode name.
+    /// @brief Registry id on an entry that names no registry.
+    static constexpr uint16_t REGISTRY_NONE = 0xFFFFu;
+
+    /**
+     * Blob offset of the mode name, followed by the submode name and then the
+     * prompt. All three are interned back to back, so each starts where the
+     * previous ended and only the first needs an offset.
+     */
+    uint32_t infoOff;
     uint16_t modeSiz;  ///< Mode name length in bytes.
     uint16_t subSiz;   ///< Submode name length in bytes; 0 for a plain mode.
     uint32_t cmdOff;   ///< Synthetic root CommandNode holding the command list.
     uint16_t cmdSiz;   ///< Commands under that root.
-    uint16_t padd{0};  ///< Keeps the CommandNode array behind this table aligned.
+
+    /**
+     * Prompt length in bytes; 0 when the mode declares none.
+     *
+     * The prompt is data, not identity: several modes share "(config-router)#"
+     * and are told apart by their names. Storing it here is what lets a session
+     * render its prompt from the tree rather than from a parallel enum table.
+     */
+    uint16_t promptSiz{0};
+
+    /**
+     * The registry a session in this mode writes to, or REGISTRY_NONE.
+     *
+     * Sits where the alignment padding used to, so it costs nothing. The submode
+     * split already separates grammars that share a prompt -- (config-router-af)#
+     * is six different command lists -- and that split is the same one that
+     * decides which registry is being configured, so the registry belongs on the
+     * entry rather than in a table keyed by prompt text.
+     */
+    uint16_t registryId{REGISTRY_NONE};
 };
 
 static_assert(sizeof(ModeEntryNode) % 4 == 0, "ModeEntryNode must keep CommandNode aligned");
@@ -77,8 +104,21 @@ public:
     /// @brief The submode name, e.g. "ethernet"; empty for a plain mode.
     std::string_view subName() const;
 
+    /// @brief The prompt this mode displays, e.g. "(config-router)#"; empty when unset.
+    std::string_view prompt() const;
+
     /// @brief True when this entry sits under a submode.
     bool hasSubMode() const;
+
+    /// @brief True when this mode names the registry it configures.
+    bool hasRegistry() const;
+
+    /**
+     * @brief Registry id this mode configures; meaningless unless hasRegistry().
+     *
+     * Compare against config::registryIdV<ENUM> to recover the type.
+     */
+    uint16_t registryId() const;
 
     /// @brief Number of commands in this entry's list.
     size_t size() const;

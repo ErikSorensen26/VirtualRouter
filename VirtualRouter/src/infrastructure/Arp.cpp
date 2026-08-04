@@ -46,10 +46,12 @@ void Arp::initiateArp()
     iface.getVRF()->getConfigs().get<config::Vrf::ARP_STATIC_ENTRY>().withRead(
         [&](const auto& entries) {
             interface::InterfaceKey localKey = iface.configs.key;
-            for (const auto& [ip, mac, key] : entries)
+            for (const auto& entry : entries)
             {
+                const auto& key = config::StaticArpEntry::key(entry);
                 if (localKey == key.value_or(localKey))
-                    addStaticArpEntry(ip, mac.value);
+                    addStaticArpEntry(config::StaticArpEntry::address(entry),
+                                      config::StaticArpEntry::mac(entry));
             }
         }
     );

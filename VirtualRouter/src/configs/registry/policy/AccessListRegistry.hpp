@@ -52,7 +52,7 @@ enum class Igmp { HQ, HR, PIM };
  * @brief TCP control flag bits used in extended ACE TCP matching.
  * @ingroup CONFIG_POLICY
  */
-enum class TcpFlag { ACK, FIN, PSH, RST, SYN, URG };
+enum class TcpFlag { ACK, FIN, PSH, RST, SYN, URG, COUNT };
 
 using MatchIcmp = uint8_t;
 

@@ -1,8 +1,11 @@
 // CommandTree.cpp
 
 #include "CommandTree.h"
-#include "FileHeader.hpp"
+#include "nodes/FileHeader.hpp"
+#include "nodes/RegistryEntry.h"
+#include "configs/RegistryTable.hpp"
 #include <Json.hpp>
+#include <filesystem>
 #include <fstream>
 #include <cstdio>
 
@@ -20,7 +23,7 @@ CommandTree::CommandTree(Storage storage)
     bindBase();
 }
 
-CommandTree::CommandTree(const std::string& jsonPath, const std::string& binaryPath)
+CommandTree::CommandTree(const std::string& sourcePath, const std::string& binaryPath)
 {
     try
     {
@@ -33,7 +36,7 @@ CommandTree::CommandTree(const std::string& jsonPath, const std::string& binaryP
         storage = Storage();
     }
 
-    build(jsonPath, binaryPath);
+    build(sourcePath, binaryPath);
     storage = Storage::mapFile(binaryPath);
     bindBase();
 }
@@ -90,10 +93,9 @@ void CommandTree::applyPortCounts(const PortCounts& counts)
     }
 }
 
-void CommandTree::build(const std::string& jsonPath, const std::string& binaryPath)
+void CommandTree::build(const std::string& sourcePath, const std::string& binaryPath)
 {
-    utils::json::JsonNode dom = utils::json::load(jsonPath);
-    std::vector<std::byte> flat = parser::flattenCmds(dom);
+    std::vector<std::byte> flat = parser::flattenDir(sourcePath);
 
     const std::string tmpPath = binaryPath + ".tmp";
     {
@@ -123,20 +125,29 @@ void CommandTree::bindBase()
     if (header->version != FileHeader::CT_VERSION)
         throw std::runtime_error("cli::tree::CommandTree: unsupported version");
 
-    // [FileHeader][ModeEntryNode[]][CommandNode[]][blob]
+    // Registry ids are list positions, so a file written against a different
+    // registry list would decode its ids as the wrong registries entirely.
+    if (header->registryHash != config::REGISTRY_FIELD_HASH)
+        throw std::runtime_error("cli::tree::CommandTree: registry list changed since this file was written");
+
+    // [FileHeader][ModeEntryNode[]][CommandNode[]][RegistryEntry[]][uint32 slots][blob]
     const std::byte* modesPtr = storage.data() + header->headerSize;
     baseModes = std::span<const ModeEntryNode>(
         reinterpret_cast<const ModeEntryNode*>(modesPtr), header->modeCount);
     const std::byte* nodesPtr = modesPtr + header->modeCount * sizeof(ModeEntryNode);
     baseNodes = std::span<const CommandNode>(
         reinterpret_cast<const CommandNode*>(nodesPtr), header->nodeCount);
-    const std::byte* blobPtr = nodesPtr + header->nodeCount * sizeof(CommandNode);
+    const std::byte* regPtr = nodesPtr + header->nodeCount * sizeof(CommandNode);
+    const std::byte* slotPtr = regPtr + header->registryCount * sizeof(RegistryEntry);
+    const std::byte* blobPtr = slotPtr + header->slotCount * sizeof(uint32_t);
     baseBlob = std::span<const char>(
         reinterpret_cast<const char*>(blobPtr), header->blobSize);
 
     size_t total = static_cast<size_t>(header->headerSize)
                  + header->modeCount * sizeof(ModeEntryNode)
                  + header->nodeCount * sizeof(CommandNode)
+                 + header->registryCount * sizeof(RegistryEntry)
+                 + header->slotCount * sizeof(uint32_t)
                  + header->blobSize;
     if (storage.size() < total)
         throw std::runtime_error("cli::tree::CommandTree: buffer shorter than its header describes");

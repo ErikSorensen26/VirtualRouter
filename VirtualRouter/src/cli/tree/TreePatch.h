@@ -35,7 +35,7 @@
 #include <string_view>
 #include <unordered_map>
 
-#include "Command.h"
+#include "nodes/Command.h"
 
 namespace cli::tree
 {
@@ -70,7 +70,9 @@ std::string expandPortPlaceholder(std::string_view pattern, size_t count);
 class TreePatch
 {
 public:
-    /// @brief True when no node has been patched, so readers can skip the lookup.
+    /**
+     * @brief True when no node has been patched, so readers can skip the lookup.
+     */
     bool empty() const { return overrides.empty(); }
 
     /**
@@ -95,7 +97,9 @@ public:
      */
     const CommandNode* find(uint32_t index) const;
 
-    /// @brief Backing text for patched names; indexed by the patched infoOff.
+    /**
+     * @brief Backing text for patched names; indexed by the patched infoOff.
+     */
     std::string_view text() const { return blob; }
 
     /**

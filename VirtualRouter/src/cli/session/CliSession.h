@@ -11,10 +11,12 @@
 #include <cstddef>
 
 #include "cli/terminal/Console.h"
+#include "cli/session/Token.hpp"
 #include "cli/modes/Mode.hpp"
-#include "cli/execution/ExecutionContext.hpp"
-#include "cli/tree/Command.h"
-#include "cli/tree/ModeEntry.h"
+#include "cli/modes/Context.hpp"
+#include "cli/tree/nodes/Command.h"
+#include "cli/tree/nodes/ModeEntry.h"
+#include "cli/execution/Executor.hpp"
 #include "TreeNavigator.hpp"
 
 class Internal_CliTest;
@@ -31,7 +33,6 @@ namespace cli
 class CommandProcessor;
 class CliEngine;
 class Configs;
-struct Token;
 
 
 /**
@@ -47,9 +48,9 @@ struct Token;
  *
  * ## Architectural Role
  * `CliSession` is the boundary between the terminal layer (@ref Console /
- * @ref ConsoleController) and the mode-specific command parsers. It holds no
- * protocol or routing state directly — it delegates execution to
- * @ref ExecutionManager, which routes tokens to the correct mode handler.
+ * @ref ConsoleController) and the config registries. It holds no protocol or
+ * routing state directly — parsing resolves a command to a tree node, and the
+ * field applier bound to that node writes through @ref ContextBase.
  *
  * The shared command tree and global engine state live in @ref CliEngine;
  * `CliSession` only holds per-user view state (current mode, working directory
@@ -106,14 +107,14 @@ public:
     // MODE MANAGEMENT (forwards to the navigation stack; called by command handlers)
 
     /// Enters a sub-mode, pushing the current one so `popMode` can return here.
-    template <CliMode T, typename S>
+    template <typename S>
     requires config::IsSubRegistryWrapper<S>
-    bool changeMode(S& configs) { return nav.changeMode<T, S>(configs); }
+    bool changeMode(CliMode mode, S& configs) { return nav.changeMode(mode, configs); }
 
     /// Jumps to a fixed mode and clears the nav stack (`end`, Ctrl-Z).
-    template <CliMode T, typename S>
+    template <typename S>
     requires config::IsSubRegistryWrapper<S>
-    bool resetAndChangeMode(S& configs) { return nav.resetAndChangeMode<T, S>(configs); }
+    bool resetAndChangeMode(CliMode mode, S& configs) { return nav.resetAndChangeMode(mode, configs); }
 
     /// Returns to the previous mode; false if already at the bottom.
     bool popMode() { return nav.popMode(); }
@@ -150,8 +151,31 @@ private:
 
         // Ok path
         std::vector<Token> tokens;
-        bool negate    = false;
-        bool defaulted = false;
+
+        /**
+         * Index of the first token matched against a pattern node rather than a
+         * command name -- where the command's argument begins. NO_VALUE when the
+         * command is all names, like a bool toggle.
+         *
+         * Indexes @ref tokens, which still carries any leading "no"/"default".
+         * Read it through @ref valueTokens rather than against a sliced span.
+         */
+        size_t valueStart = tree::CommandTree::NPOS;
+
+        /**
+         * @brief The command's argument tokens, empty when it takes none.
+         *
+         * valueStart and tokens are both counted from the raw input, including
+         * any negate/default prefix, so the slice is taken here where the two
+         * agree. Callers working from a span that already dropped the prefix
+         * would otherwise have to subtract it back out.
+         */
+        std::span<Token> valueTokens()
+        {
+            if (valueStart == tree::CommandTree::NPOS || valueStart >= tokens.size())
+                return {};
+            return std::span<Token>(tokens).subspan(valueStart);
+        }
 
         // Help / Tab path
         std::vector<tree::Command> helpList;
@@ -175,11 +199,17 @@ private:
     /// Parse rawInput against the current command tree.
     ParseResult parseInput(std::string& rawInput);
 
-    /// Normalise, parse, and execute one command string.
-    bool executeCommand(std::string& command);
+    /**
+     * Normalise, parse, and execute one command string.
+     * 
+     * @param quiet Suppress the invalid-input marker. Set by the
+     *        @ref tryGlobalCommand retry, which is an internal probe: the line
+     *        is only really invalid once both modes have refused it, so the
+     *        attempt must not report on its own behalf.
+     */
+    bool executeCommand(std::string& command, bool quiet = false);
 
     /// Dispatch a token vector to the active mode parser.
-    bool executeModeParser(const std::span<Token> tokens);
 
     // SPECIAL COMMAND FLOWS
 
@@ -198,13 +228,19 @@ private:
     void displayCommands(std::vector<tree::Command>& list);
     bool handlePagination(char ch = '\0');
 
-    cli::execution::ExecutionManager execution; ///< Owns the active mode object and dispatches token lists.
+    /// Carries the active mode's config pointer, plus the negate/default flags a
+    /// command line sets. Declared before nav, which binds a reference to it.
+    ContextBase context;
 
     // CONFIG-TREE TRACKING
 
     tree::Command prevConfig; ///< Command-tree root before the last tryGlobalCommand detour.
     tree::CommandTree& commandTree; ///< Root node of the engine's full command tree.
-    TreeNavigation nav; 
+    TreeNavigator nav;
+
+    // EXECUTION
+
+    execution::Executor executor;
 
     // PAGINATION
 
