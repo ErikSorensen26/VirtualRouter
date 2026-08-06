@@ -20,8 +20,8 @@ uint16_t AuthHandler::buildAuthTLV(uint8_t* out)
     uint16_t digestLen = 0;
     switch (authType)
     {
-        case config::eigrp::AuthType::MD5: digestLen = MD5_DIGEST_LENGTH; break;
-        case config::eigrp::AuthType::SHA256: digestLen = SHA256_DIGEST_LENGTH; break;
+        case config::eigrp::AuthType::MD5: digestLen = security::authentication::MD5_DIGEST_LENGTH; break;
+        case config::eigrp::AuthType::SHA256: digestLen = security::authentication::SHA256_DIGEST_LENGTH; break;
         default: return 0;
     }
 
@@ -58,7 +58,7 @@ bool AuthHandler::validateAuth(const uint8_t* packetStart, size_t size, const pa
         return false;
 
     uint8_t* digestIdx = const_cast<uint8_t*>(authOpt->value) + 20;
-    uint8_t digest[SHA256_DIGEST_LENGTH] = {0};
+    uint8_t digest[security::authentication::SHA256_DIGEST_LENGTH] = {0};
     std::memcpy(digest, digestIdx, digestLen);
     std::memset(digestIdx, 0, digestLen);
 
@@ -69,13 +69,13 @@ bool AuthHandler::validateAuth(const uint8_t* packetStart, size_t size, const pa
         std::string chainName = configs.get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().load();
         const auto* key = keyMgr.lookup(chainName);
         if (!key) return false;
-        uint8_t computed[MD5_DIGEST_LENGTH];
+        uint8_t computed[security::authentication::MD5_DIGEST_LENGTH];
         uint32_t keyId = utils::readU32(authOpt->value + 4);
         return key->validate(digest, computed, keyId, packetStart, size, security::authentication::HmacType::MD5);
     }
     else if (authType == config::eigrp::AuthType::SHA256 && hasKeychain)
     {
-        uint8_t computed[SHA256_DIGEST_LENGTH];
+        uint8_t computed[security::authentication::SHA256_DIGEST_LENGTH];
         std::string key = configs.get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().load();
         security::authentication::generateHMAC(
             computed,
@@ -85,7 +85,7 @@ bool AuthHandler::validateAuth(const uint8_t* packetStart, size_t size, const pa
             key.size(),
             security::authentication::HmacType::SHA256
         );
-        return std::memcmp(digest, computed, SHA256_DIGEST_LENGTH) == 0;
+        return std::memcmp(digest, computed, security::authentication::SHA256_DIGEST_LENGTH) == 0;
     }
     return false;
 }

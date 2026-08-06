@@ -69,7 +69,7 @@ void Global::reset()
     setHostname(DEFAULT_HOSTNAME);
     setIPv6UnicastRouting(false);
     setAAA(false);
-    addRoutingInstance("default");
+    addRoutingInstance();
 }
       
 // Interfaces
@@ -110,7 +110,7 @@ interface::Interface* Global::addInterface(interface::InterfaceKey key, const ha
     if (interfaceList.find(key) != interfaceList.end())
         return nullptr;
     auto [type, id] = key.decode();
-    interface::InterfaceCreation iface = {type, id, *getRoutingInstance("default"), hwInfo, debug};
+    interface::InterfaceCreation iface = {type, id, *getRoutingInstance(DEFAULT_VRF), hwInfo, debug};
     interfaceList.emplace(key, iface);
     return &interfaceList.at(key);
 }
@@ -181,7 +181,7 @@ VirtualRouter* Global::getRoutingInstance(const std::string& name, types::Addres
 
 bool Global::removeRoutingInstance(const std::string& name)
 {
-    if (name == "default") return false; // Can't delete the default instance
+    if (name == DEFAULT_VRF) return false; // Can't delete the default instance
     std::lock_guard<std::mutex> lock(routingInstanceMutex);
     if (routingInstances.find(name) != routingInstances.end())
     {

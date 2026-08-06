@@ -123,6 +123,38 @@ public:
 
     CliSession& terminal;    ///< Reference to the owning CLI session.
     void* ctx = nullptr; ///< Opaque pointer to the mode-specific config registry (for use in executeThunks).
+
+    /**
+     * @brief Which registry @ref ctx points at, as a `config::registryIdV`.
+     *
+     * The pointer is erased on the way in and recovered by casting it back to
+     * whatever registry a command's configId names. Nothing in that round trip
+     * checks the two agree, so a node bound to the wrong registry -- a grammar
+     * typo, a stale Commands.bin -- reads a field at an offset that means
+     * nothing in the object actually there.
+     *
+     * Kept beside the pointer rather than derived, because a void* is exactly
+     * the thing that cannot say what it points to. `NO_REGISTRY` means untagged:
+     * checks pass, for contexts built before this was threaded through.
+     */
+    uint16_t ctxRegistry = NO_REGISTRY;
+
+    /// @brief An untagged context, which the registry check waves through.
+    static constexpr uint16_t NO_REGISTRY = 0xFFFF;
+
+    /**
+     * @brief Points the context at a registry and records which one it is.
+     *
+     * The two always move together -- a pointer set without its tag is exactly
+     * the untagged state the tag exists to remove -- so they are set together
+     * rather than left to each call site to remember.
+     */
+    void rescope(void* cfg, uint16_t registry) noexcept
+    {
+        ctx = cfg;
+        ctxRegistry = registry;
+    }
+
     bool negate = false;     ///< True when the command was entered with a `no` prefix.
     bool defaulted = false;  ///< True when the command was entered with a `default` prefix.
 };

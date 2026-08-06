@@ -3,6 +3,7 @@
 #include "TreePatch.h"
 
 #include <charconv>
+#include <stdexcept>
 
 namespace cli::tree
 {
@@ -35,20 +36,18 @@ std::string expandPortPlaceholder(std::string_view pattern, size_t count)
 }
 
 
-void TreePatch::patchName(uint32_t index, const CommandNode& base,
-                          std::string_view name, std::string_view desc)
+void TreePatch::patchName(uint32_t index, const CommandNode& base, std::string_view name)
 {
-    // nameSiz is a byte. No CLI token comes close, but truncating keeps a bad
-    // caller from silently wrapping the length to something shorter.
-    if (name.size() > 0xFF) name = name.substr(0, 0xFF);
+    if (strs.size() >= ID_BIAS)
+        throw std::runtime_error("cli::tree::TreePatch: patched string count exceeds the id space");
 
-    const size_t start = blob.size();
+    const uint16_t id = static_cast<uint16_t>(ID_BIAS + strs.size());
+    strs.push_back({static_cast<uint32_t>(blob.size()),
+                    static_cast<uint32_t>(name.size())});
     blob.append(name);
-    blob.append(desc);
 
     CommandNode patched = base;
-    patched.infoOff = OFFSET_BIAS + static_cast<uint32_t>(start);
-    patched.nameSiz = static_cast<uint8_t>(name.size());
+    patched.nameId = id;
     overrides[index] = patched;
 }
 
@@ -56,5 +55,16 @@ const CommandNode* TreePatch::find(uint32_t index) const
 {
     auto it = overrides.find(index);
     return it == overrides.end() ? nullptr : &it->second;
+}
+
+std::string_view TreePatch::text(uint16_t id) const
+{
+    if (id < ID_BIAS) return {};
+
+    const size_t slot = static_cast<size_t>(id) - ID_BIAS;
+    if (slot >= strs.size()) return {};
+
+    const StrRef& r = strs[slot];
+    return std::string_view(blob.data() + r.off, r.len);
 }
 }

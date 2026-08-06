@@ -153,7 +153,7 @@ bool parseIPv4Prefix(std::string_view s, uint32_t& addr, uint8_t& len)
     std::string_view ip = s.substr(0, slash);
     std::string_view plenStr = s.substr(slash + 1);
 
-    if (parseIPv4(ip, addr)) return false;
+    if (!parseIPv4(ip, addr)) return false;
 
     if (plenStr.empty()) return false;
     uint32_t plen = 0;
@@ -221,6 +221,15 @@ bool extractSubnetMask(uint32_t mask, uint8_t& plen)
     return true;
 }
 
+bool extractMaskLength(std::string_view mask, uint8_t& plen)
+{
+    uint32_t bits = 0;
+    if (!parseIPv4(mask, bits)) return false;
+
+    if (extractSubnetMask(bits, plen)) return true;
+    return extractSubnetMask(~bits, plen);
+}
+
 bool extractIPAddress(std::string_view str, types::IPAddress& addr)
 {
     uint32_t v4 = 0;
@@ -283,39 +292,44 @@ bool extractIPv4Prefix(std::string_view addr, std::string_view mask, types::IPv4
     return true;
 }
 
-bool extractMacAddress(std::string_view str, types::Mac mac)
+bool extractMacAddress(std::string_view str, types::Mac& mac)
 {
-    types::NetworkSpan<uint64_t>& buf = *reinterpret_cast<types::NetworkSpan<uint64_t>*>(mac.mac);
     std::string hex;
 
     if (str.find('.') != std::string::npos)
     {
         if (str.length() != 14 || str[4] != '.' || str[9] != '.')
-            return 0;
+            return false;
         hex = std::string(str.substr(0, 4)) + std::string(str.substr(5, 4)) + std::string(str.substr(10, 4));
     }
     else
     {
         if (str.length() != 17)
-            return 0;
+            return false;
         for (size_t i = 0; i < str.length(); i += 3)
         {
             if (i + 1 >= str.length())
-                return 0;
+                return false;
             hex += str[i];
             hex += str[i + 1];
         }
     }
 
-    for (size_t i = 0; i < 6; ++i)
+    if (hex.length() != 12) return false;
+
+    uint64_t packed = 0;
+    for (char c : hex)
     {
-        int byte;
-        std::istringstream iss(hex.substr(i * 2, 2));
-        iss >> std::hex >> byte;
-        if (iss.fail())
-            return false;
-        buf[i] = static_cast<uint8_t>(byte);
+        uint8_t nibble;
+        if (c >= '0' && c <= '9')      nibble = static_cast<uint8_t>(c - '0');
+        else if (c >= 'a' && c <= 'f') nibble = static_cast<uint8_t>(c - 'a' + 10);
+        else if (c >= 'A' && c <= 'F') nibble = static_cast<uint8_t>(c - 'A' + 10);
+        else return false;
+
+        packed = (packed << 4) | nibble;
     }
+
+    mac.mac = packed;
     return true;
 }
 
@@ -346,7 +360,13 @@ bool isIPv4Address(std::string_view address)
     static const std::regex pattern(R"(^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$)");
     return std::regex_match(address.begin(), address.end(), pattern);}
 
-bool isIPv6Address(std::string_view address) 
+bool isIPv4AddressWithMask(std::string_view addressWithMask)
+{
+    types::IPv4Prefix prefix;
+    return parseIPv4Prefix(addressWithMask, prefix.addr, prefix.prefixLength);
+}
+
+bool isIPv6Address(std::string_view address)
 {
     static std::regex ipRegex("((([0-9A-Fa-f]{1,4}):){7}([0-9A-Fa-f]{1,4})|(([0-9A-Fa-f]{1,4}):){1,7}:|(([0-9A-Fa-f]{1,4}):){1,6}:([0-9A-Fa-f]{1,4})|(([0-9A-Fa-f]{1,4}):){1,5}((:[0-9A-Fa-f]{1,4}){1,2})|(([0-9A-Fa-f]{1,4}):){1,4}((:[0-9A-Fa-f]{1,4}){1,3})|(([0-9A-Fa-f]{1,4}):){1,3}((:[0-9A-Fa-f]{1,4}){1,4})|(([0-9A-Fa-f]{1,4}):){1,2}((:[0-9A-Fa-f]{1,4}){1,5})|([0-9A-Fa-f]{1,4}):((:[0-9A-Fa-f]{1,4}){1,6})|:((:[0-9A-Fa-f]{1,4}){1,7}|:)|fe80:(:[0-9A-Fa-f]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9A-Fa-f]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))");
     return std::regex_match(address.begin(), address.end(), ipRegex);

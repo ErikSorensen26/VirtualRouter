@@ -108,7 +108,7 @@ void VrfRouterEigrpV4(void*);
 void VrfRouterEigrpV6(void*);
 
 #define VRF_FIELD_LIST(X, Y) \
-    LIST_FIELD(X, Y, ARP_STATIC_ENTRY, StaticArpEntry::Tuple) \
+    LIST_FIELD(X, Y, ARP_STATIC_ENTRY, StaticArpEntry) \
     OPTIONAL_REGISTRY_CONTAINER(X, Y,       ROUTER_BGP, BgpRegistry) TODO \
     OWNED_LIST_FIELD_CB(X, Y,               ROUTER_EIGRP_V4, EigrpRegistry, uint16_t, VrfRouterEigrpV4) \
     OWNED_LIST_FIELD_CB(X, Y,               ROUTER_EIGRP_V6, EigrpRegistry, uint16_t, VrfRouterEigrpV6) \
@@ -122,34 +122,33 @@ void VrfRouterEigrpV6(void*);
     VALUE_FIELD(X, Y,                       IP_IGMP_LIMIT, uint16_t) TODO \
     ATOMIC_FIELD(X, Y,                      IP_IGMP_SSM_MAP, bool, false) TODO \
     ATOMIC_FIELD(X, Y,                      IP_IGMP_SSM_MAP_QUERY_DNS, bool, false) TODO \
-    VALUE_FIELD(X, Y,                       IP_IGMP_SSM_MAP_STATIC, IPIgmpSsmMapStatic::Tuple) TODO \
-    LIST_FIELD(X, Y,                        IP_MROUTE, IPMRoute::Tuple) TODO \
+    VALUE_FIELD(X, Y,                       IP_IGMP_SSM_MAP_STATIC, IPIgmpSsmMapStatic) TODO \
+    LIST_FIELD(X, Y,                        IP_MROUTE, IPMRoute) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y,             IP_MSDP, Incomplete) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y,             IP_MULTICAST, Incomplete) TODO \
     ATOMIC_FIELD(X, Y,                      IP_MULTICAST_ROUTING, bool, false) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y,             IP_NAME_SERVER, types::IPAddress) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y,             IP_PIM, Incomplete) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y,             IP_RADIUS_SOURCE_INTERFACE, interface::InterfaceKey) TODO \
-    LIST_FIELD(X, Y,                        IP_ROUTE, IPRoute::Tuple) TODO \
+    LIST_FIELD(X, Y,                        IP_ROUTE, IPRoute) TODO \
     ATOMIC_FIELD(X, Y,                      IP_ROUTE_PROFILE, bool, false) TODO \
     ATOMIC_FIELD(X, Y,                      IP_ROUTE_STATIC_ADJUST_TIME, uint8_t, 60) TODO \
-    LIST_FIELD(X, Y,                        IP_ROUTE_STATIC_BFD, IPRouteStaticBfd::Tuple) TODO \
+    LIST_FIELD(X, Y,                        IP_ROUTE_STATIC_BFD, IPRouteStaticBfd) TODO \
     ATOMIC_FIELD(X, Y,                      IP_ROUTE_STATIC_INTER_VRF, bool, true) TODO \
     ATOMIC_FIELD(X, Y,                      IPV6_MLD_SSM_MAP, bool, false) TODO \
     ATOMIC_FIELD(X, Y,                      IPV6_MLD_SSM_MAP_QUERY_DNS, bool, false) TODO \
-    LIST_FIELD(X, Y,                        IPV6_MLD_SSM_MAP_STATIC, IPv6MldSsmMapStatic::Tuple) TODO \
+    LIST_FIELD(X, Y,                        IPV6_MLD_SSM_MAP_STATIC, IPv6MldSsmMapStatic) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y,             IPV6_MLD_STATE_LIMIT, uint16_t) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y,             IPV6_MULTICAST, Incomplete) TODO \
     ATOMIC_FIELD(X, Y,                      IPV6_MULTICAST_ROUTING, bool, false) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y,             IPV6_PIM, Incomplete) TODO \
-    LIST_FIELD(X, Y,                        IPV6_ROUTE, IPv6Route::Tuple) TODO \
-    LIST_FIELD(X, Y,                        IPV6_ROUTE_STATIC_BFD, IPv6RouteStaticBfd::Tuple) TODO \
+    LIST_FIELD(X, Y,                        IPV6_ROUTE, IPv6Route) TODO \
+    LIST_FIELD(X, Y,                        IPV6_ROUTE_STATIC_BFD, IPv6RouteStaticBfd) TODO \
     ATOMIC_FIELD(X, Y,                      IPV6_ROUTE_STATIC_RESOLVE, bool, false) TODO \
     OWNED_LIST_FIELD(X, Y,                  IPV6_ROUTER_OSPF, OspfRegistry, uint16_t) TODO
 
 DEFINE_CONFIG_GROUP(Vrf, VRF_FIELD_LIST)
 
-TUPLE_SCHEMA_FOR(Vrf, Vrf::ARP_STATIC_ENTRY, StaticArpEntry);
 }
 
 #endif // VRF_REGISTRY_HPP

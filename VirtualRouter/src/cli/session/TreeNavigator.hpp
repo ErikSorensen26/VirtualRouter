@@ -35,6 +35,7 @@
 #include <cstddef>
 #include "cli/modes/Context.hpp"
 #include "cli/tree/CommandTree.h"
+#include "configs/RegistryTable.hpp"
 #include "configs/SubRegistry.hpp"
 
 namespace cli
@@ -49,12 +50,16 @@ namespace cli
  */
 struct NavFrame
 {
-    NavFrame(CliMode md, void* cfg, const tree::ModeEntry& dir)
-        : mode(md), configPtr(cfg), modeDir(dir)
+    NavFrame(CliMode md, void* cfg, uint16_t reg, const tree::ModeEntry& dir)
+        : mode(md), configPtr(cfg), configRegistry(reg), modeDir(dir)
     {}
 
     CliMode mode = CliMode::None;  ///< Which mode this frame represents.
     void* configPtr = nullptr;     ///< Registry instance this mode's commands write to.
+
+    /// Which registry configPtr is, so restoring it restores its tag too.
+    uint16_t configRegistry = ContextBase::NO_REGISTRY;
+
     const tree::ModeEntry modeDir; ///< Command-tree node for this mode.
 };
 
@@ -64,6 +69,25 @@ public:
     TreeNavigator(tree::CommandTree& tr, ContextBase& ctx)
         : tree(tr), context(ctx)
     {}
+
+    /**
+     * @brief The registry id for a registry type, or NO_REGISTRY if it has none.
+     *
+     * A few registry wrappers are not in REGISTRY_ID_LIST -- a templated one has
+     * no single entry to hold -- and those stay untagged rather than failing to
+     * compile, which is the same allowance @ref cli::execution::utils::visitOne
+     * makes for them on the other side.
+     */
+    template <typename S>
+    static constexpr uint16_t registryIdOf()
+    {
+        if constexpr (requires { typename S::type; })
+        {
+            if constexpr (config::isRegisteredV<typename S::type>)
+                return config::registryIdV<typename S::type>;
+        }
+        return ContextBase::NO_REGISTRY;
+    }
 
     ~TreeNavigator()
     {
@@ -81,7 +105,29 @@ public:
      * @tparam T  Target @ref CliMode enum value.
      * @tparam S  Registry type for the new mode.
      */
-    bool changeMode(CliMode mode, void* configs)
+    bool changeMode(CliMode mode, void* configs,
+                    uint16_t registry = ContextBase::NO_REGISTRY)
+    {
+        return changeMode(mode, configs, registry, context.ctx, context.ctxRegistry);
+    }
+
+    /**
+     * @brief Enters a mode, returning somewhere other than where ctx.ctx points.
+     *
+     * The two pointers are the same for a plain mode change and differ only when
+     * the line rescoped before entering: `router eigrp 1` resolves its binding
+     * inside the VRF that `eigrp` selected, but `exit` has to land back on the
+     * global config the line started from. Pushing ctx.ctx there would leave the
+     * frame holding a VRF pointer under a mode that reads it as a Global.
+     *
+     * @param mode     Mode to enter.
+     * @param configs  Registry the new mode's commands write to.
+     * @param registry Which registry @p configs is, as a `config::registryIdV`.
+     * @param retTo    Registry to restore on `exit`, in ctx.ctx's place.
+     * @param retReg   Which registry @p retTo is.
+     */
+    bool changeMode(CliMode mode, void* configs, uint16_t registry,
+                    void* retTo, uint16_t retReg)
     {
         if (hasMode() && activeMode == mode)
         {
@@ -93,9 +139,9 @@ public:
             return false;
 
         if (hasMode())
-            pushNavFrame(activeMode, context.ctx, currentMode);
+            pushNavFrame(activeMode, retTo, retReg, currentMode);
         currentMode = tree.getMode(mode);
-        bindMode(mode, configs);
+        bindMode(mode, configs, registry);
         return true;
     }
 
@@ -110,7 +156,7 @@ public:
     requires config::IsSubRegistryWrapper<S>
     bool changeMode(CliMode mode, S& configs)
     {
-        return changeMode(mode, static_cast<void*>(&configs));
+        return changeMode(mode, static_cast<void*>(&configs), registryIdOf<S>());
     }
 
     /**
@@ -128,10 +174,11 @@ public:
      * @tparam S  Registry type for the new mode.
      * @return True if the mode was entered.
      */
-    bool saveAndChangeMode(CliMode mode, void* configs)
+    bool saveAndChangeMode(CliMode mode, void* configs,
+                           uint16_t registry = ContextBase::NO_REGISTRY)
     {
         size_t nav = navTop;
-        bool chMode = changeMode(mode, configs);
+        bool chMode = changeMode(mode, configs, registry);
         if (chMode)
             savedNavTop = nav;
         return chMode;
@@ -142,7 +189,7 @@ public:
     requires config::IsSubRegistryWrapper<S>
     bool saveAndChangeMode(CliMode mode, S& configs)
     {
-        return saveAndChangeMode(mode, static_cast<void*>(&configs));
+        return saveAndChangeMode(mode, static_cast<void*>(&configs), registryIdOf<S>());
     }
 
     /**
@@ -155,11 +202,12 @@ public:
      * @tparam T  Target @ref CliMode enum value.
      * @tparam S  Registry type for the new mode.
      */
-    bool resetAndChangeMode(CliMode mode, void* configs)
+    bool resetAndChangeMode(CliMode mode, void* configs,
+                            uint16_t registry = ContextBase::NO_REGISTRY)
     {
         unwindNavTo(0);
         currentMode = tree.getMode(mode);
-        bindMode(mode, configs);
+        bindMode(mode, configs, registry);
         return true;
     }
 
@@ -168,7 +216,7 @@ public:
     requires config::IsSubRegistryWrapper<S>
     bool resetAndChangeMode(CliMode mode, S& configs)
     {
-        return resetAndChangeMode(mode, static_cast<void*>(&configs));
+        return resetAndChangeMode(mode, static_cast<void*>(&configs), registryIdOf<S>());
     }
 
     /**
@@ -184,7 +232,7 @@ public:
         if (navTop == 0) return false;
 
         NavFrame& frame = frameAt(navTop - 1);
-        bindMode(frame.mode, frame.configPtr);
+        bindMode(frame.mode, frame.configPtr, frame.configRegistry);
         currentMode = frame.modeDir;
         popNavFrame();
         return true;
@@ -246,9 +294,9 @@ private:
      * A tree::Command has no empty state, so slots stay raw storage until a mode
      * entry gives them a real one.
      */
-    void pushNavFrame(CliMode md, void* cfg, const tree::ModeEntry& dir)
+    void pushNavFrame(CliMode md, void* cfg, uint16_t reg, const tree::ModeEntry& dir)
     {
-        new (&navStack[navTop++]) NavFrame(md, cfg, dir);
+        new (&navStack[navTop++]) NavFrame(md, cfg, reg, dir);
     }
 
     /**
@@ -258,10 +306,10 @@ private:
      * a mode plus a config pointer, so popMode and changeMode share this rather
      * than reconstructing anything.
      */
-    void bindMode(CliMode md, void* cfg)
+    void bindMode(CliMode md, void* cfg, uint16_t reg)
     {
         activeMode = md;
-        context.ctx = cfg;
+        context.rescope(cfg, reg);
     }
 
     /// Destroys the top frame.

@@ -513,7 +513,6 @@
             ]
         },
         {
-            "support":true,
             "description": "Exit from interface configuration mode",
             "name": "exit",
             "subcommands": [

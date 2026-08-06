@@ -108,6 +108,22 @@ struct Token
     bool modeChange() const { return node.valid() && node.node().hasModeChange(); }
     bool tupChange()  const { return node.valid() && node.node().hasTuple(); }
     bool enumChange() const { return node.valid() && node.node().hasEnumChange(); }
+    bool deferred()   const { return node.valid() && node.node().hasDeferred(); }
+    bool resolver()   const { return node.valid() && node.node().hasResolver(); }
+
+    /// @brief An enum member that sets one bit of a bitmap field, not a value.
+    bool bitMapFlag() const { return enumChange() && node.node().hasEnumBitMap(); }
+
+    /** @brief The REGISTRY_CHANGE flag, without requiring a bound field.
+     *
+     * Grouped like modeFlagged() and for the same reason: a rescope takes a
+     * key -- `ip dhcp pool LAN` -- and the key token carries no config of its
+     * own, so the group must claim it before any binding is resolved.
+     */
+    bool registryFlagged() const
+    {
+        return node.valid() && node.node().has(tree::CommandNode::REGISTRY_CHANGE);
+    }
 
     /** @brief The MODE_CHANGE flag alone, without requiring a bound field.
      * 

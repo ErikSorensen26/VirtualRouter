@@ -37,45 +37,6 @@ namespace cli::execution
 {
 
 /**
- * @brief One member of one tuple field, waiting to be written.
- *
- * The field is identified by its packed configId rather than by a resolved
- * accessor, because the accessor's type is only recoverable inside a
- * visitBound callback and cannot be carried out of one.
- */
-struct TupleMember
-{
-    uint16_t configId;   ///< Which field this member belongs to.
-    uint8_t  member;     ///< std::get index within that field's tuple.
-    Token*   value;      ///< The token to translate; null for a bare flag.
-};
-
-/**
- * @brief Records the members a run names, without writing any of them.
- *
- * The binding rides the deepest node the parse reached, so within one run the
- * last bound token names the member and any token after it is its value.
- */
-inline void stageTupleMembers(std::span<Token> toks, std::vector<TupleMember>& out)
-{
-    for (size_t i = 0; i < toks.size(); ++i)
-    {
-        if (!toks[i].tupChange()) continue;
-
-        const tree::CommandNode& bound = toks[i].node.node();
-
-        // A member's value is the next token along, when there is one that
-        // is not itself a binding. A bool member has none: naming it is the
-        // whole command, as in `range ... advertise`.
-        Token* value = nullptr;
-        if (i + 1 < toks.size() && !toks[i + 1].tupChange())
-            value = &toks[i + 1];
-
-        out.push_back({bound.configId, bound.configExt, value});
-    }
-}
-
-/**
  * @brief Writes one member into a staging tuple, by runtime index.
  *
  * std::get needs the index at compile time, so the runtime one is matched
@@ -83,16 +44,30 @@ inline void stageTupleMembers(std::span<Token> toks, std::vector<TupleMember>& o
  * does the write.
  */
 template <typename Node>
-bool writeTupleMember(cli::ContextBase& ctx, Node& staging, TupleMember& m)
+bool writeTupleMember(cli::ContextBase& ctx, Node& staging, Token* value, Token* extra)
 {
+    const tree::CommandNode& bound = value->node.node();
+
     return [&]<std::size_t... Is>(std::index_sequence<Is...>)
     {
         bool done = false;
         ([&]{
-            if (m.member != Is) return;
+            if (bound.tupleMember() != Is) return;
 
             auto& elem = std::get<Is>(staging);
             using Elem = std::remove_cvref_t<decltype(elem)>;
+
+            // An enum member is set by being named: the value rides the node
+            // rather than the word, so no token is read for it.
+            if (bound.hasTupleEnum())
+            {
+                if constexpr (std::is_enum_v<Elem>)
+                {
+                    elem = static_cast<Elem>(bound.tupleEnumIndex());
+                    done = true;
+                }
+                return;
+            }
 
             // A bool member is set by being named, so it takes no token and
             // must not be failed for arriving without one.
@@ -104,26 +79,78 @@ bool writeTupleMember(cli::ContextBase& ctx, Node& staging, TupleMember& m)
             else if constexpr (utils::isOptional<Elem>::value)
             {
                 typename Elem::value_type v{};
-                if (utils::setTupleElement(v, m.value))
+                if constexpr (utils::DoubleValued<typename Elem::value_type>)
+                {
+                    if (utils::setDoubleTupleElement(v, value, extra))
+                    {
+                        elem = v;
+                        done = true;
+                    }
+                }
+                else if (utils::setTupleElement(v, value))
                 {
                     elem = v;
                     done = true;
                 }
             }
+            else if constexpr (utils::DoubleValued<Elem>)
+            {
+                done = utils::setDoubleTupleElement(elem, value, extra);
+            }
             else
             {
-                done = utils::setTupleElement(elem, m.value);
+                done = utils::setTupleElement(elem, value);
             }
         }(), ...);
         return done;
     }(std::make_index_sequence<std::tuple_size_v<Node>>{});
 }
 
-/// @brief Fills one tuple from the members staged for a single field and inserts it.
-inline bool commitOneTuple(cli::ContextBase& ctx, std::span<TupleMember> members)
+/**
+ * @brief Builds one tuple from a field's staged members.
+ *
+ * Members the line did not name keep the tuple's default. A member that was
+ * named but could not be translated fails the whole tuple, because a partly
+ * filled entry is worse than none: it would differ from the intended one in a
+ * way nothing downstream can detect.
+ */
+template <typename Node>
+bool fillTuple(cli::ContextBase& ctx, Node& staging, std::span<Token*> members)
+{
+    bool filled = true;
+
+    for (size_t i = 0; i < members.size(); )
+    {
+        // A member spelled with two words binds twice on the same slot, and the
+        // second token is the rest of the value rather than another member.
+        Token* extra = nullptr;
+        if (i + 1 < members.size() &&
+            members[i + 1]->node.node().tupleMember() == members[i]->node.node().tupleMember())
+        {
+            extra = members[i + 1];
+        }
+
+        if (!writeTupleMember(ctx, staging, members[i], extra))
+            filled = false;
+
+        i += extra ? 2 : 1;
+    }
+
+    return filled;
+}
+
+/**
+ * @brief Fills one tuple from the members staged for a single field and writes it.
+ *
+ * Both tuple-carrying field kinds land here. They differ only in where the
+ * tuple type comes from and how a finished tuple is stored -- a list field
+ * inserts one entry among many, a value field holds exactly one -- so the
+ * staging and filling above is shared and only the write is chosen per kind.
+ */
+inline bool commitOneTuple(cli::ContextBase& ctx, std::span<Token*> members)
 {
     // Every member in the span shares a field, so any of them identifies it.
-    const tree::CommandNode probe{ .configId = members[0].configId };
+    const tree::CommandNode probe{ .configId = members[0]->node.node().configId };
 
     bool ok = false;
     utils::visitBound(ctx, probe, [&](auto&& accessor)
@@ -136,19 +163,26 @@ inline bool commitOneTuple(cli::ContextBase& ctx, std::span<TupleMember> members
 
             if constexpr (config::IsListField<Field>)
             {
-                using Node = typename Field::node;
+                using Node = typename Field::element;
 
                 if constexpr (utils::IsTuple<Node>::value)
                 {
                     Node staging{};
-                    bool filled = true;
+                    if (fillTuple(ctx, staging, members))
+                        ok = utils::setListEntry(accessor, ctx, staging,
+                                                 members[0]->node.nodeIndex());
+                }
+            }
+            else if constexpr (config::IsValueField<Field>)
+            {
+                using Node = typename Field::type;
 
-                    for (TupleMember& m : members)
-                        if (!writeTupleMember(ctx, staging, m))
-                            filled = false;
-
-                    if (filled)
-                        ok = utils::setListEntry(accessor, ctx, staging);
+                if constexpr (utils::IsTuple<Node>::value)
+                {
+                    Node staging = accessor.hasValue() ? accessor.load() : Node{};
+                    if (fillTuple(ctx, staging, members))
+                        ok = utils::setValueEntry(accessor, ctx, staging,
+                                                  members[0]->node.nodeIndex());
                 }
             }
         }
@@ -165,27 +199,26 @@ inline bool commitOneTuple(cli::ContextBase& ctx, std::span<TupleMember> members
  * which is what makes `range A.B.C.D` and `range A.B.C.D cost 100` differ
  * only in the cost rather than in how many entries they leave behind.
  */
-inline bool commitTuples(cli::ContextBase& ctx, std::vector<TupleMember>& staged)
+inline bool commitTuples(cli::ContextBase& ctx, std::vector<Token*>& staged)
 {
     if (staged.empty()) return true;
 
-    // Grouped by field rather than by adjacency: a line may name members of
-    // two tuple fields in any order, and committing a field twice would
-    // insert two half-filled entries instead of one whole one.
+    // Grouped by field so each one commits once, and stable so a member spelled
+    // with two words keeps the order its tokens arrived in.
     std::stable_sort(staged.begin(), staged.end(),
-        [](const TupleMember& a, const TupleMember& b)
-        { return a.configId < b.configId; });
+        [](const Token* a, const Token* b)
+        { return a->node.node().configId < b->node.node().configId; });
 
     bool ok = true;
 
     for (size_t i = 0; i < staged.size(); )
     {
-        const uint16_t field = staged[i].configId;
+        const uint32_t field = staged[i]->node.node().configId;
 
         size_t end = i;
-        while (end < staged.size() && staged[end].configId == field) ++end;
+        while (end < staged.size() && staged[end]->node.node().configId == field) ++end;
 
-        if (!commitOneTuple(ctx, std::span<TupleMember>(staged).subspan(i, end - i)))
+        if (!commitOneTuple(ctx, std::span<Token*>(staged).subspan(i, end - i)))
             ok = false;
 
         i = end;

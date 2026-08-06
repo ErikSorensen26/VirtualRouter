@@ -31,17 +31,13 @@ bool Command::hasCarriageReturn() const
 std::string_view Command::name() const
 {
     if (!tree) return CARRIAGE_RETURN;
-    const CommandNode& n = resolveNode();
-    if (n.nameSiz == 0) return {};
-    return tree->blobText(n.infoOff, n.nameSiz);
+    return tree->strText(resolveNode().nameId);
 }
 
 std::string_view Command::desc() const
 {
     if (!tree) return {};
-    const CommandNode& n = resolveNode();
-    if (n.descSiz == 0) return {};
-    return tree->blobText(n.infoOff + n.nameSiz, n.descSiz);
+    return tree->strText(resolveNode().descId);
 }
 
 size_t Command::size() const

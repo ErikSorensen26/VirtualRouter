@@ -12,7 +12,7 @@ namespace core
 {
 
 VirtualRouter::VirtualRouter(Global& g, const std::string& name)
-    : defaulted(name == "default"),
+    : defaulted(name == DEFAULT_VRF),
       configs([&g, &name]() -> config::VrfRegistry& {
           auto vrfs = g.getConfigs().get<config::Global::VRF_CONFIGS>();
           return vrfs.emplaceBack(name);

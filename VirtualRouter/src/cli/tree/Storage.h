@@ -22,7 +22,10 @@ class Storage
 {
 public:
     Storage() = default;
+
+    /// @brief Takes ownership of an in-memory tree, as the flattener produces.
     explicit Storage(std::vector<std::byte> v);
+
     ~Storage();
 
     Storage(Storage&& o) noexcept;
@@ -30,14 +33,26 @@ public:
     Storage(const Storage&) = delete;
     Storage& operator=(const Storage&) = delete;
 
+    /**
+     * @brief Maps a cache file read-only.
+     *
+     * @throws std::runtime_error when the file cannot be opened, stat'd, or
+     *         mapped, and when it is empty -- a zero-length mapping is not a
+     *         valid tree and would fail later at a less obvious place.
+     */
     static Storage mapFile(const std::string& path);
 
+    /// @brief First byte of the tree, whichever way it is held; null when empty.
     const std::byte* data() const;
 
+    /// @brief Size of the held buffer in bytes.
     size_t size() const { return mapped ? mappedSize : heap.size(); }
+
+    /// @brief True when backed by a file mapping rather than the heap.
     bool isMapped() const { return mapped != nullptr; }
 
 private:
+    /// @brief Releases the mapping if there is one; safe to call repeatedly.
     void unmap();
 
     std::vector<std::byte> heap;

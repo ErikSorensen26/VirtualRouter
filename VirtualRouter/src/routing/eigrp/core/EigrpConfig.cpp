@@ -115,7 +115,7 @@ void EigrpConfig::enableStub(bool isStub, bool advertiseConnected, bool advertis
     if (advertiseStatic)        bm.set(config::eigrp::Stub::STATIC);
     if (advertiseSummary)       bm.set(config::eigrp::Stub::SUMMARY);
     if (advertiseRedistributed) bm.set(config::eigrp::Stub::REDISTRIBUTED);
-    configs.get<config::Eigrp::STUB>().set(bm.raw());
+    configs.get<config::Eigrp::STUB>().set(bm);
 }
 
 void EigrpConfig::setPassiveInterface(interface::InterfaceKey key, bool add)
@@ -192,7 +192,7 @@ StubConfig EigrpConfig::getStubConfig() const
     auto stubField = configs.get<config::Eigrp::STUB>();
     s.isStub = stubField.hasValue();
     if (s.isStub) {
-        types::EnumBitMap<config::eigrp::Stub> bm(stubField.load());
+        types::EnumBitMap<config::eigrp::Stub> bm = stubField.load();
         s.advertiseConnected     = bm.test(config::eigrp::Stub::CONNECTED);
         s.advertiseStatic        = bm.test(config::eigrp::Stub::STATIC);
         s.advertiseSummary       = bm.test(config::eigrp::Stub::SUMMARY);

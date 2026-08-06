@@ -16,7 +16,7 @@ CliEngine::CliEngine(core::Global& global, const StartupFiles& stfs, FileSystem&
     commandTree.applyPortCounts(tree::CommandTree::readPortCounts(stfs.hwConfigFile));
 
     // Set debug mode based on the input parameter
-    global.addRoutingInstance("default");
+    global.addRoutingInstance(DEFAULT_VRF);
     if (!test) {
         initConfigs(stfs);
         recoverState(); //TODO
@@ -60,7 +60,7 @@ void CliEngine::recoverState()
 	CliSession recoverSession(*this);
 
     // Set initial mode for command recovery
-    recoverSession.changeModeConfig(new cli::GlobalContext(*recoverSession.modeConfig.modeConfig, global, *global.getRoutingInstance("default")));
+    recoverSession.changeModeConfig(new cli::GlobalContext(*recoverSession.modeConfig.modeConfig, global, *global.getRoutingInstance(DEFAULT_VRF)));
     recoverSession.changeMode(CliMode::GlobalConfiguration, true);
 
     // Execute each saved command to restore the terminal's state

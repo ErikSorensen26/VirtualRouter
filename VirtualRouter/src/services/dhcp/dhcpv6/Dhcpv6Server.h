@@ -12,6 +12,7 @@
 #include "IPv6LeaseManager.h"
 #include "Dhcpv6AuthManager.h"
 #include "processing/PacketBuilder.hpp"
+#include "Global.h"
 
 #include <atomic>
 #include <unordered_map>
@@ -148,7 +149,7 @@ struct DhcpNetworkConfig
     std::atomic<bool> importSNTPAddress = false;
 
     std::atomic<uint32_t> vendorEnterpriseId;
-    std::string vrf = "default";
+    std::string vrf = DEFAULT_VRF;
 
     std::atomic<uint32_t> preferredLifetime = 86400;
     std::atomic<uint32_t> validLifetime = 172800;

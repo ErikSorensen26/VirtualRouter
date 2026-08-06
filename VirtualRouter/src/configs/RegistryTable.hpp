@@ -21,6 +21,8 @@
 #include <type_traits>
 #include <utility>
 
+#include <EnumBitMap.hpp>
+
 #include "configs/EnumSchema.hpp"
 #include "configs/RegistryTraits.hpp"
 #include "configs/TupleSchema.hpp"
@@ -234,56 +236,144 @@ constexpr uint16_t findFieldIn(RegistryIdList<Ts...>, uint16_t registry, uint32_
 {
     uint16_t i = 0;
     uint16_t found = NOT_FOUND;
-    // A lambda, not a conditional: a conditional expression is not a valid
-    // fold operand, and wrapping it in parentheses does not change that.
     ([&]{ if (i++ == registry) found = findField<typename Ts::type>(nameHash); }(), ...);
     return found;
 }
 
 /**
- * @brief Tuple member index for a field known only at runtime, or TUPLE_NOT_FOUND.
+ * True when a registry has a generated field tuple to index into.
  *
- * findTupleMember needs the field as a template argument, but the flattener has
- * an index parsed from the grammar. This turns the one into the other: expand
- * over the registry's field values, keep the branch whose value matches, and ask
- * that field's schema. Fields with no schema answer TUPLE_NOT_FOUND, which is
- * what a grammar naming a member of a non-tuple field should get.
+ * DEFINE_CONFIG_GROUP emits the RegistryOf specialization; registries still
+ * written by hand have none, so their field types cannot be recovered from an
+ * index. Same story as hasHashesV.
  */
-template <typename ENUM, std::size_t... Is>
-constexpr uint16_t findTupleMemberInField(uint16_t field, uint32_t nameHash,
-                                          std::index_sequence<Is...>)
-{
-    uint16_t found = TUPLE_NOT_FOUND;
-    ([&]{
-        if (field == Is)
-            found = findTupleMember<ENUM, static_cast<ENUM>(Is)>(nameHash);
-    }(), ...);
-    return found;
-}
+template <typename ENUM, typename = void>
+inline constexpr bool hasFieldsV = false;
 
 template <typename ENUM>
-constexpr uint16_t findTupleMemberIn(uint16_t field, uint32_t nameHash)
+inline constexpr bool hasFieldsV<ENUM, std::void_t<typename RegistryOf<ENUM>::type>> = true;
+
+/**
+ * @brief Calls f.template operator()<FieldT>() for a field named at runtime.
+ *
+ * Every lookup below starts the same way: the grammar supplies a registry id and
+ * a field index, and the answer needs the field's type. Recovering it means two
+ * expansions -- one over the registry list, one over that registry's fields --
+ * which is the bulk of what each lookup would otherwise repeat. It is written
+ * once here so each of them is only the question it actually asks.
+ */
+template <typename ENUM, typename F, std::size_t... Is>
+constexpr void visitFieldIn(uint16_t field, F&& f, std::index_sequence<Is...>)
 {
-    return findTupleMemberInField<ENUM>(
-        field, nameHash, std::make_index_sequence<registrySlotsV<ENUM>>{});
+    if constexpr (hasFieldsV<ENUM>)
+        ([&]{
+            if (field == Is)
+                f.template operator()<typename RegistryOfT<ENUM>::template FieldTypeAt<static_cast<ENUM>(Is)>>();
+        }(), ...);
+}
+
+template <typename... Ts, typename F>
+constexpr void visitField(RegistryIdList<Ts...>, uint16_t registry, uint16_t field, F&& f)
+{
+    uint16_t i = 0;
+    ([&]{
+        if (i++ == registry)
+            visitFieldIn<typename Ts::type>(field, f,
+                std::make_index_sequence<registrySlotsV<typename Ts::type>>{});
+    }(), ...);
 }
 
 /**
- * @brief As above, for a registry that is also only known at runtime.
+ * @brief The tuple schema a field stores; the field itself when it stores none.
  *
- * Mirrors findFieldIn: walk the list to recover the registry type from its id,
- * then resolve the field within it.
+ * Only fields holding a list or a value name a node, so the alias has to stay
+ * unevaluated for every other kind rather than resolve to a missing member.
  */
+namespace rt
+{
+template <typename FieldT, typename = void>
+struct Schema { using type = FieldT; };
+
+template <typename FieldT>
+struct Schema<FieldT, std::void_t<typename FieldT::node>> { using type = typename FieldT::node; };
+}
+
+template <typename FieldT>
+using SchemaOf = typename rt::Schema<FieldT>::type;
+
+template <typename FieldT>
+inline constexpr bool fieldHasSchemaV = hasTupleSchemaV<SchemaOf<FieldT>>;
+
+/// @brief Where a "Schema::member" spelling's schema is stored, and how uniquely.
+struct TupleFieldLookup
+{
+    uint16_t registry = NOT_FOUND;
+    uint16_t field = NOT_FOUND;
+    uint16_t count = 0;    ///< Fields storing the schema; >1 leaves the field to the caller.
+
+    /**
+     * @brief True when every match is in one registry.
+     *
+     * Fields storing the same schema name their members alike, so a member
+     * resolves the same way through any of them. What differs is which field is
+     * written, and a caller naming that itself -- as distribute-list does, with
+     * a field per direction -- is not ambiguous, only unresolved here.
+     */
+    bool oneRegistry = true;
+};
+
+/**
+ * @brief Finds the field storing a named tuple schema.
+ *
+ * The two-part "Schema::member" spelling names no field, so the field is what
+ * has to be recovered. A field declares the schema itself rather than its Tuple
+ * precisely so this is answerable: Tuple is structural and two schemas sharing a
+ * shape would be indistinguishable through it.
+ *
+ * Every match is counted rather than the first returned, because a schema stored
+ * by more than one field makes the short form ambiguous and the caller reports
+ * that instead of picking one.
+ */
+/// @brief Counts the fields of one registry storing a named schema, into out.
+template <typename ENUM, std::size_t... Is>
+constexpr void countSchemaIn(TupleFieldLookup& out, uint16_t registry, uint32_t typeHash,
+                             std::index_sequence<Is...>)
+{
+    if constexpr (hasFieldsV<ENUM>)
+        ([&]{
+            using FieldT = typename RegistryOfT<ENUM>::template FieldTypeAt<static_cast<ENUM>(Is)>;
+            if constexpr (fieldHasSchemaV<FieldT>)
+                if (SchemaOf<FieldT>::typeHash == typeHash)
+                {
+                    if (out.count == 0) { out.registry = registry; out.field = static_cast<uint16_t>(Is); }
+                    else if (out.registry != registry) out.oneRegistry = false;
+                    ++out.count;
+                }
+        }(), ...);
+}
+
 template <typename... Ts>
-constexpr uint16_t findTupleMemberAt(RegistryIdList<Ts...>, uint16_t registry,
+constexpr TupleFieldLookup findTupleField(RegistryIdList<Ts...>, uint32_t typeHash)
+{
+    TupleFieldLookup out;
+
+    uint16_t reg = 0;
+    (countSchemaIn<typename Ts::type>(out, reg++, typeHash,
+        std::make_index_sequence<registrySlotsV<typename Ts::type>>{}), ...);
+
+    return out;
+}
+
+/// @brief Member index within the schema a runtime-named field stores.
+template <typename... Ts>
+constexpr uint16_t findTupleMemberAt(RegistryIdList<Ts...> list, uint16_t registry,
                                      uint16_t field, uint32_t nameHash)
 {
-    uint16_t i = 0;
     uint16_t found = TUPLE_NOT_FOUND;
-    ([&]{
-        if (i++ == registry)
-            found = findTupleMemberIn<typename Ts::type>(field, nameHash);
-    }(), ...);
+    visitField(list, registry, field, [&]<typename FieldT>{
+        if constexpr (fieldHasSchemaV<FieldT>)
+            found = findTupleMember<SchemaOf<FieldT>>(nameHash);
+    });
     return found;
 }
 
@@ -292,96 +382,110 @@ constexpr uint16_t findTupleMemberAt(RegistryIdList<Ts...>, uint16_t registry,
  *
  * Separated from a bare index because the two ways it can fail need telling
  * apart: naming the wrong enum entirely is a different grammar mistake from
- * naming a member the right enum does not have, and the flattener reports them
- * differently.
+ * naming a member the right enum does not have.
  */
 struct EnumResolution
 {
     uint16_t index = ENUM_NOT_FOUND;   ///< The member's value, when it resolved.
-    bool     fieldIsEnum = false;      ///< The field's type has a member table.
-    bool     typeMatched = false;      ///< The named type is that field's type.
+    bool     fieldIsEnum = false;      ///< The type has a member table.
+    bool     typeMatched = false;      ///< The named type is that type.
+    bool     isBitMap = false;         ///< The field stores a set of members, not one.
     std::string_view fieldTypeName;    ///< For the diagnostic when it is not.
 };
+
+/**
+ * @brief Resolves "Type::MEMBER" against one known field type.
+ *
+ * A bitmap field is named by the enum it is indexed by rather than by its
+ * storage integer, so the enum is what the member is resolved against and the
+ * caller is told to set a bit instead of writing the value.
+ */
+template <typename T>
+constexpr EnumResolution resolveEnumOn(uint32_t typeHash, uint32_t memberHash)
+{
+    using Value = typename types::EnumBitMapEnumOr<T>::type;
+
+    EnumResolution out;
+    if constexpr (hasEnumSchemaV<Value>)
+    {
+        out.fieldIsEnum   = true;
+        out.isBitMap      = types::isEnumBitMapV<T>;
+        out.fieldTypeName = EnumTableOf<Value>::typeName;
+        out.typeMatched   = (EnumTableOf<Value>::typeHash == typeHash);
+
+        if (out.typeMatched)
+            out.index = findEnumMember<Value>(memberHash);
+    }
+    return out;
+}
 
 /**
  * @brief Resolves an enum member against the type a field actually declares.
  *
  * The grammar names both halves -- "Duplex::FULL" -- and the type half is
- * checked rather than trusted. A command's enum key sits beside a config key
- * binding it to a field, so the field's own type is the authority on which enum
- * is correct; naming a different one is caught here instead of writing a value
- * from an unrelated enum into the field.
+ * checked rather than trusted, so naming an unrelated enum is caught here
+ * instead of writing its value into the field.
+ *
+ * @param member Tuple member index, or TUPLE_NOT_FOUND for the field itself.
+ *               A field storing a tuple is never an enum, so on a tuple member
+ *               the member's own type is the authority.
  */
-template <typename FieldT>
-constexpr EnumResolution resolveEnumOnField(uint32_t typeHash, uint32_t memberHash)
+template <typename... Ts>
+constexpr EnumResolution resolveEnumAt(RegistryIdList<Ts...> list, uint16_t registry,
+                                       uint16_t field, uint16_t member,
+                                       uint32_t typeHash, uint32_t memberHash)
 {
     EnumResolution out;
-
-    if constexpr (requires { typename FieldT::type; })
-    {
-        using Value = std::remove_cvref_t<typename FieldT::type>;
-
-        if constexpr (hasEnumSchemaV<Value>)
+    visitField(list, registry, field, [&]<typename FieldT>{
+        if (member == TUPLE_NOT_FOUND)
         {
-            out.fieldIsEnum  = true;
-            out.fieldTypeName = EnumTableOf<Value>::typeName;
-            out.typeMatched  = (EnumTableOf<Value>::typeHash == typeHash);
-
-            if (out.typeMatched)
-                out.index = findEnumMember<Value>(memberHash);
+            if constexpr (requires { typename FieldT::type; })
+                out = resolveEnumOn<std::remove_cvref_t<typename FieldT::type>>(typeHash, memberHash);
         }
-    }
+        else if constexpr (fieldHasSchemaV<FieldT>)
+        {
+            using Schema = SchemaOf<FieldT>;
+            [&]<std::size_t... Is>(std::index_sequence<Is...>)
+            {
+                ([&]{
+                    if (member == Is)
+                        out = resolveEnumOn<std::remove_cvref_t<
+                            typename Schema::template FieldType<static_cast<typename Schema::Index>(Is)>>>(
+                                typeHash, memberHash);
+                }(), ...);
+            }(std::make_index_sequence<Schema::count>{});
+        }
+    });
     return out;
 }
+
+/// @brief Whether a field rescopes into another registry, and which one.
+struct FieldScope
+{
+    bool     isContainer = false;
+    uint16_t registry = NOT_FOUND;
+};
 
 /**
- * True when a registry has a generated field tuple to index into.
+ * @brief Reports whether a runtime-named field holds a child registry scope.
  *
- * DEFINE_CONFIG_GROUP emits the RegistryOf specialization; registries still
- * written by hand have none, so their field types cannot be recovered from an
- * index and an enum cannot be checked against them. Same story as hasHashesV.
+ * A command binding one of these does not write a value, it moves where the
+ * commands under it write, so the generator needs the registry the entries live
+ * in rather than the field's own.
  */
-template <typename ENUM, typename = void>
-inline constexpr bool hasFieldsV = false;
-
-template <typename ENUM>
-inline constexpr bool hasFieldsV<ENUM, std::void_t<typename RegistryOf<ENUM>::type>> = true;
-
-template <typename ENUM, std::size_t... Is>
-constexpr EnumResolution resolveEnumInField(uint16_t field, uint32_t typeHash,
-                                            uint32_t memberHash, std::index_sequence<Is...>)
-{
-    EnumResolution out;
-    if constexpr (hasFieldsV<ENUM>)
-    {
-        ([&]{
-            if (field == Is)
-                out = resolveEnumOnField<
-                    typename RegistryOf<ENUM>::type::template FieldTypeAt<static_cast<ENUM>(Is)>>(
-                        typeHash, memberHash);
-        }(), ...);
-    }
-    return out;
-}
-
-template <typename ENUM>
-constexpr EnumResolution resolveEnumIn(uint16_t field, uint32_t typeHash, uint32_t memberHash)
-{
-    return resolveEnumInField<ENUM>(
-        field, typeHash, memberHash, std::make_index_sequence<registrySlotsV<ENUM>>{});
-}
-
-/// @brief As above, for a registry known only by its runtime id.
 template <typename... Ts>
-constexpr EnumResolution resolveEnumAt(RegistryIdList<Ts...>, uint16_t registry,
-                                       uint16_t field, uint32_t typeHash, uint32_t memberHash)
+constexpr FieldScope resolveScopeAt(RegistryIdList<Ts...> list, uint16_t registry, uint16_t field)
 {
-    uint16_t i = 0;
-    EnumResolution out;
-    ([&]{
-        if (i++ == registry)
-            out = resolveEnumIn<typename Ts::type>(field, typeHash, memberHash);
-    }(), ...);
+    FieldScope out;
+    visitField(list, registry, field, [&]<typename FieldT>{
+        if constexpr (IsRefContainer<FieldT> || IsOwnedListField<FieldT>)
+        {
+            out.isContainer = true;
+            using Child = std::remove_cvref_t<typename FieldT::type>;
+            if constexpr (requires { typename Child::type; })
+                out.registry = registryIdV<typename Child::type>;
+        }
+    });
     return out;
 }
 

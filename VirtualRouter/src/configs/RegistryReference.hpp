@@ -65,6 +65,7 @@ public:
 private:
     T* ptr = nullptr;
     void(*delFn)(T*) = nullptr;
+    uint32_t configIndex;
 };
 
 /**
@@ -140,6 +141,7 @@ private:
 
     T* owned = nullptr;
     void(*delFn)(T*) = nullptr;
+    uint32_t configIndex;
 };
 }
 

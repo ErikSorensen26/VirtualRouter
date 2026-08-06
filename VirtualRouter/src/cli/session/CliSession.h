@@ -20,6 +20,7 @@
 #include "TreeNavigator.hpp"
 
 class Internal_CliTest;
+class Internal_EigrpConfigTest;
 
 namespace core { class VirtualRouter; }
 namespace interface { class Interface; }
@@ -65,6 +66,7 @@ class CliSession : public Console
 {
 public:
     friend class ::Internal_CliTest;
+    friend class ::Internal_EigrpConfigTest;
     friend class CommandProcessor;
     friend class CliEngine;
     friend Configs;

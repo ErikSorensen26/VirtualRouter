@@ -2112,32 +2112,212 @@
             "name": "interface",
             "subcommands": [
                 {
-                    "description": "",
-                    "name": "<interface>",
-                    "args": {
-                        "ETHERNET_CONFIG": "Global::INTERFACE",
-                        "ETHERNET_MODE": "(config-if)#/ethernet",
-                        "FASTETHERNET_CONFIG": "Global::INTERFACE",
-                        "FASTETHERNET_MODE": "(config-if)#/ethernet",
-                        "GIGABITETHERNET_CONFIG": "Global::INTERFACE",
-                        "GIGABITETHERNET_MODE": "(config-if)#/ethernet",
-                        "NULL_CONFIG": "Global::INTERFACE",
-                        "NULL_MODE": "(config-if)#/null",
-                        "PORTCHANNEL_CONFIG": "Global::INTERFACE",
-                        "PORTCHANNEL_MODE": "(config-if)#/Portchannel",
-                        "TUNNEL_CONFIG": "Global::INTERFACE",
-                        "TUNNEL_MODE": "(config-if)#/Tunnel",
-                        "VLAN_CONFIG": "Global::INTERFACE",
-                        "VLAN_MODE": "(config-if)#/vlan",
-                        "VIRTUAL_TEMPLATE_CONFIG": "Global::INTERFACE",
-                        "VIRTUAL_TEMPLATE_MODE": "(config-if)#/virtual-template"
-                    },
+                    "description": "IEEE 802.3",
+                    "name": "Ethernet",
                     "subcommands": [
                         {
                             "description": "",
-                            "name": "<cr>"
+                            "name": "<Ethernet>",
+                            "args": {
+                                "CONFIG": "Global::INTERFACE",
+                                "MODE": "(config-if)#/ethernet"
+                            },
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
                         }
                     ]
+                },
+                {
+                    "description": "FastEthernet IEEE 802.3",
+                    "name": "FastEthernet",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<FastEthernet>",
+                            "args": {
+                                "CONFIG": "Global::INTERFACE",
+                                "MODE": "(config-if)#/ethernet"
+                            },
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "GigabitEthernet IEEE 802.3z",
+                    "name": "GigabitEthernet",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<GigabitEthernet>",
+                            "args": {
+                                "CONFIG": "Global::INTERFACE",
+                                "MODE": "(config-if)#/ethernet"
+                            },
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Loopback interface",
+                    "name": "Loopback",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<Loopback>",
+                            "args": {
+                                "CONFIG": "Global::INTERFACE",
+                                "MODE": "(config-if)#/ethernet"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "description": "NAT virtual interface",
+                    "name": "NVI",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<NVI>",
+                            "args": {
+                                "CONFIG": "Global::INTERFACE",
+                                "MODE": "(config-if)#/ethernet"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "description": "Null interface",
+                    "name": "Null",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<NullIface>",
+                            "args": {
+                                "CONFIG": "Global::INTERFACE",
+                                "MODE": "(config-if)#/null"
+                            },
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Ethernet Channel of interfaces",
+                    "name": "Port-channel",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<Portchannel>",
+                            "args": {
+                                "CONFIG": "Global::INTERFACE",
+                                "MODE": "(config-if)#/Portchannel"
+                            },
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Pseudowire Interface",
+                    "name": "pseudowire",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<Pseudowire>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Tunnel interface",
+                    "name": "Tunnel",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<Tunnel>",
+                            "args": {
+                                "CONFIG": "Global::INTERFACE",
+                                "MODE": "(config-if)#/Tunnel"
+                            },
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Virtual Template interface",
+                    "name": "Virtual-Template",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<VirtualTemplate>",
+                            "args": {
+                                "CONFIG": "Global::INTERFACE",
+                                "MODE": "(config-if)#/virtual-template"
+                            },
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "Vlan Interface",
+                    "name": "Vlan",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<Vlan>",
+                            "args": {
+                                "CONFIG": "Global::INTERFACE",
+                                "MODE": "(config-if)#/vlan"
+                            },
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "description": "interface range command",
+                    "name": "range"
                 }
             ]
         },

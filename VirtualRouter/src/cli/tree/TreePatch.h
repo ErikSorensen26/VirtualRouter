@@ -14,11 +14,11 @@
  * the replacement text, so from then on every reader sees @c "<0-9>" and no
  * consumer needs to know a substitution happened.
  *
- * The mapping cannot be written to. It is mapped @c PROT_READ, and even with
- * write access the string blob is packed contiguously, so a replacement longer
- * than the original would overrun the following name. Patched text is appended
- * to a separate buffer instead, and the node's offset and length are redirected
- * into it through an override table.
+ * The mapping cannot be written to. It is mapped @c PROT_READ, and the strings
+ * it holds are interned -- one @c "<N>" entry is shared by every interface type
+ * carrying a port placeholder -- so editing an entry in place would rename every
+ * user of it at once. Patched text is appended to a separate buffer instead and
+ * given an id of its own, and the node's name id is redirected to it.
  *
  * Patches are keyed by node index and applied by @ref CommandTree::nodeAt, so
  * anything reached through a cursor observes them. Adding a new kind of runtime
@@ -34,8 +34,10 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 
 #include "nodes/Command.h"
+#include "nodes/FileHeader.hpp"
 
 namespace cli::tree
 {
@@ -78,42 +80,47 @@ public:
     /**
      * @brief Redirects one node's name to @p name.
      *
+     * The replacement gets a new id rather than editing the one the node had:
+     * that id is interned and shared, so writing through it would rename every
+     * other node using the same text.
+     *
      * @param index Node index in the tree's flat node array.
      * @param base  The node as it appears in the mapping; copied, not modified.
-     * @param name  Replacement name. Truncated to the 255-byte limit of
-     *              @c CommandNode::nameSiz, which no CLI token approaches.
-     * @param desc  The node's existing description, copied in behind the name
-     *              so it stays where @c desc() expects to find it.
+     * @param name  Replacement name.
      */
-    void patchName(uint32_t index, const CommandNode& base,
-                   std::string_view name, std::string_view desc);
+    void patchName(uint32_t index, const CommandNode& base, std::string_view name);
 
     /**
      * @brief The patched node for @p index, or nullptr when it is unpatched.
      *
      * The returned reference stays valid for the life of the patch. Text is
      * appended to a @c std::string whose growth would invalidate views into it,
-     * so patched nodes address the buffer by offset and are resolved late.
+     * so patched strings are addressed by offset and resolved late.
      */
     const CommandNode* find(uint32_t index) const;
 
     /**
-     * @brief Backing text for patched names; indexed by the patched infoOff.
+     * @brief Text of a patched string id; empty when @p id is not one.
      */
-    std::string_view text() const { return blob; }
+    std::string_view text(uint16_t id) const;
 
     /**
-     * @brief Marks offsets in a patched node as addressing @ref text.
+     * @brief Marks a string id as belonging to the patch rather than the table.
      *
      * Patched names live in a different buffer than the mapped blob, so a
-     * reader has to know which one an offset refers to. Offsets at or above
-     * this bias belong to the patch; everything below is the original blob.
+     * reader has to know which one an id refers to. Ids at or above this bias
+     * are patch entries; everything below indexes the interned table.
+     *
+     * Sits at half the id space, which caps patched strings at 32767 -- port
+     * placeholders number in the dozens, and the flattener already rejects a
+     * grammar with more than ID_BIAS interned strings.
      */
-    static constexpr uint32_t OFFSET_BIAS = 0x8000'0000u;
+    static constexpr uint16_t ID_BIAS = 0x8000u;
 
 private:
-    std::string blob;                                      ///< Patched names, each followed by its description.
-    std::unordered_map<uint32_t, CommandNode> overrides;   ///< Patched nodes, keyed by their index in the base array.
+    std::string blob;                                    ///< Patched text, back to back.
+    std::vector<StrRef> strs;                            ///< One entry per patched string; index + ID_BIAS is its id.
+    std::unordered_map<uint32_t, CommandNode> overrides; ///< Patched nodes, keyed by their index in the base array.
 };
 }
 

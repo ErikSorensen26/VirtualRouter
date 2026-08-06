@@ -3,15 +3,18 @@
 #include <utils/Json.hpp>
 #include "CommandTree.h"
 #include "nodes/Command.h"
+#include "nodes/GrammarKeys.h"
 #include "nodes/FileHeader.hpp"
-#include "nodes/RegistryEntry.h"
 #include "configs/RegistryTable.hpp"
 #include "cli/modes/Mode.hpp"
 #include <deque>
+#include <cstdio>
 #include <cstring>
 #include <algorithm>
 #include <unordered_map>
 #include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <cctype>
 
 namespace cli::tree::parser
@@ -191,12 +194,10 @@ struct ModeFile
     const JsonNode* commands = nullptr;
 };
 
-// Lays out rows in list order, so a registry's row index is its id; slots start unbound.
+// Checks every registry fits what configId can index; a field's own command is
+// recorded in the registry at write time, so nothing is laid out here.
 struct RegBuilder
 {
-    std::vector<RegistryEntry>& rows;
-    std::vector<uint32_t>& slots;
-
     template <typename Entry>
     void operator()()
     {
@@ -205,16 +206,6 @@ struct RegBuilder
 
         static_assert(count <= CommandNode::CONFIG_FIELD_ENUM_MASK,
             "registry has more fields than configId's enum field can index");
-
-        if (slots.size() + count > MAX_SLOTS)
-            throw std::runtime_error("cli::grammar: slot table exceeds uint16 offsets");
-
-        RegistryEntry e{};
-        e.slotOff = static_cast<uint16_t>(slots.size());
-        e.slotCount = static_cast<uint16_t>(count);
-        rows.push_back(e);
-
-        slots.resize(slots.size() + count, NO_COMMAND);
     }
 };
 }
@@ -227,33 +218,72 @@ using Args = std::vector<std::pair<std::string, std::string>>;
 // Holds the emit state -- nodes, blob, registry slots -- threaded through every step.
 struct TreeEmitter
 {
-    std::vector<RegistryEntry> regModes;
-    std::vector<uint32_t> regIndexes;
     std::vector<ModeEntryNode> modes;
     std::vector<CommandNode> nodes;
+    std::vector<StrRef> strs;
     std::vector<char> blob;
+
+    /// Hashes a key by its text, so a string_view looks up a string entry.
+    struct StrHash
+    {
+        using is_transparent = void;
+        size_t operator()(std::string_view s) const { return std::hash<std::string_view>{}(s); }
+    };
+
+    /// Interned text to its id; see internStr.
+    std::unordered_map<std::string, uint16_t, StrHash, std::equal_to<>> strIds;
 
     std::unordered_map<std::string, const JsonNode*> variables;
     std::deque<Args> argStore;
 
+    // Deferral keys in first-seen order; a key's position is the id configExt
+    // holds. Discovered from the grammar rather than declared, so the table is
+    // exactly the keys that were used, and one name always numbers the same way.
+    std::vector<std::string> deferKeys;
+
     explicit TreeEmitter(const JsonNode* varsRoot)
     {
-        // Rows land in list order, so a row's index is the registry's id.
-        regModes.reserve(config::registryCount);
-        regIndexes.reserve(config::registrySlotTotal);
-        config::forEachRegistryId(config::RegistryEntries{},
-                                  RegBuilder{regModes, regIndexes});
+        config::forEachRegistryId(config::RegistryEntries{}, RegBuilder{});
 
         if (varsRoot)
             for (const JsonNode& v : varsRoot->children)
                 if (isCommandArray(v)) variables.emplace(v.name, &v);
     }
 
-    uint32_t internStr(std::string_view s)
+    /**
+     * Interns one string and returns its id.
+     *
+     * The grammar repeats itself heavily -- "<cr>" alone lands here 19.5k times,
+     * and descriptions are copied verbatim across every mode that shares a
+     * command -- so identical text is stored once and every user gets the same
+     * id. An empty string is absent rather than interned, which is what lets a
+     * node distinguish "no description" from one that happens to be blank.
+     */
+    uint16_t internStr(std::string_view s)
     {
-        uint32_t off = static_cast<uint32_t>(blob.size());
+        if (s.empty()) return CommandNode::STR_NONE;
+
+        auto it = strIds.find(s);
+        if (it != strIds.end()) return it->second;
+
+        if (strs.size() >= TreePatch::ID_BIAS)
+            throw std::runtime_error("cli::grammar: interned string count exceeds "
+                + std::to_string(TreePatch::ID_BIAS));
+
+        const uint16_t id = static_cast<uint16_t>(strs.size());
+        strs.push_back({static_cast<uint32_t>(blob.size()),
+                        static_cast<uint32_t>(s.size())});
         blob.insert(blob.end(), s.begin(), s.end());
-        return off;
+
+        strIds.emplace(std::string(s), id);
+        return id;
+    }
+
+    /// The text behind an id, for diagnostics emitted while flattening.
+    std::string_view strAt(uint16_t id) const
+    {
+        if (id == CommandNode::STR_NONE || id >= strs.size()) return {};
+        return std::string_view(blob.data() + strs[id].off, strs[id].len);
     }
 
     // The variable a "<name>" refers to, or null when the name is not one.
@@ -320,7 +350,11 @@ struct TreeEmitter
         const JsonNode* src;
         const JsonNode* cont; // Site subcommands to graft at a dead-end.
         const Args* args;     // What the call site passed in, if anything.
+        uint16_t expect = REGISTRY_ANY;
     };
+
+    // No ancestor has rescoped, so any registry is in scope.
+    static constexpr uint16_t REGISTRY_ANY = UINT16_MAX;
 
     // Expands variable references into slots; active catches one reaching itself.
     void resolveChildren(const JsonNode& kids, const JsonNode* cont,
@@ -359,7 +393,7 @@ struct TreeEmitter
     // Reserves a contiguous run for one node's children and queues them.
     void emitChildren(std::deque<Frame>& queue, CommandNode& n,
                       const JsonNode& kids, const JsonNode* cont,
-                      const Args* args)
+                      const Args* args, uint16_t expect)
     {
         std::vector<const JsonNode*> active;
         std::vector<Slot> slots;
@@ -392,16 +426,66 @@ struct TreeEmitter
         n.subcmdSiz = static_cast<uint16_t>(count);
         for (uint32_t i = 0; i < count; ++i)
             queue.push_back({firstChild + i, slots[i].src,
-                             slots[i].cont, slots[i].args});
+                             slots[i].cont, slots[i].args, expect});
     }
 
-    // Binds "Registry::field[::member]" and returns the slot the field owns.
-    uint32_t* bindConfig(CommandNode& n, const std::string& cfg,
-                         const std::string& emitName, std::string& cfgKeyText)
+    /**
+     * Binds the two-part "Schema::member" spelling, which names the field only
+     * by the tuple schema it stores. Returns false when the first token is not
+     * a schema name at all, leaving the key to be read as "Registry::field".
+     */
+    bool bindTupleSchema(CommandNode& n, const ConfigKey& key,
+                         const std::string& cfg, const std::string& emitName)
+    {
+        config::TupleFieldLookup found = config::findTupleField(
+            config::RegistryEntries{}, config::tokenHash(key.registry));
+
+        if (found.count == 0) return false;
+
+        if (!found.oneRegistry)
+            throw std::runtime_error("cli::grammar: '" + emitName
+                + "' names tuple schema '" + std::string(key.registry)
+                + "', which " + std::to_string(found.count)
+                + " fields across separate registries store; name the field"
+                " instead, as \"Registry::field::" + std::string(key.field) + "\"");
+
+        uint16_t memberIdx = config::findTupleMemberAt(
+            config::RegistryEntries{}, found.registry, found.field,
+            config::tokenHash(key.field));
+
+        if (memberIdx == config::TUPLE_NOT_FOUND)
+            throw std::runtime_error("cli::grammar: '" + emitName
+                + "' names member '" + std::string(key.field) + "', which '"
+                + std::string(key.registry) + "' does not declare");
+
+        if (memberIdx >= CommandNode::CONFIG_EXT_NONE)
+            throw std::runtime_error("cli::grammar: '" + emitName
+                + "' tuple member index " + std::to_string(memberIdx)
+                + " does not fit configExt");
+
+        n.configId = CommandNode::packConfig(found.registry, found.field);
+        n.configExt = static_cast<uint8_t>(memberIdx);
+        n.flags |= CommandNode::TUPLE_CHANGE;
+
+        return true;
+    }
+
+    // Binds "Registry::field[::member]" or "Schema::member".
+    void bindConfig(CommandNode& n, const std::string& cfg,
+                    const std::string& emitName, std::string& cfgKeyText)
     {
         cfgKeyText = cfg;
 
         ConfigKey key = splitConfigKey(cfg);
+
+        // A two-part key naming a known schema is a tuple member; anything else
+        // is a registry and field, including a two-part key that is not one.
+        if (key.member.empty() && !key.field.empty())
+        {
+            if (bindTupleSchema(n, key, cfg, emitName))
+                return;
+        }
+
         uint16_t reg = resolveRegistry(key.registry, emitName);
 
         if (key.field.empty())
@@ -438,9 +522,6 @@ struct TreeEmitter
             n.configExt = static_cast<uint8_t>(memberIdx);
             n.flags |= CommandNode::TUPLE_CHANGE;
         }
-
-        // Claimed after the enum key is read; sharing the field depends on it.
-        return &regIndexes[regModes[reg].slotOff + fieldIdx];
     }
 
     // Sets the bound field to one member of its enum type.
@@ -452,24 +533,26 @@ struct TreeEmitter
                 + "' names enum '" + en + "' but no "
                 + std::string(KEY_CONFIG) + "; an enum needs the field it sets");
 
-        if (n.has(CommandNode::TUPLE_CHANGE))
-            throw std::runtime_error("cli::grammar: '" + emitName
-                + "' is both an enum and a tuple member; configExt holds one");
-
         ConfigKey ek = splitConfigKey(en);
         if (ek.field.empty() || !ek.member.empty())
             throw std::runtime_error("cli::grammar: '" + emitName
                 + "' enum '" + en
                 + "' is not of the form \"Type::MEMBER\"");
 
+        // On a tuple member the member's own type is the authority, not the
+        // field's: the field stores a whole tuple and is never an enum itself.
+        const bool onTupleMember = n.has(CommandNode::TUPLE_CHANGE);
+
         config::EnumResolution res = config::resolveEnumAt(
             config::RegistryEntries{},
             n.fieldRegistryId(), n.enumIndex(),
+            onTupleMember ? n.configExt : config::TUPLE_NOT_FOUND,
             config::tokenHash(ek.registry), config::tokenHash(ek.field));
 
         if (!res.fieldIsEnum)
             throw std::runtime_error("cli::grammar: '" + emitName
-                + "' names enum '" + en + "' but its field '"
+                + "' names enum '" + en + "' but its "
+                + (onTupleMember ? "tuple member" : "field") + " '"
                 + cfgKeyText + "' is not a registered enum type");
 
         if (!res.typeMatched)
@@ -482,6 +565,29 @@ struct TreeEmitter
                 + "' names member '" + std::string(ek.field)
                 + "', which '" + std::string(res.fieldTypeName) + "' does not declare");
 
+        // A tuple member keeps its own index and gains the enum's, four bits
+        // each, so both are checked against the half rather than the byte.
+        if (onTupleMember)
+        {
+            const uint8_t member = n.configExt;
+
+            if (member > CommandNode::TUPLE_ENUM_MAX)
+                throw std::runtime_error("cli::grammar: '" + emitName
+                    + "' tuple member index " + std::to_string(member)
+                    + " does not fit an enum-valued member, which holds "
+                    + std::to_string(CommandNode::TUPLE_ENUM_BITS) + " bits");
+
+            if (res.index > CommandNode::TUPLE_ENUM_MAX)
+                throw std::runtime_error("cli::grammar: '" + emitName
+                    + "' enum member index " + std::to_string(res.index)
+                    + " does not fit a tuple member, which holds "
+                    + std::to_string(CommandNode::TUPLE_ENUM_BITS) + " bits");
+
+            n.configExt = CommandNode::packTupleEnum(member, res.index);
+            n.flags |= CommandNode::TUPLE_ENUM;
+            return;
+        }
+
         if (res.index >= CommandNode::CONFIG_EXT_NONE)
             throw std::runtime_error("cli::grammar: '" + emitName
                 + "' enum member index " + std::to_string(res.index)
@@ -489,11 +595,95 @@ struct TreeEmitter
 
         n.configExt = static_cast<uint8_t>(res.index);
         n.flags |= CommandNode::ENUM_CHANGE;
+        if (res.isBitMap)
+            n.flags |= CommandNode::ENUM_BITMAP;
     }
 
-    // Emits one command object; returns its subcommand array, or null if a leaf.
+    /**
+     * The id a deferral key is stored under, assigning one if the key is new.
+     *
+     * Numbered rather than hashed. configExt is a byte with 0xFF spoken for, so
+     * a hash would have to be truncated into 255 values and two keys colliding
+     * would resolve each other's -- silently, and only in a grammar large enough
+     * to reach the collision. Positions cannot collide, and running out of them
+     * is a build error rather than a wrong answer at runtime.
+     */
+    uint8_t deferKeyId(const std::string& key, const std::string& emitName,
+                       std::string_view which)
+    {
+        if (key.empty())
+            throw std::runtime_error("cli::grammar: '" + emitName
+                + "' has an empty " + std::string(which));
+
+        for (size_t i = 0; i < deferKeys.size(); ++i)
+            if (deferKeys[i] == key) return static_cast<uint8_t>(i);
+
+        if (deferKeys.size() >= CommandNode::CONFIG_EXT_NONE)
+            throw std::runtime_error("cli::grammar: '" + emitName + "' names key '"
+                + key + "', which is deferral key "
+                + std::to_string(deferKeys.size())
+                + "; configExt holds "
+                + std::to_string(CommandNode::CONFIG_EXT_NONE));
+
+        deferKeys.push_back(key);
+        return static_cast<uint8_t>(deferKeys.size() - 1);
+    }
+
+    /**
+     * Holds this command's value under a key instead of writing it now.
+     *
+     * The field is still named and still checked -- what the key changes is when
+     * the write lands, not where. configExt carries the key's id, which is why
+     * this cannot sit alongside an enum, tuple or mode binding: each of those
+     * wants the same byte for its own meaning.
+     */
+    void bindDeferred(CommandNode& n, const std::string& key,
+                      const std::string& emitName, const std::string& cfgKeyText)
+    {
+        if (!n.hasConfig())
+            throw std::runtime_error("cli::grammar: '" + emitName
+                + "' defers under '" + key + "' but names no "
+                + std::string(KEY_CONFIG)
+                + "; a deferred value needs the field it resolves into");
+
+        if (n.flags & (CommandNode::ENUM_CHANGE | CommandNode::TUPLE_CHANGE))
+            throw std::runtime_error("cli::grammar: '" + emitName
+                + "' defers under '" + key + "' and also sets an enum or tuple"
+                " member of '" + cfgKeyText + "'; configExt holds one");
+
+        n.configExt = deferKeyId(key, emitName, KEY_DEFERRED);
+        n.flags |= CommandNode::DEFERRED;
+    }
+
+    /**
+     * Marks this command as the source a deferred key waits on.
+     *
+     * Numbered out of the same table bindDeferred uses, so the ids pair up. It
+     * binds no field: what it resolves is whatever deferred commands named the
+     * key, which may sit anywhere in the grammar and in any registry.
+     */
+    void bindResolver(CommandNode& n, const std::string& key,
+                      const std::string& emitName, const std::string& cfgKeyText)
+    {
+        if (n.flags & CommandNode::DEFERRED)
+            throw std::runtime_error("cli::grammar: '" + emitName
+                + "' is both deferred and a resolver; configExt holds one key");
+
+        if (n.flags & (CommandNode::ENUM_CHANGE | CommandNode::TUPLE_CHANGE))
+            throw std::runtime_error("cli::grammar: '" + emitName
+                + "' resolves '" + key + "' and also sets an enum or tuple member"
+                " of '" + cfgKeyText + "'; configExt holds one");
+
+        n.configExt = deferKeyId(key, emitName, KEY_RESOLVER);
+        n.flags |= CommandNode::RESOLVER;
+    }
+
+    /**
+     * TODO add doxy comment
+     */
     const JsonNode* emitCommand(CommandNode& n, uint32_t idx,
-                                const JsonNode& src, const Args* args)
+                                const JsonNode& src, const Args* args,
+                                uint16_t& expect)
     {
         rejectUnknownKeys(src);
 
@@ -518,13 +708,8 @@ struct TreeEmitter
 
         const std::string& emitName = name->strValue;
 
-        if (emitName.size() > UINT8_MAX)
-            throw std::runtime_error("cli::grammar: '" + emitName
-                + "' name exceeds uint8");
+        bool argUnbound = false;
 
-        bool fromArgs = false;
-
-        // An unbound argument reads as absent, which is what makes args optional.
         auto keyValue = [&](std::string_view key) -> const std::string*
         {
             const JsonNode* k = member(src, key);
@@ -537,8 +722,6 @@ struct TreeEmitter
             if (k->strValue.empty() || k->strValue.front() != ARG_SIGIL)
                 return &k->strValue;
 
-            fromArgs = true;
-
             std::string_view want(k->strValue);
             want.remove_prefix(1);
 
@@ -546,17 +729,12 @@ struct TreeEmitter
                 for (const auto& [an, av] : *args)
                     if (an == want) return &av;
 
+            argUnbound = true;
             return nullptr;
         };
 
-        // Interned back to back so desc starts at infoOff + nameSiz.
-        n.infoOff = internStr(emitName);
-        n.nameSiz = static_cast<uint8_t>(emitName.size());
-        if (desc->strValue.size() > UINT8_MAX)
-            throw std::runtime_error("cli::grammar: '" + name->strValue
-                + "' description exceeds uint8");
-        internStr(desc->strValue);
-        n.descSiz = static_cast<uint8_t>(desc->strValue.size());
+        n.nameId = internStr(emitName);
+        n.descId = internStr(desc->strValue);
 
         if (const JsonNode* props = member(src, KEY_PROPERTIES))
             for (const JsonNode& p : props->children)
@@ -574,24 +752,35 @@ struct TreeEmitter
         }
 
         std::string cfgKeyText;
-        uint32_t* cfgSlot = nullptr;
 
         // "Registry::field" binds this command to a config field
         if (const std::string* cfg = keyValue(KEY_CONFIG))
-            cfgSlot = bindConfig(n, *cfg, emitName, cfgKeyText);
+        {
+            bindConfig(n, *cfg, emitName, cfgKeyText);
+
+            if (expect != REGISTRY_ANY && n.fieldRegistryId() != expect)
+                throw std::runtime_error("cli::grammar: '" + emitName
+                    + "' binds '" + cfgKeyText + "', but an outer command rescoped"
+                    " to registry " + std::to_string(expect)
+                    + "; every config below a rescope names that registry");
+        }
+
+        // A shared definition names fields its caller fills in, so a caller that
+        // leaves them out drops the binding rather than failing: the keys below
+        // set a field this node no longer has, and go quiet along with it.
+        const bool configDropped = argUnbound && !n.hasConfig();
 
         // "Type::MEMBER" sets the bound field to one enum member.
-        if (const std::string* en = keyValue(KEY_ENUM))
+        if (const std::string* en = keyValue(KEY_ENUM); en && !configDropped)
             bindEnum(n, *en, emitName, cfgKeyText);
 
-        if (cfgSlot && !fromArgs
-            && !(n.flags & (CommandNode::ENUM_CHANGE | CommandNode::TUPLE_CHANGE)))
-        {
-            if (*cfgSlot != NO_COMMAND)
-                throw std::runtime_error("cli::grammar: '" + emitName
-                    + "' binds '" + cfgKeyText + "', already bound by another command");
-            *cfgSlot = idx;
-        }
+        // Both name a deferral key, and both land in configExt, so they run
+        // after the bindings that also claim it and refuse to share.
+        if (const std::string* key = keyValue(KEY_DEFERRED); key && !configDropped)
+            bindDeferred(n, *key, emitName, cfgKeyText);
+
+        if (const std::string* key = keyValue(KEY_RESOLVER); key && !configDropped)
+            bindResolver(n, *key, emitName, cfgKeyText);
 
         // "prompt/variant" makes this command enter that mode.
         if (const std::string* md = keyValue(KEY_MODE))
@@ -611,8 +800,47 @@ struct TreeEmitter
                     + "' enters a mode and also sets an enum or tuple member;"
                     " configExt holds one");
 
+            if (n.flags & (CommandNode::DEFERRED | CommandNode::RESOLVER))
+                throw std::runtime_error("cli::grammar: '" + emitName
+                    + "' enters a mode and also names a deferral key;"
+                    " configExt holds one");
+
             n.configExt = static_cast<uint8_t>(resolveMode(*md, emitName));
             n.flags |= CommandNode::MODE_CHANGE;
+        }
+
+        if (n.hasConfig() && !(n.flags & CommandNode::MODE_CHANGE))
+        {
+            config::FieldScope scope = config::resolveScopeAt(
+                config::RegistryEntries{}, n.fieldRegistryId(), n.enumIndex());
+
+            if (scope.isContainer)
+            {
+                // A member named on a container would never be written, since
+                // resolving to a registry is all the node does.
+                if (n.flags & (CommandNode::TUPLE_CHANGE | CommandNode::ENUM_CHANGE))
+                    throw std::runtime_error("cli::grammar: '" + emitName
+                        + "' binds container '" + cfgKeyText + "' and also sets an"
+                        " enum or tuple member; a rescope writes no value");
+
+                // A resolver names no field of its own, so a container binding
+                // on one has nothing to rescope through.
+                if (n.flags & CommandNode::RESOLVER)
+                    throw std::runtime_error("cli::grammar: '" + emitName
+                        + "' binds container '" + cfgKeyText + "' and also resolves a"
+                        " deferral key; a resolver names no field to rescope through");
+
+                if (scope.registry >= config::registryCount)
+                    throw std::runtime_error("cli::grammar: '" + emitName
+                        + "' binds container '" + cfgKeyText + "', whose entries are"
+                        " not a registered registry");
+
+                n.flags |= CommandNode::REGISTRY_CHANGE;
+
+                // Everything below now writes into what was rescoped to,
+                // which supersedes whatever an outer rescope established.
+                expect = scope.registry;
+            }
         }
 
         return member(src, KEY_SUBCOMMANDS);
@@ -629,7 +857,7 @@ struct TreeEmitter
 
         while (!queue.empty())
         {
-            auto [idx, src, cont, args] = queue.front();
+            auto [idx, src, cont, args, expect] = queue.front();
             queue.pop_front();
 
             CommandNode n{};
@@ -637,12 +865,12 @@ struct TreeEmitter
             // Synthetic array roots carry no grammar of their own.
             const JsonNode* subs = src->type == JsonNode::ARRAY
                                  ? src
-                                 : emitCommand(n, idx, *src, args);
+                                 : emitCommand(n, idx, *src, args, expect);
 
             if (subs && !subs->children.empty())
-                emitChildren(queue, n, *subs, cont, args);
+                emitChildren(queue, n, *subs, cont, args, expect);
             else if (cont)
-                emitChildren(queue, n, *cont, nullptr, nullptr);
+                emitChildren(queue, n, *cont, nullptr, nullptr, expect);
 
             nodes[idx] = n;
         }
@@ -656,29 +884,135 @@ struct TreeEmitter
                   const std::string& prompt)
     {
         ModeEntryNode e{};
-        if (modeName.size() > UINT16_MAX || subName.size() > UINT16_MAX
-            || prompt.size() > UINT16_MAX)
-            throw std::runtime_error("cli::grammar: mode name '" + modeName
-                + "', submode '" + subName + "' or prompt exceeds uint16");
-
         e.registryId = registry;
 
-        // Interned back to back so each part starts where the previous ended.
-        e.infoOff = internStr(modeName);
-        e.modeSiz = static_cast<uint16_t>(modeName.size());
-        if (!subName.empty())
-        {
-            internStr(subName);
-            e.subSiz = static_cast<uint16_t>(subName.size());
-        }
-        if (!prompt.empty())
-        {
-            internStr(prompt);
-            e.promptSiz = static_cast<uint16_t>(prompt.size());
-        }
+        e.nameId = internStr(modeName);
+        e.subId = internStr(subName);
+        e.promptId = internStr(prompt);
+
         e.cmdOff = appendCommands(array);
         e.cmdSiz = nodes[e.cmdOff].subcmdSiz;
         modes.push_back(e);
+    }
+
+    /**
+     * Rejects a deferral key that only one side of the grammar names.
+     *
+     * Keys are discovered rather than declared, so nothing has yet checked that
+     * a name was spelled the same in both places -- a typo reads as a new key,
+     * and both halves flatten cleanly into a pairing that can never resolve.
+     * Run once the whole grammar is walked: the two sides may sit in different
+     * files, so neither is complete until every mode has been emitted.
+     */
+    void checkDeferKeys() const
+    {
+        std::vector<bool> deferred(deferKeys.size(), false);
+        std::vector<bool> resolved(deferKeys.size(), false);
+
+        for (const CommandNode& n : nodes)
+        {
+            if (n.hasDeferred()) deferred[n.deferKey()] = true;
+            if (n.hasResolver()) resolved[n.deferKey()] = true;
+        }
+
+        for (size_t i = 0; i < deferKeys.size(); ++i)
+        {
+            if (deferred[i] && !resolved[i])
+                throw std::runtime_error("cli::grammar: key '" + deferKeys[i]
+                    + "' is deferred under but nothing resolves it; a "
+                    + std::string(KEY_DEFERRED) + " needs a matching "
+                    + std::string(KEY_RESOLVER));
+
+            if (resolved[i] && !deferred[i])
+                throw std::runtime_error("cli::grammar: key '" + deferKeys[i]
+                    + "' is resolved but nothing defers under it; a "
+                    + std::string(KEY_RESOLVER) + " needs a matching "
+                    + std::string(KEY_DEFERRED));
+        }
+    }
+
+    /**
+     * @brief Reports a field that one line could write twice.
+     *
+     * Many nodes may write one field without any of them conflicting. The
+     * branches of an interface name each bind the same field and only one can
+     * match; a shared definition binds one field from every call site that
+     * expands it; whole modes repeat a binding that is reached by different
+     * paths. None of those is ambiguous, because a line walks a single
+     * root-to-leaf path and meets exactly one of them.
+     *
+     * The test is therefore reachability rather than count: two writers matter
+     * only when one is an ancestor of the other, which is the one arrangement a
+     * single line can traverse both of. Then whichever runs second silently
+     * wins and the first appears to do nothing. Enum members, tuple members and
+     * deferred values are excluded outright, being separated by something other
+     * than the field they share, as is a parent and its immediate child, which
+     * is how a two-token key such as `Vlan 10` is written.
+     *
+     * A warning rather than an error because the grammar is edited in bulk and
+     * a half-finished mode is a normal intermediate state. Runs after the whole
+     * walk, since the two commands may sit in different files.
+     */
+    void reportSharedFields() const
+    {
+        constexpr uint16_t shared = CommandNode::ENUM_CHANGE
+                                  | CommandNode::TUPLE_CHANGE
+                                  | CommandNode::DEFERRED
+                                  | CommandNode::RESOLVER;
+
+        constexpr uint32_t NO_PARENT = ~uint32_t{0};
+        std::vector<uint32_t> parent(nodes.size(), NO_PARENT);
+
+        for (size_t i = 0; i < nodes.size(); ++i)
+            for (uint32_t c = 0; c < nodes[i].subcmdSiz; ++c)
+            {
+                const uint32_t child = nodes[i].subcmdOff + c;
+                if (child < parent.size()) parent[child] = static_cast<uint32_t>(i);
+            }
+
+        auto collides = [&](uint32_t a, uint32_t b)
+        {
+            for (uint32_t up = a; up != NO_PARENT; up = parent[up])
+                if (up == b) return parent[a] != b;
+            for (uint32_t up = b; up != NO_PARENT; up = parent[up])
+                if (up == a) return parent[b] != a;
+            return false;
+        };
+
+        std::unordered_map<uint16_t, std::vector<uint32_t>> writers;
+
+        for (size_t i = 0; i < nodes.size(); ++i)
+        {
+            const CommandNode& n = nodes[i];
+            if (!n.hasConfig() || (n.flags & shared)) continue;
+            writers[n.configId].push_back(static_cast<uint32_t>(i));
+        }
+
+        for (const auto& [id, found] : writers)
+        {
+            std::vector<uint32_t> clash;
+            for (size_t a = 0; a < found.size() && clash.empty(); ++a)
+                for (size_t b = a + 1; b < found.size(); ++b)
+                    if (collides(found[a], found[b]))
+                    {
+                        clash = { found[a], found[b] };
+                        break;
+                    }
+
+            if (clash.empty()) continue;
+
+            const CommandNode probe{ .configId = id };
+
+            std::string msg = "cli::grammar: warning: registry "
+                + std::to_string(probe.fieldRegistryId()) + " field "
+                + std::to_string(probe.enumIndex())
+                + " is written twice on one line, and the last one run wins:";
+
+            for (const uint32_t i : clash)
+                msg += " '" + std::string(strAt(nodes[i].nameId)) + "'";
+
+            std::fprintf(stderr, "%s\n", msg.c_str());
+        }
     }
 };
 }
@@ -687,18 +1021,21 @@ namespace
 {
 // Flattens modes into the serialized tree; shared by both entry points.
 std::vector<std::byte> emitTree(const std::vector<ModeFile>& modeFiles,
-                                const JsonNode* varsRoot)
+                                const JsonNode* varsRoot,
+                                uint32_t grammarHash = 0)
 {
     TreeEmitter em(varsRoot);
 
     for (const ModeFile& m : modeFiles)
         em.addEntry(m.name, m.variant, *m.commands, m.registry, m.prompt);
 
-    auto& regModes   = em.regModes;
-    auto& regIndexes = em.regIndexes;
-    auto& modes      = em.modes;
-    auto& nodes      = em.nodes;
-    auto& blob       = em.blob;
+    em.checkDeferKeys();
+    em.reportSharedFields();
+
+    auto& modes = em.modes;
+    auto& nodes = em.nodes;
+    auto& strs  = em.strs;
+    auto& blob  = em.blob;
 
     if (modes.size() > UINT32_MAX)
         throw std::runtime_error("cli::grammar: mode count exceeds uint32");
@@ -706,16 +1043,15 @@ std::vector<std::byte> emitTree(const std::vector<ModeFile>& modeFiles,
     FileHeader header{};
     header.modeCount = static_cast<uint32_t>(modes.size());
     header.nodeCount = static_cast<uint32_t>(nodes.size());
+    header.strCount = static_cast<uint32_t>(strs.size());
     header.blobSize = static_cast<uint32_t>(blob.size());
-    header.registryCount = static_cast<uint32_t>(regModes.size());
-    header.slotCount = static_cast<uint32_t>(regIndexes.size());
     header.registryHash = config::REGISTRY_FIELD_HASH;
+    header.grammarHash = grammarHash;
 
     std::vector<std::byte> out(sizeof(FileHeader)
                              + modes.size() * sizeof(ModeEntryNode)
                              + nodes.size() * sizeof(CommandNode)
-                             + regModes.size() * sizeof(RegistryEntry)
-                             + regIndexes.size() * sizeof(uint32_t)
+                             + strs.size() * sizeof(StrRef)
                              + blob.size());
     std::byte* p = out.data();
     auto write = [&](const void* src, size_t bytes)
@@ -726,11 +1062,60 @@ std::vector<std::byte> emitTree(const std::vector<ModeFile>& modeFiles,
     write(&header, sizeof(FileHeader));
     write(modes.data(), modes.size() * sizeof(ModeEntryNode));
     write(nodes.data(), nodes.size() * sizeof(CommandNode));
-    write(regModes.data(), regModes.size() * sizeof(RegistryEntry));
-    write(regIndexes.data(), regIndexes.size() * sizeof(uint32_t));
+    write(strs.data(), strs.size() * sizeof(StrRef));
     write(blob.data(), blob.size());
     return out;
 }
+}
+
+namespace
+{
+std::vector<std::filesystem::path> grammarFiles(const std::string& dir)
+{
+    namespace fs = std::filesystem;
+
+    std::vector<fs::path> paths;
+    for (const fs::directory_entry& e : fs::recursive_directory_iterator(dir))
+        if (e.is_regular_file() && e.path().extension() == ".json")
+            paths.push_back(e.path());
+
+    std::sort(paths.begin(), paths.end());
+    return paths;
+}
+}
+
+uint32_t hashDir(const std::string& dir)
+{
+    namespace fs = std::filesystem;
+
+    std::error_code ec;
+    if (!fs::is_directory(dir, ec)) return 0;
+
+    uint32_t h = 0x811C9DC5u;
+    auto mix = [&h](std::string_view bytes)
+    {
+        for (const char c : bytes)
+        {
+            h ^= static_cast<uint8_t>(c);
+            h *= 0x01000193u;
+        }
+    };
+
+    for (const fs::path& p : grammarFiles(dir))
+    {
+        std::ifstream in(p, std::ios::binary);
+        if (!in) return 0;
+
+        std::ostringstream body;
+        body << in.rdbuf();
+        if (!in && !in.eof()) return 0;
+
+        mix(fs::relative(p, dir, ec).generic_string());
+        mix(body.str());
+    }
+
+    // Reserved for "could not read", so a real hash never collides with it.
+    return h ? h : 1u;
 }
 
 std::vector<std::byte> flattenDir(const std::string& dir)
@@ -741,12 +1126,7 @@ std::vector<std::byte> flattenDir(const std::string& dir)
     if (!fs::is_directory(dir, ec))
         throw std::runtime_error("cli::grammar::flattenDir: not a directory: " + dir);
 
-    // Sorted for a stable table; the directory iterator promises no ordering.
-    std::vector<fs::path> paths;
-    for (const fs::directory_entry& e : fs::recursive_directory_iterator(dir))
-        if (e.is_regular_file() && e.path().extension() == ".json")
-            paths.push_back(e.path());
-    std::sort(paths.begin(), paths.end());
+    const std::vector<fs::path> paths = grammarFiles(dir);
 
     // Deque so growing it never moves an element a command pointer refers to.
     std::deque<JsonNode> docs;
@@ -853,6 +1233,6 @@ std::vector<std::byte> flattenDir(const std::string& dir)
                     : " and variant '" + m.variant + "'"));
     }
 
-    return emitTree(files, varsRoot);
+    return emitTree(files, varsRoot, hashDir(dir));
 }
 }

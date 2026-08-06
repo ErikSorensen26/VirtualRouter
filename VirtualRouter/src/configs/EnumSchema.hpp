@@ -122,16 +122,6 @@ constexpr std::size_t enumMemberCount()
 #define CONFIG_ENUM_MEMBER_HASH(NAME) config::tokenHash(#NAME),
 #define CONFIG_ENUM_MEMBER_NAME(NAME) std::string_view(#NAME),
 
-/**
- * @brief Declares a value enum together with the table naming its members.
- *
- * Usable from any namespace. The table is a plain struct beside the enum rather
- * than a specialization, so that a nested namespace can hold both; see
- * REGISTER_CONFIG_ENUM for the step that makes it findable from a type.
- *
- * COUNT terminates the enum, matching every other config enum, and is excluded
- * from the member tables -- it is a bound, not a value a grammar may name.
- */
 #define DEFINE_CONFIG_ENUM(NAME, MEMBER_LIST)                                             \
     enum class NAME { MEMBER_LIST(CONFIG_ENUM_MEMBER) COUNT };                            \
     struct NAME##EnumTable                                                                \
@@ -146,26 +136,18 @@ constexpr std::size_t enumMemberCount()
             { MEMBER_LIST(CONFIG_ENUM_MEMBER_NAME) };                                     \
     }
 
-/**
- * @brief Makes a DEFINE_CONFIG_ENUM enum resolvable from its type.
- *
- * Written at config scope, with the namespace the enum lives in and its name
- * given separately -- `REGISTER_CONFIG_ENUM(ospf, AreaType)`, or
- * `REGISTER_CONFIG_ENUM(, Duplex)` for one already at config scope. The two are
- * separate because the table's name is formed by pasting onto the enum's, and
- * `::` cannot be part of a pasted token.
- *
- * Split from the definition because an explicit specialization must be written
- * in the namespace holding the primary template, and the enums are not all
- * there.
- */
-#define REGISTER_CONFIG_ENUM(NS, NAME)                                                    \
-    template <>                                                                           \
-    struct EnumSchema<NS::NAME> { using table = NS::NAME##EnumTable; }
-
-/// @brief REGISTER_CONFIG_ENUM for an enum already at config scope.
-#define REGISTER_CONFIG_ENUM_HERE(NAME)                                                   \
+#define DEFINE_CONFIG_ENUM_HERE(NAME, MEMBER_LIST)                                        \
+    DEFINE_CONFIG_ENUM(NAME, MEMBER_LIST);                                                \
     template <>                                                                           \
     struct EnumSchema<NAME> { using table = NAME##EnumTable; }
+
+#define DEFINE_CONFIG_ENUM_NS(NS, NAME, MEMBER_LIST)                                      \
+    DEFINE_CONFIG_ENUM(NAME, MEMBER_LIST);                                                \
+    }                                                                                     \
+    template <>                                                                           \
+    struct EnumSchema<NS::NAME> { using table = NS::NAME##EnumTable; };                   \
+    namespace NS                                                                          \
+    {                                                                                     \
+    static_assert(hasEnumSchemaV<NAME>, "enum registration did not take effect")
 
 #endif // ENUM_SCHEMA_HPP

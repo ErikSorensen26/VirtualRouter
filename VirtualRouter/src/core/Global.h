@@ -28,6 +28,9 @@
 #include "ControlScheduler.h"
 #include "AddressFamily.hpp"
 
+#define DEFAULT_HOSTNAME "router"
+#define DEFAULT_VRF ""
+
 namespace config { struct GlobalRegistry; }
 
 namespace interface { class Interface; }
@@ -47,8 +50,6 @@ namespace services::dhcp { class DhcpServer; class Dhcpv6Server; }
  */
 namespace core
 {
-
-#define DEFAULT_HOSTNAME "router"
 
 class VirtualRouter;
 
@@ -281,7 +282,7 @@ public:
      * @param name Name of the VRF (must be unique).
      * @return Pointer to new VirtualRouter or nullptr if already exists.
      */
-    VirtualRouter* addRoutingInstance(const std::string& name);
+    VirtualRouter* addRoutingInstance(const std::string& name = DEFAULT_VRF);
 
     /**
      * @brief Retrieve a routing instance by name and optionally by address family.
@@ -290,7 +291,7 @@ public:
      * @param ad Address family (IPv4/IPv6). If NONE, any AF is accepted.
      * @return Pointer to VirtualRouter or nullptr if not found or AF not enabled.
      */
-    VirtualRouter* getRoutingInstance(const std::string& name = "default", types::AddressFamily = types::AddressFamily::NONE);
+    VirtualRouter* getRoutingInstance(const std::string& name = DEFAULT_VRF, types::AddressFamily = types::AddressFamily::NONE);
 
     /**
      * @brief Remove a routing instance.

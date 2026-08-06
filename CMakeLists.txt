@@ -35,14 +35,6 @@ if (BUILD_STATIC_ROUTER)
     set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
     set(BUILD_SHARED_LIBS OFF)
 
-    # Paths to static OpenSSL
-    set(OPENSSL_ROOT_DIR /opt/static-libs/openssl)
-    set(OPENSSL_INCLUDE_DIR /opt/static-libs/openssl/include)
-    set(OPENSSL_LIBRARIES
-        /opt/static-libs/openssl/lib64/libssl.a
-        /opt/static-libs/openssl/lib64/libcrypto.a
-    )
-
     if (ENABLE_DEBUG_SYMBOLS)
         message(STATUS "Including debug symbols (-g -gsplit-dwarf -rdynamic)")
         add_compile_options(-g -gsplit-dwarf)
@@ -81,7 +73,6 @@ else()
     # External Dependencies (visible to subdirs)
     find_package(PkgConfig REQUIRED)
     find_package(ZLIB REQUIRED)
-    find_package(OpenSSL REQUIRED)
     find_package(CURL REQUIRED)
 
     message(STATUS "Building in NORMAL (dynamic + test + utils) mode")

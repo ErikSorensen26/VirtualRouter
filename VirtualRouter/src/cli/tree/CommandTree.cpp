@@ -2,7 +2,6 @@
 
 #include "CommandTree.h"
 #include "nodes/FileHeader.hpp"
-#include "nodes/RegistryEntry.h"
 #include "configs/RegistryTable.hpp"
 #include <Json.hpp>
 #include <filesystem>
@@ -25,20 +24,40 @@ CommandTree::CommandTree(Storage storage)
 
 CommandTree::CommandTree(const std::string& sourcePath, const std::string& binaryPath)
 {
+    const uint32_t sources = parser::hashDir(sourcePath);
+
+    auto discard = [this]
+    {
+        storage = Storage();
+        header = nullptr;
+        baseModes = {};
+        baseNodes = {};
+        baseStrs = {};
+        baseBlob = {};
+    };
+
     try
     {
         storage = Storage::mapFile(binaryPath);
         bindBase();
-        return;
+
+        if (sources == 0 || grammarHash() == sources) return;
+
+        discard();
     }
     catch (const std::runtime_error&)
     {
-        storage = Storage();
+        discard();
     }
 
     build(sourcePath, binaryPath);
     storage = Storage::mapFile(binaryPath);
     bindBase();
+}
+
+uint32_t CommandTree::grammarHash() const
+{
+    return header ? header->grammarHash : 0;
 }
 
 PortCounts CommandTree::readPortCounts(const std::string& hwConfigPath)
@@ -70,9 +89,9 @@ void CommandTree::applyPortCounts(const PortCounts& counts)
     for (uint32_t parentIdx = 0; parentIdx < baseNodes.size(); ++parentIdx)
     {
         const CommandNode& parent = baseNodes[parentIdx];
-        if (parent.subcmdSiz == 0 || parent.nameSiz == 0) continue;
+        if (parent.subcmdSiz == 0 || parent.nameId == CommandNode::STR_NONE) continue;
 
-        auto it = counts.find(std::string(blobText(parent.infoOff, parent.nameSiz)));
+        auto it = counts.find(std::string(strText(parent.nameId)));
         if (it == counts.end() || it->second == 0) continue;
 
         for (uint32_t ord = 0; ord < parent.subcmdSiz; ++ord)
@@ -81,14 +100,12 @@ void CommandTree::applyPortCounts(const PortCounts& counts)
             if (childIdx >= baseNodes.size()) break;
 
             const CommandNode& child = baseNodes[childIdx];
-            if (child.nameSiz == 0) continue;
+            if (child.nameId == CommandNode::STR_NONE) continue;
 
-            const std::string_view name = blobText(child.infoOff, child.nameSiz);
-            const std::string range = expandPortPlaceholder(name, it->second);
+            const std::string range = expandPortPlaceholder(strText(child.nameId), it->second);
             if (range.empty()) continue;
 
-            patch.patchName(childIdx, child, range,
-                            blobText(child.infoOff + child.nameSiz, child.descSiz));
+            patch.patchName(childIdx, child, range);
         }
     }
 }
@@ -130,27 +147,31 @@ void CommandTree::bindBase()
     if (header->registryHash != config::REGISTRY_FIELD_HASH)
         throw std::runtime_error("cli::tree::CommandTree: registry list changed since this file was written");
 
-    // [FileHeader][ModeEntryNode[]][CommandNode[]][RegistryEntry[]][uint32 slots][blob]
+    // [FileHeader][ModeEntryNode[]][CommandNode[]][StrRef[]][blob]
     const std::byte* modesPtr = storage.data() + header->headerSize;
     baseModes = std::span<const ModeEntryNode>(
         reinterpret_cast<const ModeEntryNode*>(modesPtr), header->modeCount);
     const std::byte* nodesPtr = modesPtr + header->modeCount * sizeof(ModeEntryNode);
     baseNodes = std::span<const CommandNode>(
         reinterpret_cast<const CommandNode*>(nodesPtr), header->nodeCount);
-    const std::byte* regPtr = nodesPtr + header->nodeCount * sizeof(CommandNode);
-    const std::byte* slotPtr = regPtr + header->registryCount * sizeof(RegistryEntry);
-    const std::byte* blobPtr = slotPtr + header->slotCount * sizeof(uint32_t);
+    const std::byte* strsPtr = nodesPtr + header->nodeCount * sizeof(CommandNode);
+    baseStrs = std::span<const StrRef>(
+        reinterpret_cast<const StrRef*>(strsPtr), header->strCount);
+    const std::byte* blobPtr = strsPtr + header->strCount * sizeof(StrRef);
     baseBlob = std::span<const char>(
         reinterpret_cast<const char*>(blobPtr), header->blobSize);
 
     size_t total = static_cast<size_t>(header->headerSize)
                  + header->modeCount * sizeof(ModeEntryNode)
                  + header->nodeCount * sizeof(CommandNode)
-                 + header->registryCount * sizeof(RegistryEntry)
-                 + header->slotCount * sizeof(uint32_t)
+                 + header->strCount * sizeof(StrRef)
                  + header->blobSize;
     if (storage.size() < total)
         throw std::runtime_error("cli::tree::CommandTree: buffer shorter than its header describes");
+
+    for (const StrRef& r : baseStrs)
+        if (static_cast<size_t>(r.off) + r.len > baseBlob.size())
+            throw std::runtime_error("cli::tree::CommandTree: interned string out of blob bounds");
 }
 
 ModeEntry CommandTree::getMode(CliMode mode) const
@@ -205,20 +226,17 @@ const ModeEntryNode& CommandTree::modeAt(uint32_t idx) const
     return baseModes[idx];
 }
 
-std::string_view CommandTree::blobText(uint32_t off, uint32_t len) const
+std::string_view CommandTree::strText(uint16_t id) const
 {
-    if (off >= TreePatch::OFFSET_BIAS)
-    {
-        const std::string_view patched = patch.text();
-        const size_t start = off - TreePatch::OFFSET_BIAS;
-        if (start + len > patched.size())
-            throw std::runtime_error("cli::tree::CommandTree: patch range out of bounds");
-        return patched.substr(start, len);
-    }
+    if (id == CommandNode::STR_NONE) return {};
+    if (id >= TreePatch::ID_BIAS) return patch.text(id);
 
-    if (static_cast<size_t>(off) + len > baseBlob.size())
-        throw std::runtime_error("cli::tree::CommandTree: blob range out of bounds");
-    return std::string_view(baseBlob.data() + off, len);
+    if (id >= baseStrs.size())
+        throw std::runtime_error("cli::tree::CommandTree: string id out of range");
+
+    // bindBase already checked every entry against the blob.
+    const StrRef& r = baseStrs[id];
+    return std::string_view(baseBlob.data() + r.off, r.len);
 }
 
 const CommandNode& CommandTree::nodeAt(uint32_t idx) const

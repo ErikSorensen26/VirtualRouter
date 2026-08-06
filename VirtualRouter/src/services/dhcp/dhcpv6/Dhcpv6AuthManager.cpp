@@ -89,7 +89,7 @@ std::optional<AuthManager::DelayedAuthInfo> AuthManager::addDelayedAuthOption(pa
 
     updateReplayCounter(duid, replay);
 
-    const size_t headerSize = 15 + (algo == AuthAlgorithm::HMACMD5 ? MD5_DIGEST_LENGTH : SHA_DIGEST_LENGTH);
+    const size_t headerSize = 15 + (algo == AuthAlgorithm::HMACMD5 ? security::authentication::MD5_DIGEST_LENGTH : security::authentication::SHA_DIGEST_LENGTH);
 
     uint8_t* option = tlv.getNextValBuf(headerSize);
     if (!option) return {};
@@ -143,7 +143,7 @@ bool AuthManager::validateDelayedAuth(packet::Dhcpv6Header& dhcp, packet::TLV16O
     std::memcpy(mac, opt->value + 15, macLen);
     std::memset(const_cast<uint8_t*>(opt->value) + 15, 0, macLen); // Zero digest for validation
 
-    if (macLen != (algo == AuthAlgorithm::HMACMD5 ? MD5_DIGEST_LENGTH : SHA_DIGEST_LENGTH) || !isReplayValid(duid, replay))
+    if (macLen != (algo == AuthAlgorithm::HMACMD5 ? security::authentication::MD5_DIGEST_LENGTH : security::authentication::SHA_DIGEST_LENGTH) || !isReplayValid(duid, replay))
         return false;
     updateReplayCounter(duid, replay);
 
@@ -267,7 +267,7 @@ std::optional<ClientAuthManager::DelayedAuthInfo> ClientAuthManager::addDelayedA
 
     updateReplayCounter(replay);
 
-    const size_t headerSize = 15 + (algo == AuthAlgorithm::HMACMD5 ? MD5_DIGEST_LENGTH : SHA_DIGEST_LENGTH);
+    const size_t headerSize = 15 + (algo == AuthAlgorithm::HMACMD5 ? security::authentication::MD5_DIGEST_LENGTH : security::authentication::SHA_DIGEST_LENGTH);
 
     uint8_t* option = tlv.getNextValBuf(headerSize);
     if (!option) return {};
@@ -321,7 +321,7 @@ bool ClientAuthManager::validateDelayedAuth(packet::Dhcpv6Header& dhcp, packet::
     std::memcpy(mac, opt->value + 15, macLen);
     std::memset(const_cast<uint8_t*>(opt->value) + 15, 0, macLen); // Zero digest for validation
 
-    if (macLen != (algo == AuthAlgorithm::HMACMD5 ? MD5_DIGEST_LENGTH : SHA_DIGEST_LENGTH) || !isReplayValid(replay))
+    if (macLen != (algo == AuthAlgorithm::HMACMD5 ? security::authentication::MD5_DIGEST_LENGTH : security::authentication::SHA_DIGEST_LENGTH) || !isReplayValid(replay))
         return false;
     updateReplayCounter(replay);
 

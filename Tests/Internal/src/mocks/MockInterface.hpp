@@ -30,7 +30,7 @@ public:
                   float interfaceId = 0,
                   core::VirtualRouter* vrf = nullptr,
                   bool debug = true)
-        : Interface({interfaceType, interfaceId, vrf ? *vrf : *global.getRoutingInstance("default"), hwInfo, debug})
+        : Interface({interfaceType, interfaceId, vrf ? *vrf : *global.getRoutingInstance(), hwInfo, debug})
     {
         shutdownFlag = false;
         arp.refresh();

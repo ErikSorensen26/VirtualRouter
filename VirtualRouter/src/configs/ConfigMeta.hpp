@@ -69,9 +69,9 @@ using DefType = typename Strip<T>::type;
 constexpr uint32_t tokenHash(std::string_view sv)
 {
     uint32_t h = 0x811C9DC5;
-    for (char c : sv)
+    for (size_t i = 0; i < sv.size(); ++i)
     {
-        h ^= static_cast<uint32_t>(c);
+        h ^= static_cast<uint32_t>(sv[i]);
         h *= 0x01000193;
     }
     return h;

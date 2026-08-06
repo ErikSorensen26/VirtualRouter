@@ -137,6 +137,21 @@ bool extractInterfaceId(std::string_view type, std::string_view id, interface::I
 bool extractSubnetMask(uint32_t mask, uint8_t& plen);
 
 /**
+ * @brief Converts a dotted-decimal mask string to a prefix length.
+ *
+ * Accepts either spelling: a subnet mask (255.255.255.0) or the wildcard that
+ * is its inverse (0.0.0.255). Both name the same prefix, and which one a
+ * command takes is a per-protocol convention rather than a difference in
+ * meaning -- EIGRP and OSPF `network` statements use the wildcard, while an
+ * interface address uses the subnet mask.
+ *
+ * @param[in]  mask  Dot-decimal mask string, in either spelling.
+ * @param[out] plen  Populated with the prefix length on success.
+ * @return True if the string parsed and named a contiguous mask.
+ */
+bool extractMaskLength(std::string_view mask, uint8_t& plen);
+
+/**
  * @brief Parses an IP address string (IPv4 or IPv6) into an @ref types::IPAddress.
  *
  * @param[in]  str   Dot-decimal or colon-hex address string.
@@ -227,7 +242,7 @@ bool expandIPv6Address(std::string& ipv6Address);
  * @param[out] mac  Populated on success.
  * @return True if parsing succeeded.
  */
-bool extractMacAddress(std::string_view str, types::Mac mac);
+bool extractMacAddress(std::string_view str, types::Mac& mac);
 
 /**
  * @brief Tests whether a CLI token satisfies a numeric range pattern.
@@ -246,6 +261,9 @@ bool isNumericRange(std::string_view p);
 
 /// @brief Returns true if `address` is a valid dot-decimal IPv4 address.
 bool isIPv4Address(std::string_view address);
+
+/// @brief Returns true if `addressWithMask` is a valid IPv4 CIDR prefix (e.g. `"10.0.0.0/24"`).
+bool isIPv4AddressWithMask(std::string_view addressWithMask);
 
 /// @brief Returns true if `address` is a valid colon-hex IPv6 address.
 bool isIPv6Address(std::string_view address);

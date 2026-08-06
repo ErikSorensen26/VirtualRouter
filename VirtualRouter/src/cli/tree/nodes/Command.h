@@ -2,9 +2,8 @@
  * @file Command.h
  * @brief A node in the flattened command tree, and a cursor over it.
  *
- * @c CommandNode is the packed on-disk record: offsets and lengths into the
- * string blob for its name and description, the span of its children, and its
- * property flags.
+ * @c CommandNode is the packed on-disk record: ids into the string tables for
+ * its name and description, the span of its children, and its property flags.
  *
  * @c Command is the cursor callers hold — a tree pointer plus an index, cheap to
  * copy, owning nothing. Names and descriptions come back as @c string_view
@@ -24,53 +23,19 @@
 
 namespace cli::tree
 {
-// Keys as they appear in a grammar file.
-/// "prompt" or "prompt/variant" on a command that enters a mode.
-constexpr std::string_view KEY_MODE        = "mode";
-constexpr std::string_view KEY_NAME        = "name";
-constexpr std::string_view KEY_DESCRIPTION = "description";
-constexpr std::string_view KEY_SUBCOMMANDS = "subcommands";
-constexpr std::string_view KEY_PROPERTIES  = "properties";
-constexpr std::string_view KEY_SUPPORT     = "support";
-constexpr std::string_view KEY_CONFIG      = "config";
-constexpr std::string_view KEY_ENUM        = "enum";
-constexpr std::string_view KEY_ARGS        = "args";
-
-/// @brief Marks a value that names an argument rather than being one.
-constexpr char ARG_SIGIL = '$';
-
-constexpr std::string_view KEY_VARIABLES   = "VARIABLES";
-
 /**
- * @brief Every key a command object may carry.
+ * @brief Widest sibling set a per-line "already used" mask can track.
  *
- * Checked against, so a key the flattener does not know is an error rather than
- * something silently dropped. Six misspellings were already in the grammar when
- * this went in -- "descirption", "subcommads" -- and a mistyped "subcommands"
- * costs a whole subtree with nothing to show that it went missing.
+ * Bounds the recursive and single-use properties: both remember which siblings
+ * a line has already taken, and the mask holding that is one word wide.
  */
-constexpr std::string_view COMMAND_KEYS[] = {
-    KEY_NAME, KEY_DESCRIPTION, KEY_SUBCOMMANDS, KEY_PROPERTIES,
-    KEY_SUPPORT, KEY_CONFIG, KEY_ENUM, KEY_MODE, KEY_ARGS,
-};
-
-// Keys of a per-mode grammar file. Each file is one mode: its prompt, the
-// registry it configures, and its command list.
-constexpr std::string_view KEY_PROMPT      = "prompt";
-constexpr std::string_view KEY_REGISTRY    = "registry";
-constexpr std::string_view KEY_COMMANDS    = "commands";
-constexpr std::string_view KEY_VARIANT     = "variant";
-
-/// @brief Basename, without extension, of the shared variable file.
-constexpr std::string_view VARIABLES_STEM  = "Variables";
-
 constexpr size_t MAX_TRACKED_SIBLINGS = 64;
 
 class CommandTree;
 
 struct CommandNode
 {
-    enum Property : uint16_t
+    enum Property : uint32_t
     {
         NEGATE            = 1u << 0,
         NEGATE_ALL        = 1u << 1,
@@ -83,32 +48,63 @@ struct CommandNode
         TUPLE_CHANGE      = 1u << 8,
         ENUM_CHANGE       = 1u << 9,
         MODE_EXIT         = 1u << 10, // Leaving one mode, as `exit` does.
+        ENUM_BITMAP       = 1u << 11, // Qualifies ENUM_CHANGE; the field is a bitmap.
+        REGISTRY_CHANGE   = 1u << 12, // Binds a container: rescopes the line, reverts after.
+        DEFERRED          = 1u << 13, // Holds its value under a key; configExt names which.
+        RESOLVER          = 1u << 14, // Supplies the value for a key; configExt names which.
+        TUPLE_ENUM        = 1u << 15, // Qualifies TUPLE_CHANGE; configExt is split, see tupleEnumIndex().
     };
 
     /**
-     * configId packs the config field this command writes into 16 bits: the
-     * high 6 bits are the registry id, the low 10 bits the enum index within
-     * that registry. Kept packed so CommandNode stays 16 bytes.
+     * A tuple member that is an enum needs two numbers where every other node
+     * needs one: which member of the tuple, and which member of the enum. Both
+     * live in configExt, eight bits each.
+     *
+     * Still a cap, so both halves stay range-checked when they are packed.
+     * Silently truncating a member or an enumerator would write the wrong value
+     * at runtime with nothing to trace it back to, which no amount of headroom
+     * makes safe.
+     */
+    static constexpr uint16_t TUPLE_ENUM_BITS = 8;
+    static constexpr uint16_t TUPLE_ENUM_MASK = (1u << TUPLE_ENUM_BITS) - 1;
+    static constexpr uint16_t TUPLE_ENUM_MAX  = TUPLE_ENUM_MASK;
+
+    static constexpr uint16_t packTupleEnum(uint16_t member, uint16_t enumIdx)
+    {
+        return static_cast<uint16_t>((enumIdx << TUPLE_ENUM_BITS) | member);
+    }
+
+    /**
+     * configId packs the config field this command writes into 32 bits: the
+     * high 12 bits are the registry id, the low 20 bits the enum index within
+     * that registry.
      *
      * CONFIG_NONE marks a command that sets no config field, which is most of
      * them -- containers like "ip" or "router" only exist to be descended
-     * through. It reserves registry id 63, so ids run 0..62.
+     * through. It reserves the top registry id, so ids run 0..4094.
      */
-    static constexpr uint16_t CONFIG_FIELD_ENUM_BITS = 10;
-    static constexpr uint16_t CONFIG_FIELD_ENUM_MASK = (1u << CONFIG_FIELD_ENUM_BITS) - 1;
-    static constexpr uint16_t CONFIG_FIELD_MAX_REGISTRY = (1u << (16 - CONFIG_FIELD_ENUM_BITS)) - 2;
+    static constexpr uint32_t CONFIG_FIELD_ENUM_BITS = 20;
+    static constexpr uint32_t CONFIG_FIELD_ENUM_MASK = (1u << CONFIG_FIELD_ENUM_BITS) - 1;
+    static constexpr uint32_t CONFIG_FIELD_MAX_REGISTRY = (1u << (32 - CONFIG_FIELD_ENUM_BITS)) - 2;
 
-    static constexpr uint16_t CONFIG_NONE = 0xFFFFu;
-    static constexpr uint16_t CONFIG_EXT_NONE = 0xFFu;
+    static constexpr uint32_t CONFIG_NONE = 0xFFFFFFFFu;
+    static constexpr uint16_t CONFIG_EXT_NONE = 0xFFFFu;
 
-    uint32_t infoOff;
-    uint32_t subcmdOff;
-    uint16_t configId = CONFIG_NONE;
-    uint8_t  configExt = CONFIG_EXT_NONE;
-    uint8_t  nameSiz;
-    uint8_t  descSiz;
-    uint8_t  subcmdSiz;
-    uint16_t flags;
+    /// @brief Id of an interned string that is absent rather than empty.
+   static constexpr uint16_t STR_NONE = 0xFFFFu;
+
+    uint32_t subcmdOff;               ///< Index of the first child node.
+    uint32_t configId = CONFIG_NONE;  ///< Packed registry id and field index.
+    uint32_t flags = 0;               ///< Property bits.
+    uint16_t nameId = STR_NONE;       ///< Interned name; STR_NONE when unnamed.
+    uint16_t descId = STR_NONE;       ///< Interned description; STR_NONE when absent.
+    uint16_t subcmdSiz = 0;           ///< Children under subcmdOff.
+    uint16_t configExt = CONFIG_EXT_NONE;
+
+    // Reserved
+    uint32_t reserved0 = 0;
+    uint32_t reserved1 = 0;
+    uint32_t reserved2 = 0;
 
     bool has(Property o) const { return flags & o; }
 
@@ -144,6 +140,28 @@ struct CommandNode
     bool hasEnumChange() const { return (flags & ENUM_CHANGE) && configExt != CONFIG_EXT_NONE; }
 
     /**
+     * @brief True when the enum member sets a bit rather than replacing a value.
+     *
+     * Only meaningful alongside hasEnumChange(). A bitmap field holds flags, so
+     * sibling commands on one line accumulate -- `eigrp stub connected summary`
+     * sets two bits of the one field, where a value field would keep the last.
+     */
+    bool hasEnumBitMap() const { return flags & ENUM_BITMAP; }
+
+    /**
+     * @brief True when this command rescopes the rest of its own line.
+     *
+     * A mode change moves the session; this moves only the write scope, and
+     * only until the line ends -- `ip dhcp pool LAN dns-server 8.8.8.8` edits
+     * the pool without leaving the mode the user is standing in.
+     *
+     * Implies hasConfig(), like a mode change does and for the same reason: the
+     * bound field is where the new registry comes from. It needs no configExt,
+     * since it names no mode -- the scope is the field itself.
+     */
+    bool hasRegistryChange() const { return flags & REGISTRY_CHANGE; }
+
+    /**
      * @brief True when this command writes one member of a tuple-valued field.
      *
      * configExt holds the member's position in the tuple, which is a std::get
@@ -153,14 +171,68 @@ struct CommandNode
     bool hasTuple() const { return (flags & TUPLE_CHANGE) && configExt != CONFIG_EXT_NONE; }
 
     /**
+     * @brief True when this tuple member is set to a named enum member.
+     *
+     * The tuple counterpart of hasEnumChange(). A keyword names the member and
+     * the value both -- `in` says which member of DistributeList and that it is
+     * IN -- so the node carries no token and the value is fixed at flatten time.
+     */
+    bool hasTupleEnum() const { return hasTuple() && (flags & TUPLE_ENUM); }
+
+    /**
+     * @brief The std::get index this command writes, in either tuple mode.
+     */
+    uint16_t tupleMember() const
+    {
+        return (flags & TUPLE_ENUM) ? static_cast<uint16_t>(configExt & TUPLE_ENUM_MASK)
+                                    : configExt;
+    }
+
+    /**
+     * @brief The enum member this tuple member is set to; only with hasTupleEnum().
+     */
+    uint16_t tupleEnumIndex() const
+    {
+        return static_cast<uint16_t>(configExt >> TUPLE_ENUM_BITS);
+    }
+
+    /**
+     * @brief True when this command's value is held under a key rather than written.
+     *
+     * configExt holds the key's id, not the key itself: the flattener numbers the
+     * names it meets across the whole grammar and stores the position, the way a
+     * mode change stores a CLI_MODE_TABLE index. Two commands naming one key
+     * therefore carry the same id, and the name itself does not reach the binary.
+     *
+     * Implies hasConfig(): a deferred value still names the field it will land in
+     * once the key resolves. Until then the field keeps whatever default it
+     * declared, which is what makes the deferral invisible to a reader.
+     */
+    bool hasDeferred() const { return (flags & DEFERRED) && configExt != CONFIG_EXT_NONE; }
+
+    /**
+     * @brief True when this command supplies the value a deferred key waits on.
+     *
+     * The other half of hasDeferred(), numbered out of the same table so the ids
+     * match. It binds no field of its own -- what it resolves is whatever
+     * deferred commands named the same key, wherever in the grammar they sit.
+     */
+    bool hasResolver() const { return (flags & RESOLVER) && configExt != CONFIG_EXT_NONE; }
+
+    /**
+     * @brief The key id this command defers under or resolves; only with either flag.
+     */
+    uint16_t deferKey() const { return configExt; }
+
+    /**
      * @brief Registry id of the bound field; meaningless unless hasConfig().
      */
-    uint16_t fieldRegistryId() const { return configId >> CONFIG_FIELD_ENUM_BITS; }
+    uint16_t fieldRegistryId() const { return static_cast<uint16_t>(configId >> CONFIG_FIELD_ENUM_BITS); }
 
     /**
      * @brief Enum index within that registry; meaningless unless hasConfig().
      */
-    uint16_t enumIndex() const { return configId & CONFIG_FIELD_ENUM_MASK; }
+    uint32_t enumIndex() const { return configId & CONFIG_FIELD_ENUM_MASK; }
 
     /**
      * @brief Builds a packed configId from a registry id and enum index.
@@ -170,11 +242,14 @@ struct CommandNode
      * either would decode as a different binding than the one requested --
      * silently, and only for grammars large enough to reach the limit.
      */
-    static constexpr uint16_t packConfig(uint16_t registry, uint16_t index)
+    static constexpr uint32_t packConfig(uint16_t registry, uint32_t index)
     {
-        return static_cast<uint16_t>((registry << CONFIG_FIELD_ENUM_BITS) | index);
+        return (static_cast<uint32_t>(registry) << CONFIG_FIELD_ENUM_BITS) | index;
     }
 };
+
+static_assert(sizeof(CommandNode) == 32, "CommandNode layout is the on-disk format");
+static_assert(alignof(CommandNode) == 4, "CommandNode must stay 4-byte aligned in the mapping");
 
 class Command
 {
@@ -209,21 +284,31 @@ public:
      */
     static Command rebind(const CommandTree* tr, uint32_t idx) { return Command(tr, idx); }
 
+    /// @brief True when this node carries a property flag; false when unbound.
     bool hasProp(CommandNode::Property) const;
 
+    /// @brief True when "<cr>" is this node's only child, so the command ends here.
     bool hasExclusiveCR() const;
+
+    /// @brief True when "<cr>" is among this node's children, so it may end here.
     bool hasCarriageReturn() const;
 
+    /// @brief The keyword this node matches; "<cr>" for a default cursor.
     std::string_view name() const;
 
+    /// @brief The help text shown beside the name; empty when none was written.
     std::string_view desc() const;
 
+    /// @brief Number of children; zero for a leaf or a default cursor.
     size_t size() const;
 
+    /// @brief A cursor on the nth child; invalid when @p i is out of range.
     Command at(size_t i) const;
 
+    /// @brief Ordinal of the child named @p childName, or NPOS when absent.
     size_t find(std::string_view childName) const;
 
+    /// @brief Returned by @ref find for a name that is not a child.
     static constexpr size_t NPOS = ~size_t{0};
 
     class Iterator

@@ -317,7 +317,7 @@ using GlobalLineRange = std::pair<uint16_t, uint16_t>;
     VALUE_FIELD(X, Y, IPV6_LOCAL_POLICY_ROUTE_MAP, std::string) TODO \
     ATOMIC_FIELD(X, Y, IPV6_MFIB, bool, false) TODO \
     REGISTRY_CONTAINER(X, Y, IPV6_ND, NdpBaseRegistry) TODO \
-    LIST_FIELD(X, Y, IPV6_NEIGHBOR, GlobalIPv6Neighbor::Tuple) TODO \
+    LIST_FIELD(X, Y, IPV6_NEIGHBOR, GlobalIPv6Neighbor) TODO \
     ATOMIC_FIELD(X, Y, IPV6_OSPF_NAME_LOOKUP, bool, false) TODO \
     OWNED_LIST_FIELD(X, Y, IPV6_PREFIX_LIST, PrefixListRegistry<types::IPv6Prefix>, std::string) \
     LIST_FIELD(X, Y, IPV6_PREFIX_POOL, Incomplete) TODO \

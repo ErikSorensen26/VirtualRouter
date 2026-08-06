@@ -116,6 +116,18 @@ struct TraversalContext
     std::string_view endCmdStr;
 
     /**
+     * @brief The node the end-of-command marker matched, where one did.
+     *
+     * The marker itself carries no binding, but the `<cr>` leaf it stands for is
+     * an ordinary node with its own flags, and a `resolver` is spelled there:
+     * the end of the line is the one point that means the command is finished
+     * rather than merely passed through. Kept beside @ref endCmdStr, which
+     * already records the same node's name, so the token built from the marker
+     * can carry the node instead of resolving nothing.
+     */
+    tree::Command endCmdNode;
+
+    /**
      * @brief Every candidate the last word is a prefix of.
      *
      * Includes an exact match and anything extending it, so "ip" yields both
@@ -201,6 +213,7 @@ struct TraversalContext
         if (err) return {};
 
         eoc = false;
+        endCmdNode = {};
 
         bool addCarriage = false;
         if ((negateMode || defaultMode) && prevCmd)
@@ -262,7 +275,7 @@ struct TraversalContext
                 {
                     matchNode = cmd;
                     matchCount = 1;
-                    if (cmd.size() == 0) eoc = true;
+                    if (cmd.size() == 0) { eoc = true; endCmdNode = cmd; }
                     break;
                 }
             }
@@ -304,10 +317,11 @@ struct TraversalContext
             !((negateMode && userInput == "no") || (defaultMode && userInput == "default")))
         {
             endCmdStr = matchNode->name();
+            endCmdNode = matchNode.value();
             eoc = true;
             return {};
         }
-        else eoc = false;
+        else { eoc = false; endCmdNode = {}; }
 
         if (!matchCount && !userInput.empty() && err && userInput != "?" && userInput != "\t")
             return {};
@@ -346,6 +360,13 @@ struct TraversalContext
 
         // IPv4
         if (pattern == "A.B.C.D" && cli::utils::isIPv4Address(input))
+        {
+            accept();
+            return true;
+        }
+
+        // IPv4 with a prefix length
+        if (pattern == "A.B.C.D/nn" && cli::utils::isIPv4AddressWithMask(input))
         {
             accept();
             return true;

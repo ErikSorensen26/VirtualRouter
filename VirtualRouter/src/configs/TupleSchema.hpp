@@ -9,12 +9,13 @@
  * needs the member names as data, which a bare std::tuple does not carry, so
  * DEFINE_TUPLE_SCHEMA emits them beside the accessors it already generated.
  *
- * The reverse map is TupleSchemaFor<ENUM, E>: the flattener resolves a field and
- * then has to reach the schema that named its members. It is keyed on the field
- * and not on the field's type, because Tuple is structural -- OspfTrafEngInterface
- * and RouteMapMetricRange are both tuple<uint32_t, uint32_t> -- and a type-keyed
- * map could only ever answer one of them for both. TUPLE_SCHEMA_FOR states the
- * pairing at the field, where the two stay distinct.
+ * No reverse map is needed to get back. A field declares the schema itself and
+ * stores the Tuple the schema names, so the schema stays reachable from the
+ * field's own type. Declaring the Tuple directly would lose it: Tuple is
+ * structural -- OspfTrafEngInterface and RouteMapMetricRange are both
+ * tuple<uint32_t, uint32_t> -- while the schemas naming them are distinct types.
+ *
+ * @see StorageOf, which is what turns the declared schema into the stored tuple.
  */
 
 // TupleSchema.hpp
@@ -31,170 +32,156 @@
 #include <type_traits>  // std::tuple_element_t
 
 #include "configs/ConfigMeta.hpp"
-
-/**
- * Usage:
- *
- *   #define MY_FIELDS(X) \
- *       X(int,    Foo)   \
- *       X(double, Bar)
- *
- *   DEFINE_TUPLE_SCHEMA(MySchema, MY_FIELDS);
- *
- *   MySchema::Tuple t{ 1, 3.14 };
- *   auto& foo = MySchema::Foo(t);
- *
- * If a field type contains a top level comma the preprocessor would read it as
- * two arguments, so parenthesize it. The parentheses are stripped by TS_TYPE
- * and are not part of the resulting type.
- *
- *       X((std::variant<A, B>), Foo)
- */
-namespace config::ts
-{
-/**
- * void(T) is a function type taking one parameter; peel T back out of it.
- * This is what lets a parenthesized (T) survive as a single macro argument.
- */
-template <typename> struct Unparen;
-template <typename T> struct Unparen<void(T)> { using type = T; };
-
-template <typename T> using Unparen_t = typename Unparen<T>::type;
-}
+#include "configs/RegistryTraits.hpp"
 
 namespace config
 {
-/**
- * @brief Maps one registry field to the schema naming its tuple's members.
- *
- * Keyed on the field rather than on its tuple type, because a tuple type does
- * not identify a schema: Tuple is a plain std::tuple, so two schemas over the
- * same element types are indistinguishable. Specialized by TUPLE_SCHEMA_FOR,
- * and left undefined otherwise so a tuple-valued field with no schema declared
- * reports hasTupleSchemaV == false rather than resolving member names against
- * some other field's table.
- */
-template <typename ENUM, ENUM E>
-struct TupleSchemaFor;
-
-/// @brief True when a field has a schema naming its tuple members.
-template <typename ENUM, ENUM E, typename = void>
-inline constexpr bool hasTupleSchemaV = false;
-
-template <typename ENUM, ENUM E>
-inline constexpr bool hasTupleSchemaV<ENUM, E, std::void_t<decltype(TupleSchemaFor<ENUM, E>::type::members)>> = true;
-
-/// @brief The schema for a field; ill-formed unless hasTupleSchemaV.
-template <typename ENUM, ENUM E>
-using TupleSchemaT = typename TupleSchemaFor<ENUM, E>::type;
-
-/// @brief Sentinel for a tuple member name that does not resolve.
 inline constexpr uint16_t TUPLE_NOT_FOUND = 0xFFFFu;
 
+namespace ts
+{
+template <typename> struct Unparen;
+template <typename T> struct Unparen<void(T)> { using type = T; };
+template <typename T> using Unparen_t = typename Unparen<T>::type;
+
+template <size_t Count, std::size_t TableSize>
+constexpr std::array<uint16_t, TableSize> buildMemberTable(const std::array<uint32_t, Count>& hashes)
+{
+    std::array<uint16_t, TableSize> table{};
+    for (auto& slot : table)
+        slot = TUPLE_NOT_FOUND;
+    constexpr std::size_t mask = TableSize - 1;
+    for (std::size_t i =0; i < Count; ++i)
+    {
+        std::size_t slot = hashes[i] & mask;
+        while (table[slot] != TUPLE_NOT_FOUND)
+            slot = (slot + 1) & mask;
+        table[slot] = static_cast<uint16_t>(i);
+    }
+    return table;
+}
+}
+
+template <typename T, typename = void>
+inline constexpr bool hasTupleSchemaV = false;
+
+template <typename T>
+inline constexpr bool hasTupleSchemaV<T, std::void_t<decltype(T::members)>> = true;
+
+namespace ts
+{
 /**
- * @brief Index of a hashed member name within a field's schema, or TUPLE_NOT_FOUND.
+ * @brief What a field declared with a schema actually stores.
  *
- * The index is the member's position in the tuple, which is what std::get takes,
- * so what the flattener stores is directly what the executor indexes with.
+ * A field names the schema rather than its Tuple so the schema stays reachable
+ * from the field's type -- Tuple is structural, and two schemas that happen to
+ * share a shape are indistinguishable once it is all that is left. The schema
+ * itself holds no members, so what gets stored is the Tuple it names.
  */
-template <typename ENUM, ENUM E>
+template <typename T, typename = void>
+struct Storage { using type = T; };
+
+template <typename T>
+struct Storage<T, std::enable_if_t<hasTupleSchemaV<T>>> { using type = typename T::Tuple; };
+}
+
+/// @brief The stored type for a field declared with a schema; the type itself otherwise.
+template <typename T>
+using StorageOf = typename ts::Storage<T>::type;
+
+template <typename T>
 constexpr uint16_t findTupleMember(uint32_t nameHash)
 {
-    if constexpr (hasTupleSchemaV<ENUM, E>)
+    if constexpr (hasTupleSchemaV<T>)
     {
-        using Schema = TupleSchemaT<ENUM, E>;
-        for (std::size_t i = 0; i < Schema::Count; ++i)
-            if (Schema::members[i] == nameHash)
-                return static_cast<uint16_t>(i);
+        constexpr size_t mask = T::TableSize - 1;
+        std::size_t slot = nameHash & mask;
+        for (size_t probes = 0; probes < T::TableSize; ++probes)
+        {
+            const uint16_t idx = T::memberTable[slot];
+            if (idx == TUPLE_NOT_FOUND)
+                return TUPLE_NOT_FOUND;
+            if (T::members[idx] == nameHash)
+                return idx;
+            slot = (slot + 1) & mask;
+        }
     }
     return TUPLE_NOT_FOUND;
 }
 
-/// @brief The member name at an index, for diagnostics; empty when out of range.
-template <typename ENUM, ENUM E>
+template <typename T>
 constexpr std::string_view tupleMemberName(uint16_t index)
 {
-    if constexpr (hasTupleSchemaV<ENUM, E>)
+    if constexpr (hasTupleSchemaV<T>)
     {
-        using Schema = TupleSchemaT<ENUM, E>;
-        if (index < Schema::Count)
-            return Schema::names[index];
+        if (index < T::count)
+            return T::names[index];
     }
     return {};
 }
+
+template <typename T>
+constexpr size_t tupleMemberCount()
+{
+    if constexpr (hasTupleSchemaV<T>)
+        return T::count;
+    else
+        return 0;
 }
 
-// Accepts either a bare type or a parenthesized one: TS_TYPE(int), TS_TYPE((A<x,y>)).
+struct TupleResolution
+{
+    uint16_t index = TUPLE_NOT_FOUND;
+    bool typeMatched = false;
+    std::string_view typeName;
+};
+
+template <typename T>
+constexpr TupleResolution resolveTupleSchema(uint32_t typeHash, uint32_t memberHash)
+{
+    TupleResolution out;
+    if constexpr (hasTupleSchemaV<T>)
+    {
+        out.typeName = T::typeName;
+        out.typeMatched = (T::typeHash == typeHash);
+        if (out.typeMatched)
+            out.index = findTupleMember<T>(memberHash);
+    }
+    return out;
+}
+}
+
 #define TS_TYPE(T) config::ts::Unparen_t<void(T)>
 
-#define TS_INDEX_ELEM(T, Name)    Index_##Name,
-#define TS_TUPLE_ELEM(T, Name)    std::declval<std::tuple<TS_TYPE(T)>>(),
-#define TS_HASH_ELEM(T, Name)     config::tokenHash(#Name),
-#define TS_NAME_ELEM(T, Name)     std::string_view(#Name),
+#define TS_INDEX_ELEM(T, NAME) Index_##NAME,
+#define TS_TUPLE_ELEM(T, NAME) std::declval<std::tuple<TS_TYPE(T)>>(),
+#define TS_HASH_ELEM(T, NAME)  config::tokenHash(#NAME),
+#define TS_NAME_ELEM(T, NAME)  std::string_view(#NAME),
 
-#define TS_ACCESSOR_ELEM(T, Name)                                                         \
-    static TS_TYPE(T)& Name(Tuple& t) noexcept {                                          \
-        return std::get<static_cast<std::size_t>(Index::Index_##Name)>(t);                \
-    }                                                                                     \
-    static const TS_TYPE(T)& Name(const Tuple& t) noexcept {                              \
-        return std::get<static_cast<std::size_t>(Index::Index_##Name)>(t);                \
-    }
+#define TS_ACCESSOR_ELEM(T, NAME)                                                         \
+    static TS_TYPE(T)& NAME(Tuple& t) noexcept {                                          \
+        return std::get<static_cast<size_t>(Index::Index_##NAME)>(t); }                   \
+    static const TS_TYPE(T)& NAME(const Tuple& t) noexcept {                              \
+        return std::get<static_cast<size_t>(Index::Index_##NAME)>(t); }
 
-/**
- * @brief Declares a named-member view over a tuple, plus its name tables.
- *
- * `members` is parallel to the tuple and holds one name hash per element, which
- * is what a grammar's "Registry::field::member" resolves against. `names` is
- * kept beside it for diagnostics only.
- *
- * The TupleSchemaOf specialization is emitted unqualified, so this must be used
- * from inside namespace config itself. Every registry header already is: the
- * nested namespaces in them (config::ospf, config::bgp) wrap only the
- * hand written value enums, and close before the schemas. Use
- * REGISTER_TUPLE_SCHEMA instead for a schema that does live in a nested one.
- */
-#define DEFINE_TUPLE_SCHEMA(Schema, FIELD_LIST)                                           \
-    struct Schema final {                                                                 \
-        enum class Index : std::size_t {                                                  \
-            FIELD_LIST(TS_INDEX_ELEM)                                                     \
-            Count                                                                         \
-        };                                                                                \
-                                                                                          \
-        using Tuple = decltype(std::tuple_cat(                                            \
-            FIELD_LIST(TS_TUPLE_ELEM)                                                     \
-            std::declval<std::tuple<>>()                                                  \
-        ));                                                                               \
-                                                                                          \
-        static constexpr std::size_t Count = static_cast<std::size_t>(Index::Count);      \
-                                                                                          \
-        static constexpr std::string_view schemaName = std::string_view(#Schema);         \
-                                                                                          \
-        static constexpr std::array<uint32_t, Count> members =                            \
+#define DEFINE_TUPLE_SCHEMA(SCHEMA, FIELD_LIST)                                           \
+    struct SCHEMA final {                                                                 \
+        enum class Index : std::size_t { FIELD_LIST(TS_INDEX_ELEM) Count };               \
+        using Tuple = decltype(std::tuple_cat(FIELD_LIST(TS_TUPLE_ELEM)                   \
+                                              std::declval<std::tuple<>>()));             \
+        static constexpr size_t count = static_cast<size_t>(Index::Count);                \
+        static constexpr std::string_view typeName = std::string_view(#SCHEMA);           \
+        static constexpr uint32_t typeHash = config::tokenHash(#SCHEMA);                  \
+        static constexpr std::array<uint32_t, count> members =                            \
             { FIELD_LIST(TS_HASH_ELEM) };                                                 \
-        static constexpr std::array<std::string_view, Count> names =                      \
+        static constexpr std::array<std::string_view, count> names =                      \
             { FIELD_LIST(TS_NAME_ELEM) };                                                 \
-                                                                                          \
+        static constexpr size_t TableSize = std::bit_ceil(count * 2);                     \
+        static constexpr std::array<uint16_t, TableSize> memberTable =                    \
+            config::ts::buildMemberTable<count, TableSize>(members);                      \
         template <Index I>                                                                \
-        using FieldType = std::tuple_element_t<static_cast<std::size_t>(I), Tuple>;       \
-                                                                                          \
+        using FieldType = std::tuple_element_t<static_cast<size_t>(I), Tuple>;            \
         FIELD_LIST(TS_ACCESSOR_ELEM)                                                      \
     }
-
-/**
- * @brief Names the schema a field's members are resolved against.
- *
- * Placed in the field list beside the field it describes:
- *
- *     LIST_FIELD_TUPLE(X, Y, RANGE, OspfAreaRange)
- *
- * The schema cannot be recovered from the field's type alone. A schema's Tuple
- * is structural, so two unrelated schemas over the same element types are the
- * same type -- OspfTrafEngInterface and RouteMapMetricRange are both
- * tuple<uint32_t, uint32_t> -- and a type-keyed map would have to answer one of
- * them for both. Naming the schema at the field keeps the two apart.
- */
-#define TUPLE_SCHEMA_FOR(FIELD_ENUM, VALUE, SCHEMA)                                       \
-    template <>                                                                           \
-    struct TupleSchemaFor<FIELD_ENUM, VALUE> { using type = SCHEMA; }
 
 #endif // TUPLE_SCHEMA_HPP

@@ -17,28 +17,22 @@ const ModeEntryNode& ModeEntry::node() const
 
 std::string_view ModeEntry::name() const
 {
-    const ModeEntryNode& e = node();
-    if (e.modeSiz == 0) return {};
-    return tree->blobText(e.infoOff, e.modeSiz);
+    return tree->strText(node().nameId);
 }
 
 std::string_view ModeEntry::subName() const
 {
-    const ModeEntryNode& e = node();
-    if (e.subSiz == 0) return {};
-    return tree->blobText(e.infoOff + e.modeSiz, e.subSiz);
+    return tree->strText(node().subId);
 }
 
 std::string_view ModeEntry::prompt() const
 {
-    const ModeEntryNode& e = node();
-    if (e.promptSiz == 0) return {};
-    return tree->blobText(e.infoOff + e.modeSiz + e.subSiz, e.promptSiz);
+    return tree->strText(node().promptId);
 }
 
 bool ModeEntry::hasSubMode() const
 {
-    return node().subSiz != 0;
+    return node().subId != ModeEntryNode::STR_NONE;
 }
 
 bool ModeEntry::hasRegistry() const

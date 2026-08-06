@@ -66,11 +66,12 @@ public:
         return f->value.load(std::memory_order_relaxed);
     }
 
-    inline void set(F::type v) noexcept
+    inline void set(F::type v, uint32_t cmdIdx = NO_COMMAND_INDEX) noexcept
     {
         bool apply = load() != v;
         field.value.store(v, std::memory_order_release);
         field.state.store(FieldState::CANNED, std::memory_order_release);
+        field.commandIndex = cmdIdx;
         if (apply && provider.hasCtx())
         {
             if constexpr (RequiresContext<F>)
@@ -162,11 +163,12 @@ public:
         return f->value.load(std::memory_order_relaxed);
     }
 
-    inline void set(F::type v) noexcept
+    inline void set(F::type v, uint32_t cmdIdx = NO_COMMAND_INDEX) noexcept
     {
         bool apply = !hasValue() || load() != v;
         field.value.store(v, std::memory_order_release);
         field.state.store(FieldState::CANNED, std::memory_order_release);
+        field.commandIndex = cmdIdx;
         if (apply && provider.hasCtx())
         {
             if constexpr (RequiresContext<F>)
@@ -265,7 +267,7 @@ public:
         return val;
     }
 
-    inline void set(F::type v) noexcept
+    inline void set(F::type v, uint32_t cmdIdx = NO_COMMAND_INDEX) noexcept
     {
         bool apply = !hasValue() || load() != v;
         typename F::type* val = new F::type(v);
@@ -275,6 +277,7 @@ public:
             delete o;
         }, old);
         field.state.store(FieldState::CANNED, std::memory_order_release);
+        field.commandIndex = cmdIdx;
         if (apply && provider.hasCtx())
         {
             if constexpr (RequiresContext<F>)
@@ -365,8 +368,9 @@ public:
     }
 
     template <typename Fn>
-    void withWrite(Fn&& fn)
+    void withWrite(Fn&& fn, uint32_t cmdIdx = NO_COMMAND_INDEX)
     {
+        field.commandIndex = cmdIdx;
         bool runApplier{false};
         {
             std::lock_guard<std::mutex> lk(mu);
@@ -446,13 +450,14 @@ public:
      * @param k  Key identifying the child entry.
      * @return Reference to the (new or existing) child entry.
      */
-    type& emplaceBack(const key& k) noexcept
+    type& emplaceBack(const key& k, uint32_t cmdIdx = NO_COMMAND_INDEX) noexcept
     {
         if (!field.delFn)
             field.delFn = [](type* p) { delete p; };
         auto [it, ok] = field.children.try_emplace(k, nullptr);
         if (ok) {
             it->second = new type();
+            field.commandIndex = cmdIdx;
             notifyChanged();
         }
         return *it->second;

@@ -57,11 +57,10 @@ DEFINE_TUPLE_SCHEMA(EigrpSummaryAddress, EIGRP_SUMMARY_ADDRESS_FIELDS);
     ATOMIC_FIELD_CB(X, Y, PASSIVE_INTERFACE, bool, false, EigrpIfacePassive) \
     ATOMIC_FIELD_CB(X, Y, SHUTDOWN, bool, false, EigrpIfaceShutdown) \
     ATOMIC_FIELD(X, Y, SPLIT_HORIZON, bool, true) \
-    LIST_FIELD_CB(X, Y, SUMMARY_ADDRESS, EigrpSummaryAddress::Tuple, EigrpIfaceSummary)
+    LIST_FIELD_CB(X, Y, SUMMARY_ADDRESS, EigrpSummaryAddress, EigrpIfaceSummary)
 
 DEFINE_CONFIG_GROUP(EigrpInterface, EIGRP_INTERFACE_FIELD_LIST)
 
-TUPLE_SCHEMA_FOR(EigrpInterface, EigrpInterface::SUMMARY_ADDRESS, EigrpSummaryAddress);
 }
 
 #endif // EIGRP_INTERFACE_REGISTRY_H

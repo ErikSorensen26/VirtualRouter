@@ -55,21 +55,15 @@ add_library(VirtualRouter STATIC
 )
 
 # ----- INCLUDE POLICY (this is the entire point) -----
-# 1) protocol includes: "eigrp/..." (root is src/protocol)
-# 2) common/external/types stay <file> (each folder is its own root)
-# 3) src is PRIVATE root (lets you include other internal headers without forcing "src/")
 target_include_directories(VirtualRouter PUBLIC ${VR_PUBLIC_INCLUDE_ROOTS})
 
 # ----- Link deps (reuse packages found at root; safe to call again if needed) -----
-find_package(OpenSSL REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PCAP REQUIRED libpcap)
 
 target_include_directories(VirtualRouter PRIVATE ${PCAP_INCLUDE_DIRS})
 target_link_libraries(VirtualRouter PRIVATE
     ${TELNET_LIBRARIES}
-    OpenSSL::SSL
-    OpenSSL::Crypto
     ${PCAP_LIBRARIES}
     pthread
 )

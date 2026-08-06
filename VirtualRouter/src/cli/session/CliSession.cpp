@@ -153,6 +153,9 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
     handlePrefix("no", context.negate);
     handlePrefix("default", context.defaulted);
 
+    ctx.negateMode  = context.negate;
+    ctx.defaultMode = context.defaulted;
+
     if (!hasHelpToken && words.size() >= 2 && utils::partialLowerCmp(words[0], DO_EXEC_KEYWORD))
     {
         const size_t after = static_cast<size_t>(words[0].data() - rawInput.data())
@@ -270,8 +273,14 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
             }
             else if (matches.empty() && ctx.eoc)
             {
-                // Synthesized end-of-command marker; no node resolved it.
-                tokens.emplace_back(ctx.endCmdStr);
+                // Synthesized end-of-command marker. It resolves no command of
+                // its own, but the `<cr>` leaf it stands for is a real node, and
+                // a resolver is spelled there -- so the node rides along where
+                // there was one, and the marker stays nodeless where there was not.
+                if (ctx.endCmdNode.valid())
+                    tokens.emplace_back(ctx.endCmdStr, ctx.endCmdNode);
+                else
+                    tokens.emplace_back(ctx.endCmdStr);
             }
             else if (matches.empty())
             {
@@ -393,7 +402,14 @@ bool CliSession::executeCommand(std::string& command, bool quiet)
 
     if (execTokens.empty()) return false;
 
-    return executor.execute(execTokens);
+    if (!executor.execute(execTokens))
+    {
+        if (!quiet)
+            controller.print("\r\n% Invalid input detected");
+        return false;
+    }
+
+    return true;
 }
 
 bool CliSession::tryDoCommand(const std::string& remainder)
@@ -423,12 +439,16 @@ bool CliSession::tryGlobalCommand(const std::string& rawInput)
     std::string cmd = rawInput;
     const bool ok   = executeCommand(cmd, /*quiet=*/true);
 
-    const CliMode landed = getMode();
-    void* const   landedCtx = nav.getContext().ctx;
+    // The registry tag rides along with the pointer: re-entering the mode with
+    // an untagged one would leave the session writing through a void* that no
+    // longer says what it points at, which is what the tag exists to prevent.
+    const CliMode  landed    = getMode();
+    void* const    landedCtx = nav.getContext().ctx;
+    const uint16_t landedReg = nav.getContext().ctxRegistry;
     nav.restore();
 
     if (landed != CliMode::GlobalConfiguration)
-        nav.changeMode(landed, landedCtx);
+        nav.changeMode(landed, landedCtx, landedReg);
 
     return ok;
 }

@@ -149,7 +149,7 @@ public:
 
     // PROCESS-LEVEL CONFIG ACCESSORS
 
-    bool stubEnabled() const { auto stub = configs.get<config::Eigrp::STUB>(); return stub.hasValue() ? stub.load() : false; }
+    bool stubEnabled() const { return configs.get<config::Eigrp::STUB>().hasValue(); }
 
     /**
      * @brief Returns the full stub configuration as a @ref StubConfig value.

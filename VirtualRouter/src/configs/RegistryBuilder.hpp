@@ -23,6 +23,7 @@
 #include <string_view>
 #include <cstdint>
 
+#include "configs/TupleSchema.hpp" // IWYU pragma: keep
 #include "configs/RegistryTraits.hpp" // IWYU pragma: keep
 #include "configs/RegistryDefaultTable.hpp" // IWYU pragma: keep
 #include "configs/SubRegistry.hpp" // IWYU pragma: keep
@@ -36,36 +37,36 @@
 #define CONFIG_TAIL(first, ...) __VA_ARGS__
 #define CONFIG_STRIP_LEADING_COMMA(...) CONFIG_TAIL(__VA_ARGS__)
 
-#define CONFIG_FIELD(X, E, KIND, NAME, TYPE)                 X(E, KIND, NAME, TYPE, 0, ~, 0, ~, ~)
-#define CONFIG_FIELD_CB(X, E, KIND, NAME, TYPE, CB)          X(E, KIND, NAME, TYPE, 0, ~, 1, CB, ~)
-#define CONFIG_FIELD_DEF(X, E, KIND, NAME, TYPE, DEF)        X(E, KIND, NAME, TYPE, 1, DEF, 0, ~, ~)
-#define CONFIG_FIELD_DEF_CB(X, E, KIND, NAME, TYPE, DEF, CB) X(E, KIND, NAME, TYPE, 1, DEF, 1, CB, ~)
+#define CONFIG_FIELD(X, E, KIND, NAME, TYPE)                        X(E, KIND, NAME, TYPE, 0, ~, 0, ~, ~)
+#define CONFIG_FIELD_CB(X, E, KIND, NAME, TYPE, CB)                 X(E, KIND, NAME, TYPE, 0, ~, 1, CB, ~)
+#define CONFIG_FIELD_DEF(X, E, KIND, NAME, TYPE, DEF)               X(E, KIND, NAME, TYPE, 1, DEF, 0, ~, ~)
+#define CONFIG_FIELD_DEF_CB(X, E, KIND, NAME, TYPE, DEF, CB)        X(E, KIND, NAME, TYPE, 1, DEF, 1, CB, ~)
 
 // OwnedListField
-#define OWNED_LIST_FIELD(X, E, NAME, TYPE, KEY)              X(E, OwnedListField, NAME, TYPE, 0, ~, 2, ~, KEY)
-#define OWNED_LIST_FIELD_CB(X, E, NAME, TYPE, KEY, CB)       X(E, OwnedListField, NAME, TYPE, 0, ~, 3, CB, KEY)
+#define OWNED_LIST_FIELD(X, E, NAME, TYPE, KEY)                     X(E, OwnedListField, NAME, TYPE, 0, ~, 2, ~, KEY)
+#define OWNED_LIST_FIELD_CB(X, E, NAME, TYPE, KEY, CB)              X(E, OwnedListField, NAME, TYPE, 0, ~, 3, CB, KEY)
 
 // AtomicField
-#define ATOMIC_FIELD(X, E, NAME, TYPE, DEF) CONFIG_FIELD_DEF(X, E, AtomicField, NAME, TYPE, DEF)
-#define ATOMIC_FIELD_CB(X, E, NAME, TYPE, DEF, CB) CONFIG_FIELD_DEF_CB(X, E, AtomicField, NAME, TYPE, DEF, CB)
+#define ATOMIC_FIELD(X, E, NAME, TYPE, DEF)                         CONFIG_FIELD_DEF(X, E, AtomicField, NAME, TYPE, DEF)
+#define ATOMIC_FIELD_CB(X, E, NAME, TYPE, DEF, CB)                  CONFIG_FIELD_DEF_CB(X, E, AtomicField, NAME, TYPE, DEF, CB)
 
 // OptionalAtomicField
-#define OPTIONAL_ATOMIC_FIELD(X, E, NAME, TYPE) CONFIG_FIELD(X, E, OptionalAtomicField, NAME, TYPE)
-#define OPTIONAL_ATOMIC_FIELD_CB(X, E, NAME, TYPE, CB) CONFIG_FIELD_CB(X, E, OptionalAtomicField, NAME, TYPE, CB)
+#define OPTIONAL_ATOMIC_FIELD(X, E, NAME, TYPE)                     CONFIG_FIELD(X, E, OptionalAtomicField, NAME, TYPE)
+#define OPTIONAL_ATOMIC_FIELD_CB(X, E, NAME, TYPE, CB)              CONFIG_FIELD_CB(X, E, OptionalAtomicField, NAME, TYPE, CB)
 
 // ListField
-#define LIST_FIELD(X, E, NAME, TYPE) CONFIG_FIELD(X, E, ListField, NAME, TYPE)
-#define LIST_FIELD_CB(X, E, NAME, TYPE, CB) CONFIG_FIELD_CB(X, E, ListField, NAME, TYPE, CB)
+#define LIST_FIELD(X, E, NAME, TYPE)                                CONFIG_FIELD(X, E, ListField, NAME, TYPE)
+#define LIST_FIELD_CB(X, E, NAME, TYPE, CB)                         CONFIG_FIELD_CB(X, E, ListField, NAME, TYPE, CB)
 
 // ValueField
-#define VALUE_FIELD(X, E, NAME, TYPE) CONFIG_FIELD(X, E, ValueField, NAME, TYPE)
-#define VALUE_FIELD_CB(X, E, NAME, TYPE, CB) CONFIG_FIELD_CB(X, E, ValueField, NAME, TYPE, CB)
+#define VALUE_FIELD(X, E, NAME, TYPE)                               CONFIG_FIELD(X, E, ValueField, NAME, TYPE)
+#define VALUE_FIELD_CB(X, E, NAME, TYPE, CB)                        CONFIG_FIELD_CB(X, E, ValueField, NAME, TYPE, CB)
 
 // RegistryContainer
-#define REGISTRY_CONTAINER(X, E, NAME, TYPE) CONFIG_FIELD(X, E, RegistryContainer, NAME, TYPE)
+#define REGISTRY_CONTAINER(X, E, NAME, TYPE)                        CONFIG_FIELD(X, E, RegistryContainer, NAME, TYPE)
 
 // OptionalRegistryContainer
-#define OPTIONAL_REGISTRY_CONTAINER(X, E, NAME, TYPE) CONFIG_FIELD(X, E, OptionalRegistryContainer, NAME, TYPE)
+#define OPTIONAL_REGISTRY_CONTAINER(X, E, NAME, TYPE)               CONFIG_FIELD(X, E, OptionalRegistryContainer, NAME, TYPE)
 
 #define CONFIG_ENUM_ENTRY(E, KIND, NAME, TYPE, HASDEF, DEF, SPEC, CB, KEY) NAME,
 #define CONFIG_HASH_ENTRY(E, KIND, NAME, TYPE, HASDEF, DEF, SPEC, CB, KEY) tokenHash(#NAME),

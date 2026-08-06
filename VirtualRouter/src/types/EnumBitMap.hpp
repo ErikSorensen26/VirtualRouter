@@ -116,6 +116,40 @@ public:
         return bits;
     }
 };
+
+/**
+ * @brief Detects an EnumBitMap and recovers the enum it is indexed by.
+ *
+ * A bitmap field stores flags rather than a value, so the grammar binds it a
+ * member at a time -- `eigrp stub connected summary` sets two bits of one
+ * field. Telling the two apart needs the field's own type, which is why this
+ * lives beside the class rather than in the CLI: `EnumBitMap<E>::type` is the
+ * storage integer and says nothing about E.
+ */
+template <typename T>
+inline constexpr bool isEnumBitMapV = false;
+
+template <typename E>
+inline constexpr bool isEnumBitMapV<EnumBitMap<E>> = true;
+
+/**
+ * @brief The enum an EnumBitMap is indexed by, or `T` itself for anything else.
+ *
+ * Total rather than partial on purpose: callers select on `isEnumBitMapV` with
+ * `std::conditional_t`, which instantiates both arms, so the non-bitmap arm has
+ * to name something. Yielding `T` keeps that arm a no-op.
+ */
+template <typename T>
+struct EnumBitMapEnumOr
+{
+    using type = T;
+};
+
+template <typename E>
+struct EnumBitMapEnumOr<EnumBitMap<E>>
+{
+    using type = E;
+};
 }
 
 #endif // ENUM_BIT_MAP_HPP

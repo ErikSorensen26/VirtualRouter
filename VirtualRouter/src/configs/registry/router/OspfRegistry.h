@@ -16,6 +16,7 @@
 #include "configs/EnumSchema.hpp"
 #include "configs/RegistryBuilder.hpp"
 #include "configs/TupleSchema.hpp"
+#include "configs/registry/policy/PolicyHelpers.hpp"
 
 #include "IPAddress.h"
 #include "OspfInterfaceRegistry.h"
@@ -39,10 +40,8 @@ namespace ospf
  * @brief OSPF area type controlling LSA flooding and default route origination.
  * @ingroup OSPF
  */
-DEFINE_CONFIG_ENUM(AreaType, OSPF_AREA_TYPE_MEMBERS);
+DEFINE_CONFIG_ENUM_NS(ospf, AreaType, OSPF_AREA_TYPE_MEMBERS);
 }
-
-REGISTER_CONFIG_ENUM(ospf, AreaType);
 
 void OspfAreaTypeChange(void* area);
 void OspfAreaSycnRanges(void* area);
@@ -69,7 +68,7 @@ DEFINE_TUPLE_SCHEMA(OspfAreaRange, OSPF_AREA_RANGE_FIELDS);
     ATOMIC_FIELD(X, Y, NSSA_NO_REDISTRIBUTION, bool, false) \
     ATOMIC_FIELD(X, Y, NSSA_ALWAYS_TRANSLATE, bool, false) \
     ATOMIC_FIELD(X, Y, NSSA_SUPPRESS_FA, bool, false) \
-    LIST_FIELD_CB(X, Y, RANGE, OspfAreaRange::Tuple, OspfAreaSycnRanges) \
+    LIST_FIELD_CB(X, Y, RANGE, OspfAreaRange, OspfAreaSycnRanges) \
     OWNED_LIST_FIELD(X, Y, VIRTUAL_LINKS, OspfVirtualLinkRegistry, uint32_t) TODO
 
 /**
@@ -77,8 +76,6 @@ DEFINE_TUPLE_SCHEMA(OspfAreaRange, OSPF_AREA_RANGE_FIELDS);
  * @ingroup OSPF
  */
 DEFINE_CONFIG_GROUP(OspfArea, OSPF_AREA_FIELD_LIST)
-
-TUPLE_SCHEMA_FOR(OspfArea, OspfArea::RANGE, OspfAreaRange);
 
 void OspfSyncNeighbors(void* base);
 void OspfSyncNetworks(void* base);
@@ -143,6 +140,7 @@ DEFINE_TUPLE_SCHEMA(OspfSummaryAddress, OSPF_SUMMARY_ADDRESS_FIELDS);
     ATOMIC_FIELD(X, Y, INTER_AREA_DISTANCE, uint8_t, 110) \
     ATOMIC_FIELD(X, Y, INTRA_AREA_DISTANCE, uint8_t, 110) \
     OPTIONAL_ATOMIC_FIELD(X, Y, DISTRIBUTE_LIST, std::nullptr_t) TODO \
+    OPTIONAL_ATOMIC_FIELD(X, Y, DISTRIBUTE_LIST_KIND, policy::DistributeListType) \
     OPTIONAL_ATOMIC_FIELD(X, Y, DOMAIN_TAG, uint32_t) TODO \
     ATOMIC_FIELD(X, Y, EVENT_LOG_ONE_SHOT, bool, false) TODO \
     ATOMIC_FIELD(X, Y, EVENT_LOG_PAUSE, bool, false) TODO \
@@ -172,12 +170,12 @@ DEFINE_TUPLE_SCHEMA(OspfSummaryAddress, OSPF_SUMMARY_ADDRESS_FIELDS);
     ATOMIC_FIELD(X, Y, MAXIMUM_PATHS, uint8_t, 4) \
     LIST_FIELD(X, Y, MPLS_LDP_AREAS, uint32_t) TODO \
     LIST_FIELD(X, Y, MPLS_TRAF_ENG_AREAS, uint32_t) TODO \
-    LIST_FIELD(X, Y, MPLS_TRAF_ENG_INTERFACES, OspfTrafEngInterface::Tuple) TODO \
-    LIST_FIELD(X, Y, MPLS_TRAF_ENG_MESH_GROUP, OspfTrafEngMeshGroup::Tuple) TODO \
+    LIST_FIELD(X, Y, MPLS_TRAF_ENG_INTERFACES, OspfTrafEngInterface) TODO \
+    LIST_FIELD(X, Y, MPLS_TRAF_ENG_MESH_GROUP, OspfTrafEngMeshGroup) TODO \
     ATOMIC_FIELD(X, Y, MPLS_TRAF_ENG_MULTICAST_INACT, bool, false) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y, MPLS_TRAF_ENG_ROUTER_ID, uint32_t) TODO \
-    LIST_FIELD_CB(X, Y, NETWORKS, OspfNetwork::Tuple, OspfSyncNetworks) \
-    LIST_FIELD_CB(X, Y, NEIGHBORS, OspfNeighbor::Tuple, OspfSyncNeighbors) \
+    LIST_FIELD_CB(X, Y, NETWORKS, OspfNetwork, OspfSyncNetworks) \
+    LIST_FIELD_CB(X, Y, NEIGHBORS, OspfNeighbor, OspfSyncNeighbors) \
     ATOMIC_FIELD(X, Y, NSF_CISCO_HELPER, bool, false) TODO \
     ATOMIC_FIELD(X, Y, NSF_STRICT_CHECKING, bool, false) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y, HELLO_QUEUE_DEPTH, uint32_t) \
@@ -194,7 +192,7 @@ DEFINE_TUPLE_SCHEMA(OspfSummaryAddress, OSPF_SUMMARY_ADDRESS_FIELDS);
     ATOMIC_FIELD(X, Y, PRIORITY, uint8_t, 1) \
     OPTIONAL_ATOMIC_FIELD(X, Y, REDISTRIBUTE, std::nullptr_t) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y, SNMP, std::nullptr_t) TODO \
-    LIST_FIELD_CB(X, Y, SUMMARY_ADDRESS, OspfSummaryAddress::Tuple, OspfSyncSummaries) \
+    LIST_FIELD_CB(X, Y, SUMMARY_ADDRESS, OspfSummaryAddress, OspfSyncSummaries) \
     ATOMIC_FIELD(X, Y, LSA_THROTTLE_DELAY, uint32_t, 0) \
     ATOMIC_FIELD(X, Y, LSA_THROTTLE_HOLD, uint32_t, 5000) \
     ATOMIC_FIELD(X, Y, LSA_THROTTLE_MAX, uint32_t, 5000) \
@@ -210,10 +208,6 @@ DEFINE_TUPLE_SCHEMA(OspfSummaryAddress, OSPF_SUMMARY_ADDRESS_FIELDS);
  * @ingroup OSPF
  */
 DEFINE_CONFIG_GROUP(Ospf, OSPF_FIELD_LIST)
-
-TUPLE_SCHEMA_FOR(Ospf, Ospf::NETWORKS, OspfNetwork);
-TUPLE_SCHEMA_FOR(Ospf, Ospf::NEIGHBORS, OspfNeighbor);
-TUPLE_SCHEMA_FOR(Ospf, Ospf::SUMMARY_ADDRESS, OspfSummaryAddress);
 
 #define OSPFV3_ADDRESS_FAMILY_FIELD_LIST(X, Y) \
     REGISTRY_CONTAINER(X, Y, IPV4, OspfRegistry) \

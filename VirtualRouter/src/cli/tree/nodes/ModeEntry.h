@@ -41,46 +41,47 @@ class Command;
  *   (config-if)# / ethernet            mode="(config-if)#"        sub="ethernet"
  *   (config-router-af)# / eigrp        mode="(config-router-af)#" sub="eigrp"
  *
- * The mode name and the submode name are interned back to back, so the submode
- * starts at infoOff + modeSiz and needs no offset of its own.
+ * The three names are interned like a command's are, each an id into the shared
+ * string table. Prompts repeat heavily across modes -- six command lists share
+ * "(config-router-af)#" -- so interning stores each exactly once.
  */
 struct ModeEntryNode
 {
     /// @brief Registry id on an entry that names no registry.
     static constexpr uint16_t REGISTRY_NONE = 0xFFFFu;
 
-    /**
-     * Blob offset of the mode name, followed by the submode name and then the
-     * prompt. All three are interned back to back, so each starts where the
-     * previous ended and only the first needs an offset.
-     */
-    uint32_t infoOff;
-    uint16_t modeSiz;  ///< Mode name length in bytes.
-    uint16_t subSiz;   ///< Submode name length in bytes; 0 for a plain mode.
-    uint32_t cmdOff;   ///< Synthetic root CommandNode holding the command list.
-    uint16_t cmdSiz;   ///< Commands under that root.
+    /// @brief Id of an interned string that is absent rather than empty.
+    static constexpr uint16_t STR_NONE = 0xFFFFu;
+
+    uint16_t nameId = STR_NONE;   ///< Mode name, e.g. "(config-if)#".
+    uint16_t subId  = STR_NONE;   ///< Submode name; STR_NONE for a plain mode.
 
     /**
-     * Prompt length in bytes; 0 when the mode declares none.
+     * The prompt this mode displays; STR_NONE when it declares none.
      *
      * The prompt is data, not identity: several modes share "(config-router)#"
      * and are told apart by their names. Storing it here is what lets a session
      * render its prompt from the tree rather than from a parallel enum table.
      */
-    uint16_t promptSiz{0};
+    uint16_t promptId = STR_NONE;
+
+    uint16_t cmdSiz = 0;   ///< Commands under the root below.
+    uint32_t cmdOff = 0;   ///< Synthetic root CommandNode holding the command list.
 
     /**
      * The registry a session in this mode writes to, or REGISTRY_NONE.
      *
-     * Sits where the alignment padding used to, so it costs nothing. The submode
-     * split already separates grammars that share a prompt -- (config-router-af)#
-     * is six different command lists -- and that split is the same one that
-     * decides which registry is being configured, so the registry belongs on the
-     * entry rather than in a table keyed by prompt text.
+     * The submode split already separates grammars that share a prompt --
+     * (config-router-af)# is six different command lists -- and that split is
+     * the same one that decides which registry is being configured, so the
+     * registry belongs on the entry rather than in a table keyed by prompt text.
      */
-    uint16_t registryId{REGISTRY_NONE};
+    uint16_t registryId = REGISTRY_NONE;
+
+    uint16_t reserved0 = 0; ///< Growth slot; see CommandNode::reserved0.
 };
 
+static_assert(sizeof(ModeEntryNode) == 16, "ModeEntryNode layout is the on-disk format");
 static_assert(sizeof(ModeEntryNode) % 4 == 0, "ModeEntryNode must keep CommandNode aligned");
 
 /**

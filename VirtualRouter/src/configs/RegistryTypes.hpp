@@ -37,6 +37,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "configs/TupleSchema.hpp"
+
 #define ENABLE_CONFIG_INDEX 0
 
 #if defined(NDEBUG)
@@ -75,6 +77,9 @@ class RegistryDatabase;
 
 // TYPE ALIASES
 using ApplyFn = void (*)(void* ctx); ///< Callback signature for live-notification appliers.
+
+/// @brief Command-tree node index of a field never written from the CLI.
+inline constexpr uint32_t NO_COMMAND_INDEX = 0xFFFFFFFFu;
 
 template <typename ...Fields>
 struct FieldTuple;
@@ -433,8 +438,10 @@ private:
 
     std::atomic<T> value{T{}};                          ///< Stored value; authoritative when state == CANNED.
     std::atomic<FieldState> state{FieldState::INHERIT}; ///< Whether a local override is active.
+    uint32_t commandIndex = NO_COMMAND_INDEX;           ///< Node that last wrote the field.
     const AtomicField* mask = nullptr;
 };
+
 
 /**
  * @brief Lock-free config field that may be absent (no default value).
@@ -465,6 +472,7 @@ private:
 
     std::atomic<T> value{};                             ///< Stored value; authoritative when state == CANNED.
     std::atomic<FieldState> state{FieldState::INHERIT}; ///< Whether a local value has been set.
+    uint32_t commandIndex = NO_COMMAND_INDEX;           ///< Node that last wrote the field.
     const OptionalAtomicField* mask = nullptr;
 };
 
@@ -493,7 +501,8 @@ template <typename T CONFIG_INDEX_PARAM, auto H = nullptr>
 class ValueField : public ApplierHolder<ValueFieldFlag, H>
 {
 public:
-    using type = T;
+    using node = T;
+    using type = config::StorageOf<T>;
     CONFIG_INDEX_MEMBER
     void setMask(const ValueField* p) noexcept { mask = p; }
 
@@ -504,8 +513,9 @@ private:
     template <IsValueField>
     friend class ValueFieldAccessor;
 
-    std::atomic<T*> value = nullptr;                     ///< Guarded value; authoritative when state == CANNED.
+    std::atomic<type*> value = nullptr;                  ///< Guarded value; authoritative when state == CANNED.
     std::atomic<FieldState> state{FieldState::INHERIT};  ///< Whether a local value has been set.
+    uint32_t commandIndex = NO_COMMAND_INDEX;            ///< Node that last wrote the field.
     const ValueField* mask = nullptr;
 };
 
@@ -541,13 +551,11 @@ template <typename T CONFIG_INDEX_PARAM, auto H = nullptr>
 class ListField : public ApplierHolder<ListFieldFlag, H>
 {
 public:
-    using type = std::vector<T>;
-    using node = T;
+    using node    = T;
+    using element = config::StorageOf<T>;
+    using type    = std::vector<element>;
     CONFIG_INDEX_MEMBER
 
-    // value is a raw owning pointer; the list withWrite() allocates has no other owner.
-    // Destruction does not take the registry mutex, so the owning SubRegistry must
-    // outlive every thread that can reach this field through an accessor.
     ~ListField() { delete value.load(std::memory_order_relaxed); }
 private:
     template <typename, typename, ApplyFn, typename>
@@ -555,7 +563,8 @@ private:
     template <IsListField>
     friend class ListFieldAccessor;
 
-    std::atomic<std::vector<T>*> value = nullptr; ///< Guarded value; null until the first withWrite().
+    std::atomic<type*> value = nullptr; ///< Guarded value; null until the first withWrite().
+    uint32_t commandIndex = NO_COMMAND_INDEX;
 };
 
 /**
@@ -613,6 +622,7 @@ private:
 
     std::unordered_map<key, type*> children{}; ///< Pointer-owning child entries; ownership managed via delFn.
     void(*delFn)(type*) = nullptr; ///< Deleter set on first emplaceBack; called in destructor and erase.
+    uint32_t commandIndex = NO_COMMAND_INDEX; ///< Node that last wrote the field.
 };
 
 /**
