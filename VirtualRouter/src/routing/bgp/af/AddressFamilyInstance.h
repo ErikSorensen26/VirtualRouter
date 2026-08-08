@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <chrono>
 #include <functional>
+#include <map>
 #include <unordered_map>
 #include <unordered_set>
 #include <IPAddress.h>
@@ -28,10 +29,11 @@
 #include "bgp/transport/BgpRx.h"
 #include "bgp/transport/BgpTx.h"
 #include "bgp/decision/DecisionEngine.hpp"
-#include "bgp/neighbor/NeighborTable.h"
 #include "bgp/neighbor/NeighborAf.h"
 #include "bgp/attributes/AttributeManager.hpp"
 #include "bgp/features/Dampening.h"
+#include "bgp/af/DirtyState.hpp"
+#include "bgp/af/EgressPolicy.hpp"
 
 namespace routing::bgp
 {
@@ -57,38 +59,36 @@ inline void Session::sendUpdate(const BuildUpdate<typename N::Nlri>& update)
 }
 
 /**
- * @brief Returns the leading AS_SEQUENCE segment of an AS-PATH, inserting one if absent.
+ * @brief Non-template handle for an @ref AddressFamilyInstance.
+ * @ingroup BGP_AF
  *
- * Used by egress policy to prepend the local AS. When the AS-PATH is empty or
- * begins with a non-SEQUENCE segment, a new AS_SEQUENCE segment is prepended.
+ * The config registry fires plain `void(*)(void*)` applier callbacks (see
+ * BgpRegistry.cpp) that carry the owning object as a `void*`. Because
+ * @ref AddressFamilyInstance is a template, callbacks cannot name it directly; they
+ * cast the `void*` to this stable base instead. The address-family instance registers
+ * itself as its process-AF config context as an `AfInstanceBase*`, so the pointer the
+ * callback receives is always upcastable here.
  *
- * @param attrs  Path attributes to modify in-place.
- * @return Reference to the (possibly newly inserted) AS_SEQUENCE segment.
+ * Every entry point simply marks a dirty category and arms the debounce timer; the
+ * actual recompute happens later in @ref AddressFamilyInstance::flushDirty.
  */
-inline static AsPathSegment& getAsSegment(Attributes& attrs)
+struct AfInstanceBase
 {
-    if (!attrs.asPath.empty() && attrs.asPath[0].segmentType == BGP_AS_SEQUENCE)
-        return attrs.asPath[0];
-    attrs.asPath.insert(attrs.asPath.begin(), AsPathSegment{BGP_AS_SEQUENCE, {}});
-    return attrs.asPath.front();
-}
+    virtual ~AfInstanceBase() = default;
 
-/**
- * @brief Returns the leading AS_CONFED_SEQUENCE segment of an AS-PATH, inserting one if absent.
- *
- * Used by confederation egress policy to prepend the member AS. Mirrors
- * getAsSegment but targets the confederation segment type.
- *
- * @param attrs  Path attributes to modify in-place.
- * @return Reference to the (possibly newly inserted) AS_CONFED_SEQUENCE segment.
- */
-inline static AsPathSegment& getConfedAsSegment(Attributes& attrs)
-{
-    if (!attrs.asPath.empty() && attrs.asPath[0].segmentType == BGP_AS_CONFED_SEQUENCE)
-        return attrs.asPath[0];
-    attrs.asPath.insert(attrs.asPath.begin(), AsPathSegment{BGP_AS_CONFED_SEQUENCE, {}});
-    return attrs.asPath.front();
-}
+    /// Mark an inbound-pipeline category dirty for @p peerRid (0 = all peers).
+    virtual void markInboundDirty(InDirty category, uint32_t peerRid = 0) = 0;
+    /// Record that @p peerRid's NeighborAf has dirty outbound attributes, and arm the flush.
+    virtual void markNeighborOutDirty(uint32_t peerRid) = 0;
+    /// Mark a process-AF (Loc-RIB / decision) category dirty.
+    virtual void markAfDirty(AfDirty category) = 0;
+
+    /// Post @ref markAfDirty onto the BGP scheduler.
+    virtual void enqueueMarkAfDirty(AfDirty category) = 0;
+
+    /// Reconcile network-statement RIB watches after the NETWORK list changed.
+    virtual void enqueueSyncNetwork() = 0;
+};
 
 /**
  * @brief Per-AFI route processing instance: Adj-RIB-In, Loc-RIB, and Adj-RIB-Out for one address family.
@@ -141,10 +141,14 @@ inline static AsPathSegment& getConfedAsSegment(Attributes& attrs)
  * @see BgpProcess, Session, DecisionEngine, NlriPolicy, LocRib
  */
 template <typename N>
-class AddressFamilyInstance
+class AddressFamilyInstance : public AfInstanceBase
 {
 public:
     static constexpr AfiSafi afi = N::afi; ///< AFI/SAFI constants identifying this address family.
+
+    static constexpr uint16_t kDefaultEbgpMraiSecs = 30;
+    static constexpr uint16_t kDefaultIbgpMraiSecs = 5;
+
     using NlriT = typename N::Nlri;        ///< Prefix type for this AFI (e.g. types::IPv4Prefix).
     using IgpMetricResolver = std::function<uint64_t(const types::IPAddress&)>; ///< Callable that resolves the IGP cost to a next-hop address.
 
@@ -165,8 +169,12 @@ public:
           family(fam),
           policy(ProcessAccessor::getRoutingInstance(proc), proc),
           igpMetricResolver([](const types::IPAddress&) { return std::numeric_limits<uint64_t>::max(); }),
-          configs(ProcessAccessor::getConfigs(proc).get<config::Bgp::ADDRESS_FAMILIES>().emplaceBack(fam.flatten()))
+          configs(ProcessAccessor::getConfigs(proc).get<config::Bgp::ADDRESS_FAMILIES>().emplaceBack(fam.flatten())),
+          egress(proc, fam)
     {
+        // Register as the context for this AF's process-level config so registry
+        // appliers (BgpAf* callbacks) can reach us through the AfInstanceBase pointer.
+        configs.context().set(static_cast<AfInstanceBase*>(this));
         syncNetworkRoutes();
     }
 
@@ -185,7 +193,10 @@ public:
      */
     ~AddressFamilyInstance()
     {
+        configs.context().clear();
         auto& sched = ProcessAccessor::getScheduler(process);
+        if (dirty.timerId != 0)
+            sched.cancel(dirty.timerId);
         if (nhtTimerId != 0)
             sched.cancel(nhtTimerId);
         // Cancel all stale-path timers.
@@ -516,7 +527,350 @@ public:
             recomputeNlri(n);
     }
 
+    /**
+     * @brief Re-ranks Adj-RIB-In candidates and rebuilds the ADD-PATH pool for every
+     *        installed prefix in this AF, without rerunning best-path selection.
+     *
+     * Triggered when an advertise additional path config field changes: the
+     * best-path winner for each prefix is untouched, so this skips @ref DecisionEngine::selectBest
+     * and dampening, re-gathers and ranks candidates per prefix, rebuilds `additionalPaths`
+     * via @ref buildAdditionalPathsPool, and re-advertises via @ref recomputeAdjRibOut.
+     */
+    void recomputeAdditionalPaths()
+    {
+        BestPathConfig bpCfg;
+        bpCfg.compareMed        = ProcessAccessor::getConfigs(process).get<config::Bgp::BGP_ALWAYS_COMPARE_MED>().load();
+        bpCfg.compareRouterId   = configs.get<config::BgpAddressFamily::BGP_BEST_PATH_COMPARE_ROUTER_ID>().load();
+        bpCfg.medMissingAsWorst = configs.get<config::BgpAddressFamily::BGP_BEST_PATH_MED_MISSING_AS_WORST>().load();
+        bpCfg.ignoreIgpMetric   = configs.get<config::BgpAddressFamily::BGP_BEST_PATH_IGP_METRIC_IGNORE>().load();
+        bpCfg.medConfed         = configs.get<config::BgpAddressFamily::BGP_BEST_PATH_MED_CONFED>().load();
+        DecisionEngine decision(process, bpCfg);
+
+        for (auto& [nlri, best] : locRib)
+        {
+            std::vector<InboundRoute<NlriT>*> candidates;
+            for (auto& [peer, peerTable] : adjRibIn)
+            {
+                for (auto& [key, route] : peerTable)
+                {
+                    if (key.nlri != nlri)
+                        continue;
+                    candidates.push_back(&route);
+                }
+            }
+
+            {
+                auto it = networkLocalRoutes.find(nlri);
+                if (it != networkLocalRoutes.end())
+                    candidates.push_back(&it->second);
+            }
+
+            buildAdditionalPathsPool(best, decision.rankCandidates(candidates));
+            recomputeAdjRibOut(nlri, &best);
+        }
+    }
+
+    void markInboundDirty(InDirty category, uint32_t peerRid = 0) override
+    {
+        dirty.markIn(category);
+        dirty.markInPeer(peerRid);
+        armFlush();
+    }
+
+    void markNeighborOutDirty(uint32_t peerRid) override
+    {
+        dirty.markOutNeighbor(peerRid);
+        armFlush();
+    }
+
+    void markAfDirty(AfDirty category) override
+    {
+        dirty.markAf(category);
+        armFlush();
+    }
+
+    /// Config-thread entry point: hops onto the BGP scheduler before marking.
+    void enqueueMarkAfDirty(AfDirty category) override
+    {
+        ProcessAccessor::getScheduler(process).post(
+            [this, category]() { markAfDirty(category); });
+    }
+
+    void enqueueSyncNetwork() override
+    {
+        enqueueMarkAfDirty(AfDirty::NETWORK);
+    }
+
 private:
+    void armFlush()
+    {
+        dirty.arm(ProcessAccessor::getScheduler(process), [this]() { flushDirty(); });
+    }
+
+    /**
+     * @brief Drains the accumulated dirty state and recomputes only the affected stages.
+     *
+     * Runs on the BGP scheduler thread when the debounce window elapses. The dirty state
+     * is snapshotted and cleared up-front (@ref DirtyState::drain) so that marks posted
+     * while this pass runs accumulate into a fresh state and arm their own next flush;
+     * this is also the single seam a future background-thread offload would snapshot at.
+     *
+     * Stages execute in dependency order: network watches, then inbound re-evaluation,
+     * then best-path / RIB, then ADD-PATH pool, then outbound re-advertisement.
+     */
+    void flushDirty()
+    {
+        DirtyState snap = dirty.drain();
+
+        // 1. NETWORK: reconcile locally-originated network-command routes/watches.
+        //    syncNetworkRoutes() itself calls recomputeNlri for any prefix it changes.
+        if (snap.testAf(AfDirty::NETWORK))
+            syncNetworkRoutes();
+
+        // 2. Inbound: re-run ingress policy / acceptance for the affected peers.
+        if (snap.in.any())
+        {
+            if (snap.inPeers.empty())
+            {
+                // Whole-AF inbound change: re-run every peer's inbound pipeline.
+                std::vector<uint32_t> peers;
+                peers.reserve(adjRibIn.size());
+                for (const auto& [peerRid, _] : adjRibIn)
+                    peers.push_back(peerRid);
+                for (uint32_t peerRid : peers)
+                    reevaluateInbound(peerRid);
+            }
+            else
+            {
+                for (uint32_t peerRid : snap.inPeers)
+                    reevaluateInbound(peerRid);
+            }
+        }
+
+        // 3. Best-path / Loc-RIB: rerun selection or reinstall over every prefix.
+        const bool rerunBest = snap.testAf(AfDirty::BEST_PATH)
+                            || snap.testAf(AfDirty::MAX_PATHS)
+                            || snap.testAf(AfDirty::DAMPENING);
+        if (rerunBest)
+        {
+            std::vector<NlriT> keys;
+            keys.reserve(locRib.size());
+            for (const auto& [nlri, _] : locRib)
+                keys.push_back(nlri);
+            // recomputeNlri handles both re-selection and downstream Adj-RIB-Out.
+            recomputeNlri(keys);
+        }
+        else if (snap.testAf(AfDirty::DISTANCE))
+        {
+            // Distance-only: reinstall winners with the new admin distance/metric,
+            // no best-path re-selection needed.
+            std::vector<LocalRoute<NlriT>*> installs;
+            installs.reserve(locRib.size());
+            for (auto& [nlri, route] : locRib)
+                installs.push_back(&route);
+            if (!installs.empty())
+                installToRib(installs);
+        }
+
+        // 4. AF-level ADD-PATH candidate pool.
+        if (snap.testAf(AfDirty::ADD_PATH_SELECT))
+            recomputeAdditionalPaths();
+
+        // 5. Aggregates.
+        if (snap.testAf(AfDirty::AGGREGATE))
+            scheduleAggregateRecompute();
+
+        // 6. Outbound: partial rebuild per dirty neighbor. Skipped when a best-path rerun
+        //    already refreshed every Adj-RIB-Out entry above.
+        if (!rerunBest)
+        {
+            for (uint32_t peerRid : snap.outNeighbors)
+                flushOutboundNeighbor(peerRid);
+        }
+    }
+
+    /**
+     * @brief Partial outbound rebuild for one neighbor: re-derives only its dirty attributes.
+     *
+     * Reads and clears the neighbor's dirty-attribute mask, then walks its Adj-RIB-Out
+     * grouped by the shared source attribute set (the stored egress pathId). For each
+     * group it re-derives only the dirty attributes onto the current attributes, and if
+     * the result changed, acquires a new flyweight pathId, repoints the group, and sends
+     * one UPDATE covering all the group's prefixes. ADD_PATH / ACTIVATE bits fall back to
+     * a full per-prefix recompute for the affected prefixes since they change path
+     * membership rather than a single attribute.
+     */
+    void flushOutboundNeighbor(uint32_t peerRid)
+    {
+        NeighborAf* nbrAf = ProcessAccessor::getNtable(process).lookup(peerRid, family);
+        if (!nbrAf) return;
+
+        Session* session = nbrAf->getSession();
+        if (!session || !session->established()) return;
+        if (!session->getNegotiated().activeFamilies.count(family)) return;
+
+        OutAttrMask dirtyAttrs = nbrAf->drainDirtyOut();
+        if (dirtyAttrs.none()) return;
+
+        auto outIt = adjRibOut.find(peerRid);
+        if (outIt == adjRibOut.end()) return;
+        PerPeerOutTable<NlriT>& peerOut = outIt->second;
+
+        // Membership / path-set changes: these are not single-attribute rewrites, so
+        // recompute the affected prefixes in full.
+        if (testBit(dirtyAttrs, OutAttr::ACTIVATE) || testBit(dirtyAttrs, OutAttr::ADD_PATH))
+        {
+            std::unordered_set<NlriT> prefixes;
+            for (auto& [nlri, _] : peerOut)
+                prefixes.insert(nlri);
+            for (const NlriT& nlri : prefixes)
+            {
+                auto lit = locRib.find(nlri);
+                recomputeAdjRibOut(nlri, lit != locRib.end() ? &lit->second : nullptr);
+            }
+            // Attribute-only bits still handled below over whatever remains.
+            dirtyAttrs.reset(static_cast<size_t>(OutAttr::ACTIVATE));
+            dirtyAttrs.reset(static_cast<size_t>(OutAttr::ADD_PATH));
+            if (dirtyAttrs.none()) return;
+        }
+
+        auto& attrMgr = ProcessAccessor::getAttrMgr(process);
+
+        // Group entries by their current egress pathId (shared attribute set).
+        std::map<std::pair<uint32_t, const InboundRoute<NlriT>*>,
+                 std::vector<typename PerPeerOutTable<NlriT>::iterator>> groups;
+        for (auto it = peerOut.begin(); it != peerOut.end(); ++it)
+        {
+            if (!it->second.second.pathId.has_value())
+                continue;
+            const InboundRoute<NlriT>* src = findEgressSource(it, peerRid);
+            if (!src)
+                continue;
+            groups[{*it->second.second.pathId, src}].push_back(it);
+        }
+
+        for (auto& [key, entries] : groups)
+        {
+            const uint32_t oPid = key.first;
+            const InboundRoute<NlriT>* srcRoute = key.second;
+
+            PathAttribute src = srcRoute->getPathAttributes();
+            PathAttribute pa  = attrMgr.get(oPid);
+            reDeriveAttrs(pa, src, *srcRoute, *nbrAf, *session, dirtyAttrs);
+
+            // acquire() yields one reference. Each Adj-RIB-Out entry's OutboundRoute takes
+            // ownership of exactly one pre-counted reference, so hold K total: the acquire
+            // ref covers the first entry, retain once per additional entry.
+            uint32_t newPid = attrMgr.acquire(pa.attrs, pa.path);
+            if (newPid == oPid)
+            {
+                attrMgr.release(newPid);
+                continue;
+            }
+
+            BuildUpdate<NlriT> update;
+            typename BuildUpdate<NlriT>::Announcement ann;
+            ann.attrs = std::move(pa);
+            bool firstEntry = true;
+            for (auto it : entries)
+            {
+                if (!firstEntry)
+                    attrMgr.retain(newPid);
+                firstEntry = false;
+                ann.nlri.push_back({it->first, it->second.first});
+                it->second.second = OutboundRoute<NlriT>{attrMgr, newPid, it->first};
+            }
+            update.announcements.push_back(std::move(ann));
+            session->sendUpdate<N>(update);
+        }
+    }
+
+    /**
+     * @brief Re-derives only the attributes set in @p dirtyAttrs onto @p pa from @p src.
+     */
+    void reDeriveAttrs(PathAttribute& pa, const PathAttribute& src, const InboundRoute<NlriT>& route,
+                       const NeighborAf& nbrAf, const Session& session, const OutAttrMask& dirtyAttrs)
+    {
+        if (testBit(dirtyAttrs, OutAttr::NEXT_HOP))
+            egress.deriveNextHop(pa, src, route, nbrAf, session);
+        if (testBit(dirtyAttrs, OutAttr::AS_PATH))
+            egress.deriveAsPath(pa, src, nbrAf, session);
+        if (testBit(dirtyAttrs, OutAttr::COMMUNITIES))
+            egress.deriveCommunities(pa, src, nbrAf, session);
+        if (testBit(dirtyAttrs, OutAttr::EXT_COMMUNITIES))
+            egress.deriveExtCommunities(pa, src, nbrAf, session);
+        if (testBit(dirtyAttrs, OutAttr::LARGE_COMMUNITIES))
+            egress.deriveLargeCommunities(pa, src, nbrAf, session);
+        if (testBit(dirtyAttrs, OutAttr::LOCAL_PREF))
+            egress.deriveLocalPref(pa, src, session);
+        if (testBit(dirtyAttrs, OutAttr::REFLECTION))
+        {
+            const bool fromIbgp = !route.ebgp && !route.confedEbgp;
+            const bool toIbgp   = !session.neighbor.isEbgp() && !session.neighbor.isConfedEbgp();
+            if (fromIbgp && toIbgp && route.sourceNeighbor)
+            {
+                if (!pa.attrs.originatorId.has_value())
+                    pa.attrs.originatorId = route.sourceNeighbor->getParent().getRouterId();
+                pa.attrs.clusterList = src.attrs.clusterList;
+                pa.attrs.clusterList.insert(pa.attrs.clusterList.begin(), getClusterId());
+            }
+        }
+    }
+
+    /**
+     * @brief Finds the source InboundRoute for an Adj-RIB-Out entry (by NLRI and add-path id).
+     */
+    const InboundRoute<NlriT>* findEgressSource(typename PerPeerOutTable<NlriT>::iterator entry,
+                                                uint32_t peerRid)
+    {
+        const NlriT& nlri = entry->first;
+        uint32_t addPathId = entry->second.first;
+
+        auto lit = locRib.find(nlri);
+        if (lit == locRib.end()) return nullptr;
+        LocalRoute<NlriT>& best = lit->second;
+
+        if (addPathId == 0)
+            return &best.route;
+
+        // ADD-PATH: source is the path whose origin peer RID matches addPathId.
+        auto matches = [&](const InboundRoute<NlriT>* r) {
+            return r->sourceNeighbor && r->sourceNeighbor->getParent().getRouterId() == addPathId;
+        };
+        if (matches(&best.route)) return &best.route;
+        for (auto* mp : best.multipaths)
+            if (matches(mp)) return mp;
+        for (auto* ap : best.additionalPaths)
+            if (matches(ap)) return ap;
+        return nullptr;
+    }
+
+    /**
+     * @brief Re-runs the inbound pipeline for one peer after an inbound-policy config change.
+     *
+     * Prefers a soft-reconfiguration replay when a pre-policy Adj-RIB-In copy is retained;
+     * otherwise re-runs best-path over the prefixes currently in the peer's Adj-RIB-In so
+     * acceptance/limit changes take effect. A no-op if the peer has no Adj-RIB-In.
+     *
+     * @param peerRid  Router ID of the peer to re-evaluate.
+     */
+    void reevaluateInbound(uint32_t peerRid)
+    {
+        if (preAdjRibIn.count(peerRid))
+        {
+            softClearInbound(peerRid);
+            return;
+        }
+        auto inIt = adjRibIn.find(peerRid);
+        if (inIt == adjRibIn.end())
+            return;
+        std::vector<NlriT> keys;
+        keys.reserve(inIt->second.size());
+        for (const auto& [key, _] : inIt->second)
+            keys.push_back(key.nlri);
+        recomputeNlri(keys);
+    }
+
     /**
      * @brief Core inbound route processing pipeline for a decoded UPDATE message.
      *
@@ -661,8 +1015,7 @@ private:
             }
         }
 
-        for (const auto& n : touched)
-            recomputeNlri(n);
+        recomputeNlri(touched);
     }
 
     /**
@@ -699,6 +1052,13 @@ private:
         std::vector<LocalRoute<NlriT>*> installs;
         installs.reserve(nlris.size());
 
+        BestPathConfig bpCfg;
+        bpCfg.compareMed        = ProcessAccessor::getConfigs(process).get<config::Bgp::BGP_ALWAYS_COMPARE_MED>().load();
+        bpCfg.compareRouterId   = configs.get<config::BgpAddressFamily::BGP_BEST_PATH_COMPARE_ROUTER_ID>().load();
+        bpCfg.medMissingAsWorst = configs.get<config::BgpAddressFamily::BGP_BEST_PATH_MED_MISSING_AS_WORST>().load();
+        bpCfg.ignoreIgpMetric   = configs.get<config::BgpAddressFamily::BGP_BEST_PATH_IGP_METRIC_IGNORE>().load();
+        bpCfg.medConfed         = configs.get<config::BgpAddressFamily::BGP_BEST_PATH_MED_CONFED>().load();
+
         for (const auto& nlri : nlris)
         {
             std::vector<InboundRoute<NlriT>*> candidates;
@@ -724,12 +1084,6 @@ private:
                 if (it != networkLocalRoutes.end())
                     candidates.push_back(&it->second);
             }
-
-            BestPathConfig bpCfg;
-            bpCfg.compareMed        = ProcessAccessor::getConfigs(process).get<config::Bgp::BGP_ALWAYS_COMPARE_MED>().load();
-            bpCfg.compareRouterId   = configs.get<config::BgpAddressFamily::BGP_BEST_PATH_COMPARE_ROUTER_ID>().load();
-            bpCfg.medMissingAsWorst = configs.get<config::BgpAddressFamily::BGP_BEST_PATH_MED_MISSING_AS_WORST>().load();
-            bpCfg.ignoreIgpMetric   = configs.get<config::BgpAddressFamily::BGP_BEST_PATH_IGP_METRIC_IGNORE>().load();
 
             if (ProcessAccessor::getConfigs(process).get<config::Bgp::BGP_DETERMINISTIC_MED>().load())
             {
@@ -811,7 +1165,7 @@ private:
                         if (suppress)
                         {
                             startDampenReuseTimer();
-                            return; // hold suppressed: do not install into Loc-RIB
+                            continue; // hold suppressed: do not install this prefix
                         }
                     }
                 }
@@ -828,7 +1182,7 @@ private:
                     if constexpr (types::IsIPPrefix<NlriT>)
                         scheduleAggregateRecompute();
                 }
-                return;
+                continue;
             }
 
             const bool bestChanged = !had || &lit->second.route != &best->route;
@@ -925,48 +1279,6 @@ private:
     }
 
     /**
-     * @brief Re-ranks Adj-RIB-In candidates and rebuilds the ADD-PATH pool for every
-     *        installed prefix in this AF, without rerunning best-path selection.
-     *
-     * Triggered when an advertise additional path config field changes: the
-     * best-path winner for each prefix is untouched, so this skips @ref DecisionEngine::selectBest
-     * and dampening, re-gathers and ranks candidates per prefix, rebuilds `additionalPaths`
-     * via @ref buildAdditionalPathsPool, and re-advertises via @ref recomputeAdjRibOut.
-     */
-    void recomputeAdditionalPaths()
-    {
-        BestPathConfig bpCfg;
-        bpCfg.compareMed        = ProcessAccessor::getConfigs(process).get<config::Bgp::BGP_ALWAYS_COMPARE_MED>().load();
-        bpCfg.compareRouterId   = configs.get<config::BgpAddressFamily::BGP_BEST_PATH_COMPARE_ROUTER_ID>().load();
-        bpCfg.medMissingAsWorst = configs.get<config::BgpAddressFamily::BGP_BEST_PATH_MED_MISSING_AS_WORST>().load();
-        bpCfg.ignoreIgpMetric   = configs.get<config::BgpAddressFamily::BGP_BEST_PATH_IGP_METRIC_IGNORE>().load();
-        DecisionEngine decision(process, bpCfg);
-
-        for (auto& [nlri, best] : locRib)
-        {
-            std::vector<InboundRoute<NlriT>*> candidates;
-            for (auto& [peer, peerTable] : adjRibIn)
-            {
-                for (auto& [key, route] : peerTable)
-                {
-                    if (key.nlri != nlri)
-                        continue;
-                    candidates.push_back(&route);
-                }
-            }
-
-            {
-                auto it = networkLocalRoutes.find(nlri);
-                if (it != networkLocalRoutes.end())
-                    candidates.push_back(&it->second);
-            }
-
-            buildAdditionalPathsPool(best, decision.rankCandidates(candidates));
-            recomputeAdjRibOut(nlri, &best);
-        }
-    }
-
-    /**
      * @brief Calls the NLRI policy install hook and registers a next-hop tracking watch for one route.
      *
      * Builds the install descriptor via @ref buildInstall, forwards it to the policy's
@@ -1052,6 +1364,9 @@ private:
      */
     bool applyIngressPolicy(const InboundRoute<NlriT>& route)
     {
+        if (!route.sourceNeighbor)
+            return false;
+
         PathAttribute pathAttrs = ProcessAccessor::getAttrMgr(process).get(*route.pathId);
         uint32_t routerAs = ProcessAccessor::getAsNum(process);
         auto& nbr = route.sourceNeighbor->getParent();
@@ -1151,166 +1466,6 @@ private:
     }
 
     /**
-     * @brief Applies group-level egress transformations to a route's path attributes.
-     *
-     * The result is the same for all members of a peer group with the same eBGP/iBGP
-     * classification and can therefore be cached and shared across group members.
-     * Transformations applied:
-     * - eBGP: strips LOCAL_PREF, ORIGINATOR_ID, CLUSTER_LIST, and confederation AS-PATH
-     *   segments, then prepends the local (or LOCAL_AS) AS to the leading AS_SEQUENCE.
-     * - Confederation eBGP: prepends the member AS as a new AS_CONFED_SEQUENCE segment.
-     * - iBGP: no AS-PATH modifications.
-     *
-     * @param route    Best-path route to apply egress policy to.
-     * @param session  Outbound session; determines eBGP/iBGP classification and LOCAL_AS config.
-     * @return Modified PathAttribute, or `std::nullopt` if `route` has no path ID.
-     *
-     * @see applyMemberNexthop, applyEgressPolicy
-     */
-    std::optional<PathAttribute> applyGroupEgressPolicy(const InboundRoute<NlriT>& route, const Session& session)
-    {
-        if (!route.pathId.has_value())
-            return std::nullopt;
-
-        PathAttribute pa = route.getPathAttributes();
-
-        if (session.neighbor.isEbgp())
-        {
-            auto& sesCfgs = session.getNeighborConfigs();
-
-            pa.attrs.localPref    = std::nullopt;
-            pa.attrs.originatorId = std::nullopt;
-            pa.attrs.clusterList.clear();
-
-            pa.attrs.asPath.erase(
-                std::remove_if(pa.attrs.asPath.begin(), pa.attrs.asPath.end(),
-                    [](const AsPathSegment& s) {
-                        return s.segmentType == BGP_AS_CONFED_SEQUENCE ||
-                               s.segmentType == BGP_AS_CONFED_SET;
-                    }),
-                pa.attrs.asPath.end());
-
-            AsPathSegment& seg = getAsSegment(pa.attrs);
-            const uint32_t confedId = getConfedId();
-            auto localAs = sesCfgs.get<config::BgpNeighborSession::LOCAL_AS_AS>();
-            if (!sesCfgs.get<config::BgpNeighborSession::LOCAL_AS>().load() || !localAs.hasValue())
-                seg.asns.insert(seg.asns.begin(), confedId);
-            else if (sesCfgs.get<config::BgpNeighborSession::LOCAL_AS_REPLACE_AS>().load())
-                seg.asns.insert(seg.asns.begin(), localAs.load());
-            else if (sesCfgs.get<config::BgpNeighborSession::LOCAL_AS_NO_PREPEND>().load())
-                seg.asns.insert(seg.asns.begin(), confedId);
-            else
-            {
-                seg.asns.insert(seg.asns.begin(), confedId);
-                seg.asns.insert(seg.asns.begin(), localAs.load());
-            }
-        }
-        else if (session.neighbor.isConfedEbgp())
-        {
-            // RR attributes; prepend local member AS as a new AS_CONFED_SEQUENCE entry.
-            AsPathSegment& seg = getConfedAsSegment(pa.attrs);
-            const uint32_t routerAs = ProcessAccessor::getAsNum(process);
-            seg.asns.insert(seg.asns.begin(), routerAs);
-        }
-
-        return pa;
-    }
-
-    /**
-     * @brief Applies per-member next-hop and community adjustments after group-level egress policy.
-     *
-     * Handles settings that differ between members of the same peer group:
-     * - eBGP: rewrites NEXT_HOP to the session's local address unless NEXT_HOP_UNCHANGED
-     *   is set; strips standard and extended communities unless SEND_COMMUNITY permits
-     *   them; strips private ASNs from the AS-PATH when REMOVE_PRIVATE_AS is configured.
-     * - iBGP: rewrites NEXT_HOP to the local socket address when NEXT_HOP_SELF or
-     *   NEXT_HOP_SELF_ALL is configured.
-     *
-     * @param pa      Path attributes to modify in-place (already processed by group policy).
-     * @param route   Source inbound route (used to check originator identity for NEXT_HOP_SELF).
-     * @param afNbr   AF-level neighbor state for this specific peer.
-     * @param session Outbound session; provides the local socket address and eBGP flag.
-     *
-     * @see applyGroupEgressPolicy
-     */
-    void applyMemberNexthop(PathAttribute& pa, const InboundRoute<NlriT>& route,
-                            const NeighborAf& afNbr, const Session& session)
-    {
-        const auto& cfgs = afNbr.configs;
-
-        if (session.neighbor.isEbgp())
-        {
-            if (!cfgs.get<config::BgpNeighbor::NEXT_HOP_UNCHANGED>().load() ||
-                cfgs.get<config::BgpNeighbor::NEXT_HOP_SELF_ALL>().load())
-                pa.path.nextHop = session.neighbor.neighborAddress;
-
-            // SEND_COMMUNITY: strip communities for eBGP unless explicitly enabled.
-            bool sendStd = cfgs.get<config::BgpNeighbor::SEND_COMMUNITY>().load()
-                        || cfgs.get<config::BgpNeighbor::SEND_COMMUNITY_BOTH>().load()
-                        || cfgs.get<config::BgpNeighbor::SEND_COMMUNITY_STANDARD>().load();
-            bool sendExt = cfgs.get<config::BgpNeighbor::SEND_COMMUNITY_EXTENDED>().load()
-                        || cfgs.get<config::BgpNeighbor::SEND_COMMUNITY_BOTH>().load();
-
-            if (!sendStd)
-                pa.attrs.communities.clear();
-            if (!sendExt)
-                pa.attrs.extendedCommunities.clear();
-            if (!sendStd && !sendExt)
-                pa.attrs.largeCommunities.clear();
-
-            // REMOVE_PRIVATE_AS: strip private ASNs from egress AS-PATH.
-            bool removePrivate = cfgs.get<config::BgpNeighbor::REMOVE_PRIVATE_AS>().load();
-            bool removeAll     = cfgs.get<config::BgpNeighbor::REMOVE_PRIVATE_AS_ALL>().load();
-            if (removePrivate || removeAll)
-            {
-                auto isPrivateAs = [](uint32_t asn) {
-                    return (asn >= 64512u && asn <= 65534u) ||
-                           (asn >= 4200000000u && asn <= 4294967294u);
-                };
-                for (auto& seg : pa.attrs.asPath)
-                {
-                    auto it = std::remove_if(seg.asns.begin(), seg.asns.end(), isPrivateAs);
-                    seg.asns.erase(it, seg.asns.end());
-                }
-                auto it = std::remove_if(pa.attrs.asPath.begin(), pa.attrs.asPath.end(),
-                    [](const AsPathSegment& s) { return s.asns.empty(); });
-                pa.attrs.asPath.erase(it, pa.attrs.asPath.end());
-            }
-        }
-        else
-        {
-            if ((cfgs.get<config::BgpNeighbor::NEXT_HOP_SELF>().load() &&
-                 route.sourceNeighbor->getParent().getRouterId() != ProcessAccessor::getRid(process)) ||
-                cfgs.get<config::BgpNeighbor::NEXT_HOP_SELF_ALL>().load())
-                pa.path.nextHop = session.getPrimaryConnection()->socketKey()->local.address;
-        }
-    }
-
-    /**
-     * @brief Applies the combined group and member egress policy for an ungrouped peer.
-     *
-     * Calls @ref applyGroupEgressPolicy followed by @ref applyMemberNexthop in a single
-     * step. Used for peers that are not part of a peer group; for group members, the two
-     * stages are invoked separately so the group result can be shared.
-     *
-     * @param route    Route to apply egress policy to.
-     * @param session  Outbound session.
-     * @return Fully-adjusted PathAttribute, or `std::nullopt` if the route has no path ID.
-     *
-     * @see applyGroupEgressPolicy, applyMemberNexthop
-     */
-    std::optional<PathAttribute> applyEgressPolicy(const InboundRoute<NlriT>& route, const Session& session)
-    {
-        auto pa = applyGroupEgressPolicy(route, session);
-        if (!pa.has_value())
-            return std::nullopt;
-
-        const NeighborAf& nbrAf = session.neighbor.getAfNeighbor(family);
-        applyMemberNexthop(*pa, route, nbrAf, session);
-        return pa;
-    }
-
-    /**
      * @brief Per-peer Minimum Route Advertisement Interval (MRAI) rate-limit state.
      *
      * Tracks the timestamp of the last UPDATE sent to this peer and the set of NLRIs
@@ -1320,7 +1475,8 @@ private:
      */
     struct MraiState
     {
-        std::chrono::steady_clock::time_point lastSent{};
+        /// Last advertisement time per prefix; MRAI is scoped per (peer, prefix).
+        std::unordered_map<NlriT, std::chrono::steady_clock::time_point> lastSentPerNlri;
         std::unordered_set<NlriT> pending;
         uint32_t timerId = 0;
     };
@@ -1341,8 +1497,8 @@ private:
         if (it == mraiState.end()) return;
 
         std::unordered_set<NlriT> pending = std::move(it->second.pending);
+        it->second.pending.clear(); // moved-from set is unspecified; make it definitively empty
         it->second.timerId = 0;
-        it->second.lastSent = std::chrono::steady_clock::now();
 
         mraiBypassPeer = peerRid;
         for (const NlriT& nlri : pending)
@@ -1380,11 +1536,20 @@ private:
                 return;
 
             const uint32_t peerRid = session.getPeerRid();
+            NeighborAf* nbrAfPtr = session.neighbor.findAfNeighbor(family);
+            if (!nbrAfPtr)
+                return; // peer has no state for this AF; nothing to advertise
             PerPeerOutTable<NlriT>& peerOut = adjRibOut[peerRid];
-            NeighborAf& nbrAf = session.neighbor.getAfNeighbor(family);
+            NeighborAf& nbrAf = *nbrAfPtr;
             auto& nbrAfCfgs = nbrAf.configs;
 
             auto withdrawFromPeer = [&]() {
+                if (auto msIt = mraiState.find(peerRid); msIt != mraiState.end())
+                {
+                    msIt->second.lastSentPerNlri.erase(nlri);
+                    msIt->second.pending.erase(nlri);
+                }
+
                 auto [begin, end] = peerOut.equal_range(nlri);
                 if (begin == end) return;
                 BuildUpdate<NlriT> withdraw;
@@ -1415,25 +1580,33 @@ private:
                 }
             }
 
-            // MRAI: rate-limit announcements. Withdrawals always bypass.
             if (peerRid != mraiBypassPeer)
             {
                 uint16_t mraiSecs = nbrAfCfgs.get<config::BgpNeighbor::ADVERTISE_INTERVAL>().load();
+                if (mraiSecs == kDefaultEbgpMraiSecs && !session.neighbor.isEbgp())
+                    mraiSecs = kDefaultIbgpMraiSecs;
+
                 if (mraiSecs > 0)
                 {
                     auto& ms = mraiState[peerRid];
                     auto now = std::chrono::steady_clock::now();
-                    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - ms.lastSent);
-                    if (elapsed.count() < mraiSecs)
+
+                    auto sentIt = ms.lastSentPerNlri.find(nlri);
+                    if (sentIt != ms.lastSentPerNlri.end())
                     {
-                        ms.pending.insert(nlri);
-                        if (ms.timerId == 0)
+                        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                            now - sentIt->second);
+                        if (elapsed.count() < mraiSecs)
                         {
-                            auto expiry = ms.lastSent + std::chrono::seconds(mraiSecs);
-                            ms.timerId = ProcessAccessor::getScheduler(process).postAfter(expiry,
-                                [this, peerRid](uint32_t) { drainMraiPending(peerRid); });
+                            ms.pending.insert(nlri);
+                            if (ms.timerId == 0)
+                            {
+                                auto expiry = sentIt->second + std::chrono::seconds(mraiSecs);
+                                ms.timerId = ProcessAccessor::getScheduler(process).postAfter(expiry,
+                                    [this, peerRid](uint32_t) { drainMraiPending(peerRid); });
+                            }
+                            return;
                         }
-                        return;
                     }
                 }
 
@@ -1541,7 +1714,7 @@ private:
             }
 
             // ORF: apply peer-specified prefix-list filter on our outbound.
-            if (!nbrAf.orfFilter.empty() && !passesOrfFilter(nlri, nbrAf.orfFilter))
+            if (!nbrAf.orfFilter.empty() && !egress.passesOrfFilter(nlri, nbrAf.orfFilter))
             {
                 withdrawFromPeer();
                 return;
@@ -1562,12 +1735,12 @@ private:
 
                 if (!best->additionalPaths.empty())
                 {
-                    config::BgpAfBaseRegistry& baseCfg = configs.get<config::BgpAddressFamily::AF_BASE>().get();
                     bool advBackup    = configs.get<config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BACKUP>().load();
-                    bool advBestExt   = configs.get<config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BEST_EXTERNAL>().load();
-                    bool advAll       = baseCfg.get<config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_ALL>().load();
-                    auto advBestFld  = baseCfg.get<config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_BEST>();
-                    bool advGroupBest = baseCfg.get<config::BgpAfBase::ADVERTISE_ADDITIONAL_GROUP_BEST>().load();
+                    bool advAll       = nbrAfCfgs.get<config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_ALL>().load();
+                    auto advBestFld   = nbrAfCfgs.get<config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_BEST>();
+                    bool advGroupBest = nbrAfCfgs.get<config::BgpAfBase::ADVERTISE_ADDITIONAL_GROUP_BEST>().load();
+                    bool advBestExt   = nbrAfCfgs.get<config::BgpAfBase::ADVERTISE_BEST_EXTERNAL>().load()
+                                     || configs.get<config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BEST_EXTERNAL>().load();
 
                     if (advAll)
                     {
@@ -1645,21 +1818,21 @@ private:
                 std::optional<PathAttribute> egressAttrs;
                 if (pg)
                 {
-                    auto groupAttrs = applyGroupEgressPolicy(*route, session);
+                    auto groupAttrs = egress.applyGroupEgressPolicy(*route, session);
                     if (!groupAttrs.has_value())
                         continue;
-                    applyMemberNexthop(*groupAttrs, *route, nbrAf, session);
+                    egress.applyMemberNexthop(*groupAttrs, *route, nbrAf, session);
                     egressAttrs = std::move(groupAttrs);
                 }
                 else
                 {
-                    egressAttrs = applyEgressPolicy(*route, session);
+                    egressAttrs = egress.applyEgressPolicy(*route, session);
                     if (!egressAttrs.has_value())
                         continue;
                 }
 
                 // Route Reflector (RFC 4456 §8): stamp ORIGINATOR_ID and prepend CLUSTER_LIST.
-                if (isReflecting)
+                if (isReflecting && route->sourceNeighbor)
                 {
                     if (!egressAttrs->attrs.originatorId.has_value())
                         egressAttrs->attrs.originatorId = route->sourceNeighbor->getParent().getRouterId();
@@ -1694,8 +1867,9 @@ private:
 
             if (!update.announcements.empty())
             {
-                mraiState[peerRid].lastSent = std::chrono::steady_clock::now();
-                mraiState[peerRid].pending.erase(nlri);
+                auto& ms = mraiState[peerRid];
+                ms.lastSentPerNlri[nlri] = std::chrono::steady_clock::now();
+                ms.pending.erase(nlri);
             }
 
             // Slow peer detection (DYNAMIC / DYNAMIC_PERMANENT): update state from TX backlog.
@@ -1752,8 +1926,7 @@ private:
      */
     uint32_t getClusterId() const
     {
-        auto cidField = ProcessAccessor::getConfigs(process).get<config::Bgp::BGP_CLUSTER_ID>();
-        return cidField.hasValue() ? cidField.load() : ProcessAccessor::getRid(process);
+        return egress.getClusterId();
     }
 
     /**
@@ -1767,53 +1940,7 @@ private:
      */
     uint32_t getConfedId() const
     {
-        auto cidField = ProcessAccessor::getConfigs(process).get<config::Bgp::BGP_CONFEDERATION_IDENTIFIER>();
-        return cidField.hasValue() ? cidField.load() : ProcessAccessor::getAsNum(process);
-    }
-
-    /**
-     * @brief Applies a peer-sent ORF prefix-list to one outbound NLRI.
-     *
-     * Evaluates each ORF entry whose action is `ADD` against `nlri`. An entry matches
-     * when `nlri`'s prefix length falls within the entry's [minLen, maxLen] range and
-     * `nlri` is a subnet of the entry's prefix. The first matching entry determines
-     * the outcome; entries that do not match are skipped. An implicit deny applies when
-     * the filter is non-empty and no entry matched.
-     *
-     * For NLRI types other than IP prefixes, this always returns `true` (ORF not applicable).
-     *
-     * @param nlri    Outbound NLRI to evaluate.
-     * @param filter  ORF prefix-list entries received from the peer.
-     * @return `true` if the NLRI should be advertised; `false` if the ORF filter denies it.
-     */
-    bool passesOrfFilter(const NlriT& nlri, const std::vector<OrfPrefixEntry>& filter) const
-    {
-        if constexpr (std::is_same_v<NlriT, types::IPPrefix>)
-        {
-            for (const auto& e : filter)
-            {
-                if (e.action != BGP_ORF_ACTION_ADD) continue;
-
-                uint8_t minLen = e.minLen;
-                uint8_t maxLen = e.maxLen;
-                if (minLen == 0 && maxLen == 0)
-                    minLen = maxLen = e.prefix.prefixLength;
-
-                if (nlri.prefixLength < minLen || nlri.prefixLength > maxLen)
-                    continue;
-
-                // Check if nlri is a subnet of e.prefix
-                if (!e.prefix.contains(nlri))
-                    continue;
-
-                return e.match == BGP_ORF_MATCH_PERMIT;
-            }
-            return false; // implicit deny when filter is non-empty and nothing matched
-        }
-        else
-        {
-            return true; // ORF prefix-list not applicable for this NLRI type
-        }
+        return egress.getConfedId();
     }
 
     /**
@@ -1853,7 +1980,10 @@ public:
         if constexpr (!types::IsIPPrefix<NlriT>)
             return;
 
-        NeighborAf& nbrAf = session.neighbor.getAfNeighbor(family);
+        NeighborAf* nbrAfPtr = session.neighbor.findAfNeighbor(family);
+        if (!nbrAfPtr)
+            return;
+        NeighborAf& nbrAf = *nbrAfPtr;
         if (!nbrAf.configs.get<config::BgpNeighbor::ACTIVATE>().load())
             return;
         if (!nbrAf.configs.get<config::BgpAfBase::DEFAULT_ORIGINATE>().load())
@@ -1978,7 +2108,8 @@ private:
             return;
         if (!session.getNegotiated().activeFamilies.count(family))
             return;
-        if (!session.neighbor.getAfNeighbor(family).configs.get<config::BgpNeighbor::ACTIVATE>().load())
+        NeighborAf* nbrAf = session.neighbor.findAfNeighbor(family);
+        if (!nbrAf || !nbrAf->configs.get<config::BgpNeighbor::ACTIVATE>().load())
             return;
 
         for (auto& [aggNlri, state] : aggregateStates)
@@ -2166,71 +2297,6 @@ private:
     }
 
     /**
-     * @brief Applies egress transformations to an aggregate's PathAttribute before sending.
-     *
-     * Mirrors the logic of @ref applyGroupEgressPolicy for aggregate routes:
-     * - eBGP: strips LOCAL_PREF, ORIGINATOR_ID, CLUSTER_LIST, and confederation AS-PATH
-     *   segments; prepends the local (or LOCAL_AS) AS to the leading AS_SEQUENCE; rewrites
-     *   NEXT_HOP to the session's local socket address.
-     * - Confederation eBGP: prepends the member AS as AS_CONFED_SEQUENCE; sets LOCAL_PREF 100.
-     * - iBGP: sets LOCAL_PREF 100; rewrites NEXT_HOP.
-     *
-     * Modifies `pa` in-place; the caller owns the copy.
-     *
-     * @param pa       Aggregate path attributes to modify.
-     * @param session  Outbound session used to determine eBGP classification and addresses.
-     */
-    void applyAggregateEgressPolicy(PathAttribute& pa, const Session& session)
-    {
-        auto& sesCfgs = session.getNeighborConfigs();
-
-        if (session.neighbor.isEbgp())
-        {
-            pa.attrs.localPref    = std::nullopt;
-            pa.attrs.originatorId = std::nullopt;
-            pa.attrs.clusterList.clear();
-
-            // Strip CONFED segments before advertising to real eBGP.
-            pa.attrs.asPath.erase(
-                std::remove_if(pa.attrs.asPath.begin(), pa.attrs.asPath.end(),
-                    [](const AsPathSegment& s) {
-                        return s.segmentType == BGP_AS_CONFED_SEQUENCE ||
-                               s.segmentType == BGP_AS_CONFED_SET;
-                    }),
-                pa.attrs.asPath.end());
-
-            AsPathSegment& seg = getAsSegment(pa.attrs);
-            const uint32_t confedId = getConfedId();
-            auto localAsField = sesCfgs.get<config::BgpNeighborSession::LOCAL_AS_AS>();
-            if (!sesCfgs.get<config::BgpNeighborSession::LOCAL_AS>().load() || !localAsField.hasValue())
-                seg.asns.insert(seg.asns.begin(), confedId);
-            else if (sesCfgs.get<config::BgpNeighborSession::LOCAL_AS_REPLACE_AS>().load())
-                seg.asns.insert(seg.asns.begin(), localAsField.load());
-            else if (sesCfgs.get<config::BgpNeighborSession::LOCAL_AS_NO_PREPEND>().load())
-                seg.asns.insert(seg.asns.begin(), confedId);
-            else
-            {
-                seg.asns.insert(seg.asns.begin(), confedId);
-                seg.asns.insert(seg.asns.begin(), localAsField.load());
-            }
-        }
-        else if (session.neighbor.isConfedEbgp())
-        {
-            // Prepend member AS as AS_CONFED_SEQUENCE; keep LOCAL_PREF.
-            AsPathSegment& seg = getConfedAsSegment(pa.attrs);
-            seg.asns.insert(seg.asns.begin(), ProcessAccessor::getAsNum(process));
-            pa.attrs.localPref = 100;
-        }
-        else
-        {
-            pa.attrs.localPref = 100;
-        }
-
-        if (auto* conn = session.getPrimaryConnection())
-            pa.path.nextHop = conn->socketKey()->local.address;
-    }
-
-    /**
      * @brief Advertises an active aggregate to all established and activated peers.
      *
      * Iterates every neighbor; skips those without an established session, without this
@@ -2247,7 +2313,8 @@ private:
                 return;
             if (!session.getNegotiated().activeFamilies.count(family))
                 return;
-            if (!session.neighbor.getAfNeighbor(family).configs.get<config::BgpNeighbor::ACTIVATE>().load())
+            NeighborAf* nbrAf = session.neighbor.findAfNeighbor(family);
+            if (!nbrAf || !nbrAf->configs.get<config::BgpNeighbor::ACTIVATE>().load())
                 return;
 
             sendAggregateToPeer(aggNlri, state, session);
@@ -2267,7 +2334,7 @@ private:
     void sendAggregateToPeer(const NlriT& aggNlri, AggregateState& state, Session& session)
     {
         PathAttribute pa = state.basePa;
-        applyAggregateEgressPolicy(pa, session);
+        egress.applyAggregateEgressPolicy(pa, session);
 
         BuildUpdate<NlriT> update;
         typename BuildUpdate<NlriT>::Announcement ann;
@@ -3034,6 +3101,9 @@ private:
     AfiSafi           family;             ///< AFI/SAFI this instance manages.
 
     config::BgpAddressFamilyRegistry& configs; ///< Registry reference for address-family configuration.
+
+    EgressPolicy<N> egress; ///< Reusable egress path-attribute transforms for this AF.
+    DirtyState      dirty;  ///< Debounced pending config-apply work; drained by @ref flushDirty.
 };
 } // namespace routing::bgp
 

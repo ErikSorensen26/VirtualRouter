@@ -127,7 +127,13 @@ protected:
     Session* findSession(const types::IPAddress& addr) { return findSessionOn(*proc, addr); }
     static Session* findSessionOn(BgpProcess& p, const types::IPAddress& addr) { return p.findSession(addr); }
 
-    void addAfNeighbor(Neighbor& nbr, AfiSafi& afi) { nbr.addAfNeighbor(afi); }
+    void addAfNeighbor(Neighbor& nbr, AfiSafi& afi)
+    {
+        // The process AF must exist before a per-neighbor AF can reference it.
+        if (afi == ExampleNlri::afi && !proc->findAddressFamily(afi))
+            proc->enableAddressFamily<ExampleNlri::afi>();
+        nbr.addAfNeighbor(afi);
+    }
     void delAfNeighbor(Neighbor& nbr, AfiSafi& afi) { nbr.delAfNeighbor(afi); }
     void buildAttributeRanges(Neighbor& nbr) { nbr.buildAttributeRanges(); }
     static uint32_t getRid(const Neighbor& nbr) { return nbr.rid; }
@@ -764,6 +770,7 @@ TEST_F(Internal_BgpTest, BgpTx_BuildOpen_TwoByteAs_RoundTripFields)
     types::IPAddress peerAddr = mkV4(0x0A000002);
     Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peerAddr);
     Session sess(*nbr, *proc);
+    sess.initialize();
 
     BgpTx::buildOpen(pair.connA, sess);
     flushAndPump(pair, pair.connA);
@@ -806,6 +813,7 @@ TEST_F(Internal_BgpTest, BgpTx_BuildOpen_FourByteAs_UsesAsTrans)
     types::IPAddress peerAddr = mkV4(0x0A000003);
     Neighbor* nbr = ProcessAccessor::getNtable(proc2).createNeighbor(peerAddr);
     Session sess(*nbr, proc2);
+    sess.initialize();
 
     BgpTx::buildOpen(pair.connA, sess);
     flushAndPump(pair, pair.connA);
@@ -859,6 +867,7 @@ TEST_F(Internal_BgpTest, BgpTx_BuildOpen_CapabilitiesIncludeRouteRefreshAndExtMs
     types::IPAddress peerAddr = mkV4(0x0A000004);
     Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peerAddr);
     Session sess(*nbr, *proc);
+    sess.initialize();
 
     BgpTx::buildOpen(pair.connA, sess);
     flushAndPump(pair, pair.connA);
@@ -909,6 +918,7 @@ TEST_F(Internal_BgpTest, BgpTx_BuildOpen_MultiprotocolCapability_AfterEnableAf)
     ASSERT_TRUE(pair.pumpUntilAccepted());
 
     Session sess(*nbr, *proc);
+    sess.initialize();
     BgpTx::buildOpen(pair.connA, sess);
     flushAndPump(pair, pair.connA);
 
@@ -1387,7 +1397,6 @@ TEST_F(Internal_BgpTest, BgpTx_BuildRouteRefresh_BasicNormal)
 
     types::IPAddress peerAddr = mkV4(0x0A00000E);
     Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peerAddr);
-    addAfNeighbor(*nbr, afiSafi);
     Session sess(*nbr, *proc);
 
     BgpTx::buildRouteRefresh(pair.connA, sess, afiSafi, RouteRefreshReason::Normal);
@@ -2113,11 +2122,13 @@ TEST_F(Internal_BgpTest, Neighbor_IsEbgp_DifferentAsWithoutConfederation)
 
     // REMOTE_AS == local AS -> iBGP, not eBGP.
     nbr->getConfigs().get<config::BgpNeighborSession::REMOTE_AS>().set(kLocalAs);
+    ProcessAccessor::getScheduler(*proc).waitIdle();
     EXPECT_FALSE(nbr->isEbgp());
     EXPECT_FALSE(nbr->isConfedEbgp());
 
     // REMOTE_AS != local AS, not in confederation peer list -> eBGP.
     nbr->getConfigs().get<config::BgpNeighborSession::REMOTE_AS>().set(65099);
+    ProcessAccessor::getScheduler(*proc).waitIdle();
     EXPECT_TRUE(nbr->isEbgp());
     EXPECT_FALSE(nbr->isConfedEbgp());
 }
@@ -2137,6 +2148,7 @@ TEST_F(Internal_BgpTest, Neighbor_IsConfedEbgp_RemoteAsInConfederationPeers)
             peers.push_back(kConfedMemberAs);
             return true;
         });
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     // REMOTE_AS is a confederation member (and != local AS) -> confed-eBGP, not plain eBGP.
     EXPECT_FALSE(nbr->isEbgp());

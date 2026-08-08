@@ -10,6 +10,7 @@
 #include "bgp/rib/RibTypes.hpp"
 #include "NeighborAfConfigs.hpp"
 #include "bgp/af/AddressFamily.hpp"
+#include "bgp/af/DirtyState.hpp"
 
 class Internal_BgpTest;
 
@@ -22,6 +23,7 @@ class PeerPolicyTemplate;
 class Session;
 class BgpRx;
 class BgpTx;
+template <typename> class EgressPolicy;
 
 /**
  * @brief Tracks all per-neighbor, per-AFI/SAFI state for one BGP peer.
@@ -46,7 +48,7 @@ public:
      * @param family The address family this object tracks.
      * @param parent The Neighbor that owns this NeighborAf.
      */
-    NeighborAf(const AfiSafi& family, Neighbor& parent);
+    NeighborAf(const AfiSafi& family, AddressFamilyVariant& af, Neighbor& parent);
 
     /**
      * @brief Destructor. Cancels any pending maximum-prefix restart timer.
@@ -54,6 +56,18 @@ public:
     ~NeighborAf();
 
     void enqueueSyncAdditionalPaths();
+    void enqueueSyncDefaultOriginate();
+    void enqueueSyncSlowPeer();
+    void enqueueSyncActivate();
+    void enqueueSyncAdvertiseDiverse();
+    void enqueueMarkAttr(OutAttr attr);
+    void enqueueMarkAttrs(OutAttrMask attrs);
+    void enqueueMarkInbound(InDirty category);
+    void enqueueConnectionRestart();
+
+    // Synchronous mark (caller already on the BGP scheduler thread).
+    void markAttr(OutAttr attr);
+    void markAttrs(OutAttrMask attrs);
 
     const AfiSafi family; ///< The address family covered by this object.
     const Neighbor& getParent() const noexcept { return parent; }
@@ -62,8 +76,12 @@ private:
     friend class ::Internal_BgpTest;
     template <typename>
     friend class AddressFamilyInstance;
+    template <typename>
+    friend class EgressPolicy;
     friend PeerTemplateTable;
     friend class Session;
+    friend class BgpRx; // reads updateOrfFilter() on inbound ROUTE-REFRESH ORF
+    friend class BgpTx; // reads orfOutbound when appending the ORF capability
 
     bool mpNegotiated; ///< True when MP-BGP was negotiated for this family during OPEN.
 
@@ -118,10 +136,20 @@ private:
     bool isSlowPeer = false;                              ///< True when the peer has been classified as slow.
     std::chrono::steady_clock::time_point slowFirstSeen{}; ///< Timestamp when the peer was first seen as slow.
 
+    OutAttrMask dirtyOut; ///< Outbound attributes marked dirty since the last flush.
+
+    OutAttrMask drainDirtyOut() noexcept
+    {
+        OutAttrMask m = dirtyOut;
+        dirtyOut.reset();
+        return m;
+    }
+
 private:
 
     Neighbor& parent;
     NeighborAfConfigs configs;
+    AddressFamilyVariant& af;
 
     struct Private
     {

@@ -120,17 +120,13 @@ Neighbor* NeighborTable::lookup(uint32_t rid)
 NeighborAf* NeighborTable::lookup(const types::IPAddress& ipAddress, const AfiSafi& afi)
 {
     Neighbor* nbr = lookup(ipAddress);
-    return nbr
-        ? &nbr->getAfNeighbor(afi)
-        : nullptr;
+    return nbr ? nbr->findAfNeighbor(afi) : nullptr;
 }
 
 NeighborAf* NeighborTable::lookup(uint32_t rid, const AfiSafi& afi)
 {
     Neighbor* nbr = lookup(rid);
-    return nbr
-        ? &nbr->getAfNeighbor(afi)
-        : nullptr;
+    return nbr ? nbr->findAfNeighbor(afi) : nullptr;
 }
 
 bool NeighborTable::activatePeer(uint32_t rid, Session& sess)
@@ -199,6 +195,22 @@ void NeighborTable::shutdownNeighbor(Neighbor& neighbor)
 
 void NeighborTable::unshutdownNeighbor(Neighbor& neighbor)
 {
+    process.unshutdownNeighbor(neighbor);
+}
+
+void NeighborTable::clear()
+{
+    peers.clear();
+    neighbors.clear();
+}
+
+void NeighborTable::restartNeighbor(Neighbor& neighbor)
+{
+    // A session-reset config change bounces an existing session; it must not create one
+    // where none exists.
+    if (!process.findSession(neighbor.neighborAddress))
+        return;
+    process.shutdownNeighbor(neighbor);
     process.unshutdownNeighbor(neighbor);
 }
 

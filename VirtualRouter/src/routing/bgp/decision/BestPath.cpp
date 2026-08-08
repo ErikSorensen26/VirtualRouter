@@ -29,10 +29,36 @@ BestPathComparator::BestPathComparator(BgpProcess& p, BestPathConfig cfg)
 
 inline bool BestPathComparator::compareMed(const InboundRouteBase& lhs, const InboundRouteBase& rhs) const
 {
-    if (!config.compareMed)
+    // RFC 4271 9.1.2.2 (c): MED is only comparable between routes learned from the
+    // same neighbouring AS. `always-compare-med` lifts that restriction.
+    if (!config.compareMed && !sameNeighborAs(lhs, rhs, config.medConfed))
         return false;
+
     return medOrDefault(lhs.getPathAttributes(), config.medMissingAsWorst)
          < medOrDefault(rhs.getPathAttributes(), config.medMissingAsWorst);
+}
+
+bool BestPathComparator::sameNeighborAs(const InboundRouteBase& lhs, const InboundRouteBase& rhs,
+                                        bool medConfed)
+{
+    auto neighborAs = [medConfed](const InboundRouteBase& r) -> uint32_t {
+        const auto& attrs = r.getPathAttributes().attrs;
+        if (medConfed)
+        {
+            for (const auto& seg : attrs.asPath)
+            {
+                if (seg.asns.empty())
+                    continue;
+                if (seg.segmentType == BGP_AS_CONFED_SEQUENCE ||
+                    seg.segmentType == BGP_AS_CONFED_SET)
+                    return seg.asns.front();
+                break; // a non-confed segment leads: fall through to the normal rule
+            }
+        }
+        uint32_t fa = attrs.firstAs();
+        return fa != 0 ? fa : r.peerAs;
+    };
+    return neighborAs(lhs) == neighborAs(rhs);
 }
 
 bool BestPathComparator::better(const InboundRouteBase& lhs, const types::IPAddress& lhsNbr, const InboundRouteBase& rhs, const types::IPAddress& rhsNbr) const
@@ -49,8 +75,8 @@ bool BestPathComparator::better(const InboundRouteBase& lhs, const types::IPAddr
         return localPrefOrDefault(lhsAttr) > localPrefOrDefault(rhsAttr);
 
     // 3) Locally originated
-    if (!lhs.sourceNeighbor && rhs.sourceNeighbor)
-        return true;
+    if (!lhs.sourceNeighbor != !rhs.sourceNeighbor)
+        return !lhs.sourceNeighbor;
 
     // 4) Shortest AS_PATH
     if (lhsAttr.attrs.asPathLength() != rhsAttr.attrs.asPathLength())

@@ -7,18 +7,19 @@
 #include "NeighborAf.h"
 #include "Neighbor.h"
 #include "bgp/neighbor/NeighborTable.h"
+#include "bgp/af/AddressFamilyInstance.h" // IWYU pragma: keep
 
 namespace routing::bgp
 {
-NeighborAf::NeighborAf(const AfiSafi& fam, Neighbor& p)
+NeighborAf::NeighborAf(const AfiSafi& fam, AddressFamilyVariant& af, Neighbor& p)
     : family(fam),
       mpNegotiated(false),
       parent(p),
       configs(fam, [&p, &fam]() -> config::BgpNeighborRegistry& {
           auto neighborConfigs = p.configs.get<config::BgpNeighborSession::AF_NEIGHBOR>();
-          uint32_t id = fam.afi | uint32_t(fam.afi) << 16;
-          return neighborConfigs.emplaceBack(id);
-      }())
+          return neighborConfigs.emplaceBack(fam.flatten());
+      }()),
+      af(af)
 {
     configs.getConfigs().context().set(this);
 
@@ -35,6 +36,91 @@ NeighborAf::NeighborAf(const AfiSafi& fam, Neighbor& p)
         if (inhPolField.hasValue())
             configs.setPeerPolicyTemplate(parent.ntable.lookupPeerPolicyTemplate(inhPolField.load()));
     }
+}
+
+void NeighborAf::enqueueSyncAdditionalPaths()
+{
+    enqueueMarkAttr(OutAttr::ADD_PATH);
+}
+
+void NeighborAf::enqueueSyncDefaultOriginate()
+{
+    // Sent/withdrawn explicitly (not Loc-RIB derived), so applied immediately.
+    parent.scheduler.post([this]() {
+        if (!parent.session || !parent.session->established())
+            return;
+        std::visit([this](auto& fam){
+            if (configs.get<config::BgpAfBase::DEFAULT_ORIGINATE>().load())
+                fam.sendDefaultOriginate(*parent.session);
+            else
+                fam.withdrawDefaultOriginate(*parent.session);
+        }, af);
+    });
+}
+
+void NeighborAf::enqueueSyncSlowPeer()
+{
+    enqueueMarkAttr(OutAttr::NEXT_HOP);
+}
+
+void NeighborAf::enqueueSyncActivate()
+{
+    parent.scheduler.post([this]() {
+        std::visit([this](auto& fam) {
+            if (configs.get<config::BgpNeighbor::ACTIVATE>().load())
+            {
+                // Dumping the Loc-RIB only makes sense once the session can carry it.
+                if (parent.session && parent.session->established())
+                    fam.onPeerEstablished(*parent.session);
+            }
+            else
+            {
+                dirtyOut.set(static_cast<size_t>(OutAttr::ACTIVATE));
+                fam.markNeighborOutDirty(parent.getRouterId());
+            }
+        }, af);
+    });
+}
+
+void NeighborAf::enqueueSyncAdvertiseDiverse()
+{
+    enqueueMarkAttr(OutAttr::ADD_PATH);
+}
+
+void NeighborAf::markAttr(OutAttr attr)
+{
+    dirtyOut.set(static_cast<size_t>(attr));
+    std::visit([this](auto& fam) { fam.markNeighborOutDirty(parent.getRouterId()); }, af);
+}
+
+void NeighborAf::markAttrs(OutAttrMask attrs)
+{
+    dirtyOut |= attrs;
+    std::visit([this](auto& fam) { fam.markNeighborOutDirty(parent.getRouterId()); }, af);
+}
+
+void NeighborAf::enqueueMarkAttr(OutAttr attr)
+{
+    parent.scheduler.post([this, attr]() { markAttr(attr); });
+}
+
+void NeighborAf::enqueueMarkAttrs(OutAttrMask attrs)
+{
+    parent.scheduler.post([this, attrs]() { markAttrs(attrs); });
+}
+
+void NeighborAf::enqueueMarkInbound(InDirty category)
+{
+    parent.scheduler.post([this, category]() {
+        std::visit([this, category](auto& fam) {
+            fam.markInboundDirty(category, parent.getRouterId());
+        }, af);
+    });
+}
+
+void NeighborAf::enqueueConnectionRestart()
+{
+    parent.enqueueConnectionRestart();
 }
 
 void NeighborAf::updateOrfFilter(const std::vector<OrfPrefixEntry>& entries)
@@ -99,7 +185,7 @@ Session* NeighborAf::getSession() noexcept
 std::optional<uint32_t> NeighborAf::getRemoteAs() const noexcept
 {
     auto remoteAs = parent.configs.get<config::BgpNeighborSession::REMOTE_AS>();
-    if (remoteAs.hasValue())
+    if (!remoteAs.hasValue())
         return std::nullopt;
     return remoteAs.load();
 }
@@ -117,7 +203,6 @@ bool NeighborAf::isConfedEbgp() const noexcept
 NeighborAf::~NeighborAf()
 {
     cancelPfxRestart();
-    parent.configs.get<config::BgpNeighborSession::AF_NEIGHBOR>().erase(
-        family.afi | uint32_t(family.afi << 16));
+    parent.configs.get<config::BgpNeighborSession::AF_NEIGHBOR>().erase(family.flatten());
 }
 } // namespace routing

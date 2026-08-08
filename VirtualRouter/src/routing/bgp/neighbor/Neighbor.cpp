@@ -42,25 +42,47 @@ Neighbor::~Neighbor()
 void Neighbor::enqueueConnectionRestart()
 {
     scheduler.post([this]() {
-        ntable.shutdownNeighbor(*this);
-        ntable.unshutdownNeighbor(*this);
+        ntable.restartNeighbor(*this);
     });
 }
 
-void Neighbor::enqueueSyncAdditionalPaths()
+void Neighbor::enqueueSyncShutdown()
 {
     scheduler.post([this]() {
-        forEachAfNeighbor([this](NeighborAf& nbr) {
-            AddressFamilyVariant* fam = ntable.findAddressFamily(nbr.family);
-            if (!fam) return;
-            std::visit([](auto& fam) { fam.recomputeAdditionalPaths(); }, *fam);
-        });
+        if (configs.get<config::BgpNeighborSession::SHUTDOWN>().load())
+            ntable.shutdownNeighbor(*this);
+        else
+            ntable.unshutdownNeighbor(*this);
+    });
+}
+
+void Neighbor::enqueueBuildAttributeRanges()
+{
+    scheduler.post([this]() {
+        buildAttributeRanges();
+    });
+}
+
+void Neighbor::enqueueSyncRemoteAs()
+{
+    scheduler.post([this]() {
+        syncEbgp();
+        ntable.restartNeighbor(*this);
+    });
+}
+
+void Neighbor::enqueueMarkAllOutbound(OutAttr attr)
+{
+    scheduler.post([this, attr]() {
+        forEachAfNeighbor([&](NeighborAf& afNbr) { afNbr.markAttr(attr); });
     });
 }
 
 void Neighbor::addAfNeighbor(AfiSafi& afi)
 {
-    priv.afNeighbors.try_emplace(afi, afi, *this);
+    AddressFamilyVariant* af = ntable.findAddressFamily(afi);
+    assert(af);
+    priv.afNeighbors.try_emplace(afi, afi, *af, *this);
 }
 
 void Neighbor::delAfNeighbor(AfiSafi& afi)
@@ -75,6 +97,12 @@ NeighborAf& Neighbor::getAfNeighbor(const AfiSafi& afi)
     return it->second;
 }
 
+NeighborAf* Neighbor::findAfNeighbor(const AfiSafi& afi)
+{
+    auto it = priv.afNeighbors.find(afi);
+    return it != priv.afNeighbors.end() ? &it->second : nullptr;
+}
+
 void Neighbor::syncEbgp()
 {
     auto remAs = configs.get<config::BgpNeighborSession::REMOTE_AS>();
@@ -82,9 +110,12 @@ void Neighbor::syncEbgp()
     {
         priv.isEbgp.store(false, std::memory_order_release);
         priv.inConfed.store(false, std::memory_order_release);
+        return;
     }
-    priv.isEbgp.store(remAs.load() != ntable.process.asNumber, std::memory_order_release);
-    priv.inConfed.store(ntable.isPeerConfed(remAs.load()), std::memory_order_release);
+    const bool inConfed = ntable.isPeerConfed(remAs.load());
+    priv.inConfed.store(inConfed, std::memory_order_release);
+    priv.isEbgp.store(remAs.load() != ntable.process.asNumber && !inConfed,
+                      std::memory_order_release);
 }
 
 bool Neighbor::isEbgp() const noexcept

@@ -1,5 +1,7 @@
 // BgpTx.cpp
 
+#include <algorithm>
+#include <utility>
 #include <vector>
 
 #include "packet/headers/embedded/bgp/BgpOpenHeader.hpp"
@@ -18,6 +20,40 @@ void BgpTx::buildHeader(uint8_t type, uint16_t payloadSize, uint8_t* buf)
     hdr.setMarker();
     hdr.setType(type);
     hdr.setLength(payloadSize + packet::BgpHeader::fixedSize);
+}
+
+/**
+ * @brief Returns the hostname/domain byte counts the FQDN capability can actually encode.
+ *
+ * Each name carries a one-byte length prefix, and the pair must fit inside one
+ * capability parameter (253 bytes of value). Both the size computation and the
+ * emitter use this so the declared length always matches the bytes written.
+ */
+static std::pair<size_t, size_t> fqdnLengths(const Capabilities& caps)
+{
+    constexpr size_t kMaxCapValue = 253;
+
+    size_t hostLen = std::min<size_t>(caps.hostname.size(), 255);
+    size_t domLen  = std::min<size_t>(caps.domain.size(), 255);
+
+    if (2 + hostLen + domLen > kMaxCapValue)
+    {
+        hostLen = std::min(hostLen, kMaxCapValue - 2);
+        domLen  = std::min(domLen, kMaxCapValue - 2 - hostLen);
+    }
+    return {hostLen, domLen};
+}
+
+/// Families the GR capability can encode: 2 flag/time bytes + 4 per family, within one parameter.
+static size_t grFamilyCount(const Capabilities& caps)
+{
+    return std::min<size_t>(caps.gracefulFamilies.size(), (253 - 2) / 4);
+}
+
+/// Families the LLGR capability can encode: 7 bytes per family, within one parameter.
+static size_t llgrFamilyCount(const Capabilities& caps)
+{
+    return std::min<size_t>(caps.llgrFamilies.size(), 253 / 7);
 }
 
 static uint16_t computeCapabilityLen(const Capabilities& caps)
@@ -51,78 +87,55 @@ static uint16_t computeCapabilityLen(const Capabilities& caps)
     for (size_t i = 0; i < caps.orfEntries.size(); ++i)
         addParam(7);
 
-    // Extended Next-Hop Encoding
-    if (!caps.extendedNextHopEntries.empty())
+    auto addFragmented = [&](size_t entryCount, uint8_t blockSize)
     {
-        uint8_t fragSize = getFragSize(6);
-        size_t frags = getFragments(fragSize, caps.extendedNextHopEntries.size());
-        for (size_t f = 0; f < frags - 1; ++f)
-            addParam(fragSize * 6);
-        // last fragment may be smaller
-        size_t remainder = caps.extendedNextHopEntries.size() % fragSize;
-        addParam(static_cast<uint8_t>((remainder == 0 ? fragSize : remainder) * 6));
-    }
+        if (entryCount == 0)
+            return;
+        const uint8_t fragSize = getFragSize(blockSize);
+        const size_t frags = getFragments(fragSize, entryCount);
+        for (size_t f = 0; f < frags; ++f)
+        {
+            const size_t inFrag = std::min<size_t>(fragSize, entryCount - f * fragSize);
+            addParam(static_cast<uint8_t>(inFrag * blockSize));
+        }
+    };
+
+    // Extended Next-Hop Encoding
+    addFragmented(caps.extendedNextHopEntries.size(), 6);
 
     // Extended Message
     if (caps.extendedMessage)
         addParam(0);
 
-    // Graceful Restart
+    // Graceful Restart: single parameter carrying flags/time plus every family,
+    // matching appendCapabilities.
     if (caps.gracefulRestart)
-    {
-        uint8_t fragSize = getFragSize(4);
-        const size_t totalEntries = caps.gracefulFamilies.size();
-        const size_t frags = getFragments(fragSize, totalEntries);
-        for (size_t f = 0; f < frags - 1; ++f)
-            addParam(2 + fragSize * 4); // flags/time only in first frag ideally
-        size_t remainder = totalEntries % fragSize;
-        addParam(static_cast<uint8_t>(2 + (remainder == 0 ? fragSize : remainder) * 4));
-    }
+        addParam(static_cast<uint8_t>(2 + grFamilyCount(caps) * 4));
 
     // 4-byte ASN
     if (caps.asn32bit)
         addParam(4);
 
     // MULTI-SESSION
-    if (!caps.multiSessionFamilies.empty())
-    {
-        uint8_t fragSize = getFragSize(4);
-        size_t frags = getFragments(fragSize, caps.multiSessionFamilies.size());
-        for (size_t f = 0; f < frags - 1; ++f)
-            addParam(fragSize * 4);
-        size_t remainder = caps.multiSessionFamilies.size() % fragSize;
-        addParam(static_cast<uint8_t>((remainder == 0 ? fragSize : remainder) * 4));
-    }
+    addFragmented(caps.multiSessionFamilies.size(), 4);
 
     // ADD-PATH
-    if (!caps.addPathFamilies.empty())
-    {
-        uint8_t fragSize = getFragSize(4);
-        size_t frags = getFragments(fragSize, caps.addPathFamilies.size());
-        for (size_t f = 0; f < frags - 1; ++f)
-            addParam(fragSize * 4);
-        size_t remainder = caps.addPathFamilies.size() % fragSize;
-        addParam(static_cast<uint8_t>((remainder == 0 ? fragSize : remainder) * 4));
-    }
+    addFragmented(caps.addPathFamilies.size(), 4);
 
     // Enhanced Route Refresh
     if (caps.enhancedRouteRefresh)
         addParam(0);
 
-    // LLGR
+    // LLGR: single parameter carrying every family, matching appendCapabilities.
     if (caps.llgr && !caps.llgrFamilies.empty())
-    {
-        uint8_t fragSize = getFragSize(7);
-        size_t frags = getFragments(fragSize, caps.llgrFamilies.size());
-        for (size_t f = 0; f < frags - 1; ++f)
-            addParam(fragSize * 7);
-        size_t remainder = caps.llgrFamilies.size() % fragSize;
-        addParam(static_cast<uint8_t>((remainder == 0 ? fragSize : remainder) * 7));
-    }
+        addParam(static_cast<uint8_t>(llgrFamilyCount(caps) * 7));
 
     // FQDN
     if (caps.fqdn)
-        addParam(static_cast<uint8_t>(1 + caps.hostname.size() + 1 + caps.domain.size()));
+    {
+        const auto [hostLen, domLen] = fqdnLengths(caps);
+        addParam(static_cast<uint8_t>(1 + hostLen + 1 + domLen));
+    }
 
     // Link-local next hop
     if (caps.linkLocalNextHop)
@@ -214,15 +227,17 @@ static void appendCapabilities(const Capabilities& caps, transport::tcp::Connect
     // Graceful Restart
     if (caps.gracefulRestart)
     {
-        const uint8_t vlen = static_cast<uint8_t>(2 + caps.gracefulFamilies.size() * 4);
+        const size_t count = grFamilyCount(caps);
+        const uint8_t vlen = static_cast<uint8_t>(2 + count * 4);
         uint8_t* buf = openParam(BGP_CAPABILITY_GRACEFUL_RESTART, vlen);
         uint16_t flagsTime = caps.restartTime & 0x0FFF;
         if (caps.restarting) flagsTime |= 0x8000;
         utils::writeU16(buf, flagsTime);
 
         size_t p = 2;
-        for (const auto& gf : caps.gracefulFamilies)
+        for (size_t i = 0; i < count; ++i)
         {
+            const auto& gf = caps.gracefulFamilies[i];
             utils::writeU16(buf + p, gf.family.afi);
             buf[p + 2] = gf.family.safi;
             buf[p + 3] = gf.forwardingStatePreserved ? 0x80 : 0x00;
@@ -296,12 +311,14 @@ static void appendCapabilities(const Capabilities& caps, transport::tcp::Connect
     // LLGR
     if (caps.llgr && !caps.llgrFamilies.empty())
     {
-        const uint8_t vlen = static_cast<uint8_t>(caps.llgrFamilies.size() * 7);
+        const size_t count = llgrFamilyCount(caps);
+        const uint8_t vlen = static_cast<uint8_t>(count * 7);
         uint8_t* buf = openParam(BGP_CAPABILITY_LLGR, vlen);
 
         size_t idx = 0;
-        for (const auto& lf : caps.llgrFamilies)
+        for (size_t i = 0; i < count; ++i)
         {
+            const auto& lf = caps.llgrFamilies[i];
             utils::writeU16(buf + idx, lf.family.afi);
             buf[idx + 2] = lf.family.safi;
             buf[idx + 3] = lf.flags;
@@ -313,18 +330,55 @@ static void appendCapabilities(const Capabilities& caps, transport::tcp::Connect
     // FQDN
     if (caps.fqdn)
     {
-        uint8_t vlen = static_cast<uint8_t>(1 + caps.hostname.size() + 1 + caps.domain.size());
+        // Each name is length-prefixed by one byte and the whole capability must fit
+        // in a single parameter, so clamp both to what the encoding can carry.
+        const auto [hostLen, domLen] = fqdnLengths(caps);
+
+        uint8_t vlen = static_cast<uint8_t>(1 + hostLen + 1 + domLen);
         uint8_t* buf = openParam(BGP_CAPABILITY_FQDN, vlen);
-        buf[0] = static_cast<uint8_t>(caps.hostname.size());
-        std::memcpy(buf + 1, caps.hostname.data(), caps.hostname.size());
-        size_t off = 1 + caps.hostname.size();
-        buf[off] = static_cast<uint8_t>(caps.domain.size());
-        std::memcpy(buf + off + 1, caps.domain.data(), caps.domain.size());
+        buf[0] = static_cast<uint8_t>(hostLen);
+        std::memcpy(buf + 1, caps.hostname.data(), hostLen);
+        size_t off = 1 + hostLen;
+        buf[off] = static_cast<uint8_t>(domLen);
+        std::memcpy(buf + off + 1, caps.domain.data(), domLen);
     }
 
     // Link-local next hop
     if (caps.linkLocalNextHop)
         openParam(BGP_CAPABILITY_LINK_LOCAL_NEXT_HOP, 0);
+}
+
+/**
+ * @brief Splits AS-PATH segments so none exceeds the 255-ASN wire limit.
+ *
+ * The segment length field is a single byte (RFC 4271 4.3), so a segment holding
+ * more than 255 ASNs cannot be encoded. Prepending can push a segment past that
+ * bound; splitting preserves both the ASN order and the effective path length.
+ */
+static std::vector<AsPathSegment> splitAsPathSegments(const std::vector<AsPathSegment>& segs)
+{
+    constexpr size_t kMaxAsnPerSegment = 255;
+
+    std::vector<AsPathSegment> out;
+    out.reserve(segs.size());
+
+    for (const auto& seg : segs)
+    {
+        if (seg.asns.size() <= kMaxAsnPerSegment)
+        {
+            out.push_back(seg);
+            continue;
+        }
+        for (size_t off = 0; off < seg.asns.size(); off += kMaxAsnPerSegment)
+        {
+            const size_t n = std::min(kMaxAsnPerSegment, seg.asns.size() - off);
+            AsPathSegment part;
+            part.segmentType = seg.segmentType;
+            part.asns.assign(seg.asns.begin() + off, seg.asns.begin() + off + n);
+            out.push_back(std::move(part));
+        }
+    }
+    return out;
 }
 
 void BgpTx::appendAttrHdr(uint8_t flags, uint8_t type, size_t valueLen, size_t& attrsSize, transport::tcp::Connection& c)
@@ -371,11 +425,13 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, t
     // AS PATH
     if (!pa.attrs.asPath.empty())
     {
+        const std::vector<AsPathSegment> asSegs = splitAsPathSegments(pa.attrs.asPath);
+
         size_t asLen = 0;
-        for (const auto& seg : pa.attrs.asPath)
+        for (const auto& seg : asSegs)
             asLen += 2 + seg.asns.size() * (use4 ? 4u : 2u);
         appendAttrHdr(BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_AS_PATH, asLen, attrSize, c);
-        for (const auto& seg : pa.attrs.asPath)
+        for (const auto& seg : asSegs)
         {
             auto hdr = c.reserveSpan(2);
             hdr[0] = seg.segmentType;
@@ -403,24 +459,18 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, t
         }
     }
 
-    // AS4 PATH
     if (!use4)
     {
+        const bool hasWideAsn = std::any_of(
+            pa.attrs.asPath.begin(), pa.attrs.asPath.end(),
+            [](const AsPathSegment& s) {
+                return std::any_of(s.asns.begin(), s.asns.end(),
+                                   [](uint32_t asn) { return asn > 65535; });
+            });
+
         std::vector<AsPathSegment> as4;
-        for (const auto& seg : pa.attrs.as4Path)
-        {
-            AsPathSegment newSeg;
-            newSeg.segmentType = seg.segmentType;
-
-            for (uint32_t asn : seg.asns)
-            {
-                if (asn > 65535)
-                    newSeg.asns.push_back(asn);
-            }
-
-            if (!newSeg.asns.empty())
-                as4.push_back(std::move(newSeg));
-        }
+        if (hasWideAsn)
+            as4 = splitAsPathSegments(pa.attrs.asPath);
 
         if (!as4.empty())
         {
@@ -448,6 +498,7 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, t
     }
 
     // NEXT HOP
+    if (pa.path.nextHop.isIPv4())
     {
         appendAttrHdr(BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_NEXT_HOP, 4, attrSize, c);
         auto buf = c.reserveSpan(4);
@@ -601,7 +652,7 @@ void BgpTx::buildOpen(transport::tcp::Connection& connection, Session& session)
 {
     const auto& caps = session.getLocalCaps();
     const auto& proc = session.process;
-    const uint32_t localAs = caps.asn;
+    const uint32_t localAs = caps.asn != 0 ? caps.asn : proc.asNumber;
     const uint32_t rid = proc.getRouterId();
 
     uint16_t openSize = packet::BgpHeader::fixedSize + packet::BgpOpenHeader::fixedSize;
@@ -620,14 +671,13 @@ void BgpTx::buildOpen(transport::tcp::Connection& connection, Session& session)
     open.setIdentifier(rid);
 
     uint16_t capSize = computeCapabilityLen(caps);
-    if (capSize >= 255)
-        open.setParameterLen(255);
-    else
-        open.setParameterLen(static_cast<uint8_t>(capSize));
+    const bool extended = capSize >= 255;
+
+    open.setParameterLen(extended ? 255 : static_cast<uint8_t>(capSize));
 
     connection.commit(openSize);
 
-    if (capSize >= 255)
+    if (extended)
     {
         auto ext = connection.reserveSpan(2);
         utils::writeU16(ext.data(), capSize);
@@ -636,7 +686,7 @@ void BgpTx::buildOpen(transport::tcp::Connection& connection, Session& session)
 
     appendCapabilities(caps, connection);
 
-    const uint16_t extLen = (capSize >= 255) ? 2 : 0;
+    const uint16_t extLen = extended ? 2 : 0;
     buildHeader(BGP_TYPE_OPEN,
                 static_cast<uint16_t>(packet::BgpOpenHeader::fixedSize + extLen + capSize),
                 buf.data());
@@ -645,12 +695,17 @@ void BgpTx::buildOpen(transport::tcp::Connection& connection, Session& session)
 void BgpTx::buildNotification(transport::tcp::Connection& connection, const Notification& notification)
 {
     if (notification.code == 0) return;
-    uint16_t notifSize = static_cast<uint8_t>(2 + notification.data.size());
+
+    const size_t maxData = kMaxMessageLen - packet::BgpHeader::fixedSize - 2;
+    const size_t dataLen = std::min(notification.data.size(), maxData);
+
+    uint16_t notifSize = static_cast<uint16_t>(2 + dataLen);
     uint16_t bgpSize = static_cast<uint16_t>(packet::BgpHeader::fixedSize + notifSize);
     std::span<uint8_t> buf = connection.reserveSpan(bgpSize);
     uint8_t* notif = buf.data() + packet::BgpHeader::fixedSize;
     utils::writeU16(notif, notification.code);
-    std::memcpy(notif + 2, notification.data.data(), notification.data.size());
+    if (dataLen)
+        std::memcpy(notif + 2, notification.data.data(), dataLen);
     buildHeader(BGP_TYPE_NOTIFICATION, notifSize, buf.data());
     connection.commit(bgpSize);
 }
@@ -673,7 +728,9 @@ void BgpTx::buildRouteRefresh(transport::tcp::Connection& connection, Session& s
         subtype = BGP_ROUTE_REFRESH_NORMAL;
 
     // Append ORF TLV if we have an outbound filter and ORF is negotiated.
-    const auto& orfOutbound = session.neighbor.getAfNeighbor(family).orfOutbound;
+    static const std::vector<OrfPrefixEntry> kNoOrf;
+    NeighborAf* afNbr = session.neighbor.findAfNeighbor(family);
+    const auto& orfOutbound = afNbr ? afNbr->orfOutbound : kNoOrf;
     const bool sendOrf = !orfOutbound.empty() && neg.canSendOrf(family, BGP_ORF_TYPE_PREFIX_LIST);
 
     if (sendOrf)

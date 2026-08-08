@@ -231,6 +231,16 @@ public:
     void unshutdownNeighbor(Neighbor& neighbor);
 
     /**
+     * @brief Reset an existing session in place; a no-op if the neighbor has no session.
+     */
+    void restartNeighbor(Neighbor& neighbor);
+
+    /**
+     * @brief Destroy all neighbors (and the RID index). Used during ordered teardown.
+     */
+    void clear();
+
+    /**
      * TODO add doxy comment
      */
     AddressFamilyVariant* findAddressFamily(const AfiSafi& afi);

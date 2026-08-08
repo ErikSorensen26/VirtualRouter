@@ -116,7 +116,10 @@ void Session::buildLocalCapabilities()
     process.forEachAf([&](const AfiSafi& afi) {
         localCaps.mpFamilies.push_back(afi);
 
-        auto& afNbrCfgs = neighbor.getAfNeighbor(afi).configs;
+        NeighborAf* afNbr = neighbor.findAfNeighbor(afi);
+        if (!afNbr)
+            return; // neighbor not activated for this AF; no per-AF caps to add
+        auto& afNbrCfgs = afNbr->configs;
 
         bool rx = afNbrCfgs.get<config::BgpAfBase::ADDITIONAL_PATHS_RECEIVE>().load();
         bool tx = afNbrCfgs.get<config::BgpAfBase::ADDITIONAL_PATHS_SEND>().load();
@@ -163,8 +166,17 @@ bool Session::isActivated() const
 
 void Session::acceptConnection(transport::tcp::Connection&& conn)
 {
+    // A second inbound connection while one is already staged: keep the existing one
+    // and drop the newcomer, rather than leaking the connection we would overwrite.
+    if (passiveConn.has_value())
+    {
+        process.routingInstance.getTcp().close(conn.getId());
+        return;
+    }
+
     passiveConn.emplace(std::move(conn));
-    primaryConn = &passiveConn.value();
+    if (!primaryConn)
+        primaryConn = &passiveConn.value();
     postEvent(FsmEvent::TCP_CONNECTION_CONFIRMED);
 }
 

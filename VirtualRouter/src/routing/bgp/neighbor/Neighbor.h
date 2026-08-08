@@ -58,6 +58,11 @@ public:
     ~Neighbor();
 
     void enqueueConnectionRestart();
+    void enqueueSyncShutdown();
+    void enqueueBuildAttributeRanges();
+    void enqueueSyncRemoteAs();
+    void syncClassification() { syncEbgp(); }
+    void enqueueMarkAllOutbound(OutAttr attr);
 
     const types::IPAddress neighborAddress; ///< IP address of this BGP peer.
 
@@ -71,6 +76,7 @@ public:
      * @return Const reference to the NeighborAf.
      */
     NeighborAf& getAfNeighbor(const AfiSafi& afi);
+    NeighborAf* findAfNeighbor(const AfiSafi& afi);
 
     /**
      * @brief Invoke a callable for every activated per-AF neighbor state object (const overload).
@@ -119,8 +125,12 @@ private:
     // SYNC
 
     /**
-     * TODO add doxy comment
-     * TODO run this any time remote-as or global confederations change
+     * @brief Recomputes the eBGP / confederation-eBGP classification from current config.
+     *
+     * A peer is eBGP when its remote AS differs from ours and it is not a configured
+     * confederation peer. Must run whenever REMOTE_AS, the local AS, or the
+     * confederation peer list changes — driven by `enqueueSyncRemoteAs` and
+     * `BgpProcess::enqueueSyncConfederation`.
      */
     void syncEbgp();
 

@@ -30,7 +30,7 @@ namespace processing { class PacketBuilder; }
 namespace routing::bgp
 {
 class Neighbor;
-class NeighborConfigs;
+struct NeighborConfigs;
 class BgpProcess;
 class MultiSession;
 

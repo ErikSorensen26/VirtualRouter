@@ -122,6 +122,14 @@ public:
     static void onAcceptCallback(transport::tcp::AcceptCallbackCtx& ctx) noexcept;
     static void onReceiveCallback(transport::tcp::RecvCallbackCtx& ctx) noexcept;
 
+    void enqueueSyncNeighbors();
+    void enqueueSyncAddressFamilies();
+    void enqueueMarkAllAfDirty(AfDirty category);
+    void enqueueMarkAllInbound(InDirty category);
+    void enqueueMarkAllOutbound(OutAttr attr);
+    void enqueueRestartAllSessions();
+    void enqueueSyncConfederation();
+
     core::VirtualRouter& routingInstance; ///< Owning VRF; set at construction.
 
 private:
@@ -130,6 +138,7 @@ private:
     friend class PeerTemplateTable;
     friend class ProcessAccessor;
     friend class ::Internal_BgpTest;
+    friend class BgpRx; // resolves findAddressFamily() while dispatching inbound UPDATEs
 
 
     /**

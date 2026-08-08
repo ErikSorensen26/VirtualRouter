@@ -161,8 +161,13 @@ private:
      * @param sendNotification If true, a NOTIFICATION message is sent before
      *                         closing the TCP connection.
      * @param notifCode        NOTIFICATION error/subcode to send.
+     * @param trigger          Event that caused the reset; reported to transition
+     *                         observers so they see the real cause rather than a
+     *                         synthetic stop.
      */
-    void resetToIdle(bool sendNotification, uint16_t notifCode = BGP_NOTIFICATION_CEASE_UNSPECIFIC);
+    void resetToIdle(bool sendNotification,
+                     uint16_t notifCode = BGP_NOTIFICATION_CEASE_UNSPECIFIC,
+                     FsmEvent trigger = FsmEvent::MANUAL_STOP);
 
     /**
      * @brief Resets TCP, restarts the ConnectRetry timer, and initiates a new
@@ -180,6 +185,20 @@ private:
      * events and from `resetAndReconnect`.
      */
     void initiateOutgoingTcp();
+
+    /**
+     * @brief Negotiates the hold time and keepalive interval after an OPEN is received.
+     *
+     * Takes the smaller of the peer's advertised hold time (already stored in
+     * `session.holdTime`) and the configured one (RFC 4271 4.2), derives the
+     * keepalive interval, and arms both timers. A negotiated hold time of 0
+     * disables them.
+     *
+     * @return False if the peer's hold time is below the configured minimum, in
+     *         which case the session has already been reset to Idle with an
+     *         Unacceptable Hold Time notification.
+     */
+    bool negotiateHoldTime();
 
     FsmState state{FsmState::IDLE};     ///< Current FSM state.
     bool passiveMode{false};            ///< When true, outgoing connections are never initiated.
