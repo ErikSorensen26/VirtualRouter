@@ -24,8 +24,7 @@ void ExternalOriginator::distributeExternalLsa(const OriginatorContext& areaCtx,
             config::ospf::AreaType trgType = trgCtx.area.getType();
 
             if (lsaCtx.key.lsaType == Policy::NssaType &&
-                (srcType == config::ospf::AreaType::NSSA ||
-                 srcType == config::ospf::AreaType::TOTALLY_NSSA) &&
+                srcType == config::ospf::AreaType::NSSA &&
                 trgType == config::ospf::AreaType::NORMAL)
             {
                 translateNssaToExternal<Policy>(trgCtx, lsaCtx.key, body, expire);

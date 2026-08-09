@@ -153,7 +153,7 @@ protected:
         ospfv3Instance->scheduler.waitScheduled();
         mockInterface->blockEnqueues();
         vrf->removeOspf(1);
-        vrf->removeOspfv3(2, types::AddressFamily::IPv6);
+        vrf->removeOspfv3(2);
         vrf->getInterfaceManager().remove(mKey);
         delete mockInterface;
         delete global;
@@ -472,7 +472,7 @@ protected:
     {
         // Settle in-flight origination callbacks before destroying the process; they touch originationState and raced to a heap-use-after-free.
         p.scheduler.waitScheduled();
-        vrf->removeOspfv3(procId, types::AddressFamily::IPv4);
+        vrf->removeOspfv3(procId);
     }
     InterfaceFlagManager& getIfaceFlags(OspfInterface* iface = nullptr)
         { return (iface ? iface : ospfInterface)->flags; }
@@ -6642,9 +6642,10 @@ TEST_F(Internal_OspfTest, AreaType_Stub_Originates_Default_Route_From_Abr)
 // Test: AreaType_TotallyStub_Suppresses_Type3_Summaries_Except_Default
 TEST_F(Internal_OspfTest, AreaType_TotallyStub_Suppresses_Type3_Summaries_Except_Default)
 {
-    // Pre-configure area 1 as TOTALLY_STUB before construction.
-    getConfigs().get<config::Ospf::AREA_CONFIGS>().emplaceBack(1)
-        .get<config::OspfArea::AREA_TYPE>().set(config::ospf::AreaType::TOTALLY_STUB);
+    // Pre-configure area 1 as a totally-stubby area: STUB plus NO_SUMMARY.
+    auto& areaCfg = getConfigs().get<config::Ospf::AREA_CONFIGS>().emplaceBack(1);
+    areaCfg.get<config::OspfArea::AREA_TYPE>().set(config::ospf::AreaType::STUB);
+    areaCfg.get<config::OspfArea::NO_SUMMARY>().set(true);
 
     auto& iface1 = createIface(
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
@@ -6653,7 +6654,7 @@ TEST_F(Internal_OspfTest, AreaType_TotallyStub_Suppresses_Type3_Summaries_Except
     wait();
 
     ASSERT_TRUE(ospfInstance->isABR());
-    ASSERT_EQ(tStubArea.getType(), config::ospf::AreaType::TOTALLY_STUB);
+    ASSERT_EQ(tStubArea.getType(), config::ospf::AreaType::STUB);
 
     // A non-default Type-3 summary LSA injected from the backbone must be rejected.
     SummaryNetworkLsa sum{};
@@ -6835,9 +6836,11 @@ TEST_F(Internal_OspfTest, AreaType_Nssa_Originates_Default_When_Configured)
 // Test: AreaType_TotallyNssa_Suppresses_Type3_Except_Default
 TEST_F(Internal_OspfTest, AreaType_TotallyNssa_Suppresses_Type3_Except_Default)
 {
-    // Pre-configure area 1 as TOTALLY_NSSA with default-originate enabled before construction.
+    // Pre-configure area 1 as a totally-NSSA area: NSSA plus NO_SUMMARY, with
+    // default-originate enabled before construction.
     auto& area1Cfg = getConfigs().get<config::Ospf::AREA_CONFIGS>().emplaceBack(1);
-    area1Cfg.get<config::OspfArea::AREA_TYPE>().set(config::ospf::AreaType::TOTALLY_NSSA);
+    area1Cfg.get<config::OspfArea::AREA_TYPE>().set(config::ospf::AreaType::NSSA);
+    area1Cfg.get<config::OspfArea::NO_SUMMARY>().set(true);
     area1Cfg.get<config::OspfArea::NSSA_DEFAULT_ORIGINATE>().set(true);
 
     auto& iface1 = createIface(
@@ -6847,10 +6850,10 @@ TEST_F(Internal_OspfTest, AreaType_TotallyNssa_Suppresses_Type3_Except_Default)
     wait();
 
     ASSERT_TRUE(ospfInstance->isABR());
-    ASSERT_EQ(tNssaArea.getType(), config::ospf::AreaType::TOTALLY_NSSA);
+    ASSERT_EQ(tNssaArea.getType(), config::ospf::AreaType::NSSA);
 
     // A non-default Type-3 summary LSA injected from the backbone must be rejected
-    // (TOTALLY_STUB and TOTALLY_NSSA both reject Type-3 summaries).
+    // (STUB and NSSA both reject Type-3 summaries when NO_SUMMARY is set).
     SummaryNetworkLsa sum{};
     sum.networkMask = 0xFFFFFF00;
     sum.metric = 10;
@@ -7870,7 +7873,7 @@ TEST_F(Internal_OspfTest, Lls_Md5Auth_Validates_Block_Checksum)
 
     getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::AUTHENTICATION_TYPE>().set(config::ospf::AuthType::CRYPTO);
     getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::MESSAGE_DIGEST_KEYS>().withWrite([&](auto& list) {
-        list.emplace_back(keyId, keyBytes);
+        list.emplace_back(keyId, std::string(keyBytes.begin(), keyBytes.end()));
         return true;
     });
     wait();
@@ -8506,7 +8509,7 @@ TEST_F(Internal_OspfTest, AuthV2_Md5_Correct_Digest_Accepted)
 
     getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::AUTHENTICATION_TYPE>().set(config::ospf::AuthType::CRYPTO);
     getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::MESSAGE_DIGEST_KEYS>().withWrite([&](auto& list) {
-        list.emplace_back(keyId, keyBytes);
+        list.emplace_back(keyId, std::string(keyBytes.begin(), keyBytes.end()));
         return true;
     });
     wait();
@@ -8556,7 +8559,7 @@ TEST_F(Internal_OspfTest, AuthV2_Md5_Incorrect_Digest_Rejected)
 
     getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::AUTHENTICATION_TYPE>().set(config::ospf::AuthType::CRYPTO);
     getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::MESSAGE_DIGEST_KEYS>().withWrite([&](auto& list) {
-        list.emplace_back(keyId, keyBytes);
+        list.emplace_back(keyId, std::string(keyBytes.begin(), keyBytes.end()));
         return true;
     });
     wait();
@@ -8605,7 +8608,7 @@ TEST_F(Internal_OspfTest, AuthV2_Md5_KeyId_Mismatch_Rejected)
 
     getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::AUTHENTICATION_TYPE>().set(config::ospf::AuthType::CRYPTO);
     getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::MESSAGE_DIGEST_KEYS>().withWrite([&](auto& list) {
-        list.emplace_back(keyId, keyBytes);
+        list.emplace_back(keyId, std::string(keyBytes.begin(), keyBytes.end()));
         return true;
     });
     wait();
@@ -8655,7 +8658,7 @@ TEST_F(Internal_OspfTest, AuthV2_ReplayDetection_Old_Sequence_Rejected)
 
     getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::AUTHENTICATION_TYPE>().set(config::ospf::AuthType::CRYPTO);
     getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::MESSAGE_DIGEST_KEYS>().withWrite([&](auto& list) {
-        list.emplace_back(keyId, keyBytes);
+        list.emplace_back(keyId, std::string(keyBytes.begin(), keyBytes.end()));
         return true;
     });
     wait();
@@ -8741,7 +8744,7 @@ TEST_F(Internal_OspfTest, AuthV2_SyncDigestKey_Picks_Active_KeyChain_Entry)
     }
 
     getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::MESSAGE_DIGEST_KEYS>().withWrite([&](auto& list) {
-        list.emplace_back(keyId1, keyBytes1);
+        list.emplace_back(keyId1, std::string(keyBytes1.begin(), keyBytes1.end()));
         return true;
     });
     wait();
@@ -8751,7 +8754,7 @@ TEST_F(Internal_OspfTest, AuthV2_SyncDigestKey_Picks_Active_KeyChain_Entry)
 
     // Adding a second key makes it the active (last) entry per syncDigestKey().
     getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::MESSAGE_DIGEST_KEYS>().withWrite([&](auto& list) {
-        list.emplace_back(keyId2, keyBytes2);
+        list.emplace_back(keyId2, std::string(keyBytes2.begin(), keyBytes2.end()));
         return true;
     });
     wait();

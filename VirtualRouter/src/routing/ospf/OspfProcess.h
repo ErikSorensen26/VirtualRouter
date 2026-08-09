@@ -64,23 +64,13 @@ struct OspfV3Instance
      *
      * @param cfgs Shared OSPFv3 address-family configuration reference.
      */
-    OspfV3Instance(config::Ospfv3AddressFamilyRegistry& cfgs)
+    OspfV3Instance(config::OspfRegistry& cfgs)
         : configs(cfgs) {}
 
     OspfProcess* ipv4 = nullptr; ///< OSPFv3 process handling the IPv4 address family.
     OspfProcess* ipv6 = nullptr; ///< OSPFv3 process handling the IPv6 address family.
 
-    config::Ospfv3AddressFamilyRegistry& configs; ///< Shared AF-level configuration reference.
-};
-
-/**
- * @brief Pairs IPv4 and IPv6 @ref OspfInterfaceBase pointers for a dual-stack interface binding.
- * @ingroup OSPF
- */
-struct OspfInterfaceBaseInstance
-{
-    OspfInterfaceBase* IPv4; ///< Pointer to the IPv4 OSPF interface instance.
-    OspfInterfaceBase* IPv6; ///< Pointer to the IPv6 OSPF interface instance.
+    config::OspfRegistry& configs; ///< Shared AF-level configuration reference.
 };
 
 /**

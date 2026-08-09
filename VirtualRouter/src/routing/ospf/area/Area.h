@@ -22,7 +22,7 @@
 #include "OriginatorContext.h"
 #include "ospf/ospfv2/area/OpaqueOriginatorV2.h"
 
-namespace config::ospf { enum class AreaType; }
+namespace config::ospf { enum class AreaType : uint8_t; }
 namespace config { struct OspfInterfaceBaseRegistry; }
 class Internal_OspfTest;
 

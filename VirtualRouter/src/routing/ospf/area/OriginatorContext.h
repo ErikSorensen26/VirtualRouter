@@ -12,7 +12,7 @@
 
 class Internal_OspfTest;
 
-namespace config::ospf { enum class AreaType; }
+namespace config::ospf { enum class AreaType : uint8_t; }
 namespace config { struct OspfAreaRegistry; struct OspfRegistry; }
 
 namespace routing::ospf

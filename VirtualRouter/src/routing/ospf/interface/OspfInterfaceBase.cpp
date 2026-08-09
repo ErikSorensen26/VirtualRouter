@@ -78,7 +78,7 @@ void OspfInterfaceBase::syncDigestKey()
         if (!keys.empty())
         {
             const auto& last = keys.back();
-            priv.authKey = utils::readU128(std::get<1>(last).value.data());
+            priv.authKey = utils::readU128(reinterpret_cast<const uint8_t*>(std::get<1>(last).value.data()));
             priv.authKeyId = std::get<0>(last);
         }
         else

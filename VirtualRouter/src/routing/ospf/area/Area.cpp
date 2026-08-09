@@ -33,10 +33,8 @@ Area::Area(OspfProcess& base, uint32_t id)
 {
     priv.type = configs.get<config::OspfArea::AREA_TYPE>().load();
 
-    bool isStub = (priv.type == config::ospf::AreaType::STUB ||
-                   priv.type == config::ospf::AreaType::TOTALLY_STUB);
-    bool isNssa = (priv.type == config::ospf::AreaType::NSSA ||
-                   priv.type == config::ospf::AreaType::TOTALLY_NSSA);
+    bool isStub = priv.type == config::ospf::AreaType::STUB;
+    bool isNssa = priv.type == config::ospf::AreaType::NSSA;
     flags.setExternalRouting(!isStub);
     flags.setNssa(isNssa);
     if (base.isV3 && base.af == types::AddressFamily::IPv4)
@@ -85,10 +83,8 @@ void Area::reloadType()
 
     priv.type.store(newType, std::memory_order_release);
 
-    bool isStub = (priv.type == config::ospf::AreaType::STUB ||
-                   priv.type == config::ospf::AreaType::TOTALLY_STUB);
-    bool isNssa = (priv.type == config::ospf::AreaType::NSSA ||
-                   priv.type == config::ospf::AreaType::TOTALLY_NSSA);
+    bool isStub = priv.type == config::ospf::AreaType::STUB;
+    bool isNssa = priv.type == config::ospf::AreaType::NSSA;
 
     flags.setExternalRouting(!isStub);
     flags.setNssa(isNssa);
@@ -162,7 +158,7 @@ void Area::runDCIntegrityScan()
 
 bool Area::isValidForwardAddress(const types::IPAddress& addr) const
 {
-    if ((priv.type == config::ospf::AreaType::NSSA || priv.type == config::ospf::AreaType::TOTALLY_NSSA) &&
+    if (priv.type == config::ospf::AreaType::NSSA &&
         configs.get<config::OspfArea::NSSA_SUPPRESS_FA>().load())
         return false;
 
@@ -540,9 +536,10 @@ void Area::Private::evaluateDecision(Result& result, const IncomingLsaContext& c
 template <typename Policy>
 bool Area::Private::preProcess(IncomingLsaContext& ctx, const LsaBody& body)
 {
-    bool isNssa = type == config::ospf::AreaType::NSSA || type == config::ospf::AreaType::TOTALLY_NSSA;
+    bool isNssa = type == config::ospf::AreaType::NSSA;
     if (std::holds_alternative<typename Policy::InterNetworkLsa>(body) &&
-        (type == config::ospf::AreaType::TOTALLY_STUB || type == config::ospf::AreaType::TOTALLY_NSSA) &&
+        (type == config::ospf::AreaType::STUB || isNssa) &&
+        area.configs.get<config::OspfArea::NO_SUMMARY>().load() &&
         ctx.key.linkStateId != 0) // RFC 3101 §2.1: the default-route summary is still admitted
         return false;
     if (std::holds_alternative<typename Policy::InterRouterLsa>(body) && type != config::ospf::AreaType::NORMAL)

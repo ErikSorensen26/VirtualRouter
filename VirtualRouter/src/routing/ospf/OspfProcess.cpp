@@ -24,28 +24,15 @@ OspfProcess::OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, co
       externalOriginator(*this),
       externalRouteManager(*this),
       ifaceMgr(*this),
-      configs([af, isV3, vrf, procId]() -> config::OspfRegistry& {
+      configs([isV3, vrf, procId]() -> config::OspfRegistry& {
           if (isV3)
           {
-              auto& base = vrf->getGlobal().getConfigs().get<config::Global::ROUTER_OSPFV3_DEFAULT>().emplaceBack(procId);
-              auto& v3Reg = vrf->getConfigs().get<config::Vrf::ROUTER_OSPFV3>().emplaceBack(procId);
-              config::OspfRegistry& afCfgs = [&]() -> config::OspfRegistry& {
-                  if (af == types::AddressFamily::IPv4)
-                      return v3Reg.get<config::Ospfv3AddressFamily::IPV4>().get();
-                  else
-                      return v3Reg.get<config::Ospfv3AddressFamily::IPV6>().get();
-              }();
-      
-              afCfgs.setMask(&base);
-              return afCfgs;
+              // TODO
+              return vrf->getGlobalConfigs().get<config::Global::ROUTER_OSPFV3>().emplaceBack(procId);
           }
           else
           {
-              // OSPFv2 types::AddressFamily
-              if (af == types::AddressFamily::IPv4)
-                  return vrf->getConfigs().get<config::Vrf::ROUTER_OSPF>().emplaceBack(procId);
-              else
-                  return vrf->getConfigs().get<config::Vrf::IPV6_ROUTER_OSPF>().emplaceBack(procId);
+              return vrf->getGlobalConfigs().get<config::Global::ROUTER_OSPF>().emplaceBack(procId);
           }
       }()),
       priv(*this)

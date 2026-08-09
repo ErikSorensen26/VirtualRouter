@@ -29,8 +29,7 @@ SpfEngine::SpfEngine(SpfManager& mgt)
 template <typename Policy>
 SpfResult SpfEngine::run(SpfTopology<Policy>& topo)
 {
-    if (!manager.getProcessConfigs().get<config::Ospf::ISPF>().load() ||
-        !last.has_value() || lastEdges.empty())
+    if (!last.has_value() || lastEdges.empty())
     {
         SpfResult res = runFull<Policy>(topo);
         return res;

@@ -293,9 +293,7 @@ void InterOriginator::refreshStubDefaultOriginate(OriginatorContext& ctx)
 {
     config::ospf::AreaType type = ctx.area.getType();
 
-    bool add = ctx.area.process.isABR() &&
-        ((type == config::ospf::AreaType::STUB) ||
-        (type == config::ospf::AreaType::TOTALLY_STUB));
+    bool add = ctx.area.process.isABR() && type == config::ospf::AreaType::STUB;
 
     setStubDefaultOriginate<Policy>(ctx, add);
 }
@@ -305,8 +303,7 @@ void InterOriginator::refreshNssaDefaultOriginate(OriginatorContext& ctx)
     config::ospf::AreaType type = ctx.area.getType();
 
     bool add = ctx.area.process.isABR() &&
-        ((type == config::ospf::AreaType::NSSA) ||
-        (type == config::ospf::AreaType::TOTALLY_NSSA)) &&
+        type == config::ospf::AreaType::NSSA &&
         ctx.getConfigs().get<config::OspfArea::NSSA_DEFAULT_ORIGINATE>().load();
 
     setNssaDefaultOriginate(ctx, add);

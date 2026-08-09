@@ -61,10 +61,10 @@ void NeighborTable::syncUnicast()
                 unicastNbrs.erase(ip);
                 unicast.try_emplace(
                     ip,
-                    cost,
-                    dbfilter.value_or(false),
-                    pollIntv.value_or(120),
-                    priority.value_or(0)
+                    cost.value,
+                    dbfilter.value,
+                    pollIntv.value.value_or(120),
+                    priority.value.value_or(0)
                 );
             }
         });

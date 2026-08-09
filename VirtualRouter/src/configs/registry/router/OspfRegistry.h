@@ -28,18 +28,11 @@ namespace config
 {
 namespace ospf
 {
-// TOTALLY_STUB is "stub no-summary"; TOTALLY_NSSA is "NSSA no-summary".
 #define OSPF_AREA_TYPE_MEMBERS(X) \
     X(NORMAL) \
     X(STUB) \
-    X(TOTALLY_STUB) \
     X(NSSA) \
-    X(TOTALLY_NSSA)
 
-/**
- * @brief OSPF area type controlling LSA flooding and default route origination.
- * @ingroup OSPF
- */
 DEFINE_CONFIG_ENUM_NS(ospf, AreaType, OSPF_AREA_TYPE_MEMBERS);
 }
 
@@ -48,7 +41,7 @@ void OspfAreaSycnRanges(void* area);
 
 #define OSPF_AREA_RANGE_FIELDS(X) \
     X(types::IPPrefix,          prefix) \
-    X(bool,                     advertise) \
+    X(bool,                     nonAdvertise) \
     X(std::optional<uint32_t>,  cost)
 
 DEFINE_TUPLE_SCHEMA(OspfAreaRange, OSPF_AREA_RANGE_FIELDS);
@@ -56,18 +49,22 @@ DEFINE_TUPLE_SCHEMA(OspfAreaRange, OSPF_AREA_RANGE_FIELDS);
 // DEFAULT_COST, FILTER_LIST, RANGE and VIRTUAL_LINKS carried no default row:
 // absence is what those field kinds already store before configuration.
 #define OSPF_AREA_FIELD_LIST(X, Y) \
+    REGISTRY_CONTAINER(X, Y, IPSEC, OspfIPsecRegistry) \
     ATOMIC_FIELD(X, Y, AUTHENTICATION_TYPE, ospf::AuthType, ospf::AuthType::NULL_AUTH) \
     OPTIONAL_ATOMIC_FIELD(X, Y, DEFAULT_COST, uint32_t) \
-    OPTIONAL_ATOMIC_FIELD(X, Y, FILTER_LIST, std::nullptr_t) TODO \
+    VALUE_FIELD(X, Y, FILTER_LIST_IN, std::string) TODO \
+    VALUE_FIELD(X, Y, FILTER_LIST_OUT, std::string) TODO \
     ATOMIC_FIELD_CB(X, Y, AREA_TYPE, ospf::AreaType, ospf::AreaType::NORMAL, OspfAreaTypeChange) \
     ATOMIC_FIELD(X, Y, NSSA_DEFAULT_ORIGINATE, bool, false) \
     ATOMIC_FIELD(X, Y, NSSA_DEFAULT_METRIC, uint32_t, 1) \
     ATOMIC_FIELD(X, Y, NSSA_DEFAULT_METRIC_TYPE, bool, true) \
     ATOMIC_FIELD(X, Y, NSSA_DEFAULT_ONLY, bool, false) \
-    ATOMIC_FIELD(X, Y, NSSA_NO_EXT, bool, false) \
     ATOMIC_FIELD(X, Y, NSSA_NO_REDISTRIBUTION, bool, false) \
     ATOMIC_FIELD(X, Y, NSSA_ALWAYS_TRANSLATE, bool, false) \
     ATOMIC_FIELD(X, Y, NSSA_SUPPRESS_FA, bool, false) \
+    ATOMIC_FIELD(X, Y, NO_EXT, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, NO_SUMMARY, bool, false) \
+    ATOMIC_FIELD(X, Y, NO_TRANSIT, bool, false) TODO \
     LIST_FIELD_CB(X, Y, RANGE, OspfAreaRange, OspfAreaSycnRanges) \
     OWNED_LIST_FIELD(X, Y, VIRTUAL_LINKS, OspfVirtualLinkRegistry, uint32_t) TODO
 
@@ -100,32 +97,37 @@ DEFINE_TUPLE_SCHEMA(OspfTrafEngMeshGroup, OSPF_TRAF_ENG_MESH_GROUP_FIELDS);
 
 DEFINE_TUPLE_SCHEMA(OspfNetwork, OSPF_NETWORK_FIELDS);
 
-#define OSPF_NEIGHBOR_FIELDS(X) \
-    X(types::IPAddress,          address) \
-    X(std::optional<uint16_t>,   cost) \
-    X(std::optional<bool>,       databaseFilter) \
-    X(std::optional<uint16_t>,   pollInterval) \
-    X(std::optional<uint8_t>,    priority)
-
-DEFINE_TUPLE_SCHEMA(OspfNeighbor, OSPF_NEIGHBOR_FIELDS);
-
 #define OSPF_SUMMARY_ADDRESS_FIELDS(X) \
     X(types::IPPrefix,          prefix) \
-    X(bool,                     advertise) \
+    X(bool,                     notAdvertise) \
     X(bool,                     nssaOnly) \
     X(std::optional<uint32_t>,  tag)
 
 DEFINE_TUPLE_SCHEMA(OspfSummaryAddress, OSPF_SUMMARY_ADDRESS_FIELDS);
 
+#define OSPF_QUEUE_DEPTH_FIELDS(X) \
+    X(bool, unlimited) \
+    X(uint32_t, depth)
+
+DEFINE_TUPLE_SCHEMA(OspfQueueDepth, OSPF_QUEUE_DEPTH_FIELDS);
+
+#define OSPF_TABLE_MAP_FIELDS(X) \
+    X(std::string, tableMap) \
+    X(bool, filter)
+
+struct OspfRegistry;
+
 #define OSPF_FIELD_LIST(X, Y) \
+    OWNED_LIST_FIELD(X, Y, IPV4_INSTANCES, OspfRegistry, std::string) \
+    OWNED_LIST_FIELD(X, Y, IPV6_INSTANCES, OspfRegistry, std::string) \
     OWNED_LIST_FIELD(X, Y, AREA_CONFIGS, OspfAreaRegistry, uint32_t) \
     ATOMIC_FIELD(X, Y, REFERENCE_BANDWIDTH, uint32_t, 100) \
     ATOMIC_FIELD(X, Y, BFD, bool, false) TODO \
     ATOMIC_FIELD(X, Y, LLS, bool, true) \
     ATOMIC_FIELD(X, Y, OPAQUE, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, NORMAL, bool, true) TODO \
     ATOMIC_FIELD(X, Y, TRANSIT, bool, false) TODO /* virtual link */ \
-    OPTIONAL_ATOMIC_FIELD(X, Y, DOMAIN_ID, uint32_t) TODO \
-    LIST_FIELD(X, Y, SECONDARY_DOMAIN_ID, uint32_t) TODO \
+    ATOMIC_FIELD(X, Y, NO_TRANSIT, bool, false) TODO /* virtual link */ \
     ATOMIC_FIELD(X, Y, DEFAULT_ORIGINATE_ALWAYS, bool, false) \
     ATOMIC_FIELD(X, Y, DEFAULT_ORIGINATE_METRIC, uint32_t, 1) \
     ATOMIC_FIELD(X, Y, DEFAULT_ORIGINATE_METRIC_TYPE, bool, true) \
@@ -135,19 +137,18 @@ DEFINE_TUPLE_SCHEMA(OspfSummaryAddress, OSPF_SUMMARY_ADDRESS_FIELDS);
     ATOMIC_FIELD(X, Y, DISCARD_INTERNAL_DISTANCE, uint8_t, 110) \
     ATOMIC_FIELD(X, Y, DISCARD_EXTERNAL, bool, true) \
     ATOMIC_FIELD(X, Y, DISCARD_EXTERNAL_DISTANCE, uint8_t, 110) \
-    OPTIONAL_ATOMIC_FIELD(X, Y, DISTANCE, std::nullptr_t) \
     ATOMIC_FIELD(X, Y, EXTERNAL_DISTANCE, uint8_t, 110) \
     ATOMIC_FIELD(X, Y, INTER_AREA_DISTANCE, uint8_t, 110) \
     ATOMIC_FIELD(X, Y, INTRA_AREA_DISTANCE, uint8_t, 110) \
-    OPTIONAL_ATOMIC_FIELD(X, Y, DISTRIBUTE_LIST, std::nullptr_t) TODO \
-    OPTIONAL_ATOMIC_FIELD(X, Y, DISTRIBUTE_LIST_KIND, policy::DistributeListType) \
-    OPTIONAL_ATOMIC_FIELD(X, Y, DOMAIN_TAG, uint32_t) TODO \
+    VALUE_FIELD(X, Y, DISTRIBUTE_LIST_IN, policy::DistributeList) TODO \
+    VALUE_FIELD(X, Y, DISTRIBUTE_LIST_OUT, policy::DistributeList) TODO \
     ATOMIC_FIELD(X, Y, EVENT_LOG_ONE_SHOT, bool, false) TODO \
     ATOMIC_FIELD(X, Y, EVENT_LOG_PAUSE, bool, false) TODO \
     ATOMIC_FIELD(X, Y, EVENT_LOG_SIZE, uint64_t, 0) TODO \
+    ATOMIC_FIELD(X, Y, GRACEFUL_HELPER, bool, false) TODO \
+    ATOMIC_FIELD(X, Y, GRACEFUL_STRICT_CHECKING, bool, false) TODO \
     ATOMIC_FIELD(X, Y, IGNORE_MOSPF, bool, true) TODO \
     ATOMIC_FIELD(X, Y, SNMP_IFINDEX, bool, false) TODO \
-    ATOMIC_FIELD(X, Y, ISPF, bool, false) \
     OPTIONAL_ATOMIC_FIELD(X, Y, RETRANSMISSION_DC_LIMIT, uint8_t) \
     OPTIONAL_ATOMIC_FIELD(X, Y, RETRANSMISSION_NON_DC_LIMIT, uint8_t) \
     ATOMIC_FIELD(X, Y, LOG_ADJACENCY_CHANGES, bool, false) \
@@ -176,29 +177,27 @@ DEFINE_TUPLE_SCHEMA(OspfSummaryAddress, OSPF_SUMMARY_ADDRESS_FIELDS);
     OPTIONAL_ATOMIC_FIELD(X, Y, MPLS_TRAF_ENG_ROUTER_ID, uint32_t) TODO \
     LIST_FIELD_CB(X, Y, NETWORKS, OspfNetwork, OspfSyncNetworks) \
     LIST_FIELD_CB(X, Y, NEIGHBORS, OspfNeighbor, OspfSyncNeighbors) \
-    ATOMIC_FIELD(X, Y, NSF_CISCO_HELPER, bool, false) TODO \
-    ATOMIC_FIELD(X, Y, NSF_STRICT_CHECKING, bool, false) TODO \
-    OPTIONAL_ATOMIC_FIELD(X, Y, HELLO_QUEUE_DEPTH, uint32_t) \
+    LIST_FIELD(X, Y, PASSIVE_INTERFACES, interface::InterfaceKey) TODO \
     LIST_FIELD(X, Y, PREFIX_PRIORITY_ROUTE_MAP, std::string) TODO \
-    OPTIONAL_ATOMIC_FIELD(X, Y, UPDATE_QUEUE_DEPTH, uint32_t) \
+    ATOMIC_FIELD(X, Y, PREFIX_SUPPRESSION, bool, false) TODO \
+    OPTIONAL_ATOMIC_FIELD(X, Y, HELLO_QUEUE_DEPTH, OspfQueueDepth) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, UPDATE_QUEUE_DEPTH, OspfQueueDepth) \
     OPTIONAL_ATOMIC_FIELD(X, Y, ROUTER_ID, uint32_t) \
     ATOMIC_FIELD(X, Y, SHUTDOWN, bool, false) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, REDISTRIBUTE, std::nullptr_t) TODO \
+    OPTIONAL_ATOMIC_FIELD(X, Y, SNMP, std::nullptr_t) TODO \
+    LIST_FIELD_CB(X, Y, SUMMARY_ADDRESS, OspfSummaryAddress, OspfSyncSummaries) \
     ATOMIC_FIELD(X, Y, LSA_ARRIVAL, uint32_t, 1000) \
     ATOMIC_FIELD(X, Y, FLOOD_PACING, uint8_t, 33) \
     ATOMIC_FIELD(X, Y, LSA_GROUP_PACING, uint16_t, 240) \
     ATOMIC_FIELD(X, Y, RETRANSMISSION_PACING, uint8_t, 66) \
-    LIST_FIELD(X, Y, TABLE_MAP, std::string) TODO \
-    ATOMIC_FIELD(X, Y, TABLE_MAP_FILTER, bool, false) TODO \
-    ATOMIC_FIELD(X, Y, PRIORITY, uint8_t, 1) \
-    OPTIONAL_ATOMIC_FIELD(X, Y, REDISTRIBUTE, std::nullptr_t) TODO \
-    OPTIONAL_ATOMIC_FIELD(X, Y, SNMP, std::nullptr_t) TODO \
-    LIST_FIELD_CB(X, Y, SUMMARY_ADDRESS, OspfSummaryAddress, OspfSyncSummaries) \
     ATOMIC_FIELD(X, Y, LSA_THROTTLE_DELAY, uint32_t, 0) \
     ATOMIC_FIELD(X, Y, LSA_THROTTLE_HOLD, uint32_t, 5000) \
     ATOMIC_FIELD(X, Y, LSA_THROTTLE_MAX, uint32_t, 5000) \
     ATOMIC_FIELD(X, Y, SPF_THROTTLE_DELAY, uint32_t, 5000) \
     ATOMIC_FIELD(X, Y, SPF_THROTTLE_HOLD, uint32_t, 10000) \
     ATOMIC_FIELD(X, Y, SPF_THROTTLE_MAX, uint32_t, 10000) \
+    LIST_FIELD(X, Y, TABLE_MAP, policy::TableMap) TODO \
     ATOMIC_FIELD(X, Y, TRAFFIC_SHARE_MIN, bool, false) \
     ATOMIC_FIELD(X, Y, TTL_SEC, bool, false) \
     ATOMIC_FIELD(X, Y, TTL_SEC_HOPS, uint8_t, 1)
@@ -207,17 +206,7 @@ DEFINE_TUPLE_SCHEMA(OspfSummaryAddress, OSPF_SUMMARY_ADDRESS_FIELDS);
  * @brief OSPF process-level configuration fields (areas, timers, redistribution, SPF tuning).
  * @ingroup OSPF
  */
-DEFINE_CONFIG_GROUP(Ospf, OSPF_FIELD_LIST)
-
-#define OSPFV3_ADDRESS_FAMILY_FIELD_LIST(X, Y) \
-    REGISTRY_CONTAINER(X, Y, IPV4, OspfRegistry) \
-    REGISTRY_CONTAINER(X, Y, IPV6, OspfRegistry)
-
-/**
- * @brief OSPFv3 address-family process container fields.
- * @ingroup OSPF
- */
-DEFINE_CONFIG_GROUP(Ospfv3AddressFamily, OSPFV3_ADDRESS_FAMILY_FIELD_LIST)
+DEFINE_CONFIG_GROUP(Ospf, OSPF_FIELD_LIST);
 }
 
 #endif // OSPF_REGISTRY_H
