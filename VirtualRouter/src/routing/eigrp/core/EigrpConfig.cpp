@@ -10,15 +10,18 @@
 #include "eigrp/interface/EigrpInterface.h"
 #include "interface/configs/InterfaceType.hpp"
 #include "configs/FieldAccessor.hpp"
+#include "configs/registry/global/GlobalRegistry.h"
 
 namespace routing::eigrp
 {
 static config::EigrpRegistry& resolveEigrpRegistry(Eigrp& base)
 {
     auto& vrf = *base.routingInstance;
+    auto& named = base.routingInstance->getGlobalConfigs().get<config::Global::ROUTER_EIGRP>().emplaceBack(base.getAS());
     if (base.getAF() == types::AddressFamily::IPv4)
-        return vrf.getConfigs().get<config::Vrf::ROUTER_EIGRP_V4>().emplaceBack(static_cast<uint16_t>(base.getAS()));
-    return vrf.getConfigs().get<config::Vrf::ROUTER_EIGRP_V6>().emplaceBack(static_cast<uint16_t>(base.getAS()));
+        return named.get<config::EigrpNamed::V4_INSTANCES>().emplaceBack(vrf.getName());
+    else
+        return named.get<config::EigrpNamed::V6_INSTANCES>().emplaceBack(vrf.getName());
 }
 
 EigrpConfig::EigrpConfig(Eigrp& base)

@@ -3,7 +3,7 @@
 #include "TopologyTable.h"
 #include "eigrp/core/Eigrp.h"
 #include "eigrp/interface/EigrpInterface.h"
-#include "DuelEngine.h"
+#include "DualEngine.h"
 
 namespace routing::eigrp
 {

@@ -8,7 +8,7 @@
 
 #include <IPAddress.h>
 
-#include "eigrp/topology/DuelEngine.h"
+#include "eigrp/topology/DualEngine.h"
 
 class Internal_EigrpTest;
 
@@ -18,13 +18,13 @@ class EigrpInterface;
 class Eigrp;
 
 /**
- * @brief Facade that combines the @ref DuelEngine and @ref TopologyTable for
+ * @brief Facade that combines the @ref DualEngine and @ref TopologyTable for
  *        a single EIGRP process.
  * @ingroup EIGRP_CORE
  *
  * `EigrpTopology` is the primary interface through which the @ref Eigrp
  * process and @ref EigrpInterface objects interact with the DUAL convergence
- * engine.  It owns the @ref DuelEngine (which owns the @ref TopologyTable and
+ * engine.  It owns the @ref DualEngine (which owns the @ref TopologyTable and
  * @ref TimerManager) and exposes a set of high-level operations:
  *
  * - Recalculating all routes after a bulk change
@@ -34,15 +34,15 @@ class Eigrp;
  *
  * ## Architectural Role
  * Acts as the boundary between the `Eigrp` process object and the DUAL
- * algorithm.  The process does not call into `DuelEngine` directly; all
+ * algorithm.  The process does not call into `DualEngine` directly; all
  * topology interactions flow through this class.
  *
  * ## Lifecycle & Ownership
- * Owned by and lives inside the @ref Eigrp object.  The `duel` member is
+ * Owned by and lives inside the @ref Eigrp object.  The `dual` member is
  * constructed first and holds a `base` back-reference; both must be destroyed
  * together.
  *
- * @see DuelEngine
+ * @see DualEngine
  * @see TopologyTable
  */
 class EigrpTopology
@@ -54,7 +54,7 @@ public:
     /**
      * @brief Constructs the topology facade bound to the given EIGRP process.
      *
-     * Initializes the @ref DuelEngine and all dependent subsystems.
+     * Initializes the @ref DualEngine and all dependent subsystems.
      *
      * @param base The @ref Eigrp process that owns this topology.
      */
@@ -103,7 +103,7 @@ public:
     /**
      * @brief Handles a Stuck-In-Active timeout for the given query and neighbor.
      *
-     * Delegates to @ref DuelEngine::handleSIATimeout().  If all retries are
+     * Delegates to @ref DualEngine::handleSIATimeout().  If all retries are
      * exhausted the neighbor is declared down.
      *
      * @param query    The @ref OutgoingQuery whose SIA timer fired.
@@ -122,7 +122,7 @@ public:
 
 private:
 
-    DuelEngine duel; ///< DUAL algorithm engine; owns the TopologyTable and TimerManager.
+    DualEngine dual; ///< DUAL algorithm engine; owns the TopologyTable and TimerManager.
     Eigrp& base;     ///< Owning EIGRP process.
 };
 } // namespace routing::eigrp

@@ -1,7 +1,7 @@
 // EigrpInterfaceTopology.cpp
 
 #include "TopologyController.h"
-#include "eigrp/topology/DuelEngine.h"
+#include "eigrp/topology/DualEngine.h"
 #include "eigrp/topology/TopologyTable.h"
 #include "eigrp/rtp/NeighborTable.h"
 #include "EigrpInterface.h"
@@ -9,7 +9,7 @@
 
 namespace routing::eigrp
 {
-TopologyController::TopologyController(NeighborTable& ntable, DuelEngine& duel, EigrpInterface& iface) : ntable(ntable), duel(duel), iface(iface) {}
+TopologyController::TopologyController(NeighborTable& ntable, DualEngine& dual, EigrpInterface& iface) : ntable(ntable), dual(dual), iface(iface) {}
 
 uint64_t TopologyController::getLocalMetric()
 {
@@ -18,7 +18,7 @@ uint64_t TopologyController::getLocalMetric()
 
 std::unordered_map<types::IPPrefix, TopologyEntry>& TopologyController::getTopologies()
 {
-    return duel.topologyTable.entries();
+    return dual.topologyTable.entries();
 }
 
 std::vector<const RouteInfo*> TopologyController::getAdvertisableRoutes()
@@ -31,7 +31,7 @@ std::vector<const RouteInfo*> TopologyController::getAdvertisableRoutes()
     const auto& stubCfg = cfgMgr.getStubConfig();
     const bool splitHorizon = iface.configs.get<config::EigrpInterface::SPLIT_HORIZON>().load();
 
-    for (const auto& [_, entry] : duel.topologyTable.entries())
+    for (const auto& [_, entry] : dual.topologyTable.entries())
     {
         if (entry.isSuppressed(iface.interfaceKey) || entry.state == TopologyEntry::State::ACTIVE)
             continue;
@@ -119,11 +119,11 @@ void TopologyController::onNeighborDown(Neighbor& neighbor)
     const types::IPAddress& neighborIp = neighbor.ipAddress;
 
     std::vector<TopologyEntry*> affectedTopologies;
-    for (auto& [_, entry] : duel.topologyTable.entries())
+    for (auto& [_, entry] : dual.topologyTable.entries())
     {
         if (auto it = entry.routesBySource.find(neighborIp); it != entry.routesBySource.end())
         {
-            duel.topologyTable.markRouteUnreachable(it->second, neighborIp, entry);
+            dual.topologyTable.markRouteUnreachable(it->second, neighborIp, entry);
             affectedTopologies.push_back(&entry);
         }
     }
@@ -135,48 +135,48 @@ void TopologyController::onNeighborDown(Neighbor& neighbor)
     neighbor.clearReliable();
 
     // Remove the neighbor routes from topology
-    duel.removeActiveNeighbor(neighborIp);
-    duel.updateSuccessors(affectedTopologies);
-    duel.topologyTable.pruneNeighbor(neighborIp);
+    dual.removeActiveNeighbor(neighborIp);
+    dual.updateSuccessors(affectedTopologies);
+    dual.topologyTable.pruneNeighbor(neighborIp);
 }
 
 void TopologyController::refreshSuppression(std::vector<TopologyEntry*>& entries)
 {
-    duel.refreshSuppression(entries, &iface);
+    dual.refreshSuppression(entries, &iface);
 }
 
 void TopologyController::processReceivedRoutes(std::vector<ReceivedRoute>& routes, Neighbor& neighbor)
 {
-    duel.processReceivedRoutes(routes, neighbor);
+    dual.processReceivedRoutes(routes, neighbor);
 }
 
 void TopologyController::processReceivedActiveRoutes(std::vector<ReceivedRoute>& routes, Neighbor& neighbor)
 {
-    duel.processReceivedActiveRoutes(routes, neighbor);
+    dual.processReceivedActiveRoutes(routes, neighbor);
 }
 
 void TopologyController::processReceivedQueryRoutes(std::vector<ReceivedRoute>& routes, Neighbor& neighbor, uint32_t recvSeq)
 {
-    duel.processReceivedQueryRoutes(routes, neighbor, recvSeq);
+    dual.processReceivedQueryRoutes(routes, neighbor, recvSeq);
 }
 
 void TopologyController::processSIAReply(Neighbor& neighbor, uint32_t seq)
 {
-    duel.processSIAReply(neighbor, seq);
+    dual.processSIAReply(neighbor, seq);
 }
 
 void TopologyController::markRouteUnreachable(RouteInfo& route, const types::IPAddress& neighborIp, TopologyEntry& entry)
 {
-    duel.topologyTable.markRouteUnreachable(route, neighborIp, entry);
+    dual.topologyTable.markRouteUnreachable(route, neighborIp, entry);
 }
 
 TopologyEntry* TopologyController::findEntry(const types::IPPrefix& prefix)
 {
-    return duel.topologyTable.find(prefix);
+    return dual.topologyTable.find(prefix);
 }
 
 TopologyEntry& TopologyController::ensure(const types::IPPrefix& prefix)
 {
-    return duel.topologyTable.ensure(prefix);
+    return dual.topologyTable.ensure(prefix);
 }
 } // namespace routing

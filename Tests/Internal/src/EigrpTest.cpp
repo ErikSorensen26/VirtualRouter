@@ -98,7 +98,7 @@ protected:
     }
 
     // Helper function: returns the topology table.
-    TopologyTable& getTopologyTable(Eigrp* i = nullptr) { return i ? i->getTopology().duel.topologyTable : eigrpInstance->getTopology().duel.topologyTable; }
+    TopologyTable& getTopologyTable(Eigrp* i = nullptr) { return i ? i->getTopology().dual.topologyTable : eigrpInstance->getTopology().dual.topologyTable; }
     // Helper: returns the current interface list.
     std::unordered_map<interface::InterfaceKey, EigrpInterface>& getInterfaceList() { return eigrpInstance->getIfaceMgr().eigrpInterfaceList; }
     // Helper: returns the current configs
@@ -356,7 +356,7 @@ protected:
 
     bool recalculateSuccessors(TopologyEntry* entry, Eigrp* i = nullptr)
     {
-        return getDuel(i).recalculateSuccessors(entry);
+        return getDual(i).recalculateSuccessors(entry);
     }
 
     void checkInit(Neighbor& neighbor, EigrpInterface* intf = nullptr)
@@ -386,9 +386,9 @@ protected:
         iface->getRtp().nextSeq.fetch_sub(1, std::memory_order_acq_rel);
     }
 
-    std::unordered_map<types::IPPrefix, ActiveRoute>& getActiveRoutes(Eigrp* i = nullptr) { return getDuel(i).activeRoutes; }
+    std::unordered_map<types::IPPrefix, ActiveRoute>& getActiveRoutes(Eigrp* i = nullptr) { return getDual(i).activeRoutes; }
 
-    DuelEngine& getDuel(Eigrp* i = nullptr) { return i ? i->getTopology().duel : eigrpInstance->getTopology().duel; }
+    DualEngine& getDual(Eigrp* i = nullptr) { return i ? i->getTopology().dual : eigrpInstance->getTopology().dual; }
 
     bool getHelloTimerActive(EigrpInterface* eigrpInt = nullptr) { if (eigrpInt) return eigrpInt->getTimers().helloTimerId.load() != 0; else return eigrpInterface->getTimers().helloTimerId.load() != 0;}
     uint32_t getRouterID(Eigrp* eigrp = nullptr) { if (eigrp) return eigrp->routerID(); else return eigrpInstance->routerID(); }
@@ -860,7 +860,7 @@ TEST_F(Internal_EigrpTest, ActiveRoute_SIA_When_Stub_Enabled)
     r.prefix = p;
 
     std::vector<ReceivedRoute> rs = { r };
-    getDuel().processReceivedRoutes(rs, *nbr);
+    getDual().processReceivedRoutes(rs, *nbr);
     processAck(*nbr, 1); // Reverse poisen acked
 
     r.feasibleDistance = std::numeric_limits<uint64_t>::max();
@@ -873,7 +873,7 @@ TEST_F(Internal_EigrpTest, ActiveRoute_SIA_When_Stub_Enabled)
         }));
 
     rs = { r };
-    getDuel().processReceivedQueryRoutes(rs, *nbr, 10);
+    getDual().processReceivedQueryRoutes(rs, *nbr, 10);
 
     auto &active = getActiveRoutes();
     ASSERT_TRUE(active.empty());
@@ -893,7 +893,7 @@ TEST_F(Internal_EigrpTest, ActiveRoute_Will_Send_Reply_If_No_Available_Neighbors
     r.prefix = p;
 
     std::vector<ReceivedRoute> rs = { r };
-    getDuel().processReceivedRoutes(rs, *nbr);
+    getDual().processReceivedRoutes(rs, *nbr);
     processAck(*nbr, 1); // Reverse poisen acked
 
     r.feasibleDistance = std::numeric_limits<uint64_t>::max();
@@ -905,7 +905,7 @@ TEST_F(Internal_EigrpTest, ActiveRoute_Will_Send_Reply_If_No_Available_Neighbors
         }));
 
     rs = { r };
-    getDuel().processReceivedQueryRoutes(rs, *nbr, 11);
+    getDual().processReceivedQueryRoutes(rs, *nbr, 11);
 
     auto &active = getActiveRoutes();
     ASSERT_TRUE(active.empty());
@@ -1384,8 +1384,8 @@ TEST_F(Internal_EigrpTest, TopologyTable_Add_Or_Update_Route)
     r.nextHop = nextHop;
     r.hopCount = 1;
     std::vector<ReceivedRoute> rs = {r};
-    getDuel().processReceivedRoutes(rs, *neighbor);
-    auto entries = getDuel().topologyTable.entries();
+    getDual().processReceivedRoutes(rs, *neighbor);
+    auto entries = getDual().topologyTable.entries();
     ASSERT_TRUE(entries.size() > 0);
 }
 
@@ -1403,7 +1403,7 @@ TEST_F(Internal_EigrpTest, TopologyTable_Prune_Stale_Routes)
     r1.prefix = prefix1;
     r2.prefix = prefix2;
     std::vector<ReceivedRoute> rs = {r1, r2};
-    getDuel().processReceivedRoutes(rs, *neighbor);
+    getDual().processReceivedRoutes(rs, *neighbor);
     vrf->getRib().wait<uint32_t>();
     eigrpInstance->getScheduler().waitIdle();
     auto& top = getTopologyTable();
@@ -1454,7 +1454,7 @@ TEST_F(Internal_EigrpTest, RoutingTable_Metric_Update_On_Best_Route_Change)
     top1.bestNeighbor = types::IPAddress{};
     top1.routesBySource.emplace(types::IPAddress{}, RouteInfo{route1});
     std::vector<TopologyEntry*> ts = { &top1 };
-    getDuel().updateSuccessors(ts);
+    getDual().updateSuccessors(ts);
     eigrpInstance->routeManager.synchronizeRoutes({&top1});
     
     auto route2 = getRoute(eigrpInterface->interfaceKey);
@@ -1462,7 +1462,7 @@ TEST_F(Internal_EigrpTest, RoutingTable_Metric_Update_On_Best_Route_Change)
     route2.feasibleDistance = 50;
     route2.nextHop = uint32_t{0xC0A80103};
     top1.routesBySource.emplace(uint32_t{0x0A000001}, RouteInfo{route2});
-    getDuel().updateSuccessors(ts);
+    getDual().updateSuccessors(ts);
     eigrpInstance->routeManager.synchronizeRoutes(ts);
     vrf->getRib().wait<uint32_t>();
     
@@ -1492,7 +1492,7 @@ TEST_F(Internal_EigrpTest, WideMetrics_InternalRoute_ParsedCorrectly)
     std::vector<ReceivedRoute> rs = { r };
     eigrpInterface->getMetrics().addRouteMetrics(rs);
 
-    getDuel().processReceivedRoutes(rs, *nbr);
+    getDual().processReceivedRoutes(rs, *nbr);
     vrf->getRib().wait<uint32_t>();
     
 
@@ -1530,7 +1530,7 @@ TEST_F(Internal_EigrpTest, WideMetrics_ExternalRoute_ParsedCorrectly)
 
     std::vector<ReceivedRoute> rs = { r };
     eigrpInterface->getMetrics().addRouteMetrics(rs);
-    getDuel().processReceivedRoutes(rs, *nbr);
+    getDual().processReceivedRoutes(rs, *nbr);
     vrf->getRib().wait<uint32_t>();
 
     utils::RCU::Guard guard;
@@ -1572,10 +1572,10 @@ TEST_F(Internal_EigrpTest, WideMetrics_Successor_Selection)
 
     std::vector<ReceivedRoute> rs = { r1 };
     eigrpInterface->getMetrics().addRouteMetrics(rs);
-    getDuel().processReceivedRoutes(rs, *nbr1);
+    getDual().processReceivedRoutes(rs, *nbr1);
     rs = { r2 };
     eigrpInterface->getMetrics().addRouteMetrics(rs);
-    getDuel().processReceivedRoutes(rs, *nbr2);
+    getDual().processReceivedRoutes(rs, *nbr2);
     vrf->getRib().wait<uint32_t>();
 
     utils::RCU::Guard guard;
@@ -1624,9 +1624,9 @@ TEST_F(Internal_EigrpTest, WideMetrics_FeasibleSuccessor_WithVariance)
     b.nextHop = n2;
 
     std::vector<ReceivedRoute> rs = { p };
-    getDuel().processReceivedRoutes(rs, *nbr1);
+    getDual().processReceivedRoutes(rs, *nbr1);
     rs = { b };
-    getDuel().processReceivedRoutes(rs, *nbr2);
+    getDual().processReceivedRoutes(rs, *nbr2);
     vrf->getRib().wait<uint32_t>();
 
     utils::RCU::Guard guard;
@@ -1650,7 +1650,7 @@ TEST_F(Internal_EigrpTest, TopologyTable_Handles_Neighbor_Down)
     r.reportedDistance = 80;
     r.nextHop = neighborIp;
     std::vector<ReceivedRoute> rs = {r};
-    getDuel().processReceivedRoutes(rs, *neighbor);
+    getDual().processReceivedRoutes(rs, *neighbor);
     vrf->getRib().wait<uint32_t>();
     eigrpInterface->getTopController().onNeighborDown(*neighbor);
     EXPECT_EQ(getActiveRoutes().size(), 1);
@@ -1837,7 +1837,7 @@ TEST_F(Internal_EigrpTest, ActiveQuery_Clear_After_Neighbor_Response)
     testRoute.feasibleDistance = std::numeric_limits<uint64_t>::max();
     testRoute.reportedDistance = std::numeric_limits<uint64_t>::max();
     std::vector<ReceivedRoute> rs = {testRoute};
-    getDuel().processReceivedRoutes(rs, *getNeighbor(queryNeighborIp));
+    getDual().processReceivedRoutes(rs, *getNeighbor(queryNeighborIp));
     ASSERT_TRUE(hdr.has_value());
     eigrpInterface->getRtp().handleIncoming(nullptr, hdr.value(), neighborIp.raw, false);
     EXPECT_TRUE(getActiveRoutes().empty()); // Active should be resolved
@@ -1883,7 +1883,7 @@ TEST_F(Internal_EigrpTest, Reply_Returned_After_Full_Query_Sequence)
     auto& top = getTopologyTable().ensure(prefix);
     getTopologyTable().addRouteUpdate(rInfo.routeInfo, queryNeighbor, top);
     std::vector<TopologyEntry*> ts = { &top };
-    getDuel().updateSuccessors(ts);
+    getDual().updateSuccessors(ts);
     std::optional<packet::EigrpHeader> hdr;
 
     bool replyFound = false;
@@ -1924,7 +1924,7 @@ TEST_F(Internal_EigrpTest, Reply_Returned_After_Full_Query_Sequence)
     testRoute.delay = std::numeric_limits<uint64_t>::max();
     testRoute.feasibleDistance = std::numeric_limits<uint64_t>::max();
     std::vector<ReceivedRoute> rs = {testRoute};
-    getDuel().processReceivedQueryRoutes(rs, *queryNeighbor, querySeq);
+    getDual().processReceivedQueryRoutes(rs, *queryNeighbor, querySeq);
     ASSERT_TRUE(hdr.has_value());
     extraEigrpIface->getRtp().handleIncoming(nullptr, hdr.value(), neighborIp.raw, false);
     EXPECT_TRUE(replyFound);
@@ -1950,10 +1950,10 @@ TEST_F(Internal_EigrpTest, ActiveQuery_Timeout_Leads_To_Neighbor_Down)
     auto& top = getTopologyTable().ensure(prefix);
     getTopologyTable().addRouteUpdate(testRoute, getNeighbor(queryNeighborIp), top);
     std::vector<ReceivedRoute> rs = {testRoute};
-    getDuel().processReceivedRoutes(rs, *getNeighbor(queryNeighborIp));
+    getDual().processReceivedRoutes(rs, *getNeighbor(queryNeighborIp));
     rs[0].feasibleDistance = std::numeric_limits<uint64_t>::max();
     rs[0].delay = std::numeric_limits<uint64_t>::max();
-    getDuel().processReceivedRoutes(rs, *getNeighbor(queryNeighborIp));
+    getDual().processReceivedRoutes(rs, *getNeighbor(queryNeighborIp));
 
     std::this_thread::sleep_for(std::chrono::seconds(6));
     
@@ -1980,14 +1980,14 @@ TEST_F(Internal_EigrpTest, ActiveRoute_Cancels_On_Better_AlternativePath)
     r1.feasibleDistance = 100;
     r1.reportedDistance = 90;
     std::vector<ReceivedRoute> rs = { r1 };
-    getDuel().processReceivedRoutes(rs, *nbr1);
+    getDual().processReceivedRoutes(rs, *nbr1);
 
     // Bad update forces ACTIVE
     ReceivedRoute bad = r1;
     bad.feasibleDistance = std::numeric_limits<uint64_t>::max();
     bad.reportedDistance = std::numeric_limits<uint64_t>::max();
     rs = { bad };
-    getDuel().processReceivedRoutes(rs, *nbr1);
+    getDual().processReceivedRoutes(rs, *nbr1);
 
     ASSERT_FALSE(getActiveRoutes().empty());
 
@@ -1996,7 +1996,7 @@ TEST_F(Internal_EigrpTest, ActiveRoute_Cancels_On_Better_AlternativePath)
     alt.feasibleDistance = 150;
     alt.reportedDistance = 120;
     rs = { alt };
-    getDuel().processReceivedRoutes(rs, *nbr2);
+    getDual().processReceivedRoutes(rs, *nbr2);
 
     EXPECT_TRUE(getActiveRoutes().empty());
 }
@@ -2022,7 +2022,7 @@ TEST_F(Internal_EigrpTest, Query_Multicast_Sent_To_All_Eligible_Neighbors)
     r.feasibleDistance = 100;
     r.reportedDistance = 50;
     std::vector<ReceivedRoute> rs = { r };
-    getDuel().processReceivedRoutes(rs, *nbr1);
+    getDual().processReceivedRoutes(rs, *nbr1);
 
     r.feasibleDistance = std::numeric_limits<uint64_t>::max();
     r.reportedDistance = std::numeric_limits<uint64_t>::max();
@@ -2037,7 +2037,7 @@ TEST_F(Internal_EigrpTest, Query_Multicast_Sent_To_All_Eligible_Neighbors)
         }));
 
     rs = { r };
-    getDuel().processReceivedRoutes(rs, *nbr1);
+    getDual().processReceivedRoutes(rs, *nbr1);
 
     EXPECT_TRUE(queryFound);
     auto &active = getActiveRoutes();
@@ -2065,7 +2065,7 @@ TEST_F(Internal_EigrpTest, Query_Unicast_Sent_To_All_Eligible_Neighbors)
     r.feasibleDistance = 100;
     r.reportedDistance = 50;
     std::vector<ReceivedRoute> rs = { r };
-    getDuel().processReceivedRoutes(rs, *nbr1);
+    getDual().processReceivedRoutes(rs, *nbr1);
 
     r.feasibleDistance = std::numeric_limits<uint64_t>::max();
     r.reportedDistance = std::numeric_limits<uint64_t>::max();
@@ -2080,7 +2080,7 @@ TEST_F(Internal_EigrpTest, Query_Unicast_Sent_To_All_Eligible_Neighbors)
         }));
 
     rs = { r };
-    getDuel().processReceivedRoutes(rs, *nbr1);
+    getDual().processReceivedRoutes(rs, *nbr1);
 
     auto &active = getActiveRoutes();
     EXPECT_EQ(queryCount, 2);
@@ -2336,7 +2336,7 @@ TEST_F(Internal_EigrpTest, IPv6_Query_Reply_SIA) //TODO
     r.reportedDistance = std::numeric_limits<uint64_t>::max();
 
     std::vector<ReceivedRoute> rs = { r };
-    getDuel(&ipv6Eigrp).processReceivedQueryRoutes(rs, *nbr1, 10);
+    getDual(&ipv6Eigrp).processReceivedQueryRoutes(rs, *nbr1, 10);
 
     // Active route must now have pending queries
     auto& active = getActiveRoutes(&ipv6Eigrp);
@@ -2689,7 +2689,7 @@ TEST_F(Internal_EigrpTest, HighVolume_RouteUpdates_Performance_Extended)
         route.prefix = { utils::readU32(base), 24 };
         route.nextHop = nextHop;
         std::vector<ReceivedRoute> rs = {route};
-        getDuel().processReceivedRoutes(rs, *neighbor);
+        getDual().processReceivedRoutes(rs, *neighbor);
     }
     vrf->getRib().wait<uint32_t>();
     ASSERT_EQ(vrf->getRib().size<uint32_t>(), 1501);
@@ -2722,7 +2722,7 @@ TEST_F(Internal_EigrpTest, MultiInterface_Massive_Concurrent_Updates_Extended)
         route.nextHop = uint32_t{0x00000001};
         route.routeType = RouteType::INTERNAL;
         std::vector<ReceivedRoute> receivedRoutes = {route};
-        getDuel().processReceivedRoutes(receivedRoutes, *neighbor);
+        getDual().processReceivedRoutes(receivedRoutes, *neighbor);
     }
     ASSERT_GE(vrf->getRib().size<uint32_t>(), 1);
     eigrpInstance->getIfaceMgr().deactivateAll();
@@ -2841,7 +2841,7 @@ TEST_F(Internal_EigrpTest, MultiInterface_Coordinated_RoutingUpdates_Extended)
     route2.nextHop = uint32_t{0x00000002};
     route2.routeType = RouteType::INTERNAL;
     std::vector<ReceivedRoute> routes = { route1, route2 };
-    getDuel().processReceivedRoutes(routes, *getNeighbor(neighborIp, int1));
+    getDual().processReceivedRoutes(routes, *getNeighbor(neighborIp, int1));
     vrf->getRib().wait<uint32_t>();
     ASSERT_GE(vrf->getRib().size<uint32_t>(), 2);
     eigrpInstance->getIfaceMgr().deactivateAll();
@@ -2879,8 +2879,8 @@ TEST_F(Internal_EigrpTest, Unequal_Cost_Path_Added_As_Feasible_Successor)
 
     std::vector<ReceivedRoute> routes1 = { primary };
     std::vector<ReceivedRoute> routes2 = { secondary };
-    getDuel().processReceivedRoutes(routes1, *neighbor1);
-    getDuel().processReceivedRoutes(routes2, *neighbor2);
+    getDual().processReceivedRoutes(routes1, *neighbor1);
+    getDual().processReceivedRoutes(routes2, *neighbor2);
     vrf->getRib().wait<uint32_t>();
 
     utils::RCU::Guard guard;
@@ -2909,8 +2909,8 @@ TEST_F(Internal_EigrpTest, Metric_Tuning_Affects_Route_Selection)
 
     std::vector<ReceivedRoute> routes1 = { r1 };
     std::vector<ReceivedRoute> routes2 = { r2 };
-    getDuel().processReceivedRoutes(routes1, *getNeighbor(neighbor1));
-    getDuel().processReceivedRoutes(routes2, *getNeighbor(neighbor2));
+    getDual().processReceivedRoutes(routes1, *getNeighbor(neighbor1));
+    getDual().processReceivedRoutes(routes2, *getNeighbor(neighbor2));
     vrf->getRib().wait<uint32_t>();
 
     utils::RCU::Guard guard;
@@ -2932,7 +2932,7 @@ TEST_F(Internal_EigrpTest, Route_Loop_Prevention_Using_FD)
     route.reportedDistance = 150; // Violation
 
     std::vector<ReceivedRoute> routes = { route };
-    getDuel().processReceivedRoutes(routes, *neighbor);
+    getDual().processReceivedRoutes(routes, *neighbor);
     utils::RCU::Guard guard;
     auto* chosen = vrf->getRib().lookup<uint32_t>(route.prefix, guard);
 
@@ -2990,7 +2990,7 @@ TEST_F(Internal_EigrpTest, Summarization_Advertises_Summary_Only)
         }));
 
     std::vector<ReceivedRoute> routes = { route1, route2 };
-    getDuel().processReceivedRoutes(routes, *neighbor2);
+    getDual().processReceivedRoutes(routes, *neighbor2);
     vrf->getRib().wait<uint32_t>();
 
     EXPECT_EQ(vrf->getRib().size<uint32_t>(), 4);
@@ -3089,7 +3089,7 @@ TEST_F(Internal_EigrpTest, Split_Horizon_Prevents_Route_Propagation_Back)
             }
         }));
     std::vector<ReceivedRoute> routes = { route };
-    getDuel().processReceivedRoutes(routes, *neighbor);
+    getDual().processReceivedRoutes(routes, *neighbor);
 }
 
 // Test: Split_Horizon_Disabled_Allows_Advertisement
@@ -3114,7 +3114,7 @@ TEST_F(Internal_EigrpTest, Split_Horizon_Disabled_Allows_Advertisement)
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_))
         .Times(::testing::AtLeast(1));
 
-    getDuel().processReceivedRoutes(rs, *nbr);
+    getDual().processReceivedRoutes(rs, *nbr);
 }
 
 // Test: Infeasible_Route_Rejected_Due_To_Feasibility_Condition
@@ -3146,7 +3146,7 @@ TEST_F(Internal_EigrpTest, Infeasible_Route_Rejected_Due_To_Feasibility_Conditio
     newRoute.feasibleDistance = 300;
 
     std::vector<ReceivedRoute> rs = { newRoute };
-    getDuel().processReceivedRoutes(rs, *neighbor);
+    getDual().processReceivedRoutes(rs, *neighbor);
     vrf->getRib().wait<uint32_t>();
 
     // Should NOT overwrite existing route
@@ -3214,7 +3214,7 @@ TEST_F(Internal_EigrpTest, NeighborTable_OnDown_RemovesFromGlobalNeighborList)
     }
 }
 
-TEST_F(Internal_EigrpTest, DuelEngine_SetActive_DoesNotActivateWithRemainingFeasibleSuccessors)
+TEST_F(Internal_EigrpTest, DualEngine_SetActive_DoesNotActivateWithRemainingFeasibleSuccessors)
 {
     types::IPAddress n1 = uint32_t{0xC0A80150};
     types::IPAddress n2 = uint32_t{0xC0A80151};
@@ -3255,7 +3255,7 @@ TEST_F(Internal_EigrpTest, DuelEngine_SetActive_DoesNotActivateWithRemainingFeas
     getTopologyTable().addRouteUpdate(lostInfo.routeInfo, getNeighbor(n1), top);
 
     std::vector<TopologyEntry*> entries = { &top };
-    getDuel().updateSuccessors(entries);
+    getDual().updateSuccessors(entries);
     vrf->getRib().wait<uint32_t>();
 
     // n2 still provides a path, so no diffusing computation should start
@@ -3270,7 +3270,7 @@ TEST_F(Internal_EigrpTest, DuelEngine_SetActive_DoesNotActivateWithRemainingFeas
     RouteInfo lastInfo(lastGone);
     getTopologyTable().addRouteUpdate(lastInfo.routeInfo, getNeighbor(n2), top);
 
-    getDuel().updateSuccessors(entries);
+    getDual().updateSuccessors(entries);
     vrf->getRib().wait<uint32_t>();
 
     EXPECT_FALSE(getActiveRoutes().empty());
@@ -4019,7 +4019,7 @@ TEST_F(Internal_EigrpTest, IPv6_Query_Reply_Sia_TimeoutBehavesLikeIPv4)
     r.reportedDistance = std::numeric_limits<uint64_t>::max();
 
     std::vector<ReceivedRoute> rs = { r };
-    getDuel(&ipv6Eigrp).processReceivedQueryRoutes(rs, *nbr1, 10);
+    getDual(&ipv6Eigrp).processReceivedQueryRoutes(rs, *nbr1, 10);
 
     auto& active = getActiveRoutes(&ipv6Eigrp);
     ASSERT_FALSE(active.empty());
@@ -4034,14 +4034,14 @@ TEST_F(Internal_EigrpTest, IPv6_Query_Reply_Sia_TimeoutBehavesLikeIPv4)
     // The first four timeouts retry rather than give up, and the neighbor stays
     for (uint32_t i = 0; i < 4; ++i)
     {
-        getDuel(&ipv6Eigrp).handleSIATimeout(qit->second, *nbr2);
+        getDual(&ipv6Eigrp).handleSIATimeout(qit->second, *nbr2);
         EXPECT_TRUE(intf->getNTable().lookup(nbrIp2)) << "neighbor dropped on attempt " << i;
     }
     EXPECT_EQ(qit->second.siaAttempts, 4u);
 
     // The fifth finds siaAttempts exhausted and takes the unresponsive neighbor
     // down, exactly as the IPv4 path does
-    getDuel(&ipv6Eigrp).handleSIATimeout(qit->second, *nbr2);
+    getDual(&ipv6Eigrp).handleSIATimeout(qit->second, *nbr2);
     EXPECT_FALSE(intf->getNTable().lookup(nbrIp2));
 
     ipv6Eigrp.getIfaceMgr().deactivateAll();

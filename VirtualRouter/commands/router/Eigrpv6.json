@@ -7,31 +7,39 @@
             "support": true,
             "description": "Set metric of redistributed routes",
             "name": "default-metric",
+            "properties": [
+                "negate_all"
+            ],
             "subcommands": [
                 {
                     "support": true,
                     "description": "Bandwidth in Kbits per second",
                     "name": "<1-4294967295>",
+                    "config": "Eigrp::DEFAULT_METRICS::bandwidth",
                     "subcommands": [
                         {
                             "support": true,
                             "description": "delay metric in 10 microsecond units",
                             "name": "<0-4294967295>",
+                            "config": "Eigrp::DEFAULT_METRICS::delay",
                             "subcommands": [
                                 {
                                     "support": true,
                                     "description": "Reliability metric where 255 is 100% reliable",
                                     "name": "<0-255>",
+                                    "config": "Eigrp::DEFAULT_METRICS::reliability",
                                     "subcommands": [
                                         {
                                             "support": true,
                                             "description": "Effective bandwidth metric (Loading) where 255 is 100% loaded",
                                             "name": "<1-255>",
+                                            "config": "Eigrp::DEFAULT_METRICS::load",
                                             "subcommands": [
                                                 {
                                                     "support": true,
                                                     "description": "Maximum Transmission Unit metric of the path",
                                                     "name": "<1-65535>",
+                                                    "config": "Eigrp::DEFAULT_METRICS::mtu",
                                                     "subcommands": [
                                                         {
                                                             "description": "",
@@ -58,16 +66,21 @@
                     "support": true,
                     "description": "Set distance for internal and external routes",
                     "name": "eigrp",
+                    "properties": [
+                        "negate_all"
+                    ],
                     "subcommands": [
                         {
                             "support": true,
                             "description": "Distance for internal routes",
                             "name": "<1-255>",
+                            "config": "Eigrp::INTERNAL_ADMIN_DISTANCE",
                             "subcommands": [
                                 {
                                     "support": true,
                                     "description": "Distance for external routes",
                                     "name": "<1-255>",
+                                    "config": "Eigrp::EXTERNAL_ADMIN_DISTANCE",
                                     "subcommands": [
                                         {
                                             "description": "",
@@ -91,7 +104,16 @@
                     "subcommands": [
                         {
                             "description": "",
-                            "name": "<prefix_list>"
+                            "name": "<prefix_list>",
+                            "args": {
+                                "CONFIG_IN": "Eigrp::DISTRIBUTE_LIST_IN::filterList",
+                                "CONFIG_OUT": "Eigrp::DISTRIBUTE_LIST_OUT::filterList",
+                                "IN_INTERFACE": "Eigrp::DISTRIBUTE_LIST_IN::interface",
+                                "OUT_INTERFACE": "Eigrp::DISTRIBUTE_LIST_OUT::interface",
+                                "ENUM": "DistributeListType::PREFIX_GATEWAY",
+                                "IN": "Eigrp::DISTRIBUTE_LIST_IN::distribution",
+                                "OUT": "Eigrp::DISTRIBUTE_LIST_OUT::distribution"
+                            }
                         }
                     ]
                 }
@@ -104,10 +126,14 @@
                 {
                     "description": "Set EIGRP maximum event log entries",
                     "name": "event-log-size",
+                    "properties": [
+                        "negate_all"
+                    ],
                     "subcommands": [
                         {
                             "description": "Max event log entries",
                             "name": "<0-922724>",
+                            "config": "Eigrp::MAX_EVENT_LOG_SIZE",
                             "subcommands": [
                                 {
                                     "description": "",
@@ -120,6 +146,7 @@
                 {
                     "description": "Enable/Disable EIGRP neighbor logging",
                     "name": "log-neighbor-changes",
+                    "config": "Eigrp::LOG_NEIGHBOR_CHANGES",
                     "subcommands": [
                         {
                             "description": "",
@@ -130,10 +157,15 @@
                 {
                     "description": "Enable/Disable EIGRP neighbor warnings",
                     "name": "log-neighbor-warnings",
+                    "config": "Eigrp::LOG_NEIGHBOR_WARNINGS",
+                    "properties": [
+                        "negate_all"
+                    ],
                     "subcommands": [
                         {
                             "description": "Neighbor warning interval in seconds",
                             "name": "<1-65535>",
+                            "config": "Eigrp::LOG_NEIGHBOR_WARNINGS_INTERVAL",
                             "subcommands": [
                                 {
                                     "description": "",
@@ -150,10 +182,14 @@
                 {
                     "description": "router id for this EIGRP process",
                     "name": "router-id",
+                    "properties": [
+                        "negate_all"
+                    ],
                     "subcommands": [
                         {
                             "description": "EIGRP Router-ID in IP address format",
                             "name": "A.B.C.D",
+                            "config": "Eigrp::ROUTER_ID",
                             "subcommands": [
                                 {
                                     "description": "",
@@ -166,443 +202,17 @@
                 {
                     "description": "Set address-family in stubbed mode",
                     "name": "stub",
+                    "properties": [
+                        "negate_all",
+                        "recursive"
+                    ],
                     "subcommands": [
                         {
                             "description": "Do advertise connected routes",
                             "name": "connected",
+                            "config": "Eigrp::STUB",
+                            "enum": "Stub::CONNECTED",
                             "subcommands": [
-                                {
-                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                    "name": "leak-map",
-                                    "subcommands": [
-                                        {
-                                            "description": "leak-map name",
-                                            "name": "WORD",
-                                            "subcommands": [
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                },
-                                {
-                                    "description": "Do advertise redistributed routes",
-                                    "name": "redistributed",
-                                    "subcommands": [
-                                        {
-                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                            "name": "leak-map",
-                                            "subcommands": [
-                                                {
-                                                    "description": "leak-map name",
-                                                    "name": "WORD",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "Do advertise static routes",
-                                            "name": "static",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                                    "name": "leak-map",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "leak-map name",
-                                                            "name": "WORD",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "",
-                                                                    "name": "<cr>"
-                                                                }
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "Do advertise summary routes",
-                                                    "name": "summary",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                                            "name": "leak-map",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "leak-map name",
-                                                                    "name": "WORD",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "",
-                                                                            "name": "<cr>"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "Do advertise summary routes",
-                                            "name": "summary",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                                    "name": "leak-map",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "leak-map name",
-                                                            "name": "WORD",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "",
-                                                                    "name": "<cr>"
-                                                                }
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "Do advertise static routes",
-                                                    "name": "static",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                                            "name": "leak-map",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "leak-map name",
-                                                                    "name": "WORD",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "",
-                                                                            "name": "<cr>"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "",
-                                            "name": "<cr>"
-                                        }
-                                    ]
-                                },
-                                {
-                                    "description": "Do advertise static routes",
-                                    "name": "static",
-                                    "subcommands": [
-                                        {
-                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                            "name": "leak-map",
-                                            "subcommands": [
-                                                {
-                                                    "description": "leak-map name",
-                                                    "name": "WORD",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "Do advertise redistributed routes",
-                                            "name": "redistributed",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                                    "name": "leak-map",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "leak-map name",
-                                                            "name": "WORD",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "",
-                                                                    "name": "<cr>"
-                                                                }
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "Do advertise summary routes",
-                                                    "name": "summary",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                                            "name": "leak-map",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "leak-map name",
-                                                                    "name": "WORD",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "",
-                                                                            "name": "<cr>"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "Do advertise summary routes",
-                                            "name": "summary",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                                    "name": "leak-map",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "leak-map name",
-                                                            "name": "WORD",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "",
-                                                                    "name": "<cr>"
-                                                                }
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "Do advertise redistributed routes",
-                                                    "name": "redistributed",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                                            "name": "leak-map",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "leak-map name",
-                                                                    "name": "WORD",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "",
-                                                                            "name": "<cr>"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "description": "Do advertise static routes",
-                                                            "name": "static",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                                                    "name": "leak-map",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "leak-map name",
-                                                                            "name": "WORD",
-                                                                            "subcommands": [
-                                                                                {
-                                                                                    "description": "",
-                                                                                    "name": "<cr>"
-                                                                                }
-                                                                            ]
-                                                                        }
-                                                                    ]
-                                                                },
-                                                                {
-                                                                    "description": "",
-                                                                    "name": "<cr>"
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "",
-                                            "name": "<cr>"
-                                        }
-                                    ]
-                                },
-                                {
-                                    "description": "Do advertise summary routes",
-                                    "name": "summary",
-                                    "subcommands": [
-                                        {
-                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                            "name": "leak-map",
-                                            "subcommands": [
-                                                {
-                                                    "description": "leak-map name",
-                                                    "name": "WORD",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "Do advertise redistributed routes",
-                                            "name": "redistributed",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                                    "name": "leak-map",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "leak-map name",
-                                                            "name": "WORD",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "",
-                                                                    "name": "<cr>"
-                                                                }
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "Do advertise static routes",
-                                                    "name": "static",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                                            "name": "leak-map",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "leak-map name",
-                                                                    "name": "WORD",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "",
-                                                                            "name": "<cr>"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "Do advertise static routes",
-                                            "name": "static",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                                    "name": "leak-map",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "leak-map name",
-                                                            "name": "WORD",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "",
-                                                                    "name": "<cr>"
-                                                                }
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "Do advertise redistributed routes",
-                                                    "name": "redistributed",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                                            "name": "leak-map",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "leak-map name",
-                                                                    "name": "WORD",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "",
-                                                                            "name": "<cr>"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "",
-                                            "name": "<cr>"
-                                        }
-                                    ]
-                                },
                                 {
                                     "description": "",
                                     "name": "<cr>"
@@ -616,6 +226,10 @@
                                 {
                                     "description": "leak-map name",
                                     "name": "WORD",
+                                    "config": "Eigrp::STUB_LEAK_MAP",
+                                    "properties": [
+                                        "recurse_exclude_all"
+                                    ],
                                     "subcommands": [
                                         {
                                             "description": "",
@@ -628,6 +242,12 @@
                         {
                             "description": "Set receive only neighbor",
                             "name": "receive-only",
+                            "config": "Eigrp::STUB",
+                            "enum": "Stub::RECEIVE_ONLY",
+                            "properties": [
+                                "recurse_exclude_all",
+                                "recurse_hide"
+                            ],
                             "subcommands": [
                                 {
                                     "description": "",
@@ -638,405 +258,9 @@
                         {
                             "description": "Do advertise redistributed routes",
                             "name": "redistributed",
+                            "config": "Eigrp::STUB",
+                            "enum": "Stub::REDISTRIBUTED",
                             "subcommands": [
-                                {
-                                    "description": "Do advertise connected routes",
-                                    "name": "connected",
-                                    "subcommands": [
-                                        {
-                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                            "name": "leak-map",
-                                            "subcommands": [
-                                                {
-                                                    "description": "leak-map name",
-                                                    "name": "WORD",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "Do advertise static routes",
-                                            "name": "static",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                                    "name": "leak-map",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "leak-map name",
-                                                            "name": "WORD",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "",
-                                                                    "name": "<cr>"
-                                                                }
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "Do advertise summary routes",
-                                                    "name": "summary",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                                            "name": "leak-map",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "leak-map name",
-                                                                    "name": "WORD",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "",
-                                                                            "name": "<cr>"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "Do advertise summary routes",
-                                            "name": "summary",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                                    "name": "leak-map",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "leak-map name",
-                                                            "name": "WORD",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "",
-                                                                    "name": "<cr>"
-                                                                }
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "Do advertise static routes",
-                                                    "name": "static",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                                            "name": "leak-map",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "leak-map name",
-                                                                    "name": "WORD",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "",
-                                                                            "name": "<cr>"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "",
-                                            "name": "<cr>"
-                                        }
-                                    ]
-                                },
-                                {
-                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                    "name": "leak-map",
-                                    "subcommands": [
-                                        {
-                                            "description": "leak-map name",
-                                            "name": "WORD",
-                                            "subcommands": [
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                },
-                                {
-                                    "description": "Do advertise static routes",
-                                    "name": "static",
-                                    "subcommands": [
-                                        {
-                                            "description": "Do advertise connected routes",
-                                            "name": "connected",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                                    "name": "leak-map",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "leak-map name",
-                                                            "name": "WORD",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "",
-                                                                    "name": "<cr>"
-                                                                }
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "Do advertise summary routes",
-                                                    "name": "summary",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                                            "name": "leak-map",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "leak-map name",
-                                                                    "name": "WORD",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "",
-                                                                            "name": "<cr>"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                            "name": "leak-map",
-                                            "subcommands": [
-                                                {
-                                                    "description": "leak-map name",
-                                                    "name": "WORD",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "Do advertise summary routes",
-                                            "name": "summary",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Do advertise connected routes",
-                                                    "name": "connected",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                                            "name": "leak-map",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "leak-map name",
-                                                                    "name": "WORD",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "",
-                                                                            "name": "<cr>"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                                    "name": "leak-map",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "leak-map name",
-                                                            "name": "WORD",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "",
-                                                                    "name": "<cr>"
-                                                                }
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "",
-                                            "name": "<cr>"
-                                        }
-                                    ]
-                                },
-                                {
-                                    "description": "Do advertise summary routes",
-                                    "name": "summary",
-                                    "subcommands": [
-                                        {
-                                            "description": "Do advertise connected routes",
-                                            "name": "connected",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                                    "name": "leak-map",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "leak-map name",
-                                                            "name": "WORD",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "",
-                                                                    "name": "<cr>"
-                                                                }
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "Do advertise static routes",
-                                                    "name": "static",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                                            "name": "leak-map",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "leak-map name",
-                                                                    "name": "WORD",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "",
-                                                                            "name": "<cr>"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                            "name": "leak-map",
-                                            "subcommands": [
-                                                {
-                                                    "description": "leak-map name",
-                                                    "name": "WORD",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "Do advertise static routes",
-                                            "name": "static",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Do advertise connected routes",
-                                                    "name": "connected",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                                            "name": "leak-map",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "leak-map name",
-                                                                    "name": "WORD",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "",
-                                                                            "name": "<cr>"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                                    "name": "leak-map",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "leak-map name",
-                                                            "name": "WORD",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "",
-                                                                    "name": "<cr>"
-                                                                }
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "",
-                                            "name": "<cr>"
-                                        }
-                                    ]
-                                },
                                 {
                                     "description": "",
                                     "name": "<cr>"
@@ -1046,401 +270,9 @@
                         {
                             "description": "Do advertise static routes",
                             "name": "static",
+                            "config": "Eigrp::STUB",
+                            "enum": "Stub::STATIC",
                             "subcommands": [
-                                {
-                                    "description": "Do advertise connected routes",
-                                    "name": "connected",
-                                    "subcommands": [
-                                        {
-                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                            "name": "leak-map",
-                                            "subcommands": [
-                                                {
-                                                    "description": "leak-map name",
-                                                    "name": "WORD",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "Do advertise redistributed routess",
-                                            "name": "redistributed",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                                    "name": "leak-map",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "leak-map name",
-                                                            "name": "WORD",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "",
-                                                                    "name": "<cr>"
-                                                                }
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "Do advertise summary routes",
-                                                    "name": "summary",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                                            "name": "leak-map",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "leak-map name",
-                                                                    "name": "WORD",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "",
-                                                                            "name": "<cr>"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "Do advertise summary routes",
-                                            "name": "summary",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                                    "name": "leak-map",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "leak-map name",
-                                                            "name": "WORD",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "",
-                                                                    "name": "<cr>"
-                                                                }
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "Do advertise redistributed routes",
-                                                    "name": "redistributed",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                                            "name": "leak-map",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "leak-map name",
-                                                                    "name": "WORD",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "",
-                                                                            "name": "<cr>"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "",
-                                            "name": "<cr>"
-                                        }
-                                    ]
-                                },
-                                {
-                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                    "name": "leak-map",
-                                    "subcommands": [
-                                        {
-                                            "description": "leak-map name",
-                                            "name": "WORD",
-                                            "subcommands": [
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                },
-                                {
-                                    "description": "Do advertise redistributed routes",
-                                    "name": "redistributed",
-                                    "subcommands": [
-                                        {
-                                            "description": "Do advertise connected routes",
-                                            "name": "connected",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                                    "name": "leak-map",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "leak-map name",
-                                                            "name": "WORD",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "",
-                                                                    "name": "<cr>"
-                                                                }
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "Do advertise summary routes",
-                                                    "name": "summary",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                                            "name": "leak-map",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "leak-map name",
-                                                                    "name": "WORD",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "",
-                                                                            "name": "<cr>"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                            "name": "leak-map"
-                                        },
-                                        {
-                                            "description": "Do advertise summary routes",
-                                            "name": "summary",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Do advertise connected routes",
-                                                    "name": "connected",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                                            "name": "leak-map",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "leak-map name",
-                                                                    "name": "WORD",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "",
-                                                                            "name": "<cr>"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                                    "name": "leak-map",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "leak-map name",
-                                                            "name": "WORD",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "",
-                                                                    "name": "<cr>"
-                                                                }
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "",
-                                            "name": "<cr>"
-                                        }
-                                    ]
-                                },
-                                {
-                                    "description": "Do advertise summary routes",
-                                    "name": "summary",
-                                    "subcommands": [
-                                        {
-                                            "description": "Do advertise connected routes",
-                                            "name": "connected",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                                    "name": "leak-map",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "leak-map name",
-                                                            "name": "WORD",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "",
-                                                                    "name": "<cr>"
-                                                                }
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "Do advertise redistributed routes",
-                                                    "name": "redistributed",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                                            "name": "leak-map",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "leak-map name",
-                                                                    "name": "WORD",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "",
-                                                                            "name": "<cr>"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                            "name": "leak-map",
-                                            "subcommands": [
-                                                {
-                                                    "description": "leak-map name",
-                                                    "name": "WORD",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "Do advertise redistributed routes",
-                                            "name": "redistributed",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Do advertise connected routes",
-                                                    "name": "connected",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                                            "name": "leak-map",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "leak-map name",
-                                                                    "name": "WORD",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "",
-                                                                            "name": "<cr>"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                                    "name": "leak-map",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "leak-map name",
-                                                            "name": "WORD",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "",
-                                                                    "name": "<cr>"
-                                                                }
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "",
-                                            "name": "<cr>"
-                                        }
-                                    ]
-                                },
                                 {
                                     "description": "",
                                     "name": "<cr>"
@@ -1450,411 +282,9 @@
                         {
                             "description": "Do advertise summary routes",
                             "name": "summary",
+                            "config": "Eigrp::STUB",
+                            "enum": "Stub::SUMMARY",
                             "subcommands": [
-                                {
-                                    "description": "Do advertise connected routes",
-                                    "name": "connected",
-                                    "subcommands": [
-                                        {
-                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                            "name": "leak-map",
-                                            "subcommands": [
-                                                {
-                                                    "description": "leak-map name",
-                                                    "name": "WORD",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "Do advertise redistributed routes",
-                                            "name": "redistributed",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                                    "name": "leak-map",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "leak-map name",
-                                                            "name": "WORD",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "",
-                                                                    "name": "<cr>"
-                                                                }
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "Do advertise static routes",
-                                                    "name": "static",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                                            "name": "leak-map",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "leak-map name",
-                                                                    "name": "WORD",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "",
-                                                                            "name": "<cr>"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "Do advertise static routes",
-                                            "name": "static"
-                                        },
-                                        {
-                                            "description": "",
-                                            "name": "<cr>"
-                                        }
-                                    ]
-                                },
-                                {
-                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                    "name": "leak-map",
-                                    "subcommands": [
-                                        {
-                                            "description": "leak-map name",
-                                            "name": "WORD",
-                                            "subcommands": [
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                },
-                                {
-                                    "description": "Do advertise redistributed routes",
-                                    "name": "redistributed",
-                                    "subcommands": [
-                                        {
-                                            "description": "Do advertise connected routes",
-                                            "name": "connected",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                                    "name": "leak-map",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "leak-map name",
-                                                            "name": "WORD",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "",
-                                                                    "name": "<cr>"
-                                                                }
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "Do advertise static routes",
-                                                    "name": "static",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                                            "name": "leak-map",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "leak-map name",
-                                                                    "name": "WORD",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "",
-                                                                            "name": "<cr>"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                            "name": "leak-map",
-                                            "subcommands": [
-                                                {
-                                                    "description": "leak-map name",
-                                                    "name": "WORD",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "Do advertise static routes",
-                                            "name": "static",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Do advertise connected routes",
-                                                    "name": "connected",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                                            "name": "leak-map",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "leak-map name",
-                                                                    "name": "WORD",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "",
-                                                                            "name": "<cr>"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                                    "name": "leak-map",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "leak-map name",
-                                                            "name": "WORD",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "",
-                                                                    "name": "<cr>"
-                                                                }
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "",
-                                            "name": "<cr>"
-                                        }
-                                    ]
-                                },
-                                {
-                                    "description": "Do advertise static routes",
-                                    "name": "static",
-                                    "subcommands": [
-                                        {
-                                            "description": "Do advertise connected routes",
-                                            "name": "connected",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                                    "name": "leak-map",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "leak-map name",
-                                                            "name": "WORD",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "",
-                                                                    "name": "<cr>"
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                                            "name": "leak-map",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "leak-map name",
-                                                                    "name": "WORD",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "",
-                                                                            "name": "<cr>"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "Do advertise redistributed routes",
-                                                    "name": "redistributed",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                                            "name": "leak-map",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "leak-map name",
-                                                                    "name": "WORD",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "",
-                                                                            "name": "<cr>"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "description": "Do advertise static routes",
-                                                            "name": "static",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                                                    "name": "leak-map",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "leak-map name",
-                                                                            "name": "WORD",
-                                                                            "subcommands": [
-                                                                                {
-                                                                                    "description": "",
-                                                                                    "name": "<cr>"
-                                                                                }
-                                                                            ]
-                                                                        }
-                                                                    ]
-                                                                },
-                                                                {
-                                                                    "description": "",
-                                                                    "name": "<cr>"
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                            "name": "leak-map",
-                                            "subcommands": [
-                                                {
-                                                    "description": "leak-map name",
-                                                    "name": "WORD",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "Do advertise redistributed routes",
-                                            "name": "redistributed",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Do advertise connected routes",
-                                                    "name": "connected",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "Allow dynamic prefixes based on the leak-map",
-                                                            "name": "leak-map",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "leak-map name",
-                                                                    "name": "WORD",
-                                                                    "subcommands": [
-                                                                        {
-                                                                            "description": "",
-                                                                            "name": "<cr>"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "Allow dynamic prefixes based on the leak-map",
-                                                    "name": "leak-map",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "leak-map name",
-                                                            "name": "WORD",
-                                                            "subcommands": [
-                                                                {
-                                                                    "description": "",
-                                                                    "name": "<cr>"
-                                                                }
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "description": "",
-                                            "name": "<cr>"
-                                        }
-                                    ]
-                                },
                                 {
                                     "description": "",
                                     "name": "<cr>"
@@ -1870,6 +300,9 @@
                 {
                     "description": "Upgrade the Classic Mode config to Named Mode",
                     "name": "upgrade-cli",
+                    "properties": [
+                        "negate_hide"
+                    ],
                     "subcommands": [
                         {
                             "description": "EIGRP Virtual-Instance Name",
@@ -1900,11 +333,15 @@
             "support": true,
             "description": "Forward packets over multiple paths",
             "name": "maximum-paths",
+            "properties": [
+                "negate_all"
+            ],
             "subcommands": [
                 {
                     "support": true,
                     "description": "Number of paths",
                     "name": "<1-32>",
+                    "config": "Eigrp::MAX_PATHS",
                     "subcommands": [
                         {
                             "description": "",
@@ -1923,10 +360,13 @@
                     "support": true,
                     "description": "Advertise greater than <hops> as unreachable",
                     "name": "maximum-hops",
+                    "properties": [
+                        "negate_all"
+                    ],
                     "subcommands": [
                         {
-                            "support": true,
                             "description": "Hop count",
+                            "config": "Eigrp::MAX_HOPS",
                             "name": "<1-255>",
                             "subcommands": [
                                 {
@@ -1941,31 +381,39 @@
                     "support": true,
                     "description": "Modify metric coefficients",
                     "name": "weights",
+                    "properties": [
+                        "negate_all"
+                    ],
                     "subcommands": [
                         {
                             "support": true,
                             "description": "K1",
                             "name": "<0-255>",
+                            "config": "Eigrp::WEIGHT_K1",
                             "subcommands": [
                                 {
                                     "support": true,
                                     "description": "K2",
                                     "name": "<0-255>",
+                                    "config": "Eigrp::WEIGHT_K2",
                                     "subcommands": [
                                         {
                                             "support": true,
                                             "description": "K3",
                                             "name": "<0-255>",
+                                            "config": "Eigrp::WEIGHT_K3",
                                             "subcommands": [
                                                 {
                                                     "support": true,
                                                     "description": "K4",
                                                     "name": "<0-255>",
+                                                    "config": "Eigrp::WEIGHT_K4",
                                                     "subcommands": [
                                                         {
                                                             "support": true,
                                                             "description": "K5",
                                                             "name": "<0-255>",
+                                                            "config": "Eigrp::WEIGHT_K5",
                                                             "subcommands": [
                                                                 {
                                                                     "description": "",
@@ -1994,11 +442,18 @@
                     "support": true,
                     "description": "Neighbor address",
                     "name": "X:X:X:X::X",
+                    "config": "Eigrp::NEIGHBOR",
+                    "properties": [
+                        "negate_all"
+                    ],
                     "subcommands": [
                         {
                             "support": true,
                             "description": "",
                             "name": "<interface>",
+                            "args": {
+                                "CONFIG": "EigrpNeighbor::INTERFACE"
+                            },
                             "subcommands": [
                                 {
                                     "description": "",
@@ -2022,6 +477,9 @@
                 {
                     "description": "",
                     "name": "<Interface>",
+                    "args": {
+                        "CONFIG": "Eigrp::PASSIVE_INTERFACES"
+                    },
                     "subcommands": [
                         {
                             "description": "",
@@ -4485,6 +2943,9 @@
                     "support": true,
                     "description": "Summary <network>/<length>, e.g., 192.168.0.0/16",
                     "name": "X:X:X:X::X/<0-128>",
+                    "properties": [
+                        "negate_all"
+                    ],
                     "subcommands": [
                         {
                             "support": true,
@@ -4574,11 +3035,15 @@
                     "support": true,
                     "description": "time limit for active state",
                     "name": "active-time",
+                    "properties": [
+                        "negate_all"
+                    ],
                     "subcommands": [
                         {
                             "support": true,
                             "description": "active state time limit in minutes",
                             "name": "<1-65535>",
+                            "config": "Eigrp::ACTIVE_TIME",
                             "subcommands": [
                                 {
                                     "description": "",
@@ -4590,6 +3055,7 @@
                             "support": true,
                             "description": "disable time limit for active state",
                             "name": "disabled",
+                            "config": "Eigrp::ACTIVE_DISABLED",
                             "subcommands": [
                                 {
                                     "description": "",
@@ -4605,11 +3071,15 @@
             "support": true,
             "description": "Control load balancing variance",
             "name": "variance",
+            "properties": [
+                "negate_all"
+            ],
             "subcommands": [
                 {
                     "support": true,
                     "description": "Metric variance multiplier",
                     "name": "<1-128>",
+                    "config": "Eigrp::VARIANCE",
                     "subcommands": [
                         {
                             "description": "",

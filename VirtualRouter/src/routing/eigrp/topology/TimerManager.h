@@ -18,7 +18,7 @@ class ProcessQueue;
 namespace routing::eigrp
 {
 struct OutgoingQuery;
-class DuelEngine;
+class DualEngine;
 struct TopologyEntry;
 class Eigrp;
 class Neighbor;
@@ -33,7 +33,7 @@ class Neighbor;
  * to a query within the configured active-time window.
  *
  * ## Architectural Role
- * Owned by @ref DuelEngine.  When DUAL transitions a prefix to the Active
+ * Owned by @ref DualEngine.  When DUAL transitions a prefix to the Active
  * state and sends a Query to a neighbor, it calls `startSIATimer` to arm a
  * watchdog.  If the SIA timer fires before a Reply is received, DUAL tears
  * down the neighbor as unresponsive.  `cancelSIATimer` is called when a
@@ -44,10 +44,10 @@ class Neighbor;
  * additional locking.
  *
  * ## Lifecycle & Ownership
- * Created inside `DuelEngine` at process construction.  Both `base` and
+ * Created inside `DualEngine` at process construction.  Both `base` and
  * `scheduler` references must outlive this object.
  *
- * @see DuelEngine
+ * @see DualEngine
  * @see OutgoingQuery
  */
 class TimerManager
@@ -66,7 +66,7 @@ public:
      *
      * Posts a delayed callback on `scheduler` that will fire after the
      * configured active-time window expires.  If the timer fires,
-     * `DuelEngine::handleSIATimeout` is called with `entry` and `neighbor`.
+     * `DualEngine::handleSIATimeout` is called with `entry` and `neighbor`.
      *
      * @param entry    The outgoing query record tracking this SIA exchange.
      * @param neighbor The neighbor to which the query was sent.

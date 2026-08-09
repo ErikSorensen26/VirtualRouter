@@ -31,7 +31,7 @@ class EigrpInterface;
  * metrics map to a comparable RIB metric range.
  *
  * ## Architectural Role
- * Called by the @ref DuelEngine after any DUAL convergence event that changes
+ * Called by the @ref DualEngine after any DUAL convergence event that changes
  * the successor set for one or more prefixes.  It does not participate in
  * DUAL itself; it is purely an output stage that translates EIGRP-internal
  * data structures into the VRF RIB API.
@@ -42,7 +42,7 @@ class EigrpInterface;
  * lifetime of this object.
  *
  * @see TopologyEntry
- * @see DuelEngine
+ * @see DualEngine
  */
 class RouteManager
 {

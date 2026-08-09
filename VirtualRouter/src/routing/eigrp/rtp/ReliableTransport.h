@@ -52,7 +52,7 @@ struct RouteInfo;
  * ## Architectural Role
  * One `ReliableTransport` is owned by each `EigrpInterface`. It is the sole
  * point of contact between the EIGRP protocol logic (@ref RouteManager,
- * @ref DuelEngine) and the hardware packet path. Higher-level code calls the
+ * @ref DualEngine) and the hardware packet path. Higher-level code calls the
  * `send*` family of methods; lower-level formatting is delegated to
  * @ref EigrpPacketBuilder and @ref TLVBuilder.
  *

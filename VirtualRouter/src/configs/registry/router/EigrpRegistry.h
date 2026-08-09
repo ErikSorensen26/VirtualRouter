@@ -60,7 +60,6 @@ DEFINE_CONFIG_ENUM_NS(eigrp, RerouteTieBreak, EIGRP_REROUTE_TIE_BREAK);
     X(SUMMARY)
 
 DEFINE_CONFIG_ENUM_NS(eigrp, Stub, EIGRP_STUB_FLAGS);
-
 } // namespace config::eigrp
 
 void EigrpSyncNetworks(void* e);
@@ -113,14 +112,6 @@ DEFINE_TUPLE_SCHEMA(EigrpNetwork, EIGRP_NETWORK_FIELDS);
 
 DEFINE_TUPLE_SCHEMA(EigrpSummaryMetric, EIGRP_SUMMARY_METRIC_FIELDS);
 
-#define EIGRP_NEIGHBOR_MAXIMUM_PREFIX(X) \
-    X(types::IPAddress, neighbor) \
-    X(IGNOR(uint32_t),  prefixes) \
-    X(IGNOR(uint8_t),   threshold) \
-    X(IGNOR(bool),      warningOnly)
-
-DEFINE_TUPLE_SCHEMA(EigrpNeighborMaximumPrefix, EIGRP_NEIGHBOR_MAXIMUM_PREFIX);
-
 #define EIGRP_NEIGHBOR_DESCRIPTION(X) \
     X(types::IPAddress,   neighbor) \
     X(IGNOR(std::string), description)
@@ -129,7 +120,7 @@ DEFINE_TUPLE_SCHEMA(EigrpNeighborDescription, EIGRP_NEIGHBOR_DESCRIPTION);
 
 #define EIGRP_NEIGHBOR_FIELDS(X, Y) \
     LIST_FIELD(X, Y, INTERFACE, interface::InterfaceKey) \
-    ATOMIC_FIELD(X, Y, MAXIMUM_PREFIXES, uint32_t, 0) \
+    ATOMIC_FIELD(X, Y, MAXIMUM_PREFIX, uint32_t, 0) \
     ATOMIC_FIELD(X, Y, MAXIMUM_PREFIX_THRESHOLD, uint8_t, 75) \
     ATOMIC_FIELD(X, Y, MAXIMUM_PREFIX_WARNINGS, bool, false) \
     VALUE_FIELD(X, Y, DESCRIPTION, std::string)
@@ -216,6 +207,7 @@ DEFINE_CONFIG_GROUP(Eigrp, EIGRP_FIELD_LIST)
     OPTIONAL_ATOMIC_FIELD(X, Y, V6_AS, uint16_t) \
     OWNED_LIST_FIELD(X, Y, V4_INSTANCES, EigrpRegistry, std::string) \
     OWNED_LIST_FIELD(X, Y, V6_INSTANCES, EigrpRegistry, std::string) \
+    ATOMIC_FIELD(X, Y, SHUTDOWN, bool, false)
 
 /**
  * @brief Named-mode EIGRP container fields (IPv4 and IPv6 AF instances, shutdown).

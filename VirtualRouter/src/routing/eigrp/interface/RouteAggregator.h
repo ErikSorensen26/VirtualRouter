@@ -56,7 +56,7 @@ struct SummaryRoute
  * ## Architectural Role
  * One `RouteAggregator` exists per `EigrpInterface`.  It interacts with the
  * topology table through `iface`, which provides access to the process-wide
- * `DuelEngine` and its `TopologyTable`.  The aggregator does not hold topology
+ * `DualEngine` and its `TopologyTable`.  The aggregator does not hold topology
  * entries directly; it stores pointers into the topology table.
  *
  * ## Lifecycle & Ownership

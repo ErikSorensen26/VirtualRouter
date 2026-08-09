@@ -14,7 +14,7 @@
 namespace routing::eigrp
 {
 class EigrpInterface;
-class DuelEngine;
+class DualEngine;
 class Neighbor;
 class NeighborTable;
 
@@ -27,7 +27,7 @@ struct ReceivedRoute;
  * @ingroup EIGRP_INTERFACE
  *
  * `TopologyController` sits between an @ref EigrpInterface and the process-wide
- * @ref DuelEngine.  Its responsibilities are:
+ * @ref DualEngine.  Its responsibilities are:
  * - Accepting raw route vectors from RTP and routing them to the appropriate
  *   DUAL method (update, active, query, SIA-reply).
  * - Filtering the local topology map to produce the set of routes that may be
@@ -40,16 +40,16 @@ struct ReceivedRoute;
  *
  * ## Architectural Role
  * One `TopologyController` exists per `EigrpInterface`.  It holds no topology
- * state of its own — all topology entries live in `DuelEngine::topologyTable`.
+ * state of its own — all topology entries live in `DualEngine::topologyTable`.
  * The controller's role is purely to translate interface-scoped events into
  * process-scoped DUAL operations and to apply interface-local filters when
  * building advertisement lists.
  *
  * ## Lifecycle & Ownership
- * Owned by `EigrpInterface`.  Both `ntable` and `duel` references must outlive
+ * Owned by `EigrpInterface`.  Both `ntable` and `dual` references must outlive
  * this object; they are owned by the containing `Eigrp` process.
  *
- * @see DuelEngine
+ * @see DualEngine
  * @see EigrpInterface
  */
 class TopologyController
@@ -59,10 +59,10 @@ public:
      * @brief Constructs a controller bound to the given interface and DUAL engine.
      *
      * @param ntable Neighbor table for this interface, used during route filtering.
-     * @param duel   Process-wide DUAL engine that performs feasibility calculations.
+     * @param dual   Process-wide DUAL engine that performs feasibility calculations.
      * @param iface  The interface this controller serves.
      */
-    TopologyController(NeighborTable& ntable, DuelEngine& duel, EigrpInterface& iface);
+    TopologyController(NeighborTable& ntable, DualEngine& dual, EigrpInterface& iface);
 
     /**
      * @brief Computes the local composite metric for this interface.
@@ -204,7 +204,7 @@ public:
 
 private:
     NeighborTable& ntable;  ///< Neighbor table for this interface.
-    DuelEngine& duel;       ///< Process-wide DUAL engine.
+    DualEngine& dual;       ///< Process-wide DUAL engine.
     EigrpInterface& iface;  ///< Interface this controller is bound to.
 };
 } // namespace routing::eigrp

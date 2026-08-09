@@ -154,30 +154,30 @@
                 {
                     "description": "Bandwidth in Kbits per second",
                     "name": "<1-4294967295>",
-                    "config": "EigrpDefaultMetrics::bandwidth",
+                    "config": "Eigrp::DEFAULT_METRICS::bandwidth",
                     "subcommands": [
                         {
                             "description": "delay metric in 10 microsecond units",
                             "name": "<0-4294967295>",
-                            "config": "EigrpDefaultMetrics::delay",
+                            "config": "Eigrp::DEFAULT_METRICS::delay",
                             "subcommands": [
                                 {
                                     "support": true,
                                     "description": "Reliability metric where 255 is 100% reliable",
                                     "name": "<0-255>",
-                                    "config": "EigrpDefaultMetrics::reliability",
+                                    "config": "Eigrp::DEFAULT_METRICS::reliability",
                                     "subcommands": [
                                         {
                                             "support": true,
                                             "description": "Effective bandwidth metric (Loading) where 255 is 100% loaded",
                                             "name": "<1-255>",
-                                            "config": "EigrpDefaultMetrics::load",
+                                            "config": "Eigrp::DEFAULT_METRICS::load",
                                             "subcommands": [
                                                 {
                                                     "support": true,
                                                     "description": "Maximum Transmission Unit metric of the path",
                                                     "name": "<1-65535>",
-                                                    "config": "EigrpDefaultMetrics::mtu",
+                                                    "config": "Eigrp::DEFAULT_METRICS::mtu",
                                                     "subcommands": [
                                                         {
                                                             "description": "",
@@ -240,6 +240,12 @@
                     "description": "",
                     "name": "<distribute_list>",
                     "args": {
+                        "CONFIG_IN": "Eigrp::DISTRIBUTE_LIST_IN::filterList",
+                        "CONFIG_OUT": "Eigrp::DISTRIBUTE_LIST_OUT::filterList",
+                        "PREFIX_LIST_IN": "Eigrp::DISTRIBUTE_LIST_IN::prefixList",
+                        "PREFIX_LIST_OUT": "Eigrp::DISTRIBUTE_LIST_OUT::prefixList",
+                        "IN_INTERFACE": "Eigrp::DISTRIBUTE_LIST_IN::interface",
+                        "OUT_INTERFACE": "Eigrp::DISTRIBUTE_LIST_OUT::interface",
                         "IN": "Eigrp::DISTRIBUTE_LIST_IN::distribution",
                         "OUT": "Eigrp::DISTRIBUTE_LIST_OUT::distribution"
                     }
@@ -252,10 +258,11 @@
                             "description": "",
                             "name": "<route_map>",
                             "args": {
-                                "CONFIG": "DistributeList::filterList",
+                                "CONFIG_IN": "Eigrp::DISTRIBUTE_LIST_IN::filterList",
+                                "CONFIG_OUT": "Eigrp::DISTRIBUTE_LIST_OUT::filterList",
                                 "ENUM": "DistributeListType::ROUTE_MAP",
-                                "IN_INTERFACE": "DistributeList::interface",
-                                "OUT_INTERFACE": "DistributeList::interface",
+                                "IN_INTERFACE": "Eigrp::DISTRIBUTE_LIST_IN::interface",
+                                "OUT_INTERFACE": "Eigrp::DISTRIBUTE_LIST_OUT::interface",
                                 "IN": "Eigrp::DISTRIBUTE_LIST_IN::distribution",
                                 "OUT": "Eigrp::DISTRIBUTE_LIST_OUT::distribution"
                             }
@@ -379,6 +386,9 @@
                                     "description": "leak-map name",
                                     "name": "WORD",
                                     "config": "Eigrp::STUB_LEAK_MAP",
+                                    "properties": [
+                                        "recurse_exclude_all"
+                                    ],
                                     "subcommands": [
                                         {
                                             "description": "",
@@ -393,6 +403,10 @@
                             "name": "receive-only",
                             "config": "Eigrp::STUB",
                             "enum": "Stub::RECEIVE_ONLY",
+                            "properties": [
+                                "recurse_exclude_all",
+                                "recurse_hide"
+                            ],
                             "subcommands": [
                                 {
                                     "description": "",
@@ -584,7 +598,7 @@
                     "support": true,
                     "description": "Neighbor address",
                     "name": "A.B.C.D",
-                    "config": "Eigrp::NEIGHBOR::address",
+                    "config": "Eigrp::NEIGHBOR",
                     "properties": [
                         "negate_all"
                     ],
@@ -594,7 +608,7 @@
                             "description": "",
                             "name": "<interface>",
                             "args": {
-                                "CONFIG": "Eigrp::NEIGHBOR::iface"
+                                "CONFIG": "EigrpNeighbor::INTERFACE"
                             },
                             "subcommands": [
                                 {

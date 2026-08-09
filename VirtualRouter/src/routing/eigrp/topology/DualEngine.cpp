@@ -3,23 +3,23 @@
 #include <Global.h>
 #include <VirtualRouter.h>
 
-#include "DuelEngine.h"
+#include "DualEngine.h"
 #include "eigrp/core/Eigrp.h"
 #include "eigrp/interface/EigrpInterface.h"
 #include "eigrp/rtp/NeighborTable.h"
 
 namespace routing::eigrp
 {
-DuelEngine::DuelEngine(Eigrp& process) : base(process), topologyTable(process), tmgr(process, process.getScheduler()) {}
+DualEngine::DualEngine(Eigrp& process) : base(process), topologyTable(process), tmgr(process, process.getScheduler()) {}
 
-bool DuelEngine::isRouteAdvertised(const uint8_t* network, uint8_t mask)
+bool DualEngine::isRouteAdvertised(const uint8_t* network, uint8_t mask)
 {
     types::IPPrefix prefix(network, mask, base.getAF(), true);
     auto* entry = topologyTable.find(prefix);
     return entry != nullptr && !entry->successors.empty();
 }
 
-bool DuelEngine::setSuppression(TopologyEntry* entry, uint32_t key)
+bool DualEngine::setSuppression(TopologyEntry* entry, uint32_t key)
 {
     auto it = entry->suppression.find(key);
     if (it == entry->suppression.end())
@@ -32,7 +32,7 @@ bool DuelEngine::setSuppression(TopologyEntry* entry, uint32_t key)
     else return true;
 }
 
-void DuelEngine::refreshSuppression(std::vector<TopologyEntry*>& entries, EigrpInterface* iface)
+void DualEngine::refreshSuppression(std::vector<TopologyEntry*>& entries, EigrpInterface* iface)
 {
     updateSuccessors(entries);
     bool resync = false;
@@ -50,7 +50,7 @@ void DuelEngine::refreshSuppression(std::vector<TopologyEntry*>& entries, EigrpI
     }
 }
 
-const RouteInfo* DuelEngine::findBestRoute(const types::IPPrefix& prefix)
+const RouteInfo* DualEngine::findBestRoute(const types::IPPrefix& prefix)
 {
     auto* entry = topologyTable.find(prefix);
     if (!entry || entry->routesBySource.empty() || entry->successors.empty()) return nullptr;
@@ -60,13 +60,13 @@ const RouteInfo* DuelEngine::findBestRoute(const types::IPPrefix& prefix)
     return &it->second;
 }
 
-void DuelEngine::recalculateAllRoutes()
+void DualEngine::recalculateAllRoutes()
 {
     for (auto& [_, top] : topologyTable.entries())
         recalculateSuccessors(&top);
 }
 
-void DuelEngine::updateSuccessors(std::vector<TopologyEntry*>& entries)
+void DualEngine::updateSuccessors(std::vector<TopologyEntry*>& entries)
 {
     std::vector<TopologyEntry*> activeEntries;
 
@@ -87,7 +87,7 @@ void DuelEngine::updateSuccessors(std::vector<TopologyEntry*>& entries)
         setActive(activeEntries);
 }
 
-bool DuelEngine::recalculateSuccessors(TopologyEntry* entry)
+bool DualEngine::recalculateSuccessors(TopologyEntry* entry)
 {
     if (entry->routesBySource.empty()) return false;
     config::eigrp::TrafficShareMode trafMode = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::TRAFFIC_SHARE>().load();
@@ -156,7 +156,7 @@ bool DuelEngine::recalculateSuccessors(TopologyEntry* entry)
     return true;
 }
 
-bool DuelEngine::recalculateDistances(TopologyEntry* entry, uint64_t localMetric)
+bool DualEngine::recalculateDistances(TopologyEntry* entry, uint64_t localMetric)
 {
     if (!entry) return false;
 
@@ -192,7 +192,7 @@ bool DuelEngine::recalculateDistances(TopologyEntry* entry, uint64_t localMetric
     return changed;
 }
 
-void DuelEngine::processReceivedRoutes(std::vector<ReceivedRoute>& newRoutes, const Neighbor& neighbor)
+void DualEngine::processReceivedRoutes(std::vector<ReceivedRoute>& newRoutes, const Neighbor& neighbor)
 {
     std::vector<TopologyEntry*> updates;
     std::vector<const RouteInfo*> reversePoisens;
@@ -219,13 +219,13 @@ void DuelEngine::processReceivedRoutes(std::vector<ReceivedRoute>& newRoutes, co
     updateSuccessors(updates);
 }
 
-void DuelEngine::processReceivedActiveRoutes(std::vector<ReceivedRoute>& routes, const Neighbor& nbr)
+void DualEngine::processReceivedActiveRoutes(std::vector<ReceivedRoute>& routes, const Neighbor& nbr)
 {
     for (const auto& route : routes)
         processReceivedActiveRoute(route, nbr);
 }
 
-void DuelEngine::processReceivedQueryRoutes(std::vector<ReceivedRoute>& queriedRoutes, Neighbor& nbr, uint32_t recvSeq)
+void DualEngine::processReceivedQueryRoutes(std::vector<ReceivedRoute>& queriedRoutes, Neighbor& nbr, uint32_t recvSeq)
 {
     std::vector<TopologyEntry*> toActivate;
     std::vector<const RouteInfo*> replies;
@@ -260,7 +260,7 @@ void DuelEngine::processReceivedQueryRoutes(std::vector<ReceivedRoute>& queriedR
         setActive(toActivate, &recvSeq);
 }
 
-void DuelEngine::setActive(std::vector<TopologyEntry*>& entries, const uint32_t* seq)
+void DualEngine::setActive(std::vector<TopologyEntry*>& entries, const uint32_t* seq)
 {
     std::vector<ActiveRoute*> routes = {};
     {
@@ -344,7 +344,7 @@ void DuelEngine::setActive(std::vector<TopologyEntry*>& entries, const uint32_t*
     }
 }
 
-void DuelEngine::processReceivedActiveRoute(const ReceivedRoute& recvRoute, const Neighbor& neighbor)
+void DualEngine::processReceivedActiveRoute(const ReceivedRoute& recvRoute, const Neighbor& neighbor)
 {
     auto ar = activeRoutes.find(recvRoute.prefix);
     if (ar == activeRoutes.end()) return; // Not active 
@@ -368,7 +368,7 @@ void DuelEngine::processReceivedActiveRoute(const ReceivedRoute& recvRoute, cons
     }
 }
 
-void DuelEngine::processSIAReply(Neighbor& neighbor, uint32_t seq)
+void DualEngine::processSIAReply(Neighbor& neighbor, uint32_t seq)
 {
     for (auto& [_, route] : activeRoutes)
     {
@@ -383,7 +383,7 @@ void DuelEngine::processSIAReply(Neighbor& neighbor, uint32_t seq)
     }
 }
 
-void DuelEngine::removeActiveNeighbor(const types::IPAddress& neighborIp)
+void DualEngine::removeActiveNeighbor(const types::IPAddress& neighborIp)
 {
     for (auto it = activeRoutes.begin(); it != activeRoutes.end();)
     {
@@ -397,7 +397,7 @@ void DuelEngine::removeActiveNeighbor(const types::IPAddress& neighborIp)
     }
 }
 
-void DuelEngine::handleSIATimeout(OutgoingQuery& query, Neighbor& neighbor)
+void DualEngine::handleSIATimeout(OutgoingQuery& query, Neighbor& neighbor)
 {
     ActiveRoute* route = nullptr;
     bool empty = false;
@@ -419,7 +419,7 @@ void DuelEngine::handleSIATimeout(OutgoingQuery& query, Neighbor& neighbor)
         concludeActive(*route);
 }
 
-void DuelEngine::concludeActive(ActiveRoute& activeRoute)
+void DualEngine::concludeActive(ActiveRoute& activeRoute)
 {
     auto* entry = topologyTable.find(activeRoute.activePrefix);
     if (!entry) return;

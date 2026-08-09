@@ -213,7 +213,7 @@ struct SuppressionInfo
  *
  * ## Architectural Role
  * All `TopologyEntry` objects live inside `TopologyTable::topologyEntries`.
- * The @ref DuelEngine reads and mutates entries during recomputation;
+ * The @ref DualEngine reads and mutates entries during recomputation;
  * @ref TopologyController and @ref RouteAggregator hold pointers into the
  * map, so entries must not be erased while any such pointer is live.
  *
@@ -222,7 +222,7 @@ struct SuppressionInfo
  *          to it via @ref SuppressionInfo.
  *
  * @see TopologyTable
- * @see DuelEngine
+ * @see DualEngine
  */
 struct TopologyEntry
 {
@@ -268,24 +268,24 @@ struct TopologyEntry
  * Every prefix known to this router — whether learned from neighbors, locally
  * connected, or synthesized by summarization — has a @ref TopologyEntry here.
  *
- * The table is mutated exclusively by the @ref DuelEngine and the
+ * The table is mutated exclusively by the @ref DualEngine and the
  * @ref TopologyController during route processing.  The @ref RouteAggregator
  * inserts synthetic summary entries.
  *
  * ## Architectural Role
- * Owned by `DuelEngine`.  The `TopologyTable` is a pure data store with no
+ * Owned by `DualEngine`.  The `TopologyTable` is a pure data store with no
  * timer or scheduler interaction of its own; all timer management is
  * delegated to @ref TimerManager.  The `pruneExpired` method is called
  * periodically by the process scheduler to remove entries whose deletion
  * timer has fired.
  *
  * ## Lifecycle & Ownership
- * Created inside `DuelEngine` at process construction.  All pointers into
+ * Created inside `DualEngine` at process construction.  All pointers into
  * `topologyEntries` held by other objects (e.g., `RouteInfo::topology`,
  * `SummaryRoute::summaryEntry`) become invalid if the containing entry is
  * erased.  Entries are only erased by `pruneExpired` and `pruneNeighbor`.
  *
- * @see DuelEngine
+ * @see DualEngine
  * @see TopologyEntry
  */
 class TopologyTable

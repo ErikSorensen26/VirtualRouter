@@ -16,7 +16,7 @@ EigrpInterface::EigrpInterface(Eigrp& eigrpSystem, config::EigrpInterfaceRegistr
     currentInterface(&interface),
     currentInterfaceInfo(&interface.configs),
     rtp(*this),
-    topology(ntable, eigrpSystem.getTopology().duel, *this),
+    topology(ntable, eigrpSystem.getTopology().dual, *this),
     ntable(*this),
     auth(ifaceReg, eigrpSystem.routingInstance->getGlobal().keyChainManager),
     metrics(*this),

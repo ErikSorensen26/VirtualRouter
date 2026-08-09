@@ -1,10 +1,10 @@
 /**
- * @file DuelEngine.h
+ * @file DualEngine.h
  * @brief EIGRP DUAL finite state machine: feasibility conditions and recomputation.
  */
 
-#ifndef EIGRP_DUEL_ENGINE_H
-#define EIGRP_DUEL_ENGINE_H
+#ifndef EIGRP_DUAL_ENGINE_H
+#define EIGRP_DUAL_ENGINE_H
 
 #include <cstdint>
 #include <IPAddress.h>
@@ -53,7 +53,7 @@ struct OutgoingQuery
  * transitions the prefix to the Active state and sends Queries to all
  * neighbors.  `ActiveRoute` collects the replies and possible new paths
  * until all outstanding queries are resolved, at which point
- * `DuelEngine::concludeActive` is called.
+ * `DualEngine::concludeActive` is called.
  *
  * `pendingQueries` is keyed by the neighbor's IP address.  A reply from a
  * neighbor removes its entry from the map; when the map is empty all
@@ -80,7 +80,7 @@ struct ActiveRoute
  * @brief DUAL (Diffusing Update ALgorithm) engine for the EIGRP routing process.
  * @ingroup EIGRP_TOPOLOGY
  *
- * `DuelEngine` implements the DUAL finite state machine described in RFC 7868
+ * `DualEngine` implements the DUAL finite state machine described in RFC 7868
  * and the original Cisco EIGRP specification.  It is the authoritative
  * component for all feasibility decisions, successor selection, and
  * Active-state query management within one EIGRP process.
@@ -96,7 +96,7 @@ struct ActiveRoute
  *   not advertised when a covering summary is installed.
  *
  * ## Architectural Role
- * `DuelEngine` owns `topologyTable` and `tmgr` (timer manager).  It is
+ * `DualEngine` owns `topologyTable` and `tmgr` (timer manager).  It is
  * owned by and co-located with the `Eigrp` process object.  Per-interface
  * route events arrive via @ref TopologyController, which translates
  * interface-scoped neighbor events into the process-wide DUAL method calls
@@ -113,7 +113,7 @@ struct ActiveRoute
  * locking is used; callers are responsible for ensuring single-threaded
  * access.
  *
- * @warning Do not call any `DuelEngine` method from outside the EIGRP process
+ * @warning Do not call any `DualEngine` method from outside the EIGRP process
  *          scheduler thread; doing so will corrupt the topology table and
  *          active-route state without any locking to detect it.
  *
@@ -121,7 +121,7 @@ struct ActiveRoute
  * @see TimerManager
  * @see TopologyController
  */
-class DuelEngine
+class DualEngine
 {
 public:
     friend class ::Internal_EigrpTest;
@@ -134,7 +134,7 @@ public:
      *
      * @param process The owning EIGRP process.
      */
-    DuelEngine(Eigrp& process);
+    DualEngine(Eigrp& process);
 
     /**
      * @brief Checks whether a prefix is currently being advertised by this process.
@@ -342,4 +342,4 @@ private:
 };
 } // namespace routing::eigrp
 
-#endif // DUEL_ENGINE_H
+#endif // DUAL_ENGINE_H

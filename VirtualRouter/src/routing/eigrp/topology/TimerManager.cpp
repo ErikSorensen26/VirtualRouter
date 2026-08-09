@@ -4,7 +4,7 @@
 
 #include "TimerManager.h"
 #include "eigrp/core/Eigrp.h"
-#include "DuelEngine.h"
+#include "DualEngine.h"
 
 namespace routing::eigrp
 {

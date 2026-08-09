@@ -4,6 +4,23 @@
     "registry": "EigrpInterface",
     "commands": [
         {
+            "description": "Advertise add paths",
+            "name": "add-paths",
+            "subcommands": [
+                {
+                    "description": "Number of add paths to be advertised",
+                    "name": "<1-4>",
+                    "config": "EigrpInterface::ADD_PATHS",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
             "description": "authentication subcommands",
             "name": "authentication",
             "subcommands": [
@@ -14,6 +31,7 @@
                         {
                             "description": "name of key-chain",
                             "name": "WORD",
+                            "config": "EigrpInterface::AUTHENTICATION_KEYCHAIN",
                             "subcommands": [
                                 {
                                     "description": "",
@@ -30,6 +48,8 @@
                         {
                             "description": "HMAC-SHA-256 Authentication",
                             "name": "hmac-sha-256",
+                            "config": "EigrpInterface::AUTHENTICATION_MODE",
+                            "enum": "AuthType::SHA256",
                             "subcommands": [
                                 {
                                     "description": "Encryption type (0 to disable encryption, 7 for proprietary)",
@@ -38,6 +58,7 @@
                                         {
                                             "description": "password",
                                             "name": "LINE",
+                                            "config": "EigrpInterface::AUTHENTICATION_KEYCHAIN",
                                             "subcommands": [
                                                 {
                                                     "description": "",
@@ -50,6 +71,7 @@
                                 {
                                     "description": "password",
                                     "name": "LINE",
+                                    "config": "EigrpInterface::AUTHENTICATION_KEYCHAIN",
                                     "subcommands": [
                                         {
                                             "description": "",
@@ -62,6 +84,8 @@
                         {
                             "description": "Keyed message digest",
                             "name": "md5",
+                            "config": "EigrpInterface::AUTHENTICATION_MODE",
+                            "enum": "AuthType::MD5",
                             "subcommands": [
                                 {
                                     "description": "",
@@ -80,6 +104,7 @@
                 {
                     "description": "Maximum bandwidth percentage that EIGRP may use",
                     "name": "<1-999999>",
+                    "config": "EigrpInterface::BANDWIDTH_PERCENTAGE",
                     "subcommands": [
                         {
                             "description": "",
@@ -101,15 +126,13 @@
             ]
         },
         {
-            "support": true,
             "description": "Percent interface metric must change to cause update",
             "name": "dampening-change",
-            "config": "EigrpInterface::DAMPENING_CHANGE",
             "subcommands": [
                 {
-                    "support": true,
                     "description": "Percentage of change",
                     "name": "<1-100>",
+                    "config": "EigrpInterface::DAMPENING_CHANGE",
                     "subcommands": [
                         {
                             "description": "",
@@ -124,15 +147,13 @@
             ]
         },
         {
-            "support": true,
             "description": "Time in seconds to check interface metrics",
             "name": "dampening-interval",
-            "config": "EigrpInterface::DAMPENING_INTERVAL",
             "subcommands": [
                 {
-                    "support": true,
                     "description": "Time in seconds",
                     "name": "<1-65535>",
+                    "config": "EigrpInterface::DAMPENING_INTERVAL",
                     "subcommands": [
                         {
                             "description": "",
@@ -147,7 +168,6 @@
             ]
         },
         {
-            "support": true,
             "description": "Exit from Address Family Interface configuration mode",
             "name": "exit-af-interface",
             "subcommands": [
@@ -158,12 +178,10 @@
             ]
         },
         {
-            "support": true,
             "description": "Configures hello interval",
             "name": "hello-interval",
             "subcommands": [
                 {
-                    "support": true,
                     "description": "Seconds between hello transmissions",
                     "name": "<1-65535>",
                     "config": "EigrpInterface::HELLO_INTERVAL",
@@ -177,12 +195,10 @@
             ]
         },
         {
-            "support": true,
             "description": "Configures hold time",
             "name": "hold-time",
             "subcommands": [
                 {
-                    "support": true,
                     "description": "Seconds before neighbor is considered down",
                     "name": "<1-65535>",
                     "config": "EigrpInterface::HOLD_TIME",
@@ -196,7 +212,6 @@
             ]
         },
         {
-            "support": true,
             "description": "Configures EIGRP next-hop-self",
             "name": "next-hop-self",
             "config": "EigrpInterface::NEXT_HOP_SELF",
@@ -212,20 +227,13 @@
             "name": "no"
         },
         {
-            "support": true,
             "description": "Suppress address updates on an interface",
             "name": "passive-interface",
             "config": "EigrpInterface::PASSIVE_INTERFACE",
             "subcommands": [
                 {
                     "description": "",
-                    "name": "<interface>",
-                    "subcommands": [
-                        {
-                            "description": "",
-                            "name": "<cr>"
-                        }
-                    ]
+                    "name": "<cr>"
                 }
             ]
         },
@@ -241,7 +249,6 @@
             ]
         },
         {
-            "support": true,
             "description": "Perform split horizon",
             "name": "split-horizon",
             "config": "EigrpInterface::SPLIT_HORIZON",
@@ -253,19 +260,18 @@
             ]
         },
         {
-            "support": false,
             "description": "Perform addresss ummarization",
             "name": "summary-address",
             "subcommands": [
                 {
-                    "support": false,
                     "description": "Summary network address",
                     "name": "A.B.C.D",
+                    "config": "EigrpInterface::SUMMARY_ADDRESS::prefix",
                     "subcommands": [
                         {
-                            "support": false,
                             "description": "Summary network mask",
                             "name": "A.B.C.D",
+                            "config": "EigrpInterface::SUMMARY_ADDRESS::prefix",
                             "subcommands": [
                                 {
                                     "description": "Allow dynamic prefixes based on the leak-map",
@@ -274,6 +280,7 @@
                                         {
                                             "description": "leak-map name",
                                             "name": "WORD",
+                                            "config": "EigrpInterface::SUMMARY_ADDRESS::leakMap",
                                             "subcommands": [
                                                 {
                                                     "description": "",
@@ -292,9 +299,9 @@
                     ]
                 },
                 {
-                    "support": false,
                     "description": "Summary <network>/<length>, e.g. 192.168.0.0/16",
                     "name": "A.B.C.D/nn",
+                    "config": "EigrpInterface::SUMMARY_ADDRESS::prefix",
                     "subcommands": [
                         {
                             "description": "Allow dynamic prefixes based on the leak-map",
@@ -303,6 +310,7 @@
                                 {
                                     "description": "leak-map name",
                                     "name": "WORD",
+                                    "config": "EigrpInterface::SUMMARY_ADDRESS::leakMap",
                                     "subcommands": [
                                         {
                                             "description": "",

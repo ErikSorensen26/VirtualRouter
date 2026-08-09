@@ -107,7 +107,7 @@ struct EigrpInterfaceInstance
  * @ref NamedEigrp subclasses).
  *
  * An `Eigrp` instance owns:
- * - @ref EigrpTopology — wraps the @ref DuelEngine and @ref TopologyTable
+ * - @ref EigrpTopology — wraps the @ref DualEngine and @ref TopologyTable
  * - @ref InterfaceManager — tracks which interfaces participate in this process
  * - @ref EigrpConfig — process-level configuration (K-values, networks, stub, etc.)
  * - @ref GlobalAggregator — manages process-level summary routes

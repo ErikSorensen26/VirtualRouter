@@ -9,26 +9,26 @@
 
 namespace routing::eigrp
 {
-EigrpTopology::EigrpTopology(Eigrp& base) : duel(base), base(base) {}
+EigrpTopology::EigrpTopology(Eigrp& base) : dual(base), base(base) {}
 
 void EigrpTopology::pruneStaleRoutes()
 {
-    duel.topologyTable.pruneExpired();
+    dual.topologyTable.pruneExpired();
 }
 
 std::unordered_map<types::IPPrefix, TopologyEntry>& EigrpTopology::entries()
 {
-    return duel.topologyTable.entries();
+    return dual.topologyTable.entries();
 }
 
 void EigrpTopology::recalculateAll()
 {
-    duel.recalculateAllRoutes();
+    dual.recalculateAllRoutes();
 }
 
 void EigrpTopology::handleSIATimeout(OutgoingQuery& query, Neighbor& neighbor)
 {
-    duel.handleSIATimeout(query, neighbor);
+    dual.handleSIATimeout(query, neighbor);
 }
 
 void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
@@ -58,9 +58,9 @@ void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
     {
         ReceivedRoute newRoute = r;
         newRoute.prefix = prefix;
-        auto& entry = duel.topologyTable.ensure(newRoute.prefix);
+        auto& entry = dual.topologyTable.ensure(newRoute.prefix);
         base.getAggregator().updateSummary(entry);
-        duel.topologyTable.addRouteUpdate(newRoute, nullptr, entry);
+        dual.topologyTable.addRouteUpdate(newRoute, nullptr, entry);
         withdraws.erase(prefix); // Erase to mark found
         iface.connectedRoutes.insert(prefix);
         updates.push_back(&entry);
@@ -87,15 +87,15 @@ void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
     // Remove left over routes
     for (const auto& route : withdraws)
     {
-        if (auto* entry = duel.topologyTable.find(route); entry)
+        if (auto* entry = dual.topologyTable.find(route); entry)
             if (auto rit = entry->routesBySource.find(connected); rit != entry->routesBySource.end())
             {
-                duel.topologyTable.markRouteUnreachable(rit->second, connected, *entry);
+                dual.topologyTable.markRouteUnreachable(rit->second, connected, *entry);
                 updates.push_back(entry);
             }
     }
 
-    duel.updateSuccessors(updates);
+    dual.updateSuccessors(updates);
 }
 
 void EigrpTopology::clearConnected(EigrpInterface& iface)
@@ -104,18 +104,18 @@ void EigrpTopology::clearConnected(EigrpInterface& iface)
     types::IPAddress connected = (base.getAF() == types::AddressFamily::IPv4) ? types::IPAddress(uint32_t(0)) : types::IPAddress(__uint128_t(0));
     for (auto it = iface.connectedRoutes.begin(); it != iface.connectedRoutes.end();)
     {
-        if (auto* entry = duel.topologyTable.find(*it); entry)
+        if (auto* entry = dual.topologyTable.find(*it); entry)
         {
             if (auto rit = entry->routesBySource.find(connected); rit != entry->routesBySource.end())
             {
-                duel.topologyTable.markRouteUnreachable(rit->second, connected, *entry);
+                dual.topologyTable.markRouteUnreachable(rit->second, connected, *entry);
                 updates.push_back(entry);
             }
         }
         it = iface.connectedRoutes.erase(it);
     }
 
-    duel.updateSuccessors(updates);
+    dual.updateSuccessors(updates);
     base.routeManager.synchronizeRoutes(updates);
 }
 } // namespace routing

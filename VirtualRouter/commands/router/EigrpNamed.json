@@ -1,27 +1,27 @@
 {
     "prompt": "(config-router)#",
     "variant": "eigrp_named",
-    "registry": "EigrpNamed",
+    "registry": "Eigrp",
     "commands": [
         {
-            "support": true,
             "description": "Enter Address Family command mode",
             "name": "address-family",
             "subcommands": [
                 {
-                    "support": true,
                     "description": "Address family IPv4",
                     "name": "ipv4",
+                    "config": "EigrpNamed::V4_INSTANCES",
+                    "mode": "(config-router-af)#/eigrp-ipv4",
+                    "deferred": "VRF",
                     "subcommands": [
                         {
-                            "support": true,
-                            "description": "Specify Address-Family Autonomous System Number",
-                            "name": "autonomous-system",
+                            "description": "Specify a specific virtual routing/forwarding instance",
+                            "name": "vrf",
                             "subcommands": [
                                 {
-                                    "support": true,
-                                    "description": "Autonomous System",
-                                    "name": "<1-65535>",
+                                    "description": "Virtual Routing/Forwarding instance name",
+                                    "name": "WORD",
+                                    "resolver": "VRF",
                                     "subcommands": [
                                         {
                                             "description": "",
@@ -32,101 +32,26 @@
                             ]
                         },
                         {
-                            "description": "Address Family Multicast",
-                            "name": "multicast",
-                            "subcommands": [
-                                {
-                                    "support": true,
-                                    "description": "Specify Address-Family Autonomous System Number",
-                                    "name": "autonomous-system",
-                                    "subcommands": [
-                                        {
-                                            "support": true,
-                                            "description": "Autonomous System",
-                                            "name": "<1-65535>",
-                                            "subcommands": [
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                }
-                            ]
-                        },
-                        {
-                            "description": "Address Family Unicast",
-                            "name": "unicast",
-                            "subcommands": [
-                                {
-                                    "support": true,
-                                    "description": "Specify Address-Family Autonomous System Number",
-                                    "name": "autonomous-system",
-                                    "subcommands": [
-                                        {
-                                            "support": true,
-                                            "description": "Autonomous System",
-                                            "name": "<1-65535>",
-                                            "subcommands": [
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                }
-                            ]
-                        },
-                        {
-                            "support": true,
-                            "description": "Specify a specific virtual routing/forwarding instance",
-                            "name": "vrf",
-                            "subcommands": [
-                                {
-                                    "support": true,
-                                    "description": "Virtual Routing/Forwarding instance name",
-                                    "name": "WORD",
-                                    "subcommands": [
-                                        {
-                                            "support": true,
-                                            "description": "Specify Address-Family Autonomous System Number",
-                                            "name": "autonomous-system",
-                                            "subcommands": [
-                                                {
-                                                    "support": true,
-                                                    "description": "Autonomous System",
-                                                    "name": "<1-65535>",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                }
-                            ]
+                            "description": "",
+                            "name": "<cr>"
                         }
                     ]
                 },
                 {
-                    "support": true,
                     "description": "Address family IPv6",
                     "name": "ipv6",
+                    "config": "EigrpNamed::V6_INSTANCES",
+                    "mode": "(config-router-af)#/eigrp-ipv4",
+                    "deferred": "VRF",
                     "subcommands": [
                         {
-                            "support": true,
-                            "description": "Specify Address-Family Autonomous System Number",
-                            "name": "autonomous-system",
+                            "description": "Specify a specific virtual routing/forwarding instance",
+                            "name": "vrf",
                             "subcommands": [
                                 {
-                                    "support": true,
-                                    "description": "Autonomous System",
-                                    "name": "<1-65535>",
+                                    "description": "Virtual Routing/Forwarding instance name",
+                                    "name": "WORD",
+                                    "resolver": "VRF",
                                     "subcommands": [
                                         {
                                             "description": "",
@@ -137,63 +62,14 @@
                             ]
                         },
                         {
-                            "description": "Address Family Unicast",
-                            "name": "unicast",
-                            "subcommands": [
-                                {
-                                    "support": true,
-                                    "description": "Specify Address-Family Autonomous System Number",
-                                    "name": "autonomous-system",
-                                    "subcommands": [
-                                        {
-                                            "support": true,
-                                            "description": "Autonomous System",
-                                            "name": "<1-65535>",
-                                            "subcommands": [
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                }
-                            ]
-                        },
-                        {
-                            "description": "Specify a specific virtual routing/forwarding instance",
-                            "name": "vrf",
-                            "subcommands": [
-                                {
-                                    "description": "Virtual Routing/Forwarding instance name",
-                                    "name": "WORD",
-                                    "subcommands": [
-                                        {
-                                            "description": "Specify Address-Family Autonomous System Number",
-                                            "name": "autonomous-system",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Autonomous System",
-                                                    "name": "<1-65535>",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                }
-                            ]
+                            "description": "",
+                            "name": "<cr>"
                         }
                     ]
                 }
             ]
         },
         {
-            "support": true,
             "description": "Exit from routing protocol configuration mode",
             "name": "exit",
             "subcommands": [
@@ -206,112 +82,6 @@
         {
             "description": "Negate a command or set its defaults",
             "name": "no"
-        },
-        {
-            "description": "Enter Service Family command mode",
-            "name": "service-family",
-            "subcommands": [
-                {
-                    "description": "Service Family IPv4",
-                    "name": "ipv4",
-                    "subcommands": [
-                        {
-                            "description": "Specify Address-Family Autonomous System Number",
-                            "name": "autonomous-system",
-                            "subcommands": [
-                                {
-                                    "description": "Autonomous System",
-                                    "name": "<1-65535>",
-                                    "subcommands": [
-                                        {
-                                            "description": "",
-                                            "name": "<cr>"
-                                        }
-                                    ]
-                                }
-                            ]
-                        },
-                        {
-                            "description": "Specify a specific virtual routing/forwarding instance",
-                            "name": "vrf",
-                            "subcommands": [
-                                {
-                                    "description": "Virtual Routing/Forwarding instance name",
-                                    "name": "WORD",
-                                    "subcommands": [
-                                        {
-                                            "description": "Specify Address-Family Autonomous System Number",
-                                            "name": "autonomous-system",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Autonomous System",
-                                                    "name": "<1-65535>",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                    ]
-                },
-                {
-                    "description": "Service Family IPv6",
-                    "name": "ipv6",
-                    "subcommands": [
-                        {
-                            "description": "Specify Address-Family Autonomous System Number",
-                            "name": "autonomous-system",
-                            "subcommands": [
-                                {
-                                    "description": "Autonomous System",
-                                    "name": "<1-65535>",
-                                    "subcommands": [
-                                        {
-                                            "description": "",
-                                            "name": "<cr>"
-                                        }
-                                    ]
-                                }
-                            ]
-                        },
-                        {
-                            "description": "Specify a specific virtual routing/forwarding instance",
-                            "name": "vrf",
-                            "subcommands": [
-                                {
-                                    "description": "Virtual Routing/Forwarding instance name",
-                                    "name": "WORD",
-                                    "subcommands": [
-                                        {
-                                            "description": "Specify Address-Family Autonomous System Number",
-                                            "name": "autonomous-system",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Autonomous System",
-                                                    "name": "<1-65535>",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                    ]
-                }
-            ]
         },
         {
             "description": "Shutdown this instance of EIGRP",

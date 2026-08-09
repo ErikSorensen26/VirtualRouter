@@ -17,17 +17,18 @@
 #include "configs/RegistryBuilder.hpp"
 #include "configs/RegistryReference.hpp"
 #include "configs/TupleSchema.hpp"
+#include "configs/EnumSchema.hpp"
 
 namespace config
 {
 namespace eigrp
 {
-enum class AuthType : uint16_t
-{
-    NONE = 0x0000,
-    MD5 = 0x0002,
-    SHA256 = 0x0003
-};
+#define EIGRP_AUTH_TYPES(X) \
+    X(NONE, 0x0000) \
+    X(MD5, 0x0002) \
+    X(SHA256, 0x0003)
+
+DEFINE_CONFIG_VALUE_ENUM_NS(eigrp, AuthType, EIGRP_AUTH_TYPES, uint16_t);
 }
 
 void EigrpIfacePassive(void* i);
@@ -43,6 +44,7 @@ DEFINE_TUPLE_SCHEMA(EigrpSummaryAddress, EIGRP_SUMMARY_ADDRESS_FIELDS);
 // AUTHENTICATION_KEYCHAIN and SUMMARY_ADDRESS carried no default row: absence is
 // what a ValueField and a ListField already store before configuration.
 #define EIGRP_INTERFACE_FIELD_LIST(X, Y) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, ADD_PATHS, uint8_t) \
     VALUE_FIELD(X, Y, AUTHENTICATION_KEYCHAIN, std::string) \
     ATOMIC_FIELD(X, Y, AUTHENTICATION_MODE, config::eigrp::AuthType, config::eigrp::AuthType::NONE) \
     ATOMIC_FIELD(X, Y, BANDWIDTH_PERCENTAGE, uint32_t, 50) \
