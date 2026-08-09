@@ -1,5 +1,7 @@
 // TreeParser.cpp
 
+// TODO add "recurse_exclude_all", "recurse_show_all" (overrides hide) and "recurse_hide"
+
 #include <utils/Json.hpp>
 #include "CommandTree.h"
 #include "nodes/Command.h"
@@ -91,15 +93,17 @@ uint16_t resolveMode(std::string_view spec, const std::string& who)
         + std::string(spec) + "', which is not in CLI_MODE_TABLE");
 }
 
-uint16_t propertyFlag(std::string_view p)
+uint32_t propertyFlag(std::string_view p)
 {
     if (p == "negate")               return CommandNode::NEGATE;
     if (p == "negate_all")           return CommandNode::NEGATE_ALL;
     if (p == "negate_hide")          return CommandNode::NEGATE_HIDE;
     if (p == "negate_show")          return CommandNode::NEGATE_SHOW;
     if (p == "recursive")            return CommandNode::RECURSIVE;
-    if (p == "subcmd_single_use")    return CommandNode::SUBCMD_SINGLE_USE;
-    if (p == "subcmd_sequence")      return CommandNode::SUBCMD_SEQUENCE;
+    if (p == "multi_use")            return CommandNode::MULTI_USE;
+    if (p == "recurse_exclude_all")  return CommandNode::RECURSE_EXCLUDE_ALL;
+    if (p == "recurse_hide")         return CommandNode::RECURSE_HIDE;
+    if (p == "recurse_show_all")     return CommandNode::RECURSE_SHOW_ALL;
     if (p == "mode_exit")            return CommandNode::MODE_EXIT;
     throw std::runtime_error("cli::grammar: unknown property '" + std::string(p) + "'");
 }
@@ -251,7 +255,7 @@ struct TreeEmitter
     }
 
     /**
-     * Interns one string and returns its id.
+     * @brief Interns one string and returns its id.
      *
      * The grammar repeats itself heavily -- "<cr>" alone lands here 19.5k times,
      * and descriptions are copied verbatim across every mode that shares a
@@ -404,21 +408,13 @@ struct TreeEmitter
         if (count > UINT16_MAX)
             throw std::runtime_error("cli::grammar: subcommand count exceeds uint16");
 
-        // Checked on the spliced width; expansion is what pushes a set past the mask.
-        if (count > MAX_TRACKED_SIBLINGS)
-        {
-            bool tracked = false;
-            for (const Slot& s : slots)
-                if (const JsonNode* cp = member(*s.src, KEY_PROPERTIES))
-                    for (const JsonNode& p : cp->children)
-                        if (p.strValue == "recursive"
-                         || p.strValue == "subcmd_single_use")
-                            tracked = true;
-            if (tracked)
-                throw std::runtime_error("cli::grammar: recursive/sequence set of "
-                    + std::to_string(count) + " exceeds the "
-                    + std::to_string(MAX_TRACKED_SIBLINGS) + " sibling mask limit");
-        }
+        // Checked on the spliced width; expansion is what pushes a set past the
+        // mask. `recursive` is a parent property, and the parent's flags are
+        // already resolved by the time its children are emitted.
+        if (count > MAX_TRACKED_SIBLINGS && n.has(CommandNode::RECURSIVE))
+            throw std::runtime_error("cli::grammar: recursive set of "
+                + std::to_string(count) + " exceeds the "
+                + std::to_string(MAX_TRACKED_SIBLINGS) + " sibling mask limit");
 
         uint32_t firstChild = static_cast<uint32_t>(nodes.size());
         nodes.resize(nodes.size() + count);
@@ -430,7 +426,7 @@ struct TreeEmitter
     }
 
     /**
-     * Binds the two-part "Schema::member" spelling, which names the field only
+     * @brief Binds the two-part "Schema::member" spelling, which names the field only
      * by the tuple schema it stores. Returns false when the first token is not
      * a schema name at all, leaving the key to be read as "Registry::field".
      */
@@ -600,7 +596,7 @@ struct TreeEmitter
     }
 
     /**
-     * The id a deferral key is stored under, assigning one if the key is new.
+     * @brief The id a deferral key is stored under, assigning one if the key is new.
      *
      * Numbered rather than hashed. configExt is a byte with 0xFF spoken for, so
      * a hash would have to be truncated into 255 values and two keys colliding
@@ -630,7 +626,7 @@ struct TreeEmitter
     }
 
     /**
-     * Holds this command's value under a key instead of writing it now.
+     * @brief Holds this command's value under a key instead of writing it now.
      *
      * The field is still named and still checked -- what the key changes is when
      * the write lands, not where. configExt carries the key's id, which is why
@@ -656,7 +652,7 @@ struct TreeEmitter
     }
 
     /**
-     * Marks this command as the source a deferred key waits on.
+     * @brief Marks this command as the source a deferred key waits on.
      *
      * Numbered out of the same table bindDeferred uses, so the ids pair up. It
      * binds no field: what it resolves is whatever deferred commands named the
@@ -679,7 +675,23 @@ struct TreeEmitter
     }
 
     /**
-     * TODO add doxy comment
+     * @brief Populates one CommandNode from its JSON object and returns its children.
+     *
+     * Validates the required `name`/`description` keys, resolves any `$var`
+     * references against @p args, and writes the node's flags, config binding
+     * and properties. The returned pointer is pushed back onto the breadth-first
+     * queue that drives tree construction.
+     *
+     * @param n      Node to fill in; must already be allocated at @p idx.
+     * @param idx    This node's index in the flat node array.
+     * @param src    JSON object describing the command.
+     * @param args   Variable bindings from the calling definition, or `nullptr`.
+     * @param expect In/out. On entry, the registry this node must bind to, or
+     *               `REGISTRY_ANY`. Narrowed to the mode's registry when the
+     *               node is a mode boundary, constraining its whole subtree.
+     * @return The node's `subcommands` array, or `nullptr` if it is a leaf.
+     * @throws std::runtime_error On any malformed or contradictory grammar
+     *         object; the message names the offending command.
      */
     const JsonNode* emitCommand(CommandNode& n, uint32_t idx,
                                 const JsonNode& src, const Args* args,
@@ -896,7 +908,7 @@ struct TreeEmitter
     }
 
     /**
-     * Rejects a deferral key that only one side of the grammar names.
+     * @brief Rejects a deferral key that only one side of the grammar names.
      *
      * Keys are discovered rather than declared, so nothing has yet checked that
      * a name was spelled the same in both places -- a typo reads as a new key,

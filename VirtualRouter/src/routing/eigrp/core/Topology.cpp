@@ -47,7 +47,7 @@ void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
         ? interface->configs.ipv4.mtu.load(std::memory_order_relaxed)
         : interface->configs.ipv6.mtu.load(std::memory_order_relaxed);
     r.routeType = RouteType::CONNECTED;
-    r.adminDistance = base.getGlobalConfigMgr().getAD();
+    r.adminDistance = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::INTERNAL_ADMIN_DISTANCE>().load();
     r.nextHop = connected; // Self originated
 
     std::set<types::IPPrefix> withdraws = iface.connectedRoutes;

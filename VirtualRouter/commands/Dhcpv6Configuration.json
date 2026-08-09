@@ -30,15 +30,12 @@
                             "name": "X:X:X:X::X/<0-128>",
                             "properties": [
                                 "negate_all",
-                                "subcmd_sequence"
+                                "recursive"
                             ],
                             "subcommands": [
                                 {
                                     "description": "DHCPv6 unique identifier (DUID)",
                                     "name": "duid",
-                                    "properties": [
-                                        "subcmd_single_use"
-                                    ],
                                     "subcommands": [
                                         {
                                             "description": "Specify DHCPv6 unique identifier (DUID)",
@@ -55,9 +52,6 @@
                                 {
                                     "description": "Configure DHCPv6 IA identifier",
                                     "name": "iaid",
-                                    "properties": [
-                                        "subcmd_single_use"
-                                    ],
                                     "subcommands": [
                                         {
                                             "description": "DHCPv6 IA identifier",
@@ -74,9 +68,6 @@
                                 {
                                     "description": "Configure prefix lifetimes",
                                     "name": "lifetime",
-                                    "properties": [
-                                        "subcmd_single_use"
-                                    ],
                                     "subcommands": [
                                         {
                                             "description": "Valid lifetime (seconds)",
@@ -1466,15 +1457,12 @@
                             "name": "WORD",
                             "properties": [
                                 "negate",
-                                "subcmd_sequence"
+                                "recursive"
                             ],
                             "subcommands": [
                                 {
                                     "description": "Configure prefix lifetimes",
                                     "name": "lifetime",
-                                    "properties": [
-                                        "subcmd_single_use"
-                                    ],
                                     "subcommands": [
                                         {
                                             "description": "Valid lifetime (seconds)",
@@ -1699,9 +1687,6 @@
                                 {
                                     "description": "Set prefix length handling mode for prefix delegation",
                                     "name": "prefix-delegation-mode",
-                                    "properties": [
-                                        "subcmd_single_use"
-                                    ],
                                     "subcommands": [
                                         {
                                             "description": "Require exact client-requested length",

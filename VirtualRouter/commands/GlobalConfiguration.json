@@ -768,7 +768,8 @@
                                             "description": "Customize table output chain building indirection characteristics",
                                             "name": "indirection",
                                             "properties": [
-                                                "negate"
+                                                "negate",
+                                                "recursive"
                                             ],
                                             "subcommands": [
                                                 {
@@ -107121,11 +107122,14 @@
                     "support": true,
                     "description": "Enhanced Interior Gateway Routing Protocol (EIGRP)",
                     "name": "eigrp",
+                    "config": "Global::VRF_CONFIGS",
                     "subcommands": [
                         {
                             "support": true,
                             "description": "Autonomous System",
                             "name": "<1-65535>",
+                            "config": "Vrf::ROUTER_EIGRP_V4",
+                            "mode": "(config-router)#/eigrp_classic",
                             "subcommands": [
                                 {
                                     "description": "Send EIGRP updates via unicast instead of multicast",

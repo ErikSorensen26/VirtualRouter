@@ -27,7 +27,7 @@
 #include "cli/terminal/ConsoleController.hpp"
 
 #define COMMAND_TREE_BIN "./configs/Commands.bin"
-#define COMMAND_TREE "./commands"
+#define COMMAND_TREE "../VirtualRouter/commands"
 
 namespace interface { class Interface; enum class InterfaceType : uint8_t; }
 

@@ -120,9 +120,9 @@ bool stoint(T& val, std::string_view sv)
 /**
  * @brief Converts the tokens and sets the interface id.
  *
- * @param iface reference to interface id to set.
  * @param type  token pointer for interface type.
  * @param id    token pointer for interface number.
+ * @param[out] key populated with the resolved interface key on success.
  * @return True if the id was successfully calculated, false otherwise.
  */
 bool extractInterfaceId(std::string_view type, std::string_view id, interface::InterfaceKey& key);

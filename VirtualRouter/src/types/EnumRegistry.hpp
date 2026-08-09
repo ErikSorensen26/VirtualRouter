@@ -27,7 +27,7 @@ constexpr uint64_t hash(std::string_view str)
 } // namespace types
 
 /**
- * Main Macro
+ * @brief Main Macro
  *
  * Usage:
  * #define COMMAND_LIST(X) \

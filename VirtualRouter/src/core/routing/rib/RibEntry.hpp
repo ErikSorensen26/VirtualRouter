@@ -171,7 +171,7 @@ struct RibEntry
      * @brief Iterates through all available next hop addresses and
      * sees if the specified one already exists.
      *
-     * @param uint32_t ifaceid  Interface Key
+     * @param ifaceId  Interface Key
      * @return `true` if the interface is included, otherwise `false`.
      */
     bool hasNextHopInterface(uint32_t ifaceId)

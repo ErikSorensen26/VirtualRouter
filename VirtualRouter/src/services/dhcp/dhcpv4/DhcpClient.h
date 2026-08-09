@@ -32,7 +32,7 @@ public:
     /**
      * @brief Constructs a DhcpClient with the specific interface.
      *
-     * @param CurrentInterface Reference ot the interface object
+     * @param currentInterface Interface this client requests a lease for.
      * @param reduced Mode to reduce functions in the constructor for testing.
      */
     DhcpClient(interface::Interface* currentInterface, bool reduced = false);
@@ -59,7 +59,6 @@ public:
      * @param builder processing::PacketBuilder to use.
      * @param transID Transaction ID (xid).
      * @param hostname Hostname of client.
-     * @param mac Hardware address.
      * @param requestedIP IP address being requested.
      * @param serverID Server Identifier.
      * @return true if successful, false otherwise.
@@ -70,7 +69,6 @@ public:
     /**
      * @brief Build DHCPRELEASE packet.
      * @param builder processing::PacketBuilder to write into.
-     * @param mac MAC address to identify client.
      * @return true if successful, false otherwise.
      */
     bool buildDhcpRelease(processing::PacketBuilder& builder);
@@ -86,7 +84,7 @@ public:
 
     /**
      * @brief Called by external logic when a DHCP packet is received.
-     * @param header Pointer to parsed DHCPHeader object.
+     * @param dhcp Parsed DHCP header for the inbound packet.
      */
     void handleDhcpPacket(const packet::DhcpHeader& dhcp);
 

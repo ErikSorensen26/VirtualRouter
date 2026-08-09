@@ -51,7 +51,7 @@ public:
     /**
     * @ingroup INFRASTRUCTURE
     * @enum ArpCacheStatus
-    * Represents different ARP cache states 
+    * @brief Represents different ARP cache states
     */
     enum class ArpCacheStatus
     {
@@ -60,7 +60,7 @@ public:
 
     /**
     * @struct ArpCacheEntry
-    * Represents a single ARP cache entry, including the MAC address and expiration time.
+    * @brief Represents a single ARP cache entry, including the MAC address and expiration time.
     */
     struct ArpCacheEntry 
     {
@@ -75,8 +75,8 @@ public:
     };
 
     /**
-     * @brief Constructor for the ARP class.
-     * @param CurrentInterface Reference to the network interface associated with this ARP instance.
+     * @brief Constructs the ARP instance for one interface.
+     * @param interface Interface this ARP instance resolves on; must outlive it.
      */
     explicit Arp(interface::Interface& interface);
 
@@ -96,18 +96,18 @@ public:
     /**
      * @brief Adds an arp entry to the arp cache table
      *
-     * @params targetIp Target IPv4 address.
-     * @params targetMac Target MAC address.
-     * @params proxy Adds the entry as a proxy entry.
+     * @param targetIp Target IPv4 address.
+     * @param targetMac Target MAC address.
+     * @param proxy Adds the entry as a proxy entry.
      */
     void addArpEntry(types::IPv4Address targetIp, types::Mac targetMac, bool proxy = false);
 
     /**
      * @brief Adds a static arp entry to the arp cache table
      *
-     * @parap targetIp The target IP of the resolved arp entry.
-     * @param mac The MAC of the resolved arp entry.
-     * @params proxy Adds the entry as a proxy entry.
+     * @param targetIp The target IP of the resolved arp entry.
+     * @param targetMac The MAC of the resolved arp entry.
+     * @param proxy Adds the entry as a proxy entry.
      */
     void addStaticArpEntry(types::IPv4Address targetIp, types::Mac targetMac, bool proxy = false);
 
@@ -115,7 +115,7 @@ public:
      * @brief Removes a previously installed static ARP entry from the cache and data-plane table.
      *
      * @param ip The IPv4 address whose static entry should be removed.
-     * @params proxy Removes the entry as a proxy entry.
+     * @param proxy Removes the entry as a proxy entry.
      */
     void removeStaticArpEntry(types::IPv4Address ip, bool proxy = false);
 
@@ -136,16 +136,16 @@ public:
     /**
      * @brief Processes a received ARP request and updated the cache.
      *
-     * @params request The arp header containing the request.
-     * @params sourceMac The source mac of the router.
+     * @param request The arp header containing the request.
+     * @param sourceMac The source mac of the router.
      */
     void receiveRequest(const packet::ArpHeader& request, types::Mac sourceMac);
 
     /**
      * @brief Retrieves the MAC address for a given IP address.
-     * @param mac The MAC container pointer.
+     * @param[out] out Buffer receiving the resolved MAC; written only on success.
      * @param ip The IP address to query.
-     * @return True if mac was filled, otherwise false.
+     * @return True if @p out was filled, otherwise false.
      */
     bool getMac(uint8_t* out, types::IPv4Address ip);
 
@@ -191,8 +191,8 @@ protected:
     /**
      * @brief Completes an incomplete arp entry to the arp cache table
      *
-     * @parap targetIp The target IP of the resolved arp entry.
-     * @param mac The MAC of the resolved arp entry.
+     * @param entry The cache entry being resolved, keyed by its target IP.
+     * @param targetMac The MAC of the resolved arp entry.
      */
     void completeArpEntry(std::pair<const types::IPv4Address, ArpCacheEntry>& entry, types::Mac targetMac);
 
@@ -261,7 +261,7 @@ protected:
     /**
      * @brief Processes queued packets for a resolved IP address and sends them to the resolved MAC address.
      * @param targetIp The resolved IP address.
-     * @param macAddress The associated MAC address.
+     * @param mac The associated MAC address.
      */
     void processQueuedPackets(types::IPv4Address targetIp, types::Mac mac);
 

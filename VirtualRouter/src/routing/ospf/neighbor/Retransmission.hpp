@@ -54,11 +54,11 @@ public:
     /**
      * @brief Constructs the retransmission container for a neighbor.
      *
-     * Passes the process and interface references to both `RetransmissionList`
-     * members so they can read retransmit-limit configuration.
+     * Passes the interface and configuration references to both
+     * `RetransmissionList` members so they can read retransmit-limit settings.
      *
-     * @param process  The owning OSPF process.
-     * @param iface    The interface on which this neighbor was formed.
+     * @param iface  The interface on which this neighbor was formed.
+     * @param cfgs   OSPF configuration registry supplying retransmit limits.
      */
     Retransmission(OspfInterfaceBase& iface, const config::OspfRegistry& cfgs)
         : outboundLsus(iface, cfgs), outboundLsrs(iface, cfgs) {}

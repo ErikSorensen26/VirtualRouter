@@ -88,7 +88,7 @@ void InterfaceTimers::cancelHoldTimer(Neighbor& neighbor)
 void InterfaceTimers::handleHoldTimeExpire(Neighbor& neighbor)
 {
     iface.getRtp().pendingPeerTermination.store(true, std::memory_order_release);
-    if (base->getGlobalConfigMgr().isNonStopForwarding())
+    if (base->getGlobalConfigMgr().getConfigs().get<config::Eigrp::NON_STOP_FORWARDING>().load())
         iface.getNTable().startGracefulRestart(neighbor);
     else
         iface.getNTable().onDown(neighbor);
@@ -125,7 +125,7 @@ void InterfaceTimers::cancelRetransmissionTimer(ReliableInfo& pkt)
 
 void InterfaceTimers::startGracefulTimer(Neighbor& neighbor)
 {
-    auto expireTime = std::chrono::steady_clock::now() + std::chrono::seconds(base->getGlobalConfigMgr().getPurgeTime());
+    auto expireTime = std::chrono::steady_clock::now() + std::chrono::seconds(base->getGlobalConfigMgr().getConfigs().get<config::Eigrp::GRACEFUL_PURGE_TIME>().load());
     uint32_t gracefulTimerId = ref.postAfter(expireTime, [this, nbr = &neighbor](uint32_t) {
         iface.getNTable().onDown(*nbr);
     });
@@ -154,7 +154,7 @@ void InterfaceTimers::restartDampeningResetTimer()
     if (auto id = dampeningResetId.load(std::memory_order_relaxed); id != 0)
         ref.cancel(id);
 
-    suppressedUntil = std::chrono::steady_clock::now() + std::chrono::seconds(base->getGlobalConfigMgr().getDampeningResetTime()),
+    suppressedUntil = std::chrono::steady_clock::now() + std::chrono::seconds(base->getGlobalConfigMgr().getConfigs().get<config::Eigrp::MAXIMUM_PREFIX_RESET_TIME>().load()),
     dampeningResetId.store(ref.postAfter(
         suppressedUntil,
         [this](uint32_t) { iface.onDampeningResetExpire(); }
@@ -167,7 +167,7 @@ void InterfaceTimers::restartDampeningRestartTimer()
         ref.cancel(id);
 
     dampeningRestartId.store(ref.postAfter(
-        std::chrono::steady_clock::now() + std::chrono::seconds(base->getGlobalConfigMgr().getDampeningRestart()),
+        std::chrono::steady_clock::now() + std::chrono::seconds(base->getGlobalConfigMgr().getConfigs().get<config::Eigrp::MAXIMUM_PREFIX_RESTART>().load()),
         [this](uint32_t) { iface.onDampeningRestartExpire(); }
     ), std::memory_order_release);
 }

@@ -228,12 +228,10 @@ public:
     ~LogStream();
 
     /**
-     * @brief Stream insertion operator overload for LogStream.
+     * @brief Appends any streamable value to the pending log message.
      *
-     * Allows the use of manipulators like std::endl with LogStream.
-     *
-     * @param manip Function pointer for manipulators.
-     * @return LogStream& Reference to the LogStream object.
+     * @param value Value to format into the message.
+     * @return Reference to this LogStream, for chaining.
      */
     template <typename T>
     LogStream& operator<<(const T& value)
@@ -243,10 +241,10 @@ public:
     }
 
     /**
-     * @brief Overloads the insertion operator to collect message parts.
+     * @brief Applies a stream manipulator (e.g. std::endl) to the message.
      *
-     * @param manip Function pointer for manipulators (e.g., std::endl).
-     * @return LogStream& Reference to the LogStream object.
+     * @param ostream Manipulator function to apply.
+     * @return Reference to this LogStream, for chaining.
      */
     LogStream& operator<<(std::ostream& (*manip)(std::ostream&));
 

@@ -34,7 +34,7 @@ struct BuildEntry
 class StaticPacket;
 
 /**
- * RAII wrapper around a hardware TX frame.
+ * @brief RAII wrapper around a hardware TX frame.
  *
  * On construction the builder acquires a frame from the interface's TX
  * distributor.  If the builder is destroyed without the frame being
@@ -276,8 +276,8 @@ private:
 /**
  * @ingroup PROCESSING
  * @class StaticPacket
+ * @brief Heap-allocated snapshot of a built packet (without owning a TX frame).
  *
- * Heap-allocated snapshot of a built packet (without owning a TX frame).
  * Used to pre-build packet templates that can be stamped into fresh frames.
  */
 class StaticPacket

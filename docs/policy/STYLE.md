@@ -6,6 +6,123 @@ They do not simply restate what the code obviously does.
 
 ---
 
+## Comment Sizing
+
+The rest of this document defines *which tags* go where. This section defines
+*how long* the block should be. Length is decided by what is being documented,
+not by how much there is to say about it.
+
+### Tiers
+
+| Tier | Length | Applies to |
+|---|---|---|
+| **0 — None** | 0 lines | Self-explanatory getters/setters, deleted copy/move ops, obvious members |
+| **1 — Inline** | 1 line, `///<` | Members, enum values, forward declarations |
+| **2 — Brief** | 1 line, `/** @brief ... */` | Trivial methods, small structs, type aliases |
+| **3 — Standard** | 3–10 lines | Most methods, most classes |
+| **4 — Extended** | 11–25 lines | Subsystem entry points, concurrency-bearing classes |
+| **5 — Reference** | 26–40 lines | Hard cap. Only the handful of top-level orchestrators |
+
+Tiers 1–3 cover the overwhelming majority of the codebase. Tier 4 should be
+rare, tier 5 exceptional. **No block exceeds 40 lines.** If it wants to, the
+content belongs in `docs/architecture/`, linked with `@see`.
+
+### Choosing a tier
+
+Pick the *lowest* tier that answers every question a caller actually has.
+Escalate only when the entity has one of these properties:
+
+- Non-obvious ownership or lifetime → tier 3+
+- Locking, thread-affinity, or ordering constraints → tier 4
+- An invariant that corrupts state if violated → tier 3+, with `@warning`
+- Multiple subsystems bind to it → tier 4+
+
+Absent all of those, a class is tier 3 and a method is tier 2 or 3.
+
+### The floor: what "too short" means
+
+A block is too short when it restates the signature and stops. Tier 2 is the
+floor for anything with a contract — not tier 1, and not silence.
+
+```cpp
+// Too short — restates the name, tells the caller nothing.
+/** @brief Retires an object. */
+template<typename T> static void retire(T* p);
+
+// Tier 2 — states the contract that the signature does not.
+/** @brief Retires @p p for deletion via plain `delete` once no reader can reach it. */
+template<typename T> static void retire(T* p);
+```
+
+The test: **if the comment were deleted, would the caller lose anything?**
+If not, either raise it to tier 2 or drop it to tier 0. A `@brief` that
+paraphrases the identifier is worse than no comment — it costs a line and
+implies the entity was documented.
+
+### The ceiling: what "too long" means
+
+A block is too long when it documents things that are not this entity, or
+restates what is already stated elsewhere. The common failure modes:
+
+- **Enumerating members** the reader can see in the class body below
+- **Narrating collaborators** — describing what other classes do
+- **Repeating the group description** already given by `@defgroup`
+- **ASCII pipelines and state tables** that belong in `docs/architecture/`
+- **`## Section` headers with one line under each** — the header costs more
+  than the content; write a sentence instead
+
+```cpp
+// Too long — the reader can see the members; only the last line is load-bearing.
+/**
+ * @brief Manages interfaces.
+ *
+ * This class contains:
+ * - A map of interfaces
+ * - A mutex
+ * - A pointer to Global
+ *
+ * ## Architectural Role
+ * It sits between hardware and the control plane.
+ *
+ * ## Lifecycle & Ownership
+ * It is created at startup.
+ *
+ * ## Concurrency Model
+ * The map is guarded by a mutex.
+ */
+
+// Tier 3 — same information, only the parts a caller cannot infer.
+/**
+ * @brief Owns every interface in the VRF and brokers hardware↔control-plane binding.
+ * @ingroup INTERFACE
+ *
+ * Created once at startup and outlives every interface it holds. The
+ * interface map is guarded by @c ifMutex; all other members are const
+ * after construction.
+ */
+```
+
+### Sizing the `##` sections
+
+The `## Architectural Role` / `## Lifecycle & Ownership` / `## Concurrency
+Model` structure below is for **tier 4 and 5 only**. Rules:
+
+- A `##` section earns its header at **three or more lines**. Below that,
+  fold it into the opening paragraph as prose.
+- Never use a `##` section as a placeholder — omit the section entirely
+  rather than writing "N/A" or a single restating line.
+- Two `##` sections is typical for tier 4. More than four means the class
+  is doing too much, or the block is absorbing architecture docs.
+
+### Applying this to existing code
+
+Do not sweep the codebase to reformat. Bring a block to standard when you
+are already editing that entity for another reason. The exceptions worth
+fixing on sight are the two failure modes above: blocks over 40 lines, and
+`@brief` lines that only restate the identifier.
+
+---
+
 ## Header Files (`.h` / `.hpp`)
 
 ### File Banner
@@ -106,10 +223,14 @@ namespace routing::eigrp {
 
 ### Class / Struct Documentation
 
-Full Doxygen block. `@brief` is one sentence. The body uses `##` markdown
-sections to explain the design — what the class contains, how it fits into
-the system, why it owns what it owns. Add `@warning` for any invariant that,
-if violated, corrupts state or causes undefined behavior.
+Full Doxygen block. `@brief` is one sentence. Add `@warning` for any invariant
+that, if violated, corrupts state or causes undefined behavior.
+
+Most classes are **tier 3** — brief, `@ingroup`, and a short paragraph on
+ownership or role. The `##` section structure shown below is the **tier 4/5**
+form; use it only for classes that meet the escalation criteria in
+[Comment Sizing](#comment-sizing). The template below shows every section that
+*can* appear, not a checklist to fill in.
 
 ```cpp
 /**
@@ -160,9 +281,14 @@ Sections to include (only those that apply):
 
 ### Constructor & Destructor
 
-Always documented. Constructor describes what state is established and why
-defaults are what they are. Destructor describes the teardown sequence and
-any ordering constraints.
+Documented whenever they establish or tear down state that the caller must
+know about. Constructor describes what state is established and why defaults
+are what they are. Destructor describes the teardown sequence and any
+ordering constraints.
+
+Defaulted and deleted special members are tier 0 — no comment. A constructor
+that only stores its arguments is tier 2; the tier 3+ form below is for
+constructors that establish invariants.
 
 ```cpp
 /**

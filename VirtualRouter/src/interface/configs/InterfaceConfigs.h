@@ -86,10 +86,10 @@ public:
      *
      * Initializes address storage, computes the @ref key from @p type and @p id,
      * and stores a reference to the hardware interface descriptor. The IPv6 state
-     * object is initialized with a reference to @p timeManager so it can schedule
-     * DAD and address-lifetime timers.
+     * object is initialized with the owning interface's timer service so it can
+     * schedule DAD and address-lifetime timers.
      *
-     * @param timeManager  System timer service; used by @ref IPv6State for DAD timers.
+     * @param iface        Interface that owns this configuration state.
      * @param type         Logical interface type (Ethernet, Loopback, etc.).
      * @param id           Interface number; may include a fractional sub-interface component.
      * @param info         Hardware descriptor; must outlive this object.
@@ -393,10 +393,10 @@ public:
         friend class ::Internal_NdpTest;
 
         /**
-         * @brief Constructs IPv6 state bound to @p time for address lifetime management.
+         * @brief Constructs IPv6 state bound to @p tmgr for address lifetime management.
          * @ingroup INTERFACE_CONFIGS
          *
-         * @param time  Timer service; used to schedule DAD retransmissions and
+         * @param tmgr  Timer service; used to schedule DAD retransmissions and
          *              preferred/valid lifetime expiry events.
          */
         explicit IPv6State(core::TimeManager& tmgr);

@@ -95,7 +95,7 @@ public:
  
  
     /**
-     * One prefix entry stored on a node.
+     * @brief One prefix entry stored on a node.
      * Sorted by length then lexicographically so the last entry is always
      * the longest-prefix match (exploited by localBest()).
      */
@@ -125,7 +125,7 @@ public:
     };
  
     /**
-     * A trie node.
+     * @brief A trie node.
      *
      * ## Lookup hot path (read-side, lock-free)
      * Only `skipPattern`, `skipMask`, `skipLen`, `best`, and the child array
@@ -183,7 +183,7 @@ public:
         PrefixEntry* prefixEnd()       noexcept { return prefixBegin() + nPrefixes; }
         const PrefixEntry* prefixEnd() const noexcept { return prefixBegin() + nPrefixes; }
  
-        /** O(n) scan — used only on write path. */
+        /** @brief O(n) scan — used only on write path. */
         PrefixEntry* findPrefix(AddrT addr, uint8_t len) noexcept
         {
             for (auto* p = prefixBegin(); p != prefixEnd(); ++p)
@@ -198,7 +198,7 @@ public:
         }
  
         /**
-         * Insert or update. Keeps the list sorted.
+         * @brief Insert or update. Keeps the list sorted.
          * Promotes to heap storage when inline capacity is exhausted.
          */
         void insertPrefix(AddrT addr, uint8_t len, T* ptr)
@@ -227,7 +227,7 @@ public:
         }
  
         /**
-         * Remove an exact match. Returns true if found.
+         * @brief Remove an exact match. Returns true if found.
          * Does NOT demote heap→inline after removal (keeps allocator churn low).
          */
         bool removePrefix(AddrT addr, uint8_t len) noexcept
@@ -247,7 +247,7 @@ public:
         }
  
         /**
-         * The longest prefix stored directly on this node, or nullptr.
+         * @brief The longest prefix stored directly on this node, or nullptr.
          * Because the list is sorted by length ascending, the last entry wins.
          */
         T* localBest() const noexcept
@@ -256,7 +256,7 @@ public:
             return prefixEnd()[-1].ptr;
         }
  
-        /** Recompute best by scanning the subtree breadth-first. */
+        /** @brief Recompute best by scanning the subtree breadth-first. */
         T* subtreeBest() const noexcept
         {
             // For the purposes of updateBest we just use localBest — the
@@ -266,7 +266,7 @@ public:
  
         // ── Child accessors (hot path inlined) ────────────────────────────────
  
-        /** Acquire-load of child at stride index idx. */
+        /** @brief Acquire-load of child at stride index idx. */
         __attribute__((always_inline))
         Node* getChild(uint8_t idx) const noexcept
         {
@@ -274,7 +274,7 @@ public:
             return children->slots[idx].load(std::memory_order_acquire);
         }
  
-        /** Release-store of child at stride index idx. */
+        /** @brief Release-store of child at stride index idx. */
         void setChild(uint8_t idx, Node* child) noexcept
         {
             if (!children)
@@ -283,7 +283,7 @@ public:
         }
  
         /**
-         * Atomically exchange child at idx with nullptr.
+         * @brief Atomically exchange child at idx with nullptr.
          * Returns the old pointer.
          */
         Node* removeChild(uint8_t idx) noexcept
@@ -486,7 +486,7 @@ public:
  
     /** Convert N network-order bytes to a host-order AddrT integer.
      *
-     *  "Host order" here means: bit 0 of the address (MSB of byte 0) sits
+     *  @brief "Host order" here means: bit 0 of the address (MSB of byte 0) sits
      *  in the highest bit of the returned integer, so that
      *      extractBits(addr, 0, S) == addr >> (W - S)
      *  holds unconditionally on any platform.  This is NOT the same as the
@@ -505,7 +505,7 @@ public:
     }
  
     /**
-     * Zero host bits beyond len. Works for any unsigned integer width.
+     * @brief Zero host bits beyond len. Works for any unsigned integer width.
      */
     static AddrT applyMask(AddrT addr, uint8_t len) noexcept
     {
@@ -521,7 +521,7 @@ public:
 private:
  
     /**
-     * Build skipMask: a mask with exactly `len` high bits set,
+     * @brief Build skipMask: a mask with exactly `len` high bits set,
      * aligned to bit position `pos` within the W-bit address.
      * Example: W=32, pos=8, len=8 → 0x00FF0000
      */
@@ -536,7 +536,7 @@ private:
     }
  
     /**
-     * Count how many bits of `a` and `b` agree, starting at `pos`,
+     * @brief Count how many bits of `a` and `b` agree, starting at `pos`,
      * for up to `maxBits` bits. Returns the count.
      */
     static uint8_t commonSkipLen(AddrT a, AddrT b,
@@ -554,7 +554,7 @@ private:
     }
  
     /**
-     * Push `entry` into `n->best` if it is non-null.
+     * @brief Push `entry` into `n->best` if it is non-null.
      */
     static void updateBest(Node* n, T* entry) noexcept
     {
@@ -563,7 +563,7 @@ private:
     }
  
     /**
-     * Recompute `n->best` from the node's own prefix list.
+     * @brief Recompute `n->best` from the node's own prefix list.
      * Does NOT recurse into children — callers chain bottom-up.
      */
     static void recomputeBest(Node* n) noexcept
@@ -572,7 +572,7 @@ private:
     }
  
     /**
-     * Recursive insertion into the subtree at `n`, having consumed `pos` bits.
+     * @brief Recursive insertion into the subtree at `n`, having consumed `pos` bits.
      *
      * Invariant: on entry, the `pos` bits [0..pos) of `pfx` have been
      * validated or consumed by parent nodes and this node's skip.
@@ -696,7 +696,7 @@ private:
     } 
  
     /**
-     * Recursive erasure. Returns true on success.
+     * @brief Recursive erasure. Returns true on success.
      * Updates `best` bottom-up after removal.
      * Prunes childless, prefix-free nodes.
      */
@@ -752,7 +752,7 @@ private:
  
  
     /** Post-order recursive deletion.  NOT deferred through RCU — this is
-     *  only called from `clear()` after all writers have finished. */
+     *  @brief only called from `clear()` after all writers have finished. */
     static void destroyAll(Node* n) noexcept
     {
         if (!n) return;
@@ -770,7 +770,7 @@ private:
     static void destroyNode(Node* n) noexcept { delete n; }
  
     /**
-     * Retire a single node: immediately if !useRCU, deferred otherwise.
+     * @brief Retire a single node: immediately if !useRCU, deferred otherwise.
      * Used during incremental erase, not during clear().
      */
     static void retireNode(Node* n) noexcept

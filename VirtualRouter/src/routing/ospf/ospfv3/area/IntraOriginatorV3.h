@@ -76,7 +76,7 @@ public:
      * Initialises LS-ID allocation state. No LSAs are originated until
      * `fullRefresh()` is called.
      *
-     * @param a The area that owns this originator.
+     * @param ctx Originator context for the owning area.
      */
     IntraOriginatorV3(OriginatorContext& ctx);
 

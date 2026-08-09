@@ -31,16 +31,16 @@ struct AuthSettings
 };
 
 /**
- * @struct AuthConfig
- *
- * This object holds Authentication configurations for DHCPv6
+ * @class AuthManager
+ * @brief Holds the authentication keys and settings used for DHCPv6 messages.
+ * @ingroup SERVICES_DHCP_V6
  */
 class AuthManager
 {
 public:
 
     /**
-     * @struct key
+     * @struct Key
      * @brief Authentication key
      * @ingroup SERVICES_DHCP_V6
      */

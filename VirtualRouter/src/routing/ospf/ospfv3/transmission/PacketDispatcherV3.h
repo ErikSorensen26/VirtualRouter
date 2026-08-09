@@ -49,7 +49,6 @@ public:
      * interface-specific configuration handles.
      *
      * @param iface The interface this dispatcher operates on.
-     * @param configs Reference to the OspfInterfaceBaseBaseRegistry.
      */
     PacketDispatcherV3(OspfInterfaceBase& iface);
 

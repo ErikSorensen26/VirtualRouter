@@ -4,7 +4,6 @@
 #include <TopologyGenerator.h>
 #include <ListenerManager.hpp>
 #include <PacketSniffer.hpp>
-#include <CommandProcessor.h>
 #include <VirtualRouter.h>
 #include <Logger.h>
 

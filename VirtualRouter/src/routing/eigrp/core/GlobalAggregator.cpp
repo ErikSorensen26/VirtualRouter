@@ -40,11 +40,11 @@ void GlobalAggregator::enableAutoSummary(bool enable)
 {
     if (base.getAF() != types::AddressFamily::IPv4) return; // Only supported for IPv4
 
-    auto& configs = base.getGlobalConfigMgr();
-    bool current = configs.isAutoSummarized();
+    auto& configs = base.getGlobalConfigMgr().getConfigs();
+    bool current = configs.get<config::Eigrp::AUTO_SUMMARIZATION>().load();
     if (enable == current) return; // No change
 
-    configs.setAutoSummary(enable);
+    configs.get<config::Eigrp::AUTO_SUMMARIZATION>().set(enable);
 
     // Lock interface for duration
     auto& ifmgr = base.getIfaceMgr();

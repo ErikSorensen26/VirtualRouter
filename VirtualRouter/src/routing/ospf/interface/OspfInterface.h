@@ -109,11 +109,10 @@ public:
      *
      * Resolves the `Area` reference from the process, selects the correct
      * `PacketDispatcher` subclass (OSPFv2 or OSPFv3), and initialises cost
-     * and timer values from @p configs.
+     * and timer values from the interface's configuration registry.
      *
      * @param proc     The OSPF process that owns this interface.
      * @param iface    The underlying hardware/logical interface.
-     * @param configs  Version-specific interface configuration registry.
      * @param id       Composite key (hardware index + area) for this interface.
      */
     OspfInterface(OspfProcess& proc, interface::Interface& iface,

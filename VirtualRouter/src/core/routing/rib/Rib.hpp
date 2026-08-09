@@ -294,7 +294,16 @@ public:
         return fib.lookup(addr);
     }
     /**
-     * TODO doxy comment
+     * @brief Exact-match lookup returning every candidate route for a prefix.
+     *
+     * Unlike lookup(), which longest-prefix-matches an address and yields only
+     * the winning route, this takes an exact prefix key and returns the whole
+     * bucket, including non-best routes from other protocols.
+     *
+     * @param prefixKey Masked prefix and length; must match the stored key exactly.
+     * @return The bucket for that prefix, or `nullptr` if no route exists.
+     * @warning Bucket contents are owned by the scheduler thread. Read them only
+     *          under an RCU guard, and never mutate them off the scheduler.
      */
     RibBucket<AddrType>* lookupBucket(PrefixKey<AddrType>& prefixKey) const
     {
@@ -304,7 +313,15 @@ public:
     }
 
     /**
-     * TODO: Finish Doxy
+     * @brief Blocks until every route change already queued on this RIB has been applied.
+     *
+     * Route mutations are posted to the control scheduler and applied
+     * asynchronously, so a caller that adds a route and immediately reads it
+     * back may miss it. This drains the queue so the RIB reflects all prior
+     * posts. Work queued after this call begins is not waited on.
+     *
+     * @note Intended for tests and shutdown. Calling this from the scheduler
+     *       thread itself returns immediately rather than deadlocking.
      */
     void wait()
     {

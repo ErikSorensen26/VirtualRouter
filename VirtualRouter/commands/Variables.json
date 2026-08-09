@@ -282,44 +282,26 @@
     ],
     "cef_indirection": [
         {
-            "properties": [
-                "recursive"
-            ],
             "description": "shared indirection object for IPv4 labeled prefixes",
             "name": "IPv4-to-MPLS"
         },
         {
-            "properties": [
-                "recursive"
-            ],
             "description": "shared indirection object for IPv6 labeled prefixes",
             "name": "IPv6-to-MPLS"
         },
         {
-            "properties": [
-                "recursive"
-            ],
             "description": "shared indirection object for MPLS disposition",
             "name": "MPLS-end-of-stack"
         },
         {
-            "properties": [
-                "recursive"
-            ],
             "description": "shared indirection object for MPLS label switch",
             "name": "MPLS-non-end-of-stack"
         },
         {
-            "properties": [
-                "recursive"
-            ],
             "description": "non-recursive prefixes",
             "name": "non-recursive-prefixes"
         },
         {
-            "properties": [
-                "recursive"
-            ],
             "description": "recursive prefixes",
             "name": "recursive-prefixes"
         },
@@ -764,9 +746,6 @@
         {
             "description": "Metric for redistributed routes",
             "name": "metric",
-            "properties": [
-                "recursive"
-            ],
             "subcommands": [
                 {
                     "description": "Default metric",
@@ -783,9 +762,6 @@
         {
             "description": "OSPF exterior metric type for redistributed routes",
             "name": "metric-type",
-            "properties": [
-                "recursive"
-            ],
             "subcommands": [
                 {
                     "description": "Set OSPF External Type 1 metrics",
@@ -812,9 +788,6 @@
         {
             "description": "Use route map to filter/modify redistributed routes",
             "name": "route-map",
-            "properties": [
-                "recursive"
-            ],
             "subcommands": [
                 {
                     "description": "Name of route-map",
@@ -831,9 +804,6 @@
         {
             "description": "Consider subnets for redistribution into classful protocol",
             "name": "subnets",
-            "properties": [
-                "recursive"
-            ],
             "subcommands": [
                 {
                     "description": "",
@@ -844,9 +814,6 @@
         {
             "description": "Tag value for redistributed routes",
             "name": "tag",
-            "properties": [
-                "recursive"
-            ],
             "subcommands": [
                 {
                     "description": "Tag value",
@@ -884,9 +851,6 @@
                                 {
                                     "description": "DES56 Privacy algorithm",
                                     "name": "des56",
-                                    "properties": [
-                                        "recursive"
-                                    ],
                                     "subcommands": [
                                         {
                                             "description": "Privacy password",
@@ -903,9 +867,6 @@
                                 {
                                     "description": "AES Privacy algorithm",
                                     "name": "aes",
-                                    "properties": [
-                                        "recursive"
-                                    ],
                                     "subcommands": [
                                         {
                                             "description": "AES-128",
@@ -982,9 +943,6 @@
                         {
                             "description": "Privacy",
                             "name": "priv",
-                            "properties": [
-                                "recursive"
-                            ],
                             "subcommands": [
                                 {
                                     "description": "Privacy options",

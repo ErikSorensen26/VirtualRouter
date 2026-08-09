@@ -610,7 +610,7 @@ struct alignas(16) IPv6Prefix
 };
 
 /**
- * TODO finish doxy
+ * @brief Satisfied by the three prefix types, ignoring cv-qualifiers and references.
  */
 template <typename T>
 concept IsIPPrefix =
@@ -619,7 +619,7 @@ concept IsIPPrefix =
     std::is_same_v<std::remove_cv_t<std::remove_reference_t<T>>, IPv6Prefix>;
 
 /**
- * TODO finish doxy
+ * @brief Satisfied by the three address types, ignoring cv-qualifiers and references.
  */
 template <typename T>
 concept IsIPAddress =
@@ -628,7 +628,7 @@ concept IsIPAddress =
     std::is_same_v<std::remove_cv_t<std::remove_reference_t<T>>, IPv6Address>;
 
 /**
- * TODO finish doxy
+ * @brief Maps a prefix type to its matching address type; any other type is left unchanged.
  */
 template <typename T>
 using PrefixToAddress =
@@ -639,7 +639,7 @@ using PrefixToAddress =
     >;
 
 /**
- * TODO finish doxy
+ * @brief Maps an address type to its matching prefix type; any other type is left unchanged.
  */
 template <typename T>
 using AddressToPrefix =

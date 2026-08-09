@@ -55,6 +55,7 @@
     X(RouteMap) \
     X(Global) \
     X(Eigrp) \
+    X(EigrpNeighbor) \
     X(EigrpNamed) \
     X(EigrpInterface) \
     X(BgpTransportBase) \
@@ -102,7 +103,7 @@ constexpr std::size_t listSize(RegistryIdList<Ts...>) { return sizeof...(Ts); }
 inline constexpr std::size_t registryCount = listSize(RegistryEntries{});
 
 /**
- * A registry's id is its position in the list. Searched rather than stored, so
+ * @brief A registry's id is its position in the list. Searched rather than stored, so
  * adding a registry needs no number written anywhere; a type that is not in the
  * list is a compile error, which is the intent.
  */
@@ -122,7 +123,7 @@ template <typename ENUM>
 inline constexpr bool isRegisteredV = registryIdV<ENUM> < registryCount;
 
 /**
- * Slots a registry occupies in the slot table. Every config enum terminates
+ * @brief Slots a registry occupies in the slot table. Every config enum terminates
  * with COUNT, so this is uniform across macro generated and hand written enums.
  */
 template <typename ENUM>
@@ -179,7 +180,7 @@ constexpr uint16_t slotSpan(uint16_t registry)
 inline constexpr uint16_t NOT_FOUND = 0xFFFFu;
 
 /**
- * True when a registry has a generated field-name hash table.
+ * @brief True when a registry has a generated field-name hash table.
  *
  * DEFINE_CONFIG_GROUP emits one; registries still written by hand do not, so
  * their fields cannot be named from the grammar until they are converted. They
@@ -241,7 +242,7 @@ constexpr uint16_t findFieldIn(RegistryIdList<Ts...>, uint16_t registry, uint32_
 }
 
 /**
- * True when a registry has a generated field tuple to index into.
+ * @brief True when a registry has a generated field tuple to index into.
  *
  * DEFINE_CONFIG_GROUP emits the RegistryOf specialization; registries still
  * written by hand have none, so their field types cannot be recovered from an
@@ -490,7 +491,7 @@ constexpr FieldScope resolveScopeAt(RegistryIdList<Ts...> list, uint16_t registr
 }
 
 /**
- * Identifies the registry list *and* every field in it. Folds each registry's
+ * @brief Identifies the registry list *and* every field in it. Folds each registry's
  * field hashes in after its name, so inserting, renaming or reordering a field
  * inside a FIELD_LIST changes the value. Without that, a field inserted mid list
  * would shift every index below it while leaving the file hash untouched, and a

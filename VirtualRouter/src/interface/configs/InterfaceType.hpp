@@ -65,7 +65,7 @@ constexpr const char* InterfaceTypeLabels[] = {
  * Maps CLI command strings (e.g., "Ethernet", "FastEthernet") to the corresponding
  * enum value. Case-sensitive matching against standard CLI naming conventions.
  *
- * @param type CLI interface type string.
+ * @param str CLI interface type string.
  * @return InterfaceType enum value, or UNDEFINED if not recognized.
  *
  * @see getInterfaceType(InterfaceType)

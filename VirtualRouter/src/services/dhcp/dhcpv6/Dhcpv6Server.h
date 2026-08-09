@@ -344,8 +344,7 @@ struct Dhcpv6SendType
 /**
  * @ingroup SERVICES_DHCP_V6
  * @enum ReconfigReason
- *
- * This holds resonds for the reconfiguration.
+ * @brief Reasons a server-initiated Reconfigure message can carry (RFC 8415 SS21.19).
  */
 enum class ReconfigReason : uint8_t
 {
@@ -361,8 +360,7 @@ struct ReconfigureAccepts
 
 /**
  * @struct ReconfigureState
- *
- * This object holds reconfiguration states for certain clients.
+ * @brief Per-client state tracking an in-flight Reconfigure exchange.
  */
 struct ReconfigureState
 {
@@ -462,27 +460,32 @@ class Dhcpv6Server
     /**
      * @brief Extracts the client IA_NA data: IAID, T1, T2, and IAADDR.
      *
-     * @param header DHCPv6 message header.
-     * @param iface interface::Interface the packet was received on.
-     * @return dhcpv6 ia optiohs
+     * @param option    The IA_NA option to parse.
+     * @param network   Network the client was matched to.
+     * @param clientID  Client DUID, used to look up an existing binding.
+     * @param isBinding True when the request should update the lease binding.
+     * @return The parsed IA_NA block, or nullopt if the option is malformed.
      */
     std::optional<IANABlock> extractIA_NA(const packet::TLV16Option& option, DhcpNetwork* network, Duid& clientID, bool isBinding);
 
     /**
      * @brief Extracts IA_TA and TEMP address for temporary address support.
      *
-     * @param header DHCPv6 message header.
-     * @param iface interface::Interface the packet was received on.
-     * @return True if IA_TA and IAADDR were found and parsed
+     * @param option    The IA_TA option to parse.
+     * @param network   Network the client was matched to.
+     * @param isBinding True when the request should update the lease binding.
+     * @return The parsed IA_TA block, or nullopt if the option is malformed.
      */
     std::optional<IATABlock> extractIA_TA(const packet::TLV16Option& option, DhcpNetwork* network, bool isBinding);
 
     /**
-     * @brief Extracts IA_PD and IAPREFIX for prefix deligation support.
+     * @brief Extracts IA_PD and IAPREFIX for prefix delegation support.
      *
-     * @param header DHCPv6 message header.
-     * @param iface interface::Interface the packet was received on.
-     * @return True if IA_NA and IAADDR were found and parsed.
+     * @param option    The IA_PD option to parse.
+     * @param network   Network the client was matched to.
+     * @param clientID  Client DUID, used to look up an existing binding.
+     * @param isBinding True when the request should update the lease binding.
+     * @return The parsed IA_PD block, or nullopt if the option is malformed.
      */
     std::optional<IAPDBlock> extractIA_PD(const packet::TLV16Option& option, DhcpNetwork* network, Duid& clientID, bool isBinding);
 
@@ -491,12 +494,12 @@ class Dhcpv6Server
     /**
      * @brief Builds a standard DHCPv6 reply header with all configured options.
      *
-     * @param type Message type to respond with.
-     * @param transactionID transaction ID of the client message.
-     * @param config Network config.
-     * @param iaidBlocks Blocks of IAID information.
-     * @param iapdBlocks Blocks of IAPD information.
-     * @return A fully constructed DHCPv6 object.
+     * @param dhcp     Reply header to populate.
+     * @param clientID Client identifier echoed back in the reply.
+     * @param tlv      Option buffer the response options are written into.
+     * @param ia       IA options to include, or nullptr for none.
+     * @param oro      Option Request Option list from the client.
+     * @param oroSize  Number of entries in @p oro.
      */
     void buildResponse(
         packet::Dhcpv6Header& dhcp,
@@ -534,10 +537,10 @@ class Dhcpv6Server
     // UTILS---------------------------------------------------
 
     /**
-     * @brief Finds the matching network configuration for a DHCPv6 header.
+     * @brief Finds the network configuration whose prefix covers an address.
      *
-     * @param dhcpHeader The DHCP header.
-     * @return The network identifier if found, or an empty ByteString otherwise.
+     * @param ip The client address to match against configured networks.
+     * @return The matching prefix, or an empty prefix if none covers @p ip.
      */
     types::IPPrefix findMatchingNetwork(const uint8_t* ip);
 
@@ -575,17 +578,6 @@ class Dhcpv6Server
     void addRKAPAuthKey(const ByteString& secret, std::chrono::seconds lifetime);
 
     void cleanupExpiredKeys();
-
-    /**
-     * @brief Builds a Authentication Option for secure dhcp handling.
-     */
-
-    /**
-     * @brief Validates the Authentication on a incoming dhcpv6 packet
-     *
-     * @param header The incoming DHCPv6 header.
-     * @param duid The Client ID of the incoming packet.
-     */
 
     /**
      * @brief Builds a status option to send back to the client indicating status of request.

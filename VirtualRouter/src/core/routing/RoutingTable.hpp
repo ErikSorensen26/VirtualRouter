@@ -192,7 +192,16 @@ public:
     }
 
     /**
-     * TODO doxy comment
+     * @brief Exact-match lookup returning every candidate route for a prefix.
+     *
+     * Forwards to Rib::lookupBucket(). Use this instead of lookup() when the
+     * caller needs the losing routes too, such as when showing all protocol
+     * candidates for a prefix.
+     *
+     * @tparam Prefix An IPv4 or IPv6 prefix type.
+     * @param prefix The exact prefix to look up.
+     * @return The bucket for that prefix, or `nullptr` if no route exists.
+     * @warning The guard must outlive the returned pointer and its contents.
      */
     template <types::IsIPPrefix Prefix>
     RibBucket<typename Prefix::Addr>* lookupBucket(const Prefix& prefix, utils::RCU::Guard&)
@@ -269,8 +278,8 @@ public:
 
     /**
      * @brief Cancel any watch (prefix, address, or protocol) by ID.
-     * @param id   Watch ID to cancel.
-     * @param isV6 `true` to cancel in the IPv6 RIB; `false` for IPv4.
+     * @param id Watch ID to cancel.
+     * @tparam AddrType `uint32_t` for the IPv4 RIB, `__uint128_t` for IPv6.
      */
     template <typename AddrType>
     void unwatchAddress(uint32_t id)

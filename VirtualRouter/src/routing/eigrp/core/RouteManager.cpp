@@ -33,7 +33,7 @@ void RouteManager::withdrawRoute(const types::IPPrefix withdraw)
 
 void RouteManager::synchronizeRoutes(const std::vector<TopologyEntry*>& entries)
 {
-    uint8_t scale = base.getGlobalConfigMgr().getRibScale();
+    uint8_t scale = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::RIB_SCALE>().load();
 
     std::vector<const RouteInfo*> changedRoutes;
 
@@ -56,7 +56,7 @@ void RouteManager::synchronizeRoutes(const std::vector<TopologyEntry*>& entries)
 
 void RouteManager::synchronizeRoute(const TopologyEntry& entry)
 {
-    uint8_t scale = base.getGlobalConfigMgr().getRibScale();
+    uint8_t scale = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::RIB_SCALE>().load();
     if (af == types::AddressFamily::IPv4)
     {
         if (auto r = syncRoute<uint32_t>(&entry, scale); r)

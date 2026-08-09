@@ -92,14 +92,13 @@ public:
     std::unordered_map<uint32_t, NetV2ByLsId> netV2ByLsId;
 
     /**
-     * @brief Constructs the topology index from the LSDB of @p area.
+     * @brief Constructs the topology index from the LSDB of @p mgr's area.
      *
-     * Walks all Router-LSAs and Network-LSAs in @p area's LSDB and populates
-     * the @c rtr, @c net, and @c netV2ByLsId indices. The area must remain
-     * valid and unmodified for the lifetime of this object.
+     * Walks all Router-LSAs and Network-LSAs in that LSDB and populates the
+     * @c rtr, @c net, and @c netV2ByLsId indices. The area must remain valid
+     * and unmodified for the lifetime of this object.
      *
-     * @param lsdb  OSPF LSDB.
-     * @param area  OSPF area whose LSDB is indexed.
+     * @param mgr  SPF manager owning the area whose LSDB is indexed.
      */
     SpfTopology(SpfManager& mgr);
 

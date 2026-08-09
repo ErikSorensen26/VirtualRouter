@@ -76,12 +76,19 @@ concept IsFieldTuple =
     requires(T* obj) { []<typename... Fields>(FieldTuple<Fields...>*){}(obj); };
 
 /**
- * TODO finish doxy
+ * @brief Declares the field list for a @ref SubRegistry as a named base class.
+ *
+ * Registries name their fields by deriving from this rather than passing the
+ * pack to @ref SubRegistry directly, so that one field list can be shared by
+ * several registries and matched by the @ref IsFieldTuple concept.
+ *
+ * @tparam Field Field types in enum order; position `i` must correspond to
+ *               enum constant `i` of the owning registry's ENUM.
  */
 template <typename ...Field>
 struct FieldTuple
 {
-    using Type = std::tuple<Field...>;
+    using Type = std::tuple<Field...>; ///< The underlying tuple the registry stores.
 };
 
 /**
@@ -268,7 +275,7 @@ public:
      * Used after construction to change or establish parent relationship.
      * All maskable fields are reset to inherit from the new parent.
      *
-     * @param parent Pointer to parent SubRegistry (or nullptr to remove masking).
+     * @param mask Registry to inherit from, or nullptr to remove masking.
      */
     void setMask(SubRegistry* mask)
     {
@@ -284,7 +291,16 @@ public:
     }
 
     /**
-     * TODO add doxy comment
+     * @brief Invokes @p f on the single field at runtime index @p idx.
+     *
+     * Bridges a runtime index to the compile-time `get<ENUM>()` accessors, so
+     * callers that only know a field number (grammar dispatch, serialisation)
+     * can reach a typed field. @p f is called at most once; an out-of-range
+     * @p idx is silently a no-op.
+     *
+     * @tparam F Callable accepting any one of the registry's field types.
+     * @param idx Zero-based field index, matching the ENUM constant's value.
+     * @param f   Visitor invoked with a reference to the selected field.
      */
     template <typename F>
     void visit(size_t idx, F&& f)
@@ -333,8 +349,8 @@ private:
      * @brief Constructs a root registry with no parent.
      *
      * Initializes all fields with default values from RegistryDefaultTable.
-     * 
-     * @param parent Pointer to parent SubRegistry.
+     *
+     * @param p Owner of this registry, retained for scope traversal.
      */
     template <typename P>
     explicit SubRegistry(P& p) noexcept
@@ -354,8 +370,8 @@ private:
      * All fields are initialized and then masked with parent field values.
      * Child can override parent values on a per-field basis.
      *
-     * @param parent Pointer to parent SubRegistry.
-     * @param mask Reference to inherited SubRegistry of the same type.
+     * @param p Owner of this registry, retained for scope traversal.
+     * @param mask Registry of the same type whose values are inherited.
      */
     template <typename P>
     SubRegistry(P& p, SubRegistry& mask)

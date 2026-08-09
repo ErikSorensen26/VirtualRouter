@@ -9459,6 +9459,9 @@
                         {
                             "description": "Autonomous system number",
                             "name": "<1-65535>",
+                            "properties": [
+                                "recursive"
+                            ],
                             "subcommands": [
                                 {
                                     "description": "Redistribution options",
@@ -9471,6 +9474,9 @@
                 {
                     "description": "Connected routes",
                     "name": "connected",
+                    "properties": [
+                        "recursive"
+                    ],
                     "subcommands": [
                         {
                             "description": "Redistribution options",
@@ -9485,6 +9491,9 @@
                         {
                             "description": "Autonomous system number",
                             "name": "<1-65535>",
+                            "properties": [
+                                "recursive"
+                            ],
                             "subcommands": [
                                 {
                                     "description": "Redistribution options",
@@ -9501,6 +9510,9 @@
                         {
                             "description": "Process ID",
                             "name": "<1-65535>",
+                            "properties": [
+                                "recursive"
+                            ],
                             "subcommands": [
                                 {
                                     "description": "Redistribution options",
@@ -9517,6 +9529,9 @@
                         {
                             "description": "Process ID",
                             "name": "<1-65535>",
+                            "properties": [
+                                "recursive"
+                            ],
                             "subcommands": [
                                 {
                                     "description": "Redistribution of OSPF routes",
@@ -9618,6 +9633,9 @@
                         {
                             "description": "Process ID",
                             "name": "<1-65535>",
+                            "properties": [
+                                "recursive"
+                            ],
                             "subcommands": [
                                 {
                                     "description": "Redistribution of OSPF routes",
@@ -9715,6 +9733,9 @@
                 {
                     "description": "Routing Information Protocol (RIP)",
                     "name": "rip",
+                    "properties": [
+                        "recursive"
+                    ],
                     "subcommands": [
                         {
                             "description": "Redistribution options",
@@ -9725,6 +9746,9 @@
                 {
                     "description": "Static routes",
                     "name": "static",
+                    "properties": [
+                        "recursive"
+                    ],
                     "subcommands": [
                         {
                             "description": "Redistribution options",

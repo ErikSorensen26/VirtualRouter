@@ -137,14 +137,14 @@ const uint8_t* EigrpInterface::multicastEnabled()
 
 void EigrpInterface::startDampening()
 {
-    if (base.getGlobalConfigMgr().getDampening())
+    if (base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::MAXIMUM_PREFIX_DAMPENING>().load())
         tmgr.startDampeningIntervalTimer();
 }
 
 bool EigrpInterface::recordDampeningEvent()
 {
     auto& cfg = base.getGlobalConfigMgr();
-    if (!cfg.getDampening()) return true;
+    if (!cfg.getConfigs().get<config::Eigrp::MAXIMUM_PREFIX_DAMPENING>().load()) return true;
 
     auto now = std::chrono::steady_clock::now();
     routeChangeTimes.push_back(now);
@@ -160,7 +160,7 @@ bool EigrpInterface::recordDampeningEvent()
 void EigrpInterface::triggerDampeningOnRouteChange()
 {
     auto& cfg = base.getGlobalConfigMgr();
-    uint32_t maxPrefix = cfg.getMaximumPrefixes();
+    uint32_t maxPrefix = cfg.getConfigs().get<config::Eigrp::MAXIMUM_PREFIX>().load();
     if (maxPrefix == 0) return;
 
     prefixCount.fetch_add(1, std::memory_order_relaxed);
@@ -182,7 +182,7 @@ void EigrpInterface::checkDampeningStatus()
     if (!isSupressed.load(std::memory_order_relaxed)) return;
 
     auto& cfg = base.getGlobalConfigMgr();
-    bool reachedLimit = restartCounter >= cfg.getDampeningRestartCount();
+    bool reachedLimit = restartCounter >= cfg.getConfigs().get<config::Eigrp::MAXIMUM_PREFIX_RESTART_COUNT>().load();
 
     isSupressed.store(false, std::memory_order_release);
     routeChangeTimes.clear();
@@ -207,11 +207,11 @@ void EigrpInterface::onDampeningRestartExpire()
 void EigrpInterface::onDampeningIntervalExpire()
 {
     auto& cfg = base.getGlobalConfigMgr();
-    if (!cfg.getDampening()) return;
+    if (!cfg.getConfigs().get<config::Eigrp::MAXIMUM_PREFIX_DAMPENING>().load()) return;
 
     tmgr.startDampeningIntervalTimer();
 
-    const uint32_t maxPrefixes = cfg.getMaximumPrefixes();
+    const uint32_t maxPrefixes = cfg.getConfigs().get<config::Eigrp::MAXIMUM_PREFIX>().load();
     if (maxPrefixes == 0) return;
 
     double changePercent = (static_cast<double>(routeChangeTimes.size()) / maxPrefixes) * 100.0;

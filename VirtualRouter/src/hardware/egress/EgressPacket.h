@@ -58,7 +58,6 @@ public:
      * @brief Constructs the TPACKET_V2 backend: opens socket, maps ring, initialises free ring.
      *
      * @param iface  Interface to transmit on.
-     * @param opts   Queue options (frame count, snap length, CPU affinity, etc.).
      * @throws std::runtime_error if any kernel setup step fails.
      */
     EgressPacket(interface::Interface& iface, const qos::egress::TxQueueOpts&);

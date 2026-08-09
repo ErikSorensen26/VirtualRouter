@@ -99,10 +99,9 @@ public:
     friend class ProcessPacket;
 
     /**
-     * @brief Constructs a DhcpClient with the specific interface.
+     * @brief Constructs a Dhcpv6Client bound to a specific interface.
      *
-     * @param CurrentInterface Reference ot the interface object
-     * @param reduced Mode to reduce functions in the constructor for testing.
+     * @param currentInterface Interface this client requests addresses for.
      */
     Dhcpv6Client(interface::Interface* currentInterface);
 

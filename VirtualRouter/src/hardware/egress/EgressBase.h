@@ -212,7 +212,7 @@ protected:
     void destroyFreeRing();
 
     /**
-     * MPMC free ring
+     * @brief MPMC free ring
      *
      * Invariant for slot at ring position p (p & freeMask = i):
      *   freeSeq[i] == p       → empty,  ready for a producer to claim position p

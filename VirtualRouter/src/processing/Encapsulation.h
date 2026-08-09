@@ -16,12 +16,7 @@ class PacketBuilder;
 using HeaderType = packet::HeaderType;
 
 /**
- * @file Encapsulation.cpp
- * @brief Implements the encapsulation of packet information into a formatted ByteString.
- */
-
-/**
- * @brief Encapsulates packet information into a formatted ByteString.
+ * @brief Serialises the builder's parsed headers into its wire-format frame.
  *
  * This function serializes various protocol headers from the `PacketInfo` structure,
  * recalculates necessary checksums, and appends the encapsulated payload to form a
@@ -29,9 +24,9 @@ using HeaderType = packet::HeaderType;
  * Layer 2.5 (ARP, MPLS, VLAN, LLDP), Layer 3 (IPv4, IPv6, GRE, AH, ESP, ICMP, IGMP, EIGRP),
  * Layer 4 (TCP, UDP), and Layer 5 (DHCP).
  *
- * @param packet A reference to a `PacketInfo` structure containing parsed protocol headers.
- * @param encapsulated A `ByteString` representing the encapsulated payload (e.g., application data).
- * @return A `ByteString` containing the fully encapsulated and formatted packet ready for transmission.
+ * @param packet Builder holding the parsed protocol headers; written in place.
+ * @return True if the frame was fully encapsulated, false on an unsupported
+ *         header combination or insufficient frame space.
  */
 bool encapsulate(PacketBuilder& packet);
 

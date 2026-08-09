@@ -7,17 +7,19 @@
  * the node the parse landed on plus that command's value tokens, find what is
  * bound to the node and call it.
  *
- * Two things can be bound, and both go through the same configId. Most commands
+ * Three things can be bound, and all go through the same configId. Most commands
  * write a field. A few enter a mode, and those resolve the same binding to a
  * child registry rather than to a value -- `interface Vlan 10` looks 10 up in the
  * owned list the field names, and the instance it finds becomes the context the
- * next line writes to.
+ * next line writes to. A rescope resolves exactly as a mode change does but stops
+ * there, moving the write scope for the rest of the line while the session stays
+ * where it was standing.
  *
  * The split matters because parsing is entangled with the terminal -- help
  * listings, tab completion, caret markers, pagination -- and running a command
- * is not. Nothing here prints, reads input, or knows a console exists. An
- * @ref ExecRequest carries only what execution needs, so the five parse outcomes
- * that exist purely to be *displayed* never reach this far.
+ * is not. Nothing here prints, reads input, or knows a console exists. The
+ * matched tokens carry only what execution needs, so the parse outcomes that
+ * exist purely to be *displayed* never reach this far.
  */
 
 #ifndef CLI_EXECUTOR_HPP
@@ -49,16 +51,21 @@ namespace cli::execution
  * Holds no state between lines: the mode stack and the context outlive it and
  * carry everything a command needs, so one instance serves the whole session.
  *
- * Within a line it walks the tokens front to back, because the binding rides
- * the keyword token rather than the value that follows it. Each step consumes
- * one run and dispatches on what opened it: entering a mode, leaving one,
- * rescoping the rest of the line, staging a tuple member, applying a run of
- * bitmap flags, writing a field, or nothing at all for a keyword that only
- * routed the parse.
+ * A line is not run in the order it was typed. It is first grouped into the
+ * scopes its commands write to -- see @ref orderByScope -- so that what a
+ * command targets does not depend on where the phrasing happened to put a
+ * rescope. Within a block the typed order stands, because the binding rides the
+ * keyword token rather than the value that follows it.
+ *
+ * The walk then consumes one run at a time and dispatches on what opened it:
+ * entering a mode, leaving one, rescoping the rest of the line, staging a tuple
+ * member, applying a run of bitmap flags, writing a field, or nothing at all
+ * for a keyword that only routed the parse.
  *
  * Staged tuple members are the exception to running as it walks: a tuple entry
- * is assembled from members named across the line and cannot be written until
- * the line ends, so those are collected and committed together at the end.
+ * is assembled from members named across a block and cannot be written until
+ * that block ends, so those are collected and committed at every boundary that
+ * moves the write scope, and once more when the line runs out.
  */
 class Executor
 {
@@ -75,6 +82,32 @@ public:
     {
         void* ptr = nullptr;
         uint16_t registry = ContextBase::NO_REGISTRY;
+    };
+
+    /**
+     * @brief Which scope of a line a token is written in.
+     *
+     * Rescopes are numbered in the order the line names them, since each one
+     * resolves its field out of the scope before it and so has to run in that
+     * order. A mode change is not part of that sequence -- it is last whatever
+     * else the line did -- so it says so on its own field rather than by
+     * holding a reserved index, which would make it the same value as a
+     * rescope that counted far enough.
+     *
+     * This is the sort comparator, so @ref operator< has to stay a strict weak
+     * ordering: compare the fields in one fixed order, most significant first,
+     * and let a new dimension join that sequence rather than cut across it.
+     */
+    struct Block
+    {
+        bool isMode = false;
+        uint32_t index = 0;
+
+        bool operator<(const Block& o) const
+        {
+            if (isMode != o.isMode) return !isMode;
+            return index < o.index;
+        }
     };
 
     /**
@@ -103,6 +136,9 @@ public:
      *
      * Deferred values are resolved before the walk begins, since a command that
      * holds its value under a key may be read before the command supplying it.
+     * The line is then grouped by write scope, so the run loop below sees the
+     * blocks in the order they have to run rather than the order they were
+     * typed -- @ref orderByScope has the why.
      *
      * @param tokens The matched line: every token the parse produced, each
      *               carrying the tree node it resolved to.
@@ -115,54 +151,64 @@ public:
 
         RegistryScope scope(ctx);
 
-        std::vector<Token> toks;
+        std::vector<Token*> toks;
         toks.reserve(tokens.size());
 
         for (size_t i = 0; i < tokens.size(); i++)
         {
             Token& tok = tokens[i];
 
-            if (tok.resolver()) continue;
+            if (tok.resolver() && !tok.hasNode()) continue;
 
-            toks.push_back(tok);
+            toks.push_back(&tok);
 
             if (!tok.deferred()) continue;
 
-            const uint8_t deferKey = tok.node.node().deferKey();
-            for (size_t x = 0; x < tokens.size(); x++)
+            const uint16_t deferKey = tok.node.node().deferKey();
+            for (size_t x = tokens.size(); x-- > 0; )
             {
                 Token& r = tokens[x];
+
                 if (r.resolver() && r.node.node().deferKey() == deferKey)
                 {
-                    toks.push_back(r);
+                    if (r.hasNode()) tok.node = r.node;
+                    if (!r.hasNode()) toks.push_back(&r);
                     break;
                 }
             }
         }
 
-        const std::span<Token> line(toks);
+        orderByScope(toks);
 
-        for (size_t i = 0; i < line.size(); )
+        for (size_t i = 0; i < toks.size(); )
         {
             const size_t start = i;
-            Token& tok = line[i];
+            Token& tok = *toks[i];
 
             if (tok.modeFlagged())
             {
-                i = utils::nextBound(line, i, &Token::modeFlagged);
-                if (!handleModeChange(line.subspan(0, i), scope.release())) return false;
+                if (!commitStaged(staged)) return false;
+
+                i = utils::nextBound(toks, i, &Token::modeFlagged);
+
+                if (!handleModeChange(std::span<Token*>(toks.data() + start, i - start),
+                                      scope.release())) return false;
             }
             else if (tok.registryFlagged())
             {
-                i = utils::nextBound(line, i, &Token::registryFlagged);
+                if (!commitStaged(staged)) return false;
+
+                i = utils::nextBound(toks, i, &Token::registryFlagged);
                 scope.arm();
-                if (!handleRegistryChange(line.subspan(start, i - start))) return false;
+                if (!handleRegistryChange(std::span<Token*>(toks.data() + start, i - start))) return false;
             }
             else if (tok.modeExit())
             {
+                if (!commitStaged(staged)) return false;
+
                 ++i;
                 scope.disarm();
-                if (!handleModeExit(line[start])) return false;
+                if (!handleModeExit(toks[start])) return false;
             }
             else if (tok.tupChange())
             {
@@ -171,14 +217,14 @@ public:
             }
             else if (tok.bitMapFlag())
             {
-                i = execution::bitMapRunEnd(line, i);
-                if (!handleBitMapFlags(line.subspan(start, i - start))) return false;
+                i = execution::bitMapRunEnd(toks, i);
+                if (!handleBitMapFlags(std::span<Token*>(toks.data() + start, i - start))) return false;
             }
             else if (tok.hasNode())
             {
-                i = utils::nextBound(line, i, &Token::hasNode);
-                i = utils::nextSegment(line, start, i);
-                if (!handleValueChange(line.subspan(start, i - start))) return false;
+                i = utils::nextBound(toks, i, &Token::hasNode);
+                i = utils::nextSegment(toks, start, i);
+                if (!handleValueChange(std::span<Token*>(toks.data() + start, i - start))) return false;
             }
             else
             {
@@ -187,10 +233,86 @@ public:
             }
         }
 
-        return execution::commitTuples(ctx, staged);
+        // The last block ends with the line rather than at a command, so it has
+        // no boundary of its own to commit at.
+        return commitStaged(staged);
     }
 
 private:
+
+    /**
+     * @brief Writes the tuples staged so far, and empties the staging list.
+     *
+     * Called wherever the write scope is about to move, and once when the line
+     * runs out. A tuple is assembled from members named across a block and
+     * cannot be written until the block ends, but it must not outlive it
+     * either: the members named one scope's entry, and by the next command
+     * that scope is gone.
+     */
+    bool commitStaged(std::vector<Token*>& staged)
+    {
+        if (staged.empty()) return true;
+
+        const bool ok = execution::commitTuples(ctx, staged);
+        staged.clear();
+        return ok;
+    }
+
+    /**
+     * @brief Groups the line into the scopes its commands write to.
+     *
+     * A line is written in whatever order reads well -- `router eigrp 1 vrf RED
+     * network 10.0.0.0 redistribute static` names two scopes and moves between
+     * them wherever the phrasing put the move. Executing in that order makes
+     * every command's target depend on which rescopes happen to precede it,
+     * which is why a tuple named across a rescope used to commit into the wrong
+     * registry.
+     *
+     * So the line is grouped before it is run: everything writing the current
+     * scope first, then each rescope with the commands it introduced, then mode
+     * changes last. What a command writes then depends on the block it is in
+     * rather than on where the phrasing put it.
+     *
+     * The grouping is stable, so within a block the line order is untouched --
+     * which is what keeps a run's value tokens behind the keyword that binds
+     * them, and the members of one tuple in the order they were typed.
+     *
+     * Mode changes go last because they are the one move that outlives the
+     * line. Anything after one would be written in the entered mode rather than
+     * the mode the line was typed in, so there is nothing that may follow.
+     */
+    void orderByScope(std::vector<Token*>& toks)
+    {
+        std::vector<Block> block(toks.size());
+
+        Block current;
+        uint32_t next = 1;
+
+        for (size_t i = 0; i < toks.size(); i++)
+        {
+            Token* t = toks[i];
+            if (!t) continue;
+
+            if (t->modeFlagged())          current = Block{ true, 0 };
+            else if (t->registryFlagged()) current = Block{ false, next++ };
+
+            block[i] = current;
+
+            if (t->modeExit()) break;
+        }
+
+        std::vector<size_t> order(toks.size());
+        for (size_t i = 0; i < order.size(); i++) order[i] = i;
+
+        std::stable_sort(order.begin(), order.end(),
+            [&](size_t a, size_t b) { return block[a] < block[b]; });
+
+        std::vector<Token*> sorted;
+        sorted.reserve(toks.size());
+        for (size_t i : order) sorted.push_back(toks[i]);
+
+        toks.swap(sorted);
+    }
 
     /**
      * @brief Resolves the bound field and enters the mode it leads to.
@@ -210,15 +332,16 @@ private:
      * 10` enters Vlan 10 whether or not it has been configured before.
      *
      * @p retTo is where `exit` comes back to. It is passed in rather than read
-     * from the context because a rescope earlier on the same line has already
-     * moved ctx.ctx, and the binding below is resolved against that moved
-     * pointer -- see @ref RegistryScope::release.
+     * from the context because a rescope earlier on the same line may have moved
+     * ctx.ctx already, and the binding below has to be resolved against that
+     * moved pointer while the return frame has to hold the one the line started
+     * on -- see @ref RegistryScope::release.
      */
-    bool handleModeChange(std::span<Token> toks, Scope retTo)
+    bool handleModeChange(std::span<Token*> toks, Scope retTo)
     {
         const Token* binding = nullptr;
-        for (Token& t : toks)
-            if (t.hasNode()) binding = &t;
+        for (Token* t : toks)
+            if (t && t->hasNode()) binding = t;
 
         if (!binding) return false;
 
@@ -267,13 +390,15 @@ private:
      * exit resolves no field, because where it lands is whatever the navigation
      * stack was already holding rather than something the command names.
      *
-     * `end` unwinds to the bottom where `exit` steps back one. Which of the two
-     * this is comes from the command's name rather than a flag: both are the
-     * same kind of node to the tree, and the grammar has one spelling for each.
+     * `end` unwinds every configuration mode where `exit` steps back one, so it
+     * stops at the first mode that is not one -- PrivilegedExec, normally --
+     * rather than at the bottom of the stack. Which of the two this is comes
+     * from the command's name rather than a flag: both are the same kind of node
+     * to the tree, and the grammar has one spelling for each.
      */
-    bool handleModeExit(Token& t)
+    bool handleModeExit(Token* t)
     {
-        if (t.node.name() != "end") return nav.popMode();
+        if (t && t->node.name() != "end") return nav.popMode();
 
         while (isConfigurationMode(nav.getMode()) && nav.popMode()) {}
 
@@ -347,11 +472,11 @@ private:
      * stack and the grammar cursor are untouched, so the session stays where it
      * was standing and only the write scope moves.
      */
-    bool handleRegistryChange(std::span<Token> toks)
+    bool handleRegistryChange(std::span<Token*> toks)
     {
         const Token* binding = nullptr;
-        for (Token& t : toks)
-            if (t.hasNode()) binding = &t;
+        for (Token* t : toks)
+            if (t && t->hasNode()) binding = t;
 
         if (!binding) return false;
 
@@ -400,9 +525,9 @@ private:
      * binds the same field by construction; the rest contribute only their
      * members.
      */
-    bool handleBitMapFlags(std::span<Token> toks)
+    bool handleBitMapFlags(std::span<Token*> toks)
     {
-        const tree::CommandNode& bound = toks.front().node.node();
+        const tree::CommandNode& bound = toks.front()->node.node();
 
         bool ok = false;
         utils::visitBound(ctx, bound, [&](auto&& accessor)
@@ -427,10 +552,10 @@ private:
      * second from the run behind it -- which token count a field wants is a
      * property of its type, so only the visit below can decide it.
      */
-    bool handleValueChange(std::span<Token> toks)
+    bool handleValueChange(std::span<Token*> toks)
     {
-        Token& value = toks[0];
-        Token* extra = toks.size() > 1 ? &toks[1] : nullptr;
+        Token& value = *toks[0];
+        Token* extra = toks.size() > 1 ? toks[1] : nullptr;
 
         const tree::CommandNode& bound = value.node.node();
 

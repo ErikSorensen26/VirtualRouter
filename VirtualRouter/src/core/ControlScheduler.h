@@ -61,6 +61,10 @@ public:
     using ProcessQueueId = ProcessQueueSlot*; ///< Opaque handle identifying a @ref ProcessQueue's slot.
 
     /**
+     * @brief Constructs a scheduler bound to an existing thread pool and time manager.
+     *
+     * Neither reference is owned; both must outlive the scheduler.
+     *
      * @param externalPool     ThreadPool used to dispatch drain tasks.
      * @param tmgr             TimeManager used for delayed-task timers.
      * @param reserveQueues    Number of @ref ProcessQueue slots to pre-allocate; the pool
@@ -399,7 +403,7 @@ private:
     DelayedSlot*  delayedSlots = nullptr;
 
     /**
-     * Lock-free LIFO free list of delayed slots. The low 32 bits hold the
+     * @brief Lock-free LIFO free list of delayed slots. The low 32 bits hold the
      * head index, the high 32 bits an ABA tag bumped on every push/pop.
      */
     std::atomic<uint64_t> delayedFreeHead;

@@ -191,8 +191,7 @@ public:
      * - Gratuitous ARP broadcasts (two, per RFC behavior)
      * - EIGRP interface refresh events
      *
-     * @param ip        IPv4 address.
-     * @param subnet    Prefix length (0–32).
+     * @param prefix    IPv4 address and prefix length to assign.
      * @param secondary Set the IP as a secondary address.
      */
     MOCK bool setIPv4(types::IPv4Prefix prefix, bool secondary = false);
@@ -204,17 +203,15 @@ public:
      * - Duplicate Address Detection (NDP)
      * - VRF-level EIGRP IPv6 refresh
      *
-     * @param addr      Reference to 16-byte IPv6 address.
-     * @param linkLocal True if creating a link-local address.
-     * @param prefix    Prefix length (default 64).
-     * @param eui64     Whether EUI-64 formatting should apply.
+     * @param addr  IPv6 address and prefix length to assign.
+     * @param eui64 Whether EUI-64 formatting should apply.
      */
     MOCK bool setIPv6(const types::IPv6Prefix& addr, bool eui64 = false);
 
     /**
-     * @brief Marks the IPv4 address as ready
+     * @brief Marks an IPv6 address as ready once it has passed DAD.
      *
-     * @param ip        IPv4 address.
+     * @param addr The tentative address that completed Duplicate Address Detection.
      */
     void setIPv6Ready(const types::IPv6Prefix& addr);
 
@@ -238,7 +235,7 @@ public:
     /**
      * @brief Remove all IPv6 addresses from this interface.
      *
-     * @param ll Will also remove the link local address.
+     * @param local Will also remove the link local address.
      */
     void removeAllIPv6(bool local = false);
 
@@ -257,7 +254,6 @@ public:
      * Called after ND reports a conflict.
      *
      * @param address The duplicate IPv6 address.
-     * @param linkLocal True if matching against link-local address.
      */
     void markAddressDuplicate(types::IPv6Prefix address);
 
@@ -417,30 +413,50 @@ private:
     // ROUTE MANAGEMENT
 
     /**
-     * TODO doxy comment
+     * @brief Installs the CONNECTED route for one assigned address into the VRF RIB.
+     *
+     * The prefix is masked to network form before insertion, and the route is
+     * added with admin distance 0, metric 0, and this interface as its only
+     * next hop. Called on every successful address assignment.
+     *
+     * @param network Address and prefix length that was just assigned.
+     * @tparam Prefix types::IPv4Prefix or types::IPv6Prefix.
      */
     template <types::IsIPPrefix Prefix>
     void applyConnectedRoute(Prefix network);
 
     /**
-     * TODO doxy comment
+     * @brief Reinstalls the CONNECTED routes for every address of one family.
+     *
+     * Covers the primary and all secondary addresses. Used on bring-up and on
+     * VRF reassignment, where the RIB is rebuilt from current configuration.
+     *
+     * @tparam Prefix types::IPv4Prefix or types::IPv6Prefix.
      */
     template <types::IsIPPrefix Prefix>
     void applyAllConnectedRoutes();
+
+    /** @brief Reinstalls the CONNECTED routes for both address families. */
     void applyAllConnectedRoutes();
 
-
     /**
-     * TODO doxy comment
+     * @brief Withdraws the CONNECTED route for one address from the VRF RIB.
+     *
+     * @param network Address and prefix length being removed.
+     * @tparam Prefix types::IPv4Prefix or types::IPv6Prefix.
      */
     template <types::IsIPPrefix Prefix>
     void removeConnectedRoute(Prefix network);
 
     /**
-     * TODO doxy comment
+     * @brief Withdraws the CONNECTED routes for every address of one family.
+     *
+     * @tparam AddrType types::IPv4Prefix or types::IPv6Prefix.
      */
     template <types::IsIPPrefix AddrType>
     void removeAllConnectedRoutes();
+
+    /** @brief Withdraws the CONNECTED routes for both address families. */
     void removeAllConnectedRoutes();
 
     // STATE MANAGEMENT

@@ -341,7 +341,7 @@ public:
     /**
      * @brief Construct an InterfaceFlagManager, initialising options from
      *        the interface configuration.
-     * @param iface The owning OspfInterfaceBase.
+     * @param aFlags The owning area's flag manager, whose options are inherited.
      */
     InterfaceFlagManager(AreaFlagManager& aFlags)
         : areaFlags(aFlags) {}

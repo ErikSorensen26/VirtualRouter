@@ -637,15 +637,15 @@ void setOwnedField(T& field, cli::ContextBase& ctx, typename T::Field::key& key,
  * instance of it.
  */
 template <typename Key>
-bool resolveKey(std::span<Token> toks, Key& key)
+bool resolveKey(std::span<Token*> toks, Key& key)
 {
     Token* last = nullptr;
     Token* prev = nullptr;
     for (auto it = toks.rbegin(); it != toks.rend(); ++it)
     {
-        if (it->pattern == P_NONE) continue;
-        if (!last)      last = &*it;
-        else if (!prev) prev = &*it;
+        if (!(*it) || (*it)->pattern == P_NONE) continue;
+        if (!last)      last = *it;
+        else if (!prev) prev = *it;
         else            break;
     }
 
@@ -653,9 +653,6 @@ bool resolveKey(std::span<Token> toks, Key& key)
 
     if constexpr (DoubleKeyed<Key>)
     {
-        if (!prev && last != toks.data())
-            prev = last - 1;
-
         if (!prev) return false;
         return utils::translateDoubleValue(key, *prev, *last);
     }
@@ -678,14 +675,18 @@ bool resolveKey(std::span<Token> toks, Key& key)
  * three, and stopping at two keeps a genuinely repeated command from being
  * swallowed whole.
  */
-inline size_t nextSegment(std::span<Token> toks, size_t start, size_t end)
+inline size_t nextSegment(std::span<Token*> toks, size_t start, size_t end)
 {
     if (end >= toks.size() || end != start + 1) return end;
 
-    const tree::CommandNode& head = toks[start].node.node();
-    const tree::CommandNode& next = toks[end].node.node();
+    const Token* headTok = toks[start];
+    const Token* nextTok = toks[end];
 
-    if (!toks[end].hasNode()) return end;
+    if (!nextTok || !headTok || !nextTok->hasNode()) return end;
+
+    const tree::CommandNode& head = headTok->node.node();
+    const tree::CommandNode& next = nextTok->node.node();
+
     if (head.configId != next.configId || head.configExt != next.configExt) return end;
 
     return end + 1;
@@ -707,10 +708,10 @@ inline size_t nextSegment(std::span<Token> toks, size_t start, size_t end)
  * @return Index one past the run, or toks.size() when it reaches the end.
  */
 template <typename Pred>
-size_t nextBound(std::span<Token> toks, size_t i, Pred head)
+size_t nextBound(std::span<Token*> toks, size_t i, Pred head)
 {
     for (++i; i < toks.size(); ++i)
-        if ((toks[i].*head)() || toks[i].hasNode() || toks[i].resolver()) break;
+        if (toks[i] && ((toks[i]->*head)() || toks[i]->hasNode() || toks[i]->resolver())) break;
 
     return i;
 }
@@ -727,15 +728,21 @@ size_t nextBound(std::span<Token> toks, size_t i, Pred head)
  * has no single type for the void* to be cast back to, and it still holds an
  * id and its slots, so the alternative is a hole in a lookup the caller is
  * entitled to make blindly.
+ *
+ * Every registry is reached through the scope the mode is standing in, Global
+ * included: the tag check below confines a command to the registry its mode
+ * holds, and nothing is exempt from it. A command naming a scope it is not in
+ * reaches it by rescoping to it, which is a move the line makes rather than an
+ * address it is handed.
  */
 template <typename ENUM, typename Fn>
 bool visitOne(cli::ContextBase& ctx, uint16_t field, Fn& fn)
 {
     if constexpr (config::hasRegistryV<ENUM>)
     {
-        // visit indexes the field tuple directly, and the index came from a
-        // file, so the bound is checked here rather than trusted.
         if (field >= config::registrySlotsV<ENUM>) return false;
+
+        if (!ctx.ctx) return false;
 
         if (ctx.ctxRegistry != ContextBase::NO_REGISTRY
             && ctx.ctxRegistry != config::registryIdV<ENUM>)
@@ -770,7 +777,7 @@ bool visitOne(cli::ContextBase& ctx, uint16_t field, Fn& fn)
 template <typename Fn>
 bool visitBound(cli::ContextBase& ctx, const tree::CommandNode& n, Fn&& fn)
 {
-    if (!ctx.ctx || !n.hasConfig()) return false;
+    if (!n.hasConfig()) return false;
 
     const uint16_t reg = n.fieldRegistryId();
     if (reg >= config::registryCount) return false;

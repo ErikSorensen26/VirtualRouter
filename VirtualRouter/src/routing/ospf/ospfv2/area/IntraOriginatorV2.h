@@ -40,7 +40,7 @@ class IntraOriginatorV2 : public IntraOriginator
 public:
     /**
      * @brief Constructs an OriginatorV2 bound to the given area.
-     * @param a Owning OSPF area; must outlive this originator.
+     * @param ctx Originator context for the owning area; must outlive this originator.
      */
     IntraOriginatorV2(OriginatorContext& ctx);
 

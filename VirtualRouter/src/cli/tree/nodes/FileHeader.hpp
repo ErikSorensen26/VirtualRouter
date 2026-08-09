@@ -52,7 +52,7 @@ struct FileHeader
     uint32_t blobSize      = 0;
 
     /**
-     * config::REGISTRY_FIELD_HASH at the time this file was written.
+     * @brief config::REGISTRY_FIELD_HASH at the time this file was written.
      *
      * Both halves of a configId are positions: the registry id is a position in
      * REGISTRY_ID_LIST, the field index a position in that registry's enum. A
@@ -63,7 +63,7 @@ struct FileHeader
     uint32_t registryHash  = 0;
 
     /**
-     * Hash of the grammar sources this file was flattened from.
+     * @brief Hash of the grammar sources this file was flattened from.
      *
      * The other two checks catch a changed *build*; this catches changed
      * *input*. Editing a grammar file leaves the format and the registry alone,

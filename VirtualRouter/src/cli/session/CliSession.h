@@ -21,6 +21,7 @@
 
 class Internal_CliTest;
 class Internal_EigrpConfigTest;
+class Internal_GeneratedCommandTest;
 
 namespace core { class VirtualRouter; }
 namespace interface { class Interface; }
@@ -67,6 +68,7 @@ class CliSession : public Console
 public:
     friend class ::Internal_CliTest;
     friend class ::Internal_EigrpConfigTest;
+    friend class ::Internal_GeneratedCommandTest;
     friend class CommandProcessor;
     friend class CliEngine;
     friend Configs;
@@ -155,7 +157,7 @@ private:
         std::vector<Token> tokens;
 
         /**
-         * Index of the first token matched against a pattern node rather than a
+         * @brief Index of the first token matched against a pattern node rather than a
          * command name -- where the command's argument begins. NO_VALUE when the
          * command is all names, like a bool toggle.
          *
@@ -202,7 +204,7 @@ private:
     ParseResult parseInput(std::string& rawInput);
 
     /**
-     * Normalise, parse, and execute one command string.
+     * @brief Normalise, parse, and execute one command string.
      * 
      * @param quiet Suppress the invalid-input marker. Set by the
      *        @ref tryGlobalCommand retry, which is an internal probe: the line

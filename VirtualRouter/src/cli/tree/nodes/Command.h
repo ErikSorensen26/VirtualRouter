@@ -26,8 +26,8 @@ namespace cli::tree
 /**
  * @brief Widest sibling set a per-line "already used" mask can track.
  *
- * Bounds the recursive and single-use properties: both remember which siblings
- * a line has already taken, and the mask holding that is one word wide.
+ * Bounds the recursive property: it remembers which siblings a line has already
+ * taken, and the mask holding that is one word wide.
  */
 constexpr size_t MAX_TRACKED_SIBLINGS = 64;
 
@@ -41,9 +41,9 @@ struct CommandNode
         NEGATE_ALL        = 1u << 1,
         NEGATE_HIDE       = 1u << 2,
         NEGATE_SHOW       = 1u << 3,
-        RECURSIVE         = 1u << 4, // Non repeatable commands
-        SUBCMD_SEQUENCE   = 1u << 5,
-        SUBCMD_SINGLE_USE = 1u << 6,
+        RECURSIVE         = 1u << 4, // On a parent: its children may repeat.
+        MULTI_USE         = 1u << 5, // In a recursive set: this child is not spent when used.
+        // 1u << 6 free (was SUBCMD_SINGLE_USE, now the default).
         MODE_CHANGE       = 1u << 7, // Entering a mode; configExt names which one.
         TUPLE_CHANGE      = 1u << 8,
         ENUM_CHANGE       = 1u << 9,
@@ -53,10 +53,13 @@ struct CommandNode
         DEFERRED          = 1u << 13, // Holds its value under a key; configExt names which.
         RESOLVER          = 1u << 14, // Supplies the value for a key; configExt names which.
         TUPLE_ENUM        = 1u << 15, // Qualifies TUPLE_CHANGE; configExt is split, see tupleEnumIndex().
+        RECURSE_EXCLUDE_ALL = 1u << 16, // In a repeat set: using this member ends the set outright.
+        RECURSE_HIDE        = 1u << 17, // In a repeat set: absent from the re-offer once a sibling is used.
+        RECURSE_SHOW_ALL    = 1u << 18, // In a repeat set: using this member waives RECURSE_HIDE for the rest of the line.
     };
 
     /**
-     * A tuple member that is an enum needs two numbers where every other node
+     * @brief A tuple member that is an enum needs two numbers where every other node
      * needs one: which member of the tuple, and which member of the enum. Both
      * live in configExt, eight bits each.
      *
@@ -75,7 +78,7 @@ struct CommandNode
     }
 
     /**
-     * configId packs the config field this command writes into 32 bits: the
+     * @brief configId packs the config field this command writes into 32 bits: the
      * high 12 bits are the registry id, the low 20 bits the enum index within
      * that registry.
      *
@@ -214,8 +217,13 @@ struct CommandNode
      * @brief True when this command supplies the value a deferred key waits on.
      *
      * The other half of hasDeferred(), numbered out of the same table so the ids
-     * match. It binds no field of its own -- what it resolves is whatever
-     * deferred commands named the same key, wherever in the grammar they sit.
+     * match. What it resolves is whatever deferred commands named the same key,
+     * wherever in the grammar they sit.
+     *
+     * Whether it also writes somewhere is hasConfig()'s business, and the two
+     * are independent. A resolver that binds no field exists only to supply a
+     * value, so execution leaves it out of the walk and reads it by key; one
+     * that binds a field is a command as well, and is walked in its place.
      */
     bool hasResolver() const { return (flags & RESOLVER) && configExt != CONFIG_EXT_NONE; }
 

@@ -90,8 +90,8 @@ void DuelEngine::updateSuccessors(std::vector<TopologyEntry*>& entries)
 bool DuelEngine::recalculateSuccessors(TopologyEntry* entry)
 {
     if (entry->routesBySource.empty()) return false;
-    config::eigrp::TrafficShareMode trafMode = base.getGlobalConfigMgr().getTrafficMode();
-    uint8_t variance = base.getGlobalConfigMgr().getVariance();
+    config::eigrp::TrafficShareMode trafMode = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::TRAFFIC_SHARE>().load();
+    uint8_t variance = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::VARIANCE>().load();
 
     uint64_t bestFD = std::numeric_limits<uint64_t>::max();
     uint8_t bestAD = std::numeric_limits<uint8_t>::max();
@@ -196,7 +196,7 @@ void DuelEngine::processReceivedRoutes(std::vector<ReceivedRoute>& newRoutes, co
 {
     std::vector<TopologyEntry*> updates;
     std::vector<const RouteInfo*> reversePoisens;
-    uint8_t maxHops = base.getGlobalConfigMgr().getMaxHops();
+    uint8_t maxHops = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::MAX_HOPS>().load();
     for (auto& newRoute : newRoutes)
     {
         if (newRoute.hopCount >= maxHops || newRoute.reportedDistance > newRoute.feasibleDistance) continue;

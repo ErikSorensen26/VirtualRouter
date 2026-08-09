@@ -178,7 +178,7 @@ std::pair<bool, bool> RouteAggregator::calculateSummary(SummaryRoute& s)
     r.reportedDistance = 0;
     r.hopCount = 0;
     r.tag = 0;
-    r.adminDistance = base.getGlobalConfigMgr().getAD();
+    r.adminDistance = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::INTERNAL_ADMIN_DISTANCE>().load();
     r.routeType = RouteType::SUMMARY;
     r.flags = 0;
     

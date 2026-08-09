@@ -118,12 +118,17 @@ constexpr std::size_t enumMemberCount()
 }
 }
 
-#define CONFIG_ENUM_MEMBER(NAME)      NAME,
-#define CONFIG_ENUM_MEMBER_HASH(NAME) config::tokenHash(#NAME),
-#define CONFIG_ENUM_MEMBER_NAME(NAME) std::string_view(#NAME),
+#define CONFIG_ENUM_M(NAME) NAME,
+#define CONFIG_VALUE_ENUM_M(NAME, VALUE) NAME = VALUE,
 
-#define DEFINE_CONFIG_ENUM(NAME, MEMBER_LIST)                                             \
-    enum class NAME { MEMBER_LIST(CONFIG_ENUM_MEMBER) COUNT };                            \
+#define CONFIG_ENUM_M_HASH(NAME) config::tokenHash(#NAME),
+#define CONFIG_VALUE_ENUM_M_HASH(NAME, VALUE) config::tokenHash(#NAME),
+
+#define CONFIG_ENUM_M_NAME(NAME) std::string_view(#NAME),
+#define CONFIG_VALUE_ENUM_M_NAME(NAME, VALUE) std::string_view(#NAME),
+
+#define DEFINE_CONFIG_ENUM(NAME, MEMBER_LIST, MACRO_TYPE, HASH_TYPE, NAME_TYPE, TYPE)     \
+    enum class NAME TYPE { MEMBER_LIST(MACRO_TYPE) COUNT };                               \
     struct NAME##EnumTable                                                                \
     {                                                                                     \
         using type = NAME;                                                                \
@@ -131,18 +136,33 @@ constexpr std::size_t enumMemberCount()
         static constexpr std::string_view typeName = std::string_view(#NAME);             \
         static constexpr std::size_t count = static_cast<std::size_t>(NAME::COUNT);       \
         static constexpr std::array<uint32_t, count> members =                            \
-            { MEMBER_LIST(CONFIG_ENUM_MEMBER_HASH) };                                     \
+            { MEMBER_LIST(HASH_TYPE) };                                                   \
         static constexpr std::array<std::string_view, count> names =                      \
-            { MEMBER_LIST(CONFIG_ENUM_MEMBER_NAME) };                                     \
+            { MEMBER_LIST(NAME_TYPE) };                                                   \
     }
 
 #define DEFINE_CONFIG_ENUM_HERE(NAME, MEMBER_LIST)                                        \
-    DEFINE_CONFIG_ENUM(NAME, MEMBER_LIST);                                                \
+    DEFINE_CONFIG_ENUM(NAME, MEMBER_LIST, CONFIG_ENUM_M, CONFIG_ENUM_M_HASH, CONFIG_ENUM_M_NAME, : uint8_t ); \
     template <>                                                                           \
     struct EnumSchema<NAME> { using table = NAME##EnumTable; }
 
 #define DEFINE_CONFIG_ENUM_NS(NS, NAME, MEMBER_LIST)                                      \
-    DEFINE_CONFIG_ENUM(NAME, MEMBER_LIST);                                                \
+    DEFINE_CONFIG_ENUM(NAME, MEMBER_LIST, CONFIG_ENUM_M, CONFIG_ENUM_M_HASH, CONFIG_ENUM_M_NAME, : uint8_t ); \
+    }                                                                                     \
+    template <>                                                                           \
+    struct EnumSchema<NS::NAME> { using table = NS::NAME##EnumTable; };                   \
+    namespace NS                                                                          \
+    {                                                                                     \
+    static_assert(hasEnumSchemaV<NAME>, "enum registration did not take effect")
+
+
+#define DEFINE_CONFIG_VALUE_ENUM_HERE(NAME, MEMBER_LIST, TYPE)                            \
+    DEFINE_CONFIG_ENUM(NAME, MEMBER_LIST, CONFIG_VALUE_ENUM_M, CONFIG_VALUE_ENUM_M_HASH, CONFIG_VALUE_ENUM_M_NAME, : TYPE); \
+    template <>                                                                           \
+    struct EnumSchema<NAME> { using table = NAME##EnumTable; }
+
+#define DEFINE_CONFIG_VALUE_ENUM_NS(NS, NAME, MEMBER_LIST, TYPE)                          \
+    DEFINE_CONFIG_ENUM(NAME, MEMBER_LIST, CONFIG_VALUE_ENUM_M, CONFIG_VALUE_ENUM_M_HASH, CONFIG_VALUE_ENUM_M_NAME, : TYPE); \
     }                                                                                     \
     template <>                                                                           \
     struct EnumSchema<NS::NAME> { using table = NS::NAME##EnumTable; };                   \

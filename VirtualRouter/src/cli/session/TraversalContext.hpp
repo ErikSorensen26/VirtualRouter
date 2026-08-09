@@ -28,12 +28,12 @@
  * be reconstructed from the other.
  *
  * ## Repeat sets
- * Some grammar nodes may be re-entered. A `recursive` sibling is spent once
- * used, so after `metric 100` the set returns without `metric`; a
- * `subcmd_sequence` returns whole except for children marked
- * `subcmd_single_use`. @ref cli::TraversalContext::RepeatFrame tracks which
- * siblings are spent with a bitmask, which caps a set at
- * @ref cli::tree::MAX_TRACKED_SIBLINGS members.
+ * Some grammar nodes may be re-entered. A `recursive` parent lets its children
+ * be given in any order on one line: each is spent once used, so after
+ * `metric 100` the set returns without `metric`, and a child marked `multi_use`
+ * is the exception that stays on offer.
+ * @ref cli::TraversalContext::RepeatFrame tracks which siblings are spent with a
+ * bitmask, which caps a set at @ref cli::tree::MAX_TRACKED_SIBLINGS members.
  *
  * ## Input mode
  * The same walk serves execution, `?`, and tab, and they disagree about what is
@@ -96,18 +96,18 @@ struct TraversalContext
     tree::Command currentDirectory;
 
     /**
-     * A repeatable set the walk returns to once a branch ends.
+     * @brief A repeatable set the walk returns to once a branch ends.
      *
-     * `recursive` siblings are each usable once: after "metric 100" completes,
-     * the set comes back without "metric". `subcmd_sequence` returns the whole
-     * set apart from the children marked `subcmd_single_use`, so unmarked
-     * options stay available for as long as the user keeps typing.
+     * Members are spent as they are used: after "metric 100" completes, the set
+     * comes back without "metric". A child marked `multi_use` is the exception
+     * and stays on offer for as long as the user keeps typing.
      */
     struct RepeatFrame
     {
         tree::Command set;          // The sibling set to return to.
         uint64_t used = 0;          // Bit per consumed sibling.
-        bool sequence = false;      // subcmd_sequence, else recursive.
+        bool excludeAll = false;    // A `recurse_exclude_all` member was used: no more offers.
+        bool showAll = false;       // A `recurse_show_all` member was used: `recurse_hide` is waived.
     };
     std::vector<RepeatFrame> repeatStack;
 
@@ -299,6 +299,9 @@ struct TraversalContext
                 else markRepeatUsed(owner, ordinal);
             }
 
+            if (!repeatStack.empty())
+                applyRecurseFlags(repeatStack.back(), matchNode.value());
+
             if (matchNode->size() != 0)
                 currentDirectory = matchNode.value();
 
@@ -425,41 +428,63 @@ private:
                (!negate && cmd.hasProp(tree::CommandNode::NEGATE_SHOW));
     }
 
-    static bool isRepeatable(const tree::Command& set, bool& sequence)
+    /**
+     * @brief Whether a sibling set may be returned to once a branch ends.
+     *
+     * Repeating describes the set rather than any one member, so it is read off
+     * the parent. What a member does inside a repeating set -- spent on use, or
+     * `multi_use` and offered again -- is the child's own business.
+     */
+    static bool isRepeatable(const tree::Command& set)
     {
-        if (set.hasProp(tree::CommandNode::SUBCMD_SEQUENCE)) { sequence = true; return true; }
-        for (const auto& c : set)
-            if (c.hasProp(tree::CommandNode::RECURSIVE)) { sequence = false; return true; }
-        return false;
+        return set.hasProp(tree::CommandNode::RECURSIVE);
+    }
+
+    /**
+     * @brief Folds a just-used member's `recurse_*` properties into its frame.
+     *
+     * `recurse_exclude_all` and `recurse_show_all` are one-way switches for the
+     * rest of the line: once a member carrying either is used, the frame stays
+     * that way regardless of what else follows.
+     */
+    static void applyRecurseFlags(RepeatFrame& f, const tree::Command& child)
+    {
+        if (child.hasProp(tree::CommandNode::RECURSE_EXCLUDE_ALL)) f.excludeAll = true;
+        if (child.hasProp(tree::CommandNode::RECURSE_SHOW_ALL)) f.showAll = true;
     }
 
 public:
     void markRepeatUsed(const tree::Command& set, size_t ordinal)
     {
-        bool sequence = false;
-        if (!isRepeatable(set, sequence)) return;
+        if (!isRepeatable(set)) return;
         if (ordinal >= tree::MAX_TRACKED_SIBLINGS) return;
 
-        // A sequence keeps one frame for the whole run; recursive sets nest.
-        if (!repeatStack.empty() && repeatStack.back().sequence && sequence)
+        // Re-entering the set already on top updates its mask; pushing a second
+        // frame for it would clear the spent bits and let a member repeat. A
+        // different set nests, so an inner run returns to the inner set first.
+        if (!repeatStack.empty()
+            && repeatStack.back().set.nodeIndex() == set.nodeIndex())
         {
             repeatStack.back().used |= (uint64_t{1} << ordinal);
+            applyRecurseFlags(repeatStack.back(), set.at(ordinal));
             return;
         }
-        repeatStack.push_back({set, uint64_t{1} << ordinal, sequence});
+        repeatStack.push_back({set, uint64_t{1} << ordinal});
+        applyRecurseFlags(repeatStack.back(), set.at(ordinal));
     }
 
     /**
      * @brief The still-available members of the innermost repeat set.
      *
-     * Empty when no set is active. A recursive set drops every sibling already
-     * used; a sequence drops only those marked `subcmd_single_use`, since its
-     * unmarked options may be repeated.
+     * Empty when no set is active. A member is spent once used, so a clause
+     * cannot be given twice on one line; `multi_use` exempts the few that may.
      */
     std::vector<tree::Command> repeatOptions() const
     {
         if (repeatStack.empty()) return {};
         const RepeatFrame& f = repeatStack.back();
+
+        if (f.excludeAll) return {};
 
         std::vector<tree::Command> out;
         for (size_t i = 0; i < f.set.size(); ++i)
@@ -467,13 +492,11 @@ public:
             bool used = i < tree::MAX_TRACKED_SIBLINGS && (f.used & (uint64_t{1} << i));
             tree::Command child = f.set.at(i);
 
-            if (used)
-            {
-                // Recursive members are one-shot. In a sequence only the
-                // single-use ones are spent; the rest stay on offer.
-                if (!f.sequence) continue;
-                if (child.hasProp(tree::CommandNode::SUBCMD_SINGLE_USE)) continue;
-            }
+            if (used && !child.hasProp(tree::CommandNode::MULTI_USE)) continue;
+
+            if (!used && f.used != 0 && !f.showAll
+                && child.hasProp(tree::CommandNode::RECURSE_HIDE)) continue;
+
             out.push_back(child);
         }
         return out;

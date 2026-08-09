@@ -1,5 +1,10 @@
 /**
- * TODO add doxy comment
+ * @file PolicyHelpers.hpp
+ * @brief Shared policy types used by more than one routing protocol registry.
+ *
+ * Declares the `DistributeListType` config enum and the `DistributeList` tuple
+ * schema. These live here rather than in a protocol registry because the
+ * `distribute_list` grammar definition is shared across EIGRP, OSPF and RIP.
  */
 
 #ifndef POLICY_HELPERS_HPP

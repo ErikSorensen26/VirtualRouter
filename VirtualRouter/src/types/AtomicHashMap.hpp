@@ -439,7 +439,7 @@ public:
         return Snapshot(std::move(guard), t);
     }
 
-    /** Size at the moment of the call (consistent within one RCU guard). */
+    /** @brief Size at the moment of the call (consistent within one RCU guard). */
     size_t size() const noexcept
     {
         utils::RCU::Guard guard;
@@ -543,7 +543,7 @@ public:
     }
 
     /**
-     * Rebuild at same capacity to eliminate tombstones.
+     * @brief Rebuild at same capacity to eliminate tombstones.
      * No-op if there are no tombstones.
      */
     void rehash()
@@ -558,7 +558,7 @@ public:
     }
 
 private:
-    /** Build a 2× table and populate it from src. */
+    /** @brief Build a 2× table and populate it from src. */
     Table* grow(const Table* src) const
     {
         Table* dst = Table::make(src->cap * 2);
@@ -567,7 +567,7 @@ private:
     }
 
     /**
-     * Copy all live entries from src into dst.
+     * @brief Copy all live entries from src into dst.
      * Uses copy, not move, so src stays valid for concurrent RCU readers.
      */
     void rehash_into(const Table* src, Table* dst) const
@@ -583,7 +583,7 @@ private:
     }
 
     /**
-     * Atomically publish neo, retire old through RCU.
+     * @brief Atomically publish neo, retire old through RCU.
      * Must be called under write_mutex_.
      */
     void publish(Table* neo, Table* old) noexcept

@@ -81,13 +81,17 @@ public:
     };
 
     /**
-     * TODO finish doxy comment
+     * @brief Per-address Duplicate Address Detection state for one tentative address.
+     *
+     * Created when DAD starts and consulted on each probe: the address is
+     * accepted once @c retires reaches the configured DAD_ATTEMPTS, or
+     * abandoned as soon as @c duplicate is set by an inbound advertisement.
      */
     struct DadEntry
     {
-        bool duplicate = false;
-        uint32_t timerId = 0;
-        uint32_t retires = 0;
+        bool duplicate = false; ///< Set when a peer defends the address; ends DAD immediately.
+        uint32_t timerId = 0;   ///< Timer for the next probe.
+        uint32_t retires = 0;   ///< Probes sent so far; DAD succeeds at DAD_ATTEMPTS.
     };
 
     /**
@@ -125,10 +129,10 @@ public:
     void addNdpEntry(types::IPv6Address targetIp, types::Mac targetMac, bool proxy = false);
 
     /**
-     * @brief Adds a static arp entry to the arp cache table
+     * @brief Adds a static NDP cache entry that never expires.
      *
-     * @parap targetIp The target IP of the resolved arp entry.
-     * @param mac The MAC of the resolved arp entry.
+     * @param targetIp The target IPv6 address of the entry.
+     * @param targetMac The MAC the address resolves to.
      * @param proxy Adds the entry as a proxy.
      */
     void addStaticNdpEntry(types::IPv6Address targetIp, types::Mac targetMac, bool proxy = false);
@@ -142,12 +146,23 @@ public:
     void removeStaticNdpEntry(types::IPv6Address targetIp, bool proxy = false);
 
     /**
-     * TODO finish doxy
+     * @brief Adds a proxy NDP entry for an address this router answers on behalf of.
+     *
+     * @param targetIp The IPv6 address to proxy for.
+     * @param targetMac The MAC to advertise in the Neighbor Advertisement.
+     *
+     * @warning Declared but not implemented; linking a call to this fails.
+     *          Use @ref addStaticNdpEntry with @c proxy set instead.
      */
     void addProxyNdpEntry(types::IPv6Address targetIp, types::Mac targetMac);
 
     /**
-     * TODO finish doxy
+     * @brief Removes a proxy NDP entry previously added for @p targetIp.
+     *
+     * @param targetIp The proxied IPv6 address to stop answering for.
+     *
+     * @warning Declared but not implemented; linking a call to this fails.
+     *          Use @ref removeStaticNdpEntry with @c proxy set instead.
      */
     void removeProxyNdpEntry(types::IPv6Address targetIp);
 

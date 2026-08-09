@@ -109,7 +109,7 @@ public:
      * @param records LSA records to acknowledge.
      * @return True if the packet was sent successfully.
      */
-    virtual bool sendLsAck(Neighbor& nbr, std::vector<LsaRecordRef>& ) = 0;
+    virtual bool sendLsAck(Neighbor& nbr, std::vector<LsaRecordRef>& records) = 0;
 
     /**
      * @brief Enqueues LSRs for reliable delivery and sends the first burst.

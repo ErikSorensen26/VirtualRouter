@@ -57,7 +57,7 @@ struct ModeEntryNode
     uint16_t subId  = STR_NONE;   ///< Submode name; STR_NONE for a plain mode.
 
     /**
-     * The prompt this mode displays; STR_NONE when it declares none.
+     * @brief The prompt this mode displays; STR_NONE when it declares none.
      *
      * The prompt is data, not identity: several modes share "(config-router)#"
      * and are told apart by their names. Storing it here is what lets a session
@@ -69,7 +69,7 @@ struct ModeEntryNode
     uint32_t cmdOff = 0;   ///< Synthetic root CommandNode holding the command list.
 
     /**
-     * The registry a session in this mode writes to, or REGISTRY_NONE.
+     * @brief The registry a session in this mode writes to, or REGISTRY_NONE.
      *
      * The submode split already separates grammars that share a prompt --
      * (config-router-af)# is six different command lists -- and that split is

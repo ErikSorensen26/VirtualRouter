@@ -230,9 +230,8 @@ private:
     // FLOODING
 
     /**
-     * @brief Transmits a batch of flood-ready LSAs out of the given interface.
+     * @brief Floods a batch of LSAs out of every interface in this area.
      *
-     * @param iface   Interface to send from.
      * @param records Batch of (FloodInfo, LsaRecordRef) pairs to transmit.
      */
     void send(std::vector<std::pair<FloodInfo, LsaRecordRef>>& records);

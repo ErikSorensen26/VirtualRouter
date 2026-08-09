@@ -126,9 +126,9 @@ public:
     void unregisterInterface(const HwIfaceInfo* info, interface::Interface* iface);
 
     /**
-     * @brief Returns the @ref HwIfaceInfo for the given kernel interface index.
+     * @brief Returns the @ref HwIfaceInfo for the given interface key.
      *
-     * @param index  Kernel @c ifindex.
+     * @param key  Logical interface key to look up.
      * @return Pointer to the record, or @c nullptr if unknown.
      */
     const HwIfaceInfo* getHwInfo(interface::InterfaceKey key) const;

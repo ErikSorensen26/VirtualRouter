@@ -23,7 +23,7 @@
 >
 > Constraint context: Every unnecessary indirection compounds across millions of packets per second. A virtual dispatch or a hash-map lookup that could have been a compile-time decision is CPU that could have forwarded packets.
 >
-> Mechanism: Templates are used as a correctness and performance tool throughout. The CLI parser's match logic is generated at compile time via fold expressions — at runtime it's a linear chain of comparisons, no dispatch table. The config registry resolves field access by type tag at compile time, no string lookup, no runtime branching at read sites. BGP's address family system instantiates `AddressFamilyInstance<N>` separately per AFI/SAFI — the IPv4 and IPv6 paths are completely separate compiled objects with no dead branches in either. If a decision can be made at compile time, it is.
+> Mechanism: Templates are used as a correctness and performance tool throughout. The config registry resolves field access by type tag at compile time, no string lookup, no runtime branching at read sites. The CLI resolves each grammar node to a registry field at flatten time and maps the result read-only, so a command walk allocates nothing and every name comparison is against a `string_view` into the mapping. BGP's address family system instantiates `AddressFamilyInstance<N>` separately per AFI/SAFI — the IPv4 and IPv6 paths are completely separate compiled objects with no dead branches in either. If a decision can be made at compile time, it is.
 >
 > Status: This is a foundational invariant and not a tunable optimization.
 
@@ -31,7 +31,7 @@
 >
 > Constraint context: The worst bugs in protocol software are the ones that compile, run, and produce wrong routing behavior silently — wrong config key returning a default value, wrong address family processing a prefix, an unhandled LSA type skipped without error. These are nearly impossible to catch in testing.
 >
-> Mechanism: The config registry makes it a compile error to read a field from the wrong registry scope. The CLI command system makes it a compile error to have an unhandled mode. BGP's address family variant makes it a compile error to handle a new AFI/SAFI at some `std::visit` sites but not others. OSPF LSA bodies are `std::variant`, so pattern-matching over LSA types is exhaustive by construction. All of these would be silent runtime failures in a less type-safe design. The type system enforces invariants the RFC states in English.
+> Mechanism: The config registry makes it a compile error to read a field from the wrong registry scope. The CLI mode table makes it a compile error for a mode to exist in the enum without a prompt and path, and the grammar flattener refuses to emit a tree when a command names a config field or registry that does not exist, so an unresolvable command never reaches a mapped binary. BGP's address family variant makes it a compile error to handle a new AFI/SAFI at some `std::visit` sites but not others. OSPF LSA bodies are `std::variant`, so pattern-matching over LSA types is exhaustive by construction. All of these would be silent runtime failures in a less type-safe design. The type system enforces invariants the RFC states in English.
 >
 > Status: This is a foundational invariant and not a tunable optimization.
 
@@ -100,10 +100,12 @@ VirtualRouter/src/
 │       └── interface/          Interface manager
 │
 ├── cli/
-│   ├── parser/                 Command<>, CliModeParser<>, FixedString
-│   ├── modes/                  Mode enum, path table, contexts
-│   ├── execution/              Executor<> — mode switching
-│   └── runtime/                CliSession, I/O loop
+│   ├── tree/                   CommandTree, Storage, TreeParser (flattener)
+│   │   └── nodes/              CommandNode, ModeEntry, FileHeader
+│   ├── modes/                  Mode enum, path/prompt table, ContextBase
+│   ├── session/                CliSession, TreeNavigator, TraversalContext
+│   ├── execution/              Executor, field dispatch, tuple staging
+│   └── terminal/               Console, ConsoleController, FrameBuffer
 │
 ├── configs/
 │   ├── RegistryTypes.hpp       Field types and concepts
@@ -137,7 +139,7 @@ VirtualRouter/src/
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                         CLI / Configuration Layer                            │
-│     CliModeParser<> + Command<> templates  ·  RegistryDatabase<>             │
+│   Mapped grammar tree  ·  CliSession traversal  ·  RegistryDatabase<>        │
 └──────────────────────────────────┬───────────────────────────────────────────┘
                                    │ ApplyFn callbacks on field change
 ┌──────────────────────────────────▼───────────────────────────────────────────┐
@@ -713,10 +715,10 @@ against a parent struct field without writing bespoke traversal code for every
 single field. The type-tag system replaced it entirely.
 
 Each config field is 1–3 lines to define. The inheritance chain is handled
-automatically by the masking system. Because everything is resolved at compile
-time the CLI parser can be generated from the type structure directly rather than
-from runtime inspection. Compile-time dispatch is also faster than any runtime
-lookup. The tradeoff is debug info size — the template instantiations add to the
+automatically by the masking system. Because every field is a distinct type tag,
+a grammar node names its target field by registry and index, and the CLI
+resolves that to a typed accessor without runtime inspection of the value.
+Compile-time dispatch is also faster than any runtime lookup. The tradeoff is debug info size — the template instantiations add to the
 debug symbol table — but with how the registry is structured it has minimal
 impact on actual binary size, and it's a one-time cost per field definition
 rather than per access.
@@ -844,67 +846,206 @@ how compiled sets are referenced from the protocol path — are in active design
 
 ---
 
-### 11. CLI Engine
+### 11. CLI Grammar Tree
 
 #### Purpose
 
-The CLI parses operator commands and writes configuration to the registry. It's
-separate from the registry because the two have different concerns: the registry
-stores values and fires callbacks; the CLI handles mode navigation, tokenization,
-command matching, and prefix semantics (`no`, `default`). The registry has no
-knowledge of how values are set — only that they are.
+The grammar tree is the CLI's command vocabulary: every command, argument
+placeholder, help string, and mode transition the operator can reach. It is
+authored as JSON under `VirtualRouter/commands/`, flattened into a fixed-record
+binary (`Commands.bin`), and mapped read-only at runtime.
+
+It cannot be merged into the CLI runtime because the two have different
+lifetimes and different failure modes. The grammar is built once per grammar
+change and is immutable thereafter; the runtime is per-session, mutable, and
+re-entered on every keystroke. A defect in the grammar is a build-time artifact
+problem, diagnosable by regenerating the binary. A defect in the runtime is a
+session problem. Keeping the flattener separate also means the parse cost — JSON
+across dozens of files, variable substitution, shared-definition expansion — is
+paid once at build rather than once per process start.
 
 #### Design Decision
 
-**Commands are compile-time types, not runtime-registered callbacks.**
+**A flattened, memory-mapped record array, not a parsed object graph held in
+memory.**
 
-The CLI started as a full runtime system. It was a disaster — every new command
-required writing a significant amount of boilerplate, matching logic had to be
-duplicated or abstracted behind layers that made it harder to follow, and there
-was no clean structure for handling argument capture and validation consistently.
-The template approach replaced all of that. Adding a command is one type and one
-line in the parser list. The match logic, argument capture, and dispatch are all
-handled by the template machinery with no per-command boilerplate.
+The flattener resolves the entire grammar — includes, shared definitions,
+grammar variable arguments — into a flat array of 16-byte `CommandNode` records
+plus one string blob. Children of a node occupy a contiguous run, so a node
+locates them with an offset and a count rather than a pointer list. At runtime
+nothing is allocated per traversal: `Command` and `ModeEntry` are cursors into
+the mapping, and every name and help string is a `string_view` into the blob.
 
-**`Command<Handler, Parts...>`** captures a command pattern at compile time.
-Fixed tokens match by precomputed hash; `ARG` tokens capture and forward values.
-`CliModeParser<Mode, Context, Commands...>` folds over the pack at runtime as a
-linear chain with no virtual dispatch.
+`CommandNode` is 16 bytes and *is* the on-disk format. Its `configId` packs the
+registry id and the field's enum index; its `flags` word carries the node
+properties (`recursive`, `subcmd_sequence`, enum-change, tuple-change, deferred,
+resolver). All 16 flag bits are allocated and `configExt` is a single byte-wide
+slot, so the record's spare capacity — not the grammar syntax — is the binding
+constraint on adding new node properties. A new property costs either a widened
+record and a format-version bump, or a bit reclaimed by merging two existing
+properties.
 
-**Executor ping-pong buffer:** Two `Context<>` slots. `changeMode<M>` placement-
-news the new context into the inactive slot and swaps the active index. Mode
-switching is O(1), no heap allocation. `revert()` swaps back; the previous
-context is still valid in its slot. `NavEntry` stores the mode, dispatch thunk,
-and construction thunk — the back-stack reconstructs the exact context type
-without RTTI.
+Rejected alternative: keeping the parsed JSON object graph in memory, as the
+previous design did. That paid full JSON parse cost at every process start,
+allocated a node object per grammar entry, and made every name lookup a string
+allocation or map probe. The grammar is large and completely static after build
+— it is exactly the case a mapped flat file serves better than a heap graph.
 
-**`negate` / `defaulted` flags** on `ContextBase`: The tokenizer sets flags when
-it sees `no` or `default` rather than routing to separate command types. Each
-handler inspects the flags. This halves the number of command definitions and
-guarantees the positive and negative forms are always in sync — they're the same
-type.
+Rejected alternative: generating the grammar as C++ source at build time. That
+makes every grammar edit a full recompile of the CLI translation units, and
+the grammar changes far more often than the code that walks it.
 
-**X-macro for mode table:** The mode enum and path/prompt arrays are generated
-from a single X-macro. A mode that exists in the enum but not in the array is a
-compile error.
+> **Decision: Cache staleness is checked on three axes**
+>
+> Constraint: A flattened cache that no longer matches its inputs is read as valid and produces a silently wrong grammar — the edit simply does not appear, which reads as the grammar being wrong rather than the cache being stale. This affects the CLI Grammar Tree and the Configuration Registry, since a registry change shifts the ids that `configId` encodes.
+>
+> Mechanism: The header carries a format version, a registry signature, and an FNV-1a hash over every grammar file's relative path and contents. On open, any mismatch discards the mapping and rebuilds from source. The hash covers names as well as bytes, so an addition, removal, rename, or edit all change it. A zero hash means the sources could not be read and is treated as a non-match rather than as a particular value.
+>
+> Trade-offs: Startup hashes every grammar file, which is one sequential read of a directory that is small and in page cache. Reversing this means grammar edits again require deleting the cache by hand, and the failure mode returns to a silently stale tree. Removing it would touch `FileHeader`, `TreeParser`, and `CommandTree`'s two-path constructor.
 
-`FindParser<M>` is a compile-time lookup. Requesting a mode with no registered
-parser is a build error — entering an unhandled mode is impossible.
+**Port placeholders are resolved after mapping, not at flatten time.** The
+grammar writes a bare `<N>` wherever an interface number belongs, because the
+flattener cannot know how many ports a chassis has. `applyPortCounts` numbers
+each placeholder against the hardware config — `<0>` under GigabitEthernet on a
+10-port box becomes `<0-9>`. An interface type with no configured ports keeps
+its placeholder, so it matches nothing: correct for a type the hardware does
+not have, where inventing a range would accept numbers for ports that cannot
+exist.
 
 #### Invariants
 
-- Every CLI mode has exactly one registered parser, enforced at compile time.
-  A mode without a parser could be entered by navigation but could never handle
-  any input — it would silently accept or reject everything incorrectly.
-- `changeMode<M>` never allocates heap memory. Mode switching inside the CLI I/O
-  loop can't trigger allocation that might fail or stall.
-- The positive and negative forms of every command share one type definition and
-  can't diverge. A `no` form that silently no-ops when the positive form was
-  broken is not an acceptable failure mode for network configuration.
+- A mapped tree matches the build and the grammar sources it was flattened
+  from, or it is discarded and rebuilt before any cursor binds to it. A tree
+  that fails a check is never partially trusted.
+- Every accessor bounds-checks its index against the header's counts. An
+  out-of-range index would otherwise read a valid-looking but unrelated record
+  rather than failing.
+- Cursors (`Command`, `ModeEntry`) and every `string_view` they return borrow
+  from the mapping and do not outlive the `CommandTree`. When a cache is
+  discarded, the mapping and every span bound over it are cleared together.
+- Children of a node are contiguous. Traversal depends on this to enumerate a
+  candidate set by offset and count.
 
 ---
 
-### 12. TCP Transport Layer
+### 12. CLI Runtime
+
+#### Purpose
+
+The CLI runtime turns a line of operator input into configuration writes. It
+tokenizes the line, walks it through the grammar tree one word at a time,
+resolves tab-completion and `?` help against the same walk, tracks the mode
+stack, and dispatches the matched command to the registry field it names.
+
+It is separate from the Configuration Registry because the two answer different
+questions: the registry stores values and fires callbacks; the runtime decides
+which value a line of text refers to. The registry has no knowledge of how
+values are set — only that they are. It is separate from the CLI Grammar Tree
+because it holds all the mutable, per-session state the tree deliberately has
+none of.
+
+#### Design Decision
+
+**Command dispatch is a runtime lookup keyed by `configId`, not a compile-time
+type per command.**
+
+The previous design captured each command as a `Command<Handler, Parts...>`
+type, folded into a `CliModeParser<Mode, Context, Commands...>` pack per mode.
+Every command needed a handler type and a line in a parser list, and the
+grammar was therefore split across JSON (for names and help) and C++ (for
+behavior) — two places to edit for one command, free to disagree.
+
+Now a grammar node names the field it writes directly, via the `configId` it
+carries. Execution splits that id into a registry id and a field index, then
+resolves it through `visitBound`: a compile-time fold over the registry entry
+list that selects the one branch whose registry id matches at runtime and
+instantiates the caller's logic against that registry's typed field accessor.
+The write goes through the type-erased `ContextBase::ctx` pointer for the active
+mode. The dispatch is a runtime value lookup, but every field access it reaches
+is still statically typed — there is no string lookup and no virtual call.
+Adding a command that sets an existing field is a grammar edit alone, with no
+C++ change.
+
+Rejected alternative: retaining the compile-time command types. They gave a
+genuine guarantee — an unhandled mode was a build error — but they made the
+grammar bicameral, and every command that only set a config field still cost a
+handler type. The guarantee they provided is now covered by the flattener
+resolving `configId` when the tree is generated: a node naming an unknown
+registry or field throws there, so no binary carrying it is ever written.
+
+Rejected alternative: a string-keyed callback registry. That reintroduces the
+per-command registration boilerplate the compile-time design was built to
+escape, and moves field resolution to a runtime string lookup on every command.
+
+> **Decision: Each config field records the command that wrote it**
+>
+> Constraint: Configuration must be reproducible as command text — `show running-config` has to emit the commands that produce the current state. Deriving that text by reverse-lookup from a field to a grammar node requires a slot table that the flattener maintains and that goes stale independently of the grammar. This affects the CLI Runtime and the Configuration Registry.
+>
+> Mechanism: Every config field carries a `uint32_t commandIndex` (`NO_COMMAND_INDEX` when unwritten), set to the flat index of the tree node that wrote it. The value is runtime-only and never persisted, so it cannot disagree with a rebuilt tree. A bitmap flag run records the node that opened the run, since the run is one command however many flags it spells.
+>
+> Trade-offs: Four bytes per field, and every write path must thread the index through to the accessor. Reversing this means restoring the reverse-lookup slot table in the flattener and the staleness class that came with it. It touches `RegistryTypes.hpp`, `FieldAccessor.hpp`, and every write path in `cli/execution`.
+
+**One walk serves execution, help, and tab.** `TraversalContext` is the cursor
+for a single line. A word resolves against the current node's children in two
+passes: keywords first by name, exact before prefix, so `int` reaches
+`interface`; only if nothing matches by name are placeholder nodes (`WORD`,
+`A.B.C.D`, `<0-9>`) tested by validating the value. Placeholders are excluded
+from name matching entirely — otherwise the literal text `A.B.C.D` would
+satisfy the address it stands for.
+
+An exact match does not end the walk. `ip` is a complete command and also the
+prefix of `ipv6`. Execution takes the exact match; `ip?` is asking what else
+begins that way. Both are recorded — the winner in `matchNode`, every candidate
+in `prefixMatches` — so neither reading is reconstructed from the other. The
+three consumers disagree about what constitutes an error, so `inputMode` gates
+that rather than each caller re-deciding: an ambiguous prefix is fatal to
+execution and is the expected case for help.
+
+**The mode stack is a fixed-size placement-new'd buffer.** Depth is bounded by
+the grammar, so `TreeNavigator` holds ten raw slots rather than a vector, and a
+session does not allocate to change modes. Each `NavFrame` captures the mode,
+the config pointer, and the grammar cursor together, because `exit` must restore
+all three as a unit. Restoring pops frame by frame rather than truncating —
+discarding frames would leave the mode, prompt, and config pointer wherever the
+detour left them. Three entry points are kept distinct: `changeMode` pushes,
+`resetAndChangeMode` clears the stack for `end` and Ctrl-Z, and
+`saveAndChangeMode` marks a depth for detours like `do <command>` that must
+leave the session where they found it.
+
+**`negate` / `defaulted` flags on `ContextBase`:** the tokenizer sets a flag
+when it sees `no` or `default` rather than routing to a separate command. The
+positive and negative forms are therefore the same grammar node and cannot
+diverge.
+
+**X-macro for the mode table:** the `CliMode` enum and the prompt/path arrays
+are generated from one table. A mode in the enum but not the array is a compile
+error. `isConfigurationMode` reads off the prompt rather than a separate flag
+column, so there is one place stating which modes `end` unwinds.
+
+#### Invariants
+
+- A grammar node that writes config names exactly one field. Two nodes on the
+  same root-to-leaf path writing one field means the last one run wins silently.
+  The flattener detects this by reachability when it generates the tree and
+  warns on stderr, exempting the adjacent parent-child pair that spells a
+  two-token key. The exemption is structural rather than type-aware, so a
+  genuine double-write spelled as a direct parent-child pair is not reported.
+- A two-token key (`interface Vlan 10`, an IPv4 prefix) is paired at commit, not
+  at staging. Both tokens bind one field, and a partially-paired key is never
+  written.
+- Mode changes do not allocate. The nav stack is fixed-size and frames are
+  constructed in place.
+- `exit` restores the mode, prompt, grammar cursor, and config pointer together
+  or restores none of them.
+- Traversal state borrows from the grammar tree and the input line and outlives
+  neither.
+- A command that fails in the current mode and is retried in
+  GlobalConfiguration reports invalid input only after both modes refuse it. The
+  probe does not report on its own behalf.
+
+---
+
+### 13. TCP Transport Layer
 
 #### Purpose
 
@@ -954,7 +1095,7 @@ and returns. The TCP thread never calls into BGP directly.
 
 ---
 
-### 13. Packet Processing Pipeline
+### 14. Packet Processing Pipeline
 
 #### Purpose
 
@@ -999,7 +1140,7 @@ ingress backend delivered the frame.
 
 ---
 
-### 14. Hardware I/O — Ingress & Egress
+### 15. Hardware I/O — Ingress & Egress
 
 #### Purpose
 
@@ -1061,7 +1202,7 @@ socket call, incurring one syscall and one kernel copy per frame. Used when
 
 ---
 
-### 15. Infrastructure — ARP & NDP
+### 16. Infrastructure — ARP & NDP
 
 #### Purpose
 
@@ -1114,7 +1255,7 @@ Duplicate Address Detection for link-local address assignment.
 
 ---
 
-### 16. Interface Layer
+### 17. Interface Layer
 
 #### Purpose
 
@@ -1171,7 +1312,7 @@ event bus — `setVRF` doesn't need to know which protocols are active.
 
 ---
 
-### 17. QoS
+### 18. QoS
 
 #### Purpose
 

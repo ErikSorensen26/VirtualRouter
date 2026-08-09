@@ -54,8 +54,7 @@ public:
     /**
      * @brief Constructs the dispatcher and binds it to an OSPFv2 interface.
      *
-     * @param iface   The OSPFv2 interface that owns this dispatcher.
-     * @param configs Reference to the shared base interface configuration registry.
+     * @param iface The OSPFv2 interface that owns this dispatcher.
      */
     PacketDispatcherV2(OspfInterfaceBase& iface);
 

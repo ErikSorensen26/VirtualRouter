@@ -3055,7 +3055,7 @@ TEST_F(Internal_EigrpTest, Unicast_Neighbor_Forms_Correctly)
 // Test: Dampening_Suppresses_Updates
 TEST_F(Internal_EigrpTest, Dampening_Suppresses_Updates)
 {
-    eigrpInstance->getGlobalConfigMgr().getConfigs().get<config::Eigrp::DAMPENING>().set(true);
+    eigrpInstance->getGlobalConfigMgr().getConfigs().get<config::Eigrp::MAXIMUM_PREFIX_DAMPENING>().set(true);
     ReceivedRoute route = getRoute(eigrpInterface->interfaceKey);
     route.prefix = { uint32_t{0xC0A80135}, 24 };
     route.routeType = RouteType::INTERNAL;
@@ -3507,11 +3507,11 @@ TEST_F(Internal_EigrpTest, RouteAggregator_AutoSummary_AtClassfulBoundary)
     // The /8 aggregate now exists and the components are still present
     EXPECT_TRUE(getTopologyTable().entries().contains(classful));
     EXPECT_TRUE(getTopologyTable().entries().contains(types::IPPrefix{ types::IPAddress{uint32_t{0x0A010100}}, 24 }));
-    EXPECT_TRUE(eigrpInstance->getGlobalConfigMgr().isAutoSummarized());
+    EXPECT_TRUE(eigrpInstance->getGlobalConfigMgr().getConfigs().get<config::Eigrp::AUTO_SUMMARIZATION>().load());
 
     // Disabling clears the summaries back out
     eigrpInstance->getAggregator().enableAutoSummary(false);
-    EXPECT_FALSE(eigrpInstance->getGlobalConfigMgr().isAutoSummarized());
+    EXPECT_FALSE(eigrpInstance->getGlobalConfigMgr().getConfigs().get<config::Eigrp::AUTO_SUMMARIZATION>().load());
 }
 
 TEST_F(Internal_EigrpTest, TLVParsing_DuplicateTlvsInPacket_Handled)

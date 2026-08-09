@@ -291,7 +291,7 @@ public:
      * @param ad Address family (IPv4/IPv6). If NONE, any AF is accepted.
      * @return Pointer to VirtualRouter or nullptr if not found or AF not enabled.
      */
-    VirtualRouter* getRoutingInstance(const std::string& name = DEFAULT_VRF, types::AddressFamily = types::AddressFamily::NONE);
+    VirtualRouter* getRoutingInstance(const std::string& name = DEFAULT_VRF, types::AddressFamily ad = types::AddressFamily::NONE);
 
     /**
      * @brief Remove a routing instance.

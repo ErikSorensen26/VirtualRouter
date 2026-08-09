@@ -89,9 +89,11 @@ struct Token
         : value(token), node(n), pattern(matchVolatilePattern(n.name()))
     {}
 
-    /// @brief A word no node resolved: an unknown command, an ambiguous prefix,
-    /// or the synthesized end-of-command marker. The cursor stays invalid, which
-    /// is what hasNode() and the flag accessors below test for.
+    /**
+     * @brief A word no node resolved: an unknown command, an ambiguous prefix,
+     * or the synthesized end-of-command marker. The cursor stays invalid, which
+     * is what hasNode() and the flag accessors below test for.
+     */
     explicit Token(std::string_view token)
         : value(token)
     {}
