@@ -28,7 +28,7 @@ static bool verifyOspfFletcher(const uint8_t* lsa, uint16_t len)
     check.addBytes(lsa + 2, 14);   // options..seqNum (LSA offset 2..15)
     check.addU16(0);               // checksum field (LSA offset 16..17), treated as zero
     check.addBytes(lsa + 18, len - 18); // length..end of body (LSA offset 18..len-1)
-    return check.finalize() == utils::readU16(lsa + 16);
+    return check.finalize() == utils::read<uint16_t>(lsa + 16);
 }
 
 void PacketDispatcherV2::handleIncoming(const packet::Ospfv2Header& ospfHeader, const uint8_t* neighborIp, bool multicast)
@@ -177,7 +177,7 @@ void PacketDispatcherV2::processHello(PacketDispatcher::HeaderInfo& info, bool u
         bool ridFound = false;
         for (size_t i = 0; i < listSize; i += 4)
         {
-            if (utils::readU32(neighborList + i) == iface.area.process.getRouterId())
+            if (utils::read<uint32_t>(neighborList + i) == iface.area.process.getRouterId())
             {
                 ridFound = true;
                 break;
@@ -417,7 +417,7 @@ void PacketDispatcherV2::processLSUpdate(PacketDispatcher::HeaderInfo& info)
     if (info.neighbor->getState() < Neighbor::State::EXCHANGE)
         return;
 
-    uint32_t lsuSize = utils::readU32(info.payload);
+    uint32_t lsuSize = utils::read<uint32_t>(info.payload);
     uint32_t routerId = iface.area.process.getRouterId();
 
     info.offset += 4;
@@ -511,7 +511,7 @@ void PacketDispatcherV2::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
         return;
 
     // RFC 5613 SS2.2: the LLS length field is a count of 32-bit words, not bytes.
-    uint16_t llsLen = static_cast<uint16_t>(utils::readU16(llsBase + 2) * 4);
+    uint16_t llsLen = static_cast<uint16_t>(utils::read<uint16_t>(llsBase + 2) * 4);
     if (llsLen < 4 || info.offset + llsLen > info.packetSize)
         return;
 
@@ -526,7 +526,7 @@ void PacketDispatcherV2::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
         if (size != 4 || offset + 4 > llsLen) 
             return false;
 
-        extension = utils::readU32(llsBase + offset);
+        extension = utils::read<uint32_t>(llsBase + offset);
         offset += 4;
         return true;
     };
@@ -536,12 +536,12 @@ void PacketDispatcherV2::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
         if (!authEnabled || size != 20 || offset + 20 > llsLen)
             return false;
 
-        const uint32_t seq = utils::readU32(llsBase + offset);
+        const uint32_t seq = utils::read<uint32_t>(llsBase + offset);
         if (info.neighbor->lastAuthSeq.load(std::memory_order_relaxed) > seq)
             return false;
 
         uint8_t key[16]{};
-        utils::writeU128(key, getAuthKey().value());
+        utils::write<__uint128_t>(key, getAuthKey().value());
 
         uint8_t digest[16]{};
         security::authentication::generateHMAC(digest, llsBase, llsLen - 16, key, 16, security::authentication::HmacType::MD5);
@@ -555,8 +555,8 @@ void PacketDispatcherV2::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
 
     while (offset + 4 < llsLen)
     {
-        uint16_t type = utils::readU16(llsBase + offset);
-        uint16_t size = utils::readU16(llsBase + offset + 2);
+        uint16_t type = utils::read<uint16_t>(llsBase + offset);
+        uint16_t size = utils::read<uint16_t>(llsBase + offset + 2);
         offset += 4;
 
         switch (type)
@@ -581,7 +581,7 @@ void PacketDispatcherV2::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
     {
         ChecksumFletcher check;
         check.addBytes(llsBase + 2, llsLen - 2);
-        if (check.finalize() != utils::readU16(llsBase))
+        if (check.finalize() != utils::read<uint16_t>(llsBase))
             return;
     }
 
@@ -599,7 +599,7 @@ bool PacketDispatcherV2::processOspfSimpleAuthentication(const packet::Ospfv2Hea
     if (hdr.getAuthType() != static_cast<uint16_t>(config::ospf::AuthType::SIMPLE))
         return false;
     uint8_t secret[8] = {};
-    utils::writeU64(secret, secretVal.load());
+    utils::write<uint64_t>(secret, secretVal.load());
     return std::memcmp(hdr.getAuthentication(), secret, 8) == 0;
 }
 
@@ -618,12 +618,12 @@ bool PacketDispatcherV2::processOspfCryptoAuthentication(HeaderInfo& info, const
         return false;
     if (auth[3] != 16)
         return false;
-    if (uint32_t seq = utils::readU32(auth + 4); seq > info.neighbor->lastAuthSeq.load(std::memory_order_relaxed))
+    if (uint32_t seq = utils::read<uint32_t>(auth + 4); seq > info.neighbor->lastAuthSeq.load(std::memory_order_relaxed))
         info.neighbor->lastAuthSeq.store(seq, std::memory_order_release);
     else return false;
     
     uint8_t authSecret[16];
-    utils::writeU128(authSecret, key.value());
+    utils::write<__uint128_t>(authSecret, key.value());
     uint8_t authDigest[16];
     security::authentication::generateHMAC(authDigest, hdr.buffer, hdr.getPacketLen(), authSecret, 16, security::authentication::HmacType::MD5);
     info.authSize = 16;

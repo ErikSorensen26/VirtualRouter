@@ -63,11 +63,11 @@ struct IntraAreaPrefixLsaV4
     {
         if (len < 12) return std::nullopt;
 
-        uint16_t prefixCount = utils::readU16(buf);
+        uint16_t prefixCount = utils::read<uint16_t>(buf);
         IntraAreaPrefixLsaV4 lsa;
-        lsa.referencedLsaType = utils::readU16(buf + 2);
-        lsa.referencedLinkStateId = utils::readU32(buf + 4);
-        lsa.referencedAdvRouter = utils::readU32(buf + 8);
+        lsa.referencedLsaType = utils::read<uint16_t>(buf + 2);
+        lsa.referencedLinkStateId = utils::read<uint32_t>(buf + 4);
+        lsa.referencedAdvRouter = utils::read<uint32_t>(buf + 8);
 
         size_t off = 12;
         for (uint16_t i = 0; i < prefixCount; i++)
@@ -77,7 +77,7 @@ struct IntraAreaPrefixLsaV4
             uint8_t plen = buf[off++];
             IntraAreaPrefixV4 prefix;
             prefix.options = buf[off++];
-            prefix.metric = utils::readU16(buf + off);
+            prefix.metric = utils::read<uint16_t>(buf + off);
             off += 2;
 
             uint8_t prefixBytes = (plen + 7) / 8;
@@ -101,10 +101,10 @@ struct IntraAreaPrefixLsaV4
     {
         if (len < 12) return false;
 
-        utils::writeU16(buf, static_cast<uint16_t>(prefixes.size()));
-        utils::writeU16(buf + 2, referencedLsaType);
-        utils::writeU32(buf + 4, referencedLinkStateId);
-        utils::writeU32(buf + 8, referencedAdvRouter);
+        utils::write<uint16_t>(buf, static_cast<uint16_t>(prefixes.size()));
+        utils::write<uint16_t>(buf + 2, referencedLsaType);
+        utils::write<uint32_t>(buf + 4, referencedLinkStateId);
+        utils::write<uint32_t>(buf + 8, referencedAdvRouter);
 
         size_t off = 12;
         for (const auto& prefix : prefixes)
@@ -113,12 +113,12 @@ struct IntraAreaPrefixLsaV4
 
             buf[off++] = prefix.prefix.prefixLength;
             buf[off++] = prefix.options;
-            utils::writeU16(buf + off, prefix.metric);
+            utils::write<uint16_t>(buf + off, prefix.metric);
             off += 2;
 
             uint8_t prefixBytes = (prefix.prefix.prefixLength + 7) / 8;
             if (off + prefixBytes > len) return false;
-            utils::writeBytes(buf + off, prefix.prefix.addr, prefixBytes);
+            utils::write<__uint128_t>(buf + off, prefix.prefix.addr, prefixBytes);
             off += prefixBytes;
         }
 

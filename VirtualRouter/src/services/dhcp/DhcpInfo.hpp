@@ -97,7 +97,7 @@ inline static uint8_t* generateDhcpTransid(uint8_t* out)
 {
     static std::uniform_int_distribution<uint32_t> dis(0, UINT32_MAX);
     uint32_t transId = dis(getTransidGenerator());
-    utils::writeU32(out, transId);
+    utils::write<uint32_t>(out, transId);
     return out;
 }
 /**

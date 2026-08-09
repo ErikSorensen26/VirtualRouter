@@ -52,12 +52,12 @@ struct InterAreaRouterLsa
         InterAreaRouterLsa lsa;
 
         if (buf[0] != 0) return std::nullopt;
-        lsa.options = utils::readU24(buf + 1);
+        lsa.options = utils::read<uint32_t, 3>(buf + 1);
 
         if (buf[4] != 0) return std::nullopt;
-        lsa.metric = utils::readU24(buf + 5);
+        lsa.metric = utils::read<uint32_t, 3>(buf + 5);
 
-        lsa.destinationRouterId = utils::readU32(buf + 8);
+        lsa.destinationRouterId = utils::read<uint32_t>(buf + 8);
 
         return lsa;
     }
@@ -76,10 +76,10 @@ struct InterAreaRouterLsa
         if (len != 12) return false;
         
         buf[0] = 0;
-        utils::writeU24(buf + 1, options);
+        utils::write<uint32_t, 3>(buf + 1, options);
         buf[4] = 0;
-        utils::writeU24(buf + 5, metric);
-        utils::writeU32(buf + 8, destinationRouterId);
+        utils::write<uint32_t, 3>(buf + 5, metric);
+        utils::write<uint32_t>(buf + 8, destinationRouterId);
 
         return true;
     }

@@ -43,8 +43,8 @@ struct AhHeader
     uint8_t getNextHeader() const { return raw->nextHeader[0]; }
     uint8_t getPayloadLength() const { return raw->payloadLength[0]; }
     const uint8_t* getReserved() const { return raw->reserved; }
-    uint32_t getSpi() const { return utils::readU32(raw->spi); }
-    uint32_t getSequence() const { return utils::readU32(raw->sequence); }
+    uint32_t getSpi() const { return utils::read<uint32_t>(raw->spi); }
+    uint32_t getSequence() const { return utils::read<uint32_t>(raw->sequence); }
 
     void setNextHeader(uint8_t val)
         { raw->nextHeader[0] = val; }
@@ -53,9 +53,9 @@ struct AhHeader
     void setReserved(uint8_t* val)
         { std::memcpy(raw->reserved, val, 2); }
     void setSpi(uint32_t val)
-        { utils::writeU32(raw->spi, val); }
+        { utils::write<uint32_t>(raw->spi, val); }
     void setSequence(uint32_t val)
-        { utils::writeU32(raw->sequence, val); }
+        { utils::write<uint32_t>(raw->sequence, val); }
 };
 
 } // namespace packet

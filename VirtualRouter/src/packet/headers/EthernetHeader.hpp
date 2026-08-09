@@ -46,11 +46,11 @@ struct EthernetHeader
     DEFINE_FIXED_HEADER(EthernetHeaderRaw);
 
     void setSourceMac(uint64_t val)
-        { utils::writeU48(raw->sourceMac, val); }
+        { utils::write<uint64_t, 6>(raw->sourceMac, val); }
     void setDestinationMac(uint64_t val)
-        { utils::writeU48(raw->destinationMac, val); }
+        { utils::write<uint64_t, 6>(raw->destinationMac, val); }
     void setType(const uint16_t val)
-        { utils::writeU16(raw->type, val); }
+        { utils::write<uint16_t>(raw->type, val); }
 };
 
 } // namespace packet

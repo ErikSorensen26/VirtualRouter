@@ -25,8 +25,8 @@ uint16_t AuthHandler::buildAuthTLV(uint8_t* out)
         default: return 0;
     }
 
-    utils::writeU16(out, static_cast<uint16_t>(authType));
-    utils::writeU16(out + 2, digestLen);
+    utils::write<uint16_t>(out, static_cast<uint16_t>(authType));
+    utils::write<uint16_t>(out + 2, digestLen);
     std::memset(out + 4, 0, 16 + digestLen);
 
     if (authType == config::eigrp::AuthType::SHA256 && configs.get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().hasValue())
@@ -47,8 +47,8 @@ bool AuthHandler::validateAuth(const uint8_t* packetStart, size_t size, const pa
     if (!authOpt)
         return false;
 
-    config::eigrp::AuthType authType = static_cast<config::eigrp::AuthType>(utils::readU16(authOpt->value));
-    uint16_t digestLen = utils::readU16(authOpt->value + 2);
+    config::eigrp::AuthType authType = static_cast<config::eigrp::AuthType>(utils::read<uint16_t>(authOpt->value));
+    uint16_t digestLen = utils::read<uint16_t>(authOpt->value + 2);
 
     if (authType != configs.get<config::EigrpInterface::AUTHENTICATION_MODE>().load())
         return false;
@@ -70,7 +70,7 @@ bool AuthHandler::validateAuth(const uint8_t* packetStart, size_t size, const pa
         const auto* key = keyMgr.lookup(chainName);
         if (!key) return false;
         uint8_t computed[security::authentication::MD5_DIGEST_LENGTH];
-        uint32_t keyId = utils::readU32(authOpt->value + 4);
+        uint32_t keyId = utils::read<uint32_t>(authOpt->value + 4);
         return key->validate(digest, computed, keyId, packetStart, size, security::authentication::HmacType::MD5);
     }
     else if (authType == config::eigrp::AuthType::SHA256 && hasKeychain)
@@ -102,14 +102,14 @@ bool AuthHandler::appendAuthHMAC(core::Global& global, const std::string& chainN
     // Locate the last TLV
     while (true)
     {
-        uint16_t type = utils::readU16(cursor);
-        uint16_t length = utils::readU16(cursor + 2);
+        uint16_t type = utils::read<uint16_t>(cursor);
+        uint16_t length = utils::read<uint16_t>(cursor + 2);
 
         if (type == EIGRP_OPTION_AUTHENTICATION)
         {
             authTLV = cursor + 4;
-            config::eigrp::AuthType authType = static_cast<config::eigrp::AuthType>(utils::readU16(authTLV));
-            uint16_t digestLen = utils::readU16(authTLV + 2);
+            config::eigrp::AuthType authType = static_cast<config::eigrp::AuthType>(utils::read<uint16_t>(authTLV));
+            uint16_t digestLen = utils::read<uint16_t>(authTLV + 2);
 
             if (authType == config::eigrp::AuthType::MD5 && (length != 36 || digestLen != 16))
                 return false;
@@ -141,7 +141,7 @@ bool AuthHandler::appendAuthHMAC(core::Global& global, const std::string& chainN
                 if (!chain) return false;
                 auto key = chain->getCurrentSendKey();
                 if (!key.has_value()) return false;
-                utils::writeU32(authTLV + 4, key.value().keyId);
+                utils::write<uint32_t>(authTLV + 4, key.value().keyId);
 
                 security::authentication::generateHMAC(
                     authTLV + 20,

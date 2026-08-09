@@ -59,11 +59,11 @@ struct Ospfv2Header
 
     uint8_t getVersion() const             { return raw->version; }
     uint8_t getType() const                { return raw->type; }
-    uint16_t getPacketLen() const          { return utils::readU16(raw->packetLength); }
-    uint32_t getRouterID() const           { return utils::readU32(raw->routerID); }
-    uint32_t getAreaID() const             { return utils::readU32(raw->areaID); }
-    uint16_t getChecksum() const           { return utils::readU16(raw->checksum); }
-    uint16_t getAuthType() const           { return utils::readU16(raw->authType); }
+    uint16_t getPacketLen() const          { return utils::read<uint16_t>(raw->packetLength); }
+    uint32_t getRouterID() const           { return utils::read<uint32_t>(raw->routerID); }
+    uint32_t getAreaID() const             { return utils::read<uint32_t>(raw->areaID); }
+    uint16_t getChecksum() const           { return utils::read<uint16_t>(raw->checksum); }
+    uint16_t getAuthType() const           { return utils::read<uint16_t>(raw->authType); }
     uint8_t* getAuthentication() const     { return raw->authentication; }
 
     void setVersion(uint8_t val)
@@ -71,15 +71,15 @@ struct Ospfv2Header
     void setType(uint8_t val)
         { raw->type = val; }
     void setPacketLen(uint16_t val)
-        { utils::writeU16(raw->packetLength, val); }
+        { utils::write<uint16_t>(raw->packetLength, val); }
     void setRouterID(uint32_t val)
-        { utils::writeU32(raw->routerID, val); }
+        { utils::write<uint32_t>(raw->routerID, val); }
     void setAreaID(uint32_t val)
-        { utils::writeU32(raw->areaID, val); }
+        { utils::write<uint32_t>(raw->areaID, val); }
     void setChecksum(uint16_t val)
-        { utils::writeU16(raw->checksum, val); }
+        { utils::write<uint16_t>(raw->checksum, val); }
     void setAuthType(uint16_t val)
-        { utils::writeU16(raw->authType, val); }
+        { utils::write<uint16_t>(raw->authType, val); }
     void setAuthentication(const uint8_t* val)
         { std::memcpy(raw->authentication, val, 8); }
 };

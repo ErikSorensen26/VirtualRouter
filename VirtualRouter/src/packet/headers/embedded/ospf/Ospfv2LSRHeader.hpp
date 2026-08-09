@@ -32,16 +32,16 @@ struct Ospfv2LSRHeader
 {
     DEFINE_FIXED_HEADER(Ospfv2LSRHeaderRaw);
 
-    uint32_t getType() const           { return utils::readU32(raw->type); }
-    uint32_t getLsID() const                { return utils::readU32(raw->lsID); }
-    uint32_t getAdvRouter() const           { return utils::readU32(raw->advRouter); }
+    uint32_t getType() const           { return utils::read<uint32_t>(raw->type); }
+    uint32_t getLsID() const                { return utils::read<uint32_t>(raw->lsID); }
+    uint32_t getAdvRouter() const           { return utils::read<uint32_t>(raw->advRouter); }
 
     void setType(uint32_t val)
-        { utils::writeU32(raw->type, val); }
+        { utils::write<uint32_t>(raw->type, val); }
     void setLsID(uint32_t val)
-        { utils::writeU32(raw->lsID, val); }
+        { utils::write<uint32_t>(raw->lsID, val); }
     void setAdvRouter(uint32_t val)
-        { utils::writeU32(raw->advRouter, val); }
+        { utils::write<uint32_t>(raw->advRouter, val); }
 };
 
 } // namespace packet

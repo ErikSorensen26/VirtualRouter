@@ -58,14 +58,14 @@ struct NetworkLsaV3
         if (len < 4) return std::nullopt;
 
         NetworkLsaV3 lsa;
-        lsa.options = utils::readU24(buf + 1);
+        lsa.options = utils::read<uint32_t, 3>(buf + 1);
         size_t off = 4;
 
         if ((len - off) % 4 != 0) return std::nullopt;
 
         while (off < len)
         {
-            lsa.attachedRouters.push_back(utils::readU32(buf + off));
+            lsa.attachedRouters.push_back(utils::read<uint32_t>(buf + off));
             off += 4;
         }
 
@@ -86,14 +86,14 @@ struct NetworkLsaV3
     {
         if (len < 4) return false;
 
-        utils::writeU24(buf + 1, options);
+        utils::write<uint32_t, 3>(buf + 1, options);
         size_t off = 4;
 
         if (4 + (4 * attachedRouters.size()) != len) return false;
 
         for (const auto& router : attachedRouters)
         {
-            utils::writeU32(buf + off, router);
+            utils::write<uint32_t>(buf + off, router);
             off += 4;
         }
 

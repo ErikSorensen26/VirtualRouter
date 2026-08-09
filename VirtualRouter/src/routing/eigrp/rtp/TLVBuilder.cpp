@@ -28,8 +28,8 @@ uint8_t TLVBuilder::encodeRouteOption(EigrpInterface& iface, uint8_t* out, size_
     const uint64_t bw = std::min(route->routeInfo.bandwidth, currentBandwidth);
 
     auto writeIpAddr = [&](uint8_t* dst, const types::IPAddress& ip) {
-        if (data.v6) utils::writeU128(dst, ip.v6());
-        else utils::writeU32(dst, ip.v4());
+        if (data.v6) utils::write<__uint128_t>(dst, ip.v6());
+        else utils::write<uint32_t>(dst, ip.v4());
     };
 
     if (!wide)
@@ -49,9 +49,9 @@ uint8_t TLVBuilder::encodeRouteOption(EigrpInterface& iface, uint8_t* out, size_
     {
         if (named)
         {
-            utils::writeU16(out + data.offset, route->routeInfo.wide.topology); data.offset += 2;
-            utils::writeU16(out + data.offset, route->routeInfo.wide.afi); data.offset += 2;
-            utils::writeU32(out + data.offset, route->routeInfo.wide.rid); data.offset += 4;
+            utils::write<uint16_t>(out + data.offset, route->routeInfo.wide.topology); data.offset += 2;
+            utils::write<uint16_t>(out + data.offset, route->routeInfo.wide.afi); data.offset += 2;
+            utils::write<uint32_t>(out + data.offset, route->routeInfo.wide.rid); data.offset += 4;
         }
         if (!encodeWideMetric(data, delay, bw)) return 0;
 
@@ -106,9 +106,9 @@ std::optional<ReceivedRoute> TLVBuilder::decodeRoute(const packet::TLV16Option& 
     {
         if (named)
         {
-            r.wide.topology = utils::readU16(value + data.offset); data.offset += 2;
-            r.wide.afi = utils::readU16(value + data.offset); data.offset += 2;
-            r.wide.rid = utils::readU32(value + data.offset); data.offset += 4;
+            r.wide.topology = utils::read<uint16_t>(value + data.offset); data.offset += 2;
+            r.wide.afi = utils::read<uint16_t>(value + data.offset); data.offset += 2;
+            r.wide.rid = utils::read<uint32_t>(value + data.offset); data.offset += 4;
         }
         if (!decodeWideMetric(data)) return std::nullopt;
         r.nextHop = types::IPAddress(value + data.offset, af);
@@ -124,11 +124,11 @@ std::optional<ReceivedRoute> TLVBuilder::decodeRoute(const packet::TLV16Option& 
 bool TLVBuilder::decodeClassicMetric(RouteData& data)
 {
     if (data.offset + 16  > data.valueSize) return false;
-    uint32_t dl = utils::readU32(data.value + data.offset); data.offset += 4;
-    uint32_t bw = utils::readU32(data.value + data.offset); data.offset += 4;
+    uint32_t dl = utils::read<uint32_t>(data.value + data.offset); data.offset += 4;
+    uint32_t bw = utils::read<uint32_t>(data.value + data.offset); data.offset += 4;
     data.r.delay = (dl != 0) ? (((uint64_t)dl * 10ULL * 1'000'000ULL) / 256ULL) : dl;
     data.r.bandwidth = (bw != 0) ? ((10'000'000ULL * 256ULL) / bw) : bw;
-    data.r.mtu = static_cast<uint16_t>(utils::readU24(data.value + data.offset)); data.offset += 3;
+    data.r.mtu = static_cast<uint16_t>(utils::read<uint32_t, 3>(data.value + data.offset)); data.offset += 3;
     data.r.hopCount = data.value[data.offset++];
     data.r.reliability = data.value[data.offset++];
     data.r.load = data.value[data.offset++];
@@ -146,11 +146,11 @@ bool TLVBuilder::encodeClassicMetric(RouteData& data, const uint64_t& delay, con
     if (data.offset + 16 > data.valueSize) return false;
     uint32_t scaledDelay = (delay != 0 && delay != std::numeric_limits<uint64_t>::max()) ? static_cast<uint32_t>((delay * 256ULL) / (10ULL * 1'000'000ULL)) : static_cast<uint32_t>(delay);
     uint32_t scaledBW = (bw != 0 && bw != std::numeric_limits<uint64_t>::max()) ? static_cast<uint32_t>((10'000'000 * 256ULL) / (bw > 10'000'000 ? 10'000'000 : bw)) : static_cast<uint32_t>(bw);
-    utils::writeU32(data.value + data.offset, scaledDelay >= 0xFFFFFFFF ? 0xFFFFFFFF : scaledDelay);
+    utils::write<uint32_t>(data.value + data.offset, scaledDelay >= 0xFFFFFFFF ? 0xFFFFFFFF : scaledDelay);
     data.offset += 4;
-    utils::writeU32(data.value + data.offset, scaledBW);
+    utils::write<uint32_t>(data.value + data.offset, scaledBW);
     data.offset += 4;
-    utils::writeU24(data.value + data.offset, data.r.mtu);
+    utils::write<uint32_t, 3>(data.value + data.offset, data.r.mtu);
     data.offset += 3;
     data.value[data.offset] = static_cast<uint8_t>(data.r.hopCount + 1);
     data.value[data.offset + 1] = data.r.reliability;
@@ -168,10 +168,10 @@ bool TLVBuilder::decodeWideMetric(RouteData& data)
     data.r.wide.priority = data.value[data.offset++];
     data.r.reliability = data.value[data.offset++];
     data.r.load = data.value[data.offset++];
-    data.r.mtu = static_cast<uint16_t>(utils::readU24(data.value + data.offset)); data.offset += 3;
+    data.r.mtu = static_cast<uint16_t>(utils::read<uint32_t, 3>(data.value + data.offset)); data.offset += 3;
     data.r.hopCount = data.value[data.offset++];
-    data.r.delay = utils::readU48(data.value + data.offset); data.offset += 6;
-    data.r.bandwidth = utils::readU48(data.value + data.offset); data.offset += 6;
+    data.r.delay = utils::read<uint64_t, 6>(data.value + data.offset); data.offset += 6;
+    data.r.bandwidth = utils::read<uint64_t, 6>(data.value + data.offset); data.offset += 6;
     data.offset += 2; // Reserved
     data.r.flags = data.value[data.offset]; data.offset += 2;
 
@@ -194,11 +194,11 @@ bool TLVBuilder::encodeWideMetric(RouteData& data, const uint64_t& delay, const 
     data.value[data.offset++] = 0; // proprity
     data.value[data.offset++] = data.r.reliability;
     data.value[data.offset++] = data.r.load;
-    utils::writeU24(data.value + data.offset, data.r.mtu); data.offset += 3;
+    utils::write<uint32_t, 3>(data.value + data.offset, data.r.mtu); data.offset += 3;
     data.value[data.offset++] = static_cast<uint8_t>(data.r.hopCount + 1);
-    utils::writeU48(data.value + data.offset, delay); data.offset += 6;
-    utils::writeU48(data.value + data.offset, bw); data.offset += 6;
-    utils::writeU16(data.value + data.offset, 0); data.offset += 2; // reserved
+    utils::write<uint64_t, 6>(data.value + data.offset, delay); data.offset += 6;
+    utils::write<uint64_t, 6>(data.value + data.offset, bw); data.offset += 6;
+    utils::write<uint16_t>(data.value + data.offset, 0); data.offset += 2; // reserved
     data.value[data.offset] = data.r.flags; data.offset += 2; // flags
     if (data.r.wide.data.size() != 0)
     {
@@ -211,10 +211,10 @@ bool TLVBuilder::encodeWideMetric(RouteData& data, const uint64_t& delay, const 
 bool TLVBuilder::decodeExternal(RouteData& data)
 {
     if (data.offset + 20 > data.valueSize) return false;
-    data.r.external.originRouter = utils::readU32(data.value + data.offset); data.offset += 4;
-    data.r.external.originAS = utils::readU32(data.value + data.offset); data.offset += 4;
-    data.r.tag = utils::readU32(data.value + data.offset); data.offset += 4;
-    data.r.external.externalMetric = utils::readU32(data.value + data.offset); data.offset += 4;
+    data.r.external.originRouter = utils::read<uint32_t>(data.value + data.offset); data.offset += 4;
+    data.r.external.originAS = utils::read<uint32_t>(data.value + data.offset); data.offset += 4;
+    data.r.tag = utils::read<uint32_t>(data.value + data.offset); data.offset += 4;
+    data.r.external.externalMetric = utils::read<uint32_t>(data.value + data.offset); data.offset += 4;
     data.offset += 2; // Reserved
     data.r.external.type = data.value[data.offset++];
     data.r.external.flags = data.value[data.offset++];
@@ -224,10 +224,10 @@ bool TLVBuilder::decodeExternal(RouteData& data)
 bool TLVBuilder::encodeExternal(RouteData& data)
 {
     if (data.offset + 20 > data.valueSize) return false;
-    utils::writeU32(data.value + data.offset, data.r.external.originRouter); data.offset += 4;
-    utils::writeU32(data.value + data.offset, data.r.external.originAS); data.offset += 4;
-    utils::writeU32(data.value + data.offset, data.r.tag); data.offset += 4;
-    utils::writeU32(data.value + data.offset, data.r.external.externalMetric); data.offset += 4;
+    utils::write<uint32_t>(data.value + data.offset, data.r.external.originRouter); data.offset += 4;
+    utils::write<uint32_t>(data.value + data.offset, data.r.external.originAS); data.offset += 4;
+    utils::write<uint32_t>(data.value + data.offset, data.r.tag); data.offset += 4;
+    utils::write<uint32_t>(data.value + data.offset, data.r.external.externalMetric); data.offset += 4;
     data.offset += 2; // Reserved
     data.value[data.offset++] = data.r.external.type;
     data.value[data.offset++] = data.r.external.flags;
@@ -252,9 +252,9 @@ bool TLVBuilder::encodeDestination(RouteData& data)
     if (data.offset + prefSize > data.valueSize) return false;
     data.value[data.offset] = plen; data.offset += 1;
     if (data.v6)
-        utils::writeBytes(data.value + data.offset, data.r.prefix.v6(), prefSize);
+        utils::write<__uint128_t>(data.value + data.offset, data.r.prefix.v6(), prefSize);
     else
-        utils::writeBytes(data.value + data.offset, data.r.prefix.v4(), prefSize);
+        utils::write<__uint128_t>(data.value + data.offset, data.r.prefix.v4(), prefSize);
     data.offset += prefSize;
     return true;
 }
@@ -268,7 +268,7 @@ uint8_t* TLVBuilder::encodeStubOption(uint8_t* out, const eigrp::StubConfig& stu
     if (stub.advertiseRedistributed) flags |= 0x0008;
     if (stub.advertiseLeakMap) flags |= 0x0010;
     if (stub.receiveOnly) flags |= 0x0020;
-    utils::writeU16(out, flags);
+    utils::write<uint16_t>(out, flags);
     return out;
 }
 
@@ -280,7 +280,7 @@ uint8_t* TLVBuilder::calculateParameters(uint8_t* out, const eigrp::KValue& kval
     out[3] = kvalue.k4_Reliability;
     out[4] = kvalue.k5_MTU;
     out[5] = kvalue.k6_Power;
-    if (holdTime != 0) utils::writeU16(out + 6, holdTime);
+    if (holdTime != 0) utils::write<uint16_t>(out + 6, holdTime);
 
     return out;
 }

@@ -485,7 +485,7 @@ struct TcpIpAdapter final
             const auto* sin = reinterpret_cast<const sockaddr_in*>(sa);
             portOut = ntohs(sin->sin_port);
 
-            ipOut.setV4(utils::readU32(reinterpret_cast<const uint8_t*>(&sin->sin_addr)));
+            ipOut.setV4(utils::read<uint32_t>(reinterpret_cast<const uint8_t*>(&sin->sin_addr)));
             return;
         }
 
@@ -494,7 +494,7 @@ struct TcpIpAdapter final
             const auto* sin6 = reinterpret_cast<const sockaddr_in6*>(sa);
             portOut = ntohs(sin6->sin6_port);
 
-            ipOut.setV6(utils::readU128(reinterpret_cast<const uint8_t*>(&sin6->sin6_addr)));
+            ipOut.setV6(utils::read<__uint128_t>(reinterpret_cast<const uint8_t*>(&sin6->sin6_addr)));
             return;
         }
     }

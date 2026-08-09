@@ -405,17 +405,17 @@ public:
             if constexpr (W == 8)
                 out[0] = static_cast<uint8_t>(*v);
             else if constexpr (W == 16)
-                utils::writeU16(out, static_cast<uint16_t>(*v));
+                utils::write<uint16_t>(out, static_cast<uint16_t>(*v));
             else if constexpr (W == 24)
-                utils::writeU24(out, static_cast<uint32_t>(*v));
+                utils::write<uint32_t, 3>(out, static_cast<uint32_t>(*v));
             else if constexpr (W == 32)
-                utils::writeU32(out, static_cast<uint32_t>(*v));
+                utils::write<uint32_t>(out, static_cast<uint32_t>(*v));
             else if constexpr (W == 48)
-                utils::writeU48(out, static_cast<uint64_t>(*v));
+                utils::write<uint64_t, 6>(out, static_cast<uint64_t>(*v));
             else if constexpr (W == 64)
-                utils::writeU64(out, static_cast<uint64_t>(*v));
+                utils::write<uint64_t>(out, static_cast<uint64_t>(*v));
             else
-                utils::writeU128(out, static_cast<__uint128_t>(*v));
+                utils::write<__uint128_t>(out, static_cast<__uint128_t>(*v));
             return true;
         }
         return false;

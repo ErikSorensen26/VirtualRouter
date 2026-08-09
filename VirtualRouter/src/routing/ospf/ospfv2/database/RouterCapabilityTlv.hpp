@@ -39,12 +39,12 @@ struct RouterCapabilityTlv
     {
         if (len < 8) return std::nullopt;
 
-        uint16_t type = utils::readU16(buf);
-        uint16_t tlvLen = utils::readU16(buf + 2);
+        uint16_t type = utils::read<uint16_t>(buf);
+        uint16_t tlvLen = utils::read<uint16_t>(buf + 2);
         if (type != TLV_TYPE || tlvLen != 4) return std::nullopt;
 
         RouterCapabilityTlv tlv;
-        tlv.capabilities = utils::readU32(buf + 4);
+        tlv.capabilities = utils::read<uint32_t>(buf + 4);
         return tlv;
     }
 
@@ -60,9 +60,9 @@ struct RouterCapabilityTlv
     bool buildBody(uint8_t* buf, uint16_t len) const
     {
         if (len < size()) return false;
-        utils::writeU16(buf, TLV_TYPE);
-        utils::writeU16(buf + 2, 4);
-        utils::writeU32(buf + 4, capabilities);
+        utils::write<uint16_t>(buf, TLV_TYPE);
+        utils::write<uint16_t>(buf + 2, 4);
+        utils::write<uint32_t>(buf + 4, capabilities);
         return true;
     }
 };

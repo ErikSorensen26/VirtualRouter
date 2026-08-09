@@ -283,7 +283,7 @@ public:
      * @param[out] out Destination buffer; caller must supply at least 4 bytes.
      * @return `out` for chaining.
      */
-    inline uint8_t* routerID(uint8_t* out) const { utils::writeU32(out, rid.id); return out; }
+    inline uint8_t* routerID(uint8_t* out) const { utils::write<uint32_t>(out, rid.id); return out; }
     inline uint32_t routerID() const { return rid.id; }
 
     /**

@@ -168,7 +168,7 @@ std::optional<HwIfaceInfo> HardwareManager::extractHwInfo(int sock, struct ifreq
 
     if (ioctl(sock, SIOCGIFHWADDR, &ifr) != 0)
         return std::nullopt;
-    info.mac = utils::readU48(reinterpret_cast<uint8_t*>(ifr.ifr_hwaddr.sa_data));
+    info.mac = utils::read<uint64_t, 6>(reinterpret_cast<uint8_t*>(ifr.ifr_hwaddr.sa_data));
 
     struct ethtool_cmd edata {};
     edata.cmd = ETHTOOL_GSET;

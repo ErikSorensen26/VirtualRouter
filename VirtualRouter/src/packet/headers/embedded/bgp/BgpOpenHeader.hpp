@@ -43,20 +43,20 @@ struct BgpOpenHeader
     DEFINE_PACKET_HEADER(BgpOpenHeaderRaw);
 
     uint8_t getVersion() const { return raw->version; }
-    uint16_t getAsNumber() const { return utils::readU16(raw->asNumber); }
-    uint16_t getHoldTime() const { return utils::readU16(raw->holdTime); }
-    uint32_t getIdentifier() const { return utils::readU32(raw->identifier); }
+    uint16_t getAsNumber() const { return utils::read<uint16_t>(raw->asNumber); }
+    uint16_t getHoldTime() const { return utils::read<uint16_t>(raw->holdTime); }
+    uint32_t getIdentifier() const { return utils::read<uint32_t>(raw->identifier); }
     const uint8_t* getIdentifierBuf() const { return raw->identifier; }
     uint8_t getParameterLen() const { return raw->parameterLen; }
 
     void setVersion(uint8_t val)
         { raw->version = val; }
     void setAsNumber(uint16_t val)
-        { utils::writeU16(raw->asNumber, val); }
+        { utils::write<uint16_t>(raw->asNumber, val); }
     void setHoldTime(uint16_t val)
-        { utils::writeU16(raw->holdTime, val); }
+        { utils::write<uint16_t>(raw->holdTime, val); }
     void setIdentifier(uint32_t val)
-        { utils::writeU32(raw->identifier, val); }
+        { utils::write<uint32_t>(raw->identifier, val); }
     void setParameterLen(uint8_t val)
         { raw->parameterLen = val; }
 };

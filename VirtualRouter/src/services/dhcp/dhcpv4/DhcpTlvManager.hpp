@@ -72,7 +72,7 @@ inline static bool appendTLV(DhcpTLVManager& tlv, uint8_t type, uint32_t value)
         buffer = tlv.tlv.getNextValBuf(9); // int32: 4, override/end: 5
         if (buffer)
         {
-            utils::writeU32(buffer, value);
+            utils::write<uint32_t>(buffer, value);
             tlv.tlv.append(type, 4, nullptr, 4);
             zeroRequested();
             return true;
@@ -84,7 +84,7 @@ inline static bool appendTLV(DhcpTLVManager& tlv, uint8_t type, uint32_t value)
         buffer = tlv.tlvFile.getNextValBuf(4);
         if (buffer)
         {
-            utils::writeU32(buffer, value);
+            utils::write<uint32_t>(buffer, value);
             tlv.tlvFile.append(type, 4, nullptr, 4);
             zeroRequested();
             return true;
@@ -94,7 +94,7 @@ inline static bool appendTLV(DhcpTLVManager& tlv, uint8_t type, uint32_t value)
     buffer = tlv.tlvSname.getNextValBuf(4);
     if (buffer)
     {
-        utils::writeU32(buffer, value);
+        utils::write<uint32_t>(buffer, value);
         tlv.tlvSname.append(type, 4, nullptr, 4);
         zeroRequested();
         return true;

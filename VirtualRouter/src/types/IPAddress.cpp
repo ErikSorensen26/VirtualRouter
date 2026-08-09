@@ -38,12 +38,12 @@ IPAddress::IPAddress(const uint8_t* bytes, AddressFamily af)
 {
     if (af == AddressFamily::IPv4)
     {
-        uint32_t ipv4 = utils::readU32(bytes);
+        uint32_t ipv4 = utils::read<uint32_t>(bytes);
         raw = (static_cast<__uint128_t>(ipv4)) | (__uint128_t{0xFFFF} << 32);
     }
     else if (af == AddressFamily::IPv6)
     {
-        raw = utils::readU128(bytes);
+        raw = utils::read<__uint128_t>(bytes);
     }
     else
     {
@@ -257,11 +257,11 @@ IPv4Address::IPv4Address(uint32_t a, uint8_t plen)
 }
 
 IPv4Address::IPv4Address(const uint8_t* bytes)
-    : addr(utils::readU32(bytes))
+    : addr(utils::read<uint32_t>(bytes))
 {}
 
 IPv4Address::IPv4Address(const uint8_t* bytes, uint8_t plen)
-    : addr(utils::readU32(bytes))
+    : addr(utils::read<uint32_t>(bytes))
 {
     addPrefixLen(plen);
 }
@@ -316,11 +316,11 @@ IPv6Address::IPv6Address(__uint128_t a, uint8_t plen)
 }
 
 IPv6Address::IPv6Address(const uint8_t* bytes)
-    : addr(utils::readU128(bytes))
+    : addr(utils::read<__uint128_t>(bytes))
 {}
 
 IPv6Address::IPv6Address(const uint8_t* bytes, uint8_t plen)
-    : addr(utils::readU128(bytes))
+    : addr(utils::read<__uint128_t>(bytes))
 {
     addPrefixLen(plen);
 }
@@ -405,12 +405,12 @@ IPPrefix::IPPrefix(const uint8_t* ip, uint8_t prefix, AddressFamily family, bool
     {
         if (family == AddressFamily::IPv4)
         {
-            addr = static_cast<__uint128_t>(utils::readU32(ip)) | (__uint128_t{0xFFFF} << 32);
+            addr = static_cast<__uint128_t>(utils::read<uint32_t>(ip)) | (__uint128_t{0xFFFF} << 32);
             prefixLength = prefix;
         }
         else
         {
-            addr = utils::readU128(ip);
+            addr = utils::read<__uint128_t>(ip);
             prefixLength = prefix;
         }
     }
@@ -418,12 +418,12 @@ IPPrefix::IPPrefix(const uint8_t* ip, uint8_t prefix, AddressFamily family, bool
     {
         if (family == AddressFamily::IPv4)
         {
-            addr = utils::readBytes<uint32_t>(ip, (prefix + 7) / 8) | (__uint128_t{0xFFFF} << 32);
+            addr = utils::read<uint32_t>(ip, (prefix + 7) / 8) | (__uint128_t{0xFFFF} << 32);
             addPrefixLen(prefix);
         }
         else
         {
-            addr = utils::readBytes<__uint128_t>(ip, (prefix + 7) / 8);
+            addr = utils::read<__uint128_t>(ip, (prefix + 7) / 8);
             addPrefixLen(prefix);
         }
     }
@@ -700,12 +700,12 @@ IPv4Prefix::IPv4Prefix(const uint8_t* bytes, uint8_t prefix, bool maintainAddres
 {
     if (maintainAddress)
     {
-        addr = utils::readU32(bytes);
+        addr = utils::read<uint32_t>(bytes);
         prefixLength = prefix;
     }
     else
     {
-        addr = utils::readBytes<uint32_t>(bytes, (prefix + 7) / 8);
+        addr = utils::read<uint32_t>(bytes, (prefix + 7) / 8);
         addPrefixLen(prefix);
     }
 }
@@ -874,12 +874,12 @@ IPv6Prefix::IPv6Prefix(const uint8_t* bytes, uint8_t prefix, bool maintainAddres
 {
     if (maintainAddress)
     {
-        addr = utils::readU128(bytes);
+        addr = utils::read<__uint128_t>(bytes);
         prefixLength = prefix;
     }
     else
     {
-        addr = utils::readBytes<__uint128_t>(bytes, (prefix + 7) / 8);
+        addr = utils::read<__uint128_t>(bytes, (prefix + 7) / 8);
         addPrefixLen(prefix);
     }
 }

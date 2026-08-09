@@ -77,8 +77,8 @@ bool Interface::setIPv4(types::IPv4Prefix prefix, bool secondary)
         if (!arp.isShutdown())
         {
             types::IPv4Address v4addr(prefix.addr);
-            arp.sendReply(utils::readU48(ETHERNET_MAC_BROADCAST), v4addr);
-            arp.sendReply(utils::readU48(ETHERNET_MAC_BROADCAST), v4addr);
+            arp.sendReply(utils::read<uint64_t, 6>(ETHERNET_MAC_BROADCAST), v4addr);
+            arp.sendReply(utils::read<uint64_t, 6>(ETHERNET_MAC_BROADCAST), v4addr);
         }
     };
 
@@ -221,7 +221,7 @@ std::vector<std::array<uint8_t, 16>> Interface::getTentativeAddress()
     if (!configs.ipv6.linkLocalAddress->valid && configs.ipv6.linkLocalAddress->tentative)
     {
         tentative.emplace_back();
-        utils::writeU128(tentative.back().data(), configs.ipv6.linkLocalAddress->prefix.addr);
+        utils::write<__uint128_t>(tentative.back().data(), configs.ipv6.linkLocalAddress->prefix.addr);
     }
 
     // core::Global unicast
@@ -230,7 +230,7 @@ std::vector<std::array<uint8_t, 16>> Interface::getTentativeAddress()
         if (addr->tentative)
         {
             tentative.emplace_back();
-            utils::writeU128(tentative.back().data(), addr->prefix.addr);
+            utils::write<__uint128_t>(tentative.back().data(), addr->prefix.addr);
         }
     }
 
@@ -240,7 +240,7 @@ std::vector<std::array<uint8_t, 16>> Interface::getTentativeAddress()
         if (addr->tentative)
         {
             tentative.emplace_back();
-            utils::writeU128(tentative.back().data(), addr->prefix.addr);
+            utils::write<__uint128_t>(tentative.back().data(), addr->prefix.addr);
         }
     }
 
@@ -450,7 +450,7 @@ void Interface::enqueuePacket(processing::PacketBuilder& packetInfo, uint64_t ma
     if (!encapsulate(packetInfo))
         return;
 
-    utils::writeU48(packetInfo.getBuffer(), mac);
+    utils::write<uint64_t, 6>(packetInfo.getBuffer(), mac);
 
     // Enqueue the serialized packet for sending
     if (packetInfo.frame.slot)

@@ -79,7 +79,7 @@ void InterfaceConfigs::syncDhcpv6()
 
 uint8_t* InterfaceConfigs::getMac(uint8_t* mac)
 {
-    utils::writeU48(mac, macAddress.load(std::memory_order_relaxed));
+    utils::write<uint64_t, 6>(mac, macAddress.load(std::memory_order_relaxed));
     return mac;
 }
 
@@ -160,7 +160,7 @@ std::optional<types::IPv4Prefix> InterfaceConfigs::IPv4State::getSecondaryPrefix
 
 uint8_t* InterfaceConfigs::IPv4State::getPrimaryAddress(uint8_t* out) const
 {
-    utils::writeU32(out, address.load(std::memory_order_relaxed));
+    utils::write<uint32_t>(out, address.load(std::memory_order_relaxed));
     return out;
 }
 
@@ -168,7 +168,7 @@ uint8_t* InterfaceConfigs::IPv4State::getSecondaryAddress(uint8_t* out) const
 {
     std::lock_guard<std::mutex> lock(ipMutex);
     if (secondary.empty()) return nullptr;
-    utils::writeU32(out, secondary.front().addr);
+    utils::write<uint32_t>(out, secondary.front().addr);
     return out;
 }
 
@@ -196,7 +196,7 @@ bool InterfaceConfigs::IPv4State::hasPrimaryAddress(types::IPv4Prefix prefix) co
 
 bool InterfaceConfigs::IPv4State::hasPrimaryAddress(const uint8_t* addr, uint8_t len) const
 {
-    return address.load(std::memory_order_relaxed) == utils::readU32(addr) && mask.load(std::memory_order_relaxed) == len;
+    return address.load(std::memory_order_relaxed) == utils::read<uint32_t>(addr) && mask.load(std::memory_order_relaxed) == len;
 }
 
 bool InterfaceConfigs::IPv4State::hasSecondaryAddress(types::IPv4Prefix prefix) const
@@ -208,7 +208,7 @@ bool InterfaceConfigs::IPv4State::hasSecondaryAddress(types::IPv4Prefix prefix) 
 
 bool InterfaceConfigs::IPv4State::hasSecondaryAddress(const uint8_t* addr, uint8_t len) const
 {
-    uint32_t ip = utils::readU32(addr);
+    uint32_t ip = utils::read<uint32_t>(addr);
     std::lock_guard<std::mutex> lock(ipMutex);
     return std::find_if(secondary.begin(), secondary.end(),
         [&](const types::IPv4Prefix& p) { return p.addr == ip && p.prefixLength == len; }) != secondary.end();
@@ -216,7 +216,7 @@ bool InterfaceConfigs::IPv4State::hasSecondaryAddress(const uint8_t* addr, uint8
 
 uint8_t InterfaceConfigs::IPv4State::getPrimaryPrefix(uint8_t* out) const
 {
-    utils::writeU32(out, address.load(std::memory_order_relaxed));
+    utils::write<uint32_t>(out, address.load(std::memory_order_relaxed));
     return mask.load(std::memory_order_relaxed);
 }
 
@@ -224,7 +224,7 @@ std::optional<uint8_t> InterfaceConfigs::IPv4State::getSecondaryPrefix(uint8_t* 
 {
     std::lock_guard<std::mutex> lock(ipMutex);
     if (secondary.empty()) return std::nullopt;
-    utils::writeU32(out, secondary.front().addr);
+    utils::write<uint32_t>(out, secondary.front().addr);
     return secondary.front().prefixLength;
 }
 
@@ -280,7 +280,7 @@ std::unordered_set<types::IPv4Prefix> InterfaceConfigs::IPv4State::getSecondaryP
 
 bool InterfaceConfigs::IPv4State::comparePrimaryAddress(const uint8_t* ip)
 {
-    return address.load(std::memory_order_relaxed) == utils::readU32(ip);
+    return address.load(std::memory_order_relaxed) == utils::read<uint32_t>(ip);
 }
 
 bool InterfaceConfigs::IPv4State::comparePrimaryAddress(types::IPv4Address ip)
@@ -449,7 +449,7 @@ uint8_t* InterfaceConfigs::IPv6State::getLocalAddress(uint8_t* out) const
     std::lock_guard lock(ipMutex);
     if (linkLocalAddress)
     {
-        utils::writeU128(out, linkLocalAddress->prefix.addr);
+        utils::write<__uint128_t>(out, linkLocalAddress->prefix.addr);
         return out;
     }
     return nullptr;
@@ -460,7 +460,7 @@ uint8_t* InterfaceConfigs::IPv6State::getGlobalUnicast(uint8_t* out) const
     std::lock_guard lock(ipMutex);
     if (!globalAddresses.empty())
     {
-        utils::writeU128(out, globalAddresses.front()->prefix.addr);
+        utils::write<__uint128_t>(out, globalAddresses.front()->prefix.addr);
         return out;
     }
     return nullptr;
@@ -471,7 +471,7 @@ uint8_t* InterfaceConfigs::IPv6State::getLocalUnicast(uint8_t* out) const
     std::lock_guard lock(ipMutex);
     if (!uniqueLocalAddresses.empty())
     {
-        utils::writeU128(out, uniqueLocalAddresses.front()->prefix.addr);
+        utils::write<__uint128_t>(out, uniqueLocalAddresses.front()->prefix.addr);
         return out;
     }
     return nullptr;
@@ -520,7 +520,7 @@ types::IPv6Prefix InterfaceConfigs::IPv6State::getLocalUnicastPrefix() const
 
 bool InterfaceConfigs::IPv6State::hasAddress(const uint8_t* addr)
 {
-    return hasAddress(utils::readU128(addr));
+    return hasAddress(utils::read<__uint128_t>(addr));
 }
 
 bool InterfaceConfigs::IPv6State::hasAddress(types::IPv6Address addr)
@@ -544,17 +544,17 @@ bool InterfaceConfigs::IPv6State::hasAddress(types::IPv6Address addr)
 bool InterfaceConfigs::IPv6State::hasLocalAddress(const uint8_t* addr, uint8_t len) const
 {
     std::lock_guard lock(ipMutex);
-    return linkLocalAddress && linkLocalAddress->prefix.addr == utils::readU128(addr) && linkLocalAddress->prefix.prefixLength == len;
+    return linkLocalAddress && linkLocalAddress->prefix.addr == utils::read<__uint128_t>(addr) && linkLocalAddress->prefix.prefixLength == len;
 }
 
 bool InterfaceConfigs::IPv6State::hasLocalUnicast(const uint8_t* addr, uint8_t len) const
 {
-    return hasLocalUnicast(types::IPv6Prefix(utils::readU128(addr), len, true));
+    return hasLocalUnicast(types::IPv6Prefix(utils::read<__uint128_t>(addr), len, true));
 }
 
 bool InterfaceConfigs::IPv6State::hasGlobalUnicast(const uint8_t* addr, uint8_t len) const
 {
-    return hasGlobalUnicast(types::IPv6Prefix(utils::readU128(addr), len, true));
+    return hasGlobalUnicast(types::IPv6Prefix(utils::read<__uint128_t>(addr), len, true));
 }
 
 bool InterfaceConfigs::IPv6State::hasLocalAddress(const types::IPv6Prefix& prefix) const
@@ -585,7 +585,7 @@ uint8_t InterfaceConfigs::IPv6State::getLocalPrefix(uint8_t* out) const
 {
     std::lock_guard lock(ipMutex);
     if (!linkLocalAddress) return 0;
-    utils::writeU128(out, linkLocalAddress->prefix.addr);
+    utils::write<__uint128_t>(out, linkLocalAddress->prefix.addr);
     return linkLocalAddress->prefix.prefixLength;
 }
 
@@ -593,7 +593,7 @@ uint8_t InterfaceConfigs::IPv6State::getGlobalUnicastPrefix(uint8_t* out) const
 {
     std::lock_guard lock(ipMutex);
     if (globalAddresses.empty()) return 0;
-    utils::writeU128(out, globalAddresses.front()->prefix.addr);
+    utils::write<__uint128_t>(out, globalAddresses.front()->prefix.addr);
     return globalAddresses.front()->prefix.prefixLength;
 }
 
@@ -601,7 +601,7 @@ uint8_t InterfaceConfigs::IPv6State::getLocalUnicastPrefix(uint8_t* out) const
 {
     std::lock_guard lock(ipMutex);
     if (uniqueLocalAddresses.empty()) return 0;
-    utils::writeU128(out, uniqueLocalAddresses.front()->prefix.addr);
+    utils::write<__uint128_t>(out, uniqueLocalAddresses.front()->prefix.addr);
     return uniqueLocalAddresses.front()->prefix.prefixLength;
 }
 

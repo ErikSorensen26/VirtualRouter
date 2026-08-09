@@ -134,7 +134,7 @@ bool DhcpClient::buildDhcpDiscover(processing::PacketBuilder& builder, const uin
     if (configs.clientID.size > 0)
         dhcp::appendTLV(tlv, DHCPV6_OPTION_CLIENT_ID, configs.clientID.size, configs.clientID.data);
     uint8_t msgSize[2];
-    utils::writeU16(msgSize, configs.maxSize.load(std::memory_order_relaxed));
+    utils::write<uint16_t>(msgSize, configs.maxSize.load(std::memory_order_relaxed));
     dhcp::appendTLV(tlv, DHCP_OPTION_MAX_SIZE, 2, msgSize);
     dhcp::appendTLV(tlv, DHCP_OPTION_HOSTNAME, hostname.size(), reinterpret_cast<const uint8_t*>(hostname.data()));
     const uint8_t requestList[] = {
@@ -519,9 +519,9 @@ bool DhcpClient::processDhcpOffer(const packet::DhcpHeader& dhcp, std::vector<pa
     if (msgType != DHCP_TYPE_OFFER || !serverIdPtr)
         return false;
 
-    uint32_t requestedAddress = utils::readU32(dhcp.raw->yiaddr);
-    uint32_t dhcpServerId = utils::readU32(serverIdPtr);
-    uint32_t transId = utils::readU32(dhcp.raw->xId);
+    uint32_t requestedAddress = utils::read<uint32_t>(dhcp.raw->yiaddr);
+    uint32_t dhcpServerId = utils::read<uint32_t>(serverIdPtr);
+    uint32_t transId = utils::read<uint32_t>(dhcp.raw->xId);
 
     offered.store(true, std::memory_order_release);
     core::Global& global = currentInterface->getVRF()->getGlobal();
@@ -556,27 +556,27 @@ bool DhcpClient::processDhcpAck(const packet::DhcpHeader& dhcp, std::vector<pack
                 break;
             case DHCP_OPTION_SERVER_IDENTIFIER:
                 if (opt.length == 4)
-                    serverId = utils::readU32(opt.value);
+                    serverId = utils::read<uint32_t>(opt.value);
                 break;
             case DHCP_OPTION_LEASE_TIME:
                 if (opt.length == 4)
-                    leaseTime = utils::readU32(opt.value);
+                    leaseTime = utils::read<uint32_t>(opt.value);
                 break;
             case DHCP_OPTION_RENEWAL_TIME:
                 if (opt.length == 4)
-                    t1 = utils::readU32(opt.value);
+                    t1 = utils::read<uint32_t>(opt.value);
                 break;
             case DHCP_OPTION_REBINDING_TIME:
                 if (opt.length == 4)
-                    t2 = utils::readU32(opt.value);
+                    t2 = utils::read<uint32_t>(opt.value);
                 break;
             case DHCP_OPTION_MASK:
                 if (opt.length == 4)
-                    subnetMask = utils::readU32(opt.value);
+                    subnetMask = utils::read<uint32_t>(opt.value);
                 break;
             case DHCP_OPTION_ROUTER:
                 if (opt.length >= 4)
-                    gateway = utils::readU32(opt.value);
+                    gateway = utils::read<uint32_t>(opt.value);
                 break;
             case DHCP_OPTION_AUTHENTICATION:
                 if (opt.length >= 20)
@@ -592,7 +592,7 @@ bool DhcpClient::processDhcpAck(const packet::DhcpHeader& dhcp, std::vector<pack
         return false;
     
     // Apply configs
-    currentInterface->setIPv4(types::IPv4Prefix(utils::readU32(dhcp.raw->yiaddr), static_cast<uint8_t>(std::popcount(subnetMask))));
+    currentInterface->setIPv4(types::IPv4Prefix(utils::read<uint32_t>(dhcp.raw->yiaddr), static_cast<uint8_t>(std::popcount(subnetMask))));
     configs.router.setV4(gateway);
     configs.serverID.setV4(serverId);
     configs.leaseTime.store(leaseTime);
@@ -719,7 +719,7 @@ void DhcpClient::processOptionalOption(const std::vector<packet::TLV8Option>& op
 
             case DHCP_OPTION_MTU:
                 if (opt.length == 2)
-                    configs.mtu.store(utils::readU16(opt.value), std::memory_order_release);
+                    configs.mtu.store(utils::read<uint16_t>(opt.value), std::memory_order_release);
                 break;
             
             case DHCP_OPTION_HOSTNAME:
@@ -940,7 +940,7 @@ void DhcpClient::appendAuthOptions(packet::TLV8BufferManager& tlv, const packet:
     authOpt[2] = 0;
 
     uint64_t counter = configs.lastReplayCounter.load(std::memory_order_relaxed);
-    utils::writeU64(authOpt + 3, counter + 1);
+    utils::write<uint64_t>(authOpt + 3, counter + 1);
 
     // Zero the digest field
     std::memset(authOpt + 11, 0, 16);
@@ -968,7 +968,7 @@ bool DhcpClient::validateAuthentication(const packet::DhcpHeader& dhcp, const ui
         return false;
 
     // Extract replay counter
-    uint64_t counter = utils::readU64(data + 3);
+    uint64_t counter = utils::read<uint64_t>(data + 3);
     if (counter <= configs.lastReplayCounter.load(std::memory_order_relaxed))
         return false;
 

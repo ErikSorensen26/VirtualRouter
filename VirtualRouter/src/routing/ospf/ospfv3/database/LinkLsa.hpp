@@ -74,7 +74,7 @@ struct LinkLsa
         LinkLsa lsa;
 
         lsa.priority = buf[0];
-        lsa.options = utils::readU24(buf + 1);
+        lsa.options = utils::read<uint32_t, 3>(buf + 1);
         lsa.localLink = types::IPv6Address(buf + 4);
 
         uint8_t prefixList = buf[20];
@@ -112,8 +112,8 @@ struct LinkLsa
         if (len < 21) return false;
 
         buf[0] = priority;
-        utils::writeU24(buf + 1, options);
-        utils::writeU128(buf + 4, localLink.addr);
+        utils::write<uint32_t, 3>(buf + 1, options);
+        utils::write<__uint128_t>(buf + 4, localLink.addr);
 
         buf[20] = static_cast<uint8_t>(prefixes.size());
         size_t off = 21;
@@ -125,7 +125,7 @@ struct LinkLsa
             uint8_t prefixBytes = (link.prefix.prefixLength + 7) / 8;
 
             if (off + prefixBytes > len) return false;
-            utils::writeBytes(buf + off, link.prefix.addr, prefixBytes);
+            utils::write<__uint128_t>(buf + off, link.prefix.addr, prefixBytes);
         }
 
         return true;

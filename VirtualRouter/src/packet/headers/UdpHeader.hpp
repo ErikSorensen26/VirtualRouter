@@ -43,20 +43,20 @@ struct UdpHeader
     DEFINE_FIXED_HEADER(UdpHeaderRaw);
 
     uint16_t getSourcePort() const
-        { return utils::readU16(raw->sourcePort); }
+        { return utils::read<uint16_t>(raw->sourcePort); }
     uint16_t getDestinationPort() const
-        { return utils::readU16(raw->destinationPort); }
+        { return utils::read<uint16_t>(raw->destinationPort); }
     uint16_t getLength() const
-        { return utils::readU16(raw->length); }
+        { return utils::read<uint16_t>(raw->length); }
     const uint8_t* getChecksum() const
         { return raw->checksum; }
     
     void setChecksum(uint8_t* val)
         { std::memcpy(raw->checksum, val, 2); }
     void setSourcePort(uint16_t val)
-        { utils::writeU16(raw->sourcePort, val); }
+        { utils::write<uint16_t>(raw->sourcePort, val); }
     void setDestinationPort(uint16_t val)
-        { utils::writeU16(raw->destinationPort, val); }
+        { utils::write<uint16_t>(raw->destinationPort, val); }
 };
 
 } // namespace packet

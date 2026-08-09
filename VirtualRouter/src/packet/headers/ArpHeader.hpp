@@ -54,34 +54,34 @@ struct ArpHeader
 {
     DEFINE_FIXED_HEADER(ArpHeaderRaw);
 
-    uint16_t getHardwareType() const { return utils::readU16(raw->hardwareType); }
-    uint16_t getProtocolType() const { return utils::readU16(raw->protocolType); }
+    uint16_t getHardwareType() const { return utils::read<uint16_t>(raw->hardwareType); }
+    uint16_t getProtocolType() const { return utils::read<uint16_t>(raw->protocolType); }
     uint8_t  getHardwareSize() const { return raw->hardwareSize; }
     uint8_t  getProtocolSize() const { return raw->protocolSize; }
-    uint16_t getOpcode() const { return utils::readU16(raw->opcode); }
+    uint16_t getOpcode() const { return utils::read<uint16_t>(raw->opcode); }
     const uint8_t* getSenderIpAddr() const { return raw->senderIpAddress; }
     const uint8_t* getTargetIpAddr() const { return raw->targetIpAddress; }
     const uint8_t* getSenderHwAddr() const { return raw->senderHardwareAddress; }
     const uint8_t* getTargetHwAddr() const { return raw->targetHardwareAddress; }
 
     void setHardwareType(uint16_t val) 
-        { utils::writeU16(raw->hardwareType, val); }
+        { utils::write<uint16_t>(raw->hardwareType, val); }
     void setProtocolType(uint16_t val)
-        { utils::writeU16(raw->protocolType, val); }
+        { utils::write<uint16_t>(raw->protocolType, val); }
     void setHardwareSize(uint8_t val)
         { raw->hardwareSize = val; }
     void setProtocolSize(uint8_t val)
         { raw->protocolSize = val; }
     void setOpcode(uint16_t val)
-        { utils::writeU16(raw->opcode, val); }
+        { utils::write<uint16_t>(raw->opcode, val); }
     void setSenderHwAddr(uint64_t val)
-        { utils::writeU48(raw->senderHardwareAddress, val); }
+        { utils::write<uint64_t, 6>(raw->senderHardwareAddress, val); }
     void setSenderIpAddr(uint32_t val)
-        { utils::writeU32(raw->senderIpAddress, val); }
+        { utils::write<uint32_t>(raw->senderIpAddress, val); }
     void setTargetHwAddr(uint64_t val)
-        { utils::writeU48(raw->targetHardwareAddress, val); }
+        { utils::write<uint64_t, 6>(raw->targetHardwareAddress, val); }
     void setTargetIpAddr(uint32_t val)
-        { utils::writeU32(raw->targetIpAddress, val); }
+        { utils::write<uint32_t>(raw->targetIpAddress, val); }
 };
 
 } // namespace packet

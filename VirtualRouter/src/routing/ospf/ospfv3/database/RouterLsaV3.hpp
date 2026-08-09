@@ -116,7 +116,7 @@ struct RouterLsaV3
 
         RouterLsaV3 lsa;
 
-        lsa.options = utils::readU32(buf);
+        lsa.options = utils::read<uint32_t>(buf);
 
         size_t off = 4;
 
@@ -124,10 +124,10 @@ struct RouterLsaV3
         {
             RouterLinkV3 link;
             link.type = buf[off];
-            link.metric = utils::readU16(buf + off + 2);
-            link.interfaceId = utils::readU32(buf + off + 4);
-            link.neighborInterfaceId = utils::readU32(buf + off + 8);
-            link.neighborRouterId = utils::readU32(buf + off + 12);
+            link.metric = utils::read<uint16_t>(buf + off + 2);
+            link.interfaceId = utils::read<uint32_t>(buf + off + 4);
+            link.neighborInterfaceId = utils::read<uint32_t>(buf + off + 8);
+            link.neighborRouterId = utils::read<uint32_t>(buf + off + 12);
             lsa.links.push_back(link);
             off += 16;
         }
@@ -150,17 +150,17 @@ struct RouterLsaV3
     {
         if (len != (4 + (16 * links.size()))) return false;
 
-        utils::writeU32(buf, options);
+        utils::write<uint32_t>(buf, options);
 
         size_t off = 4;
         for (const auto& link : links)
         {
             buf[off++] = link.type; 
             buf[off++] = 0;
-            utils::writeU16(buf + off, link.metric); off += 2;
-            utils::writeU32(buf + off, link.interfaceId); off += 4;
-            utils::writeU32(buf + off, link.neighborInterfaceId); off += 4;
-            utils::writeU32(buf + off, link.neighborRouterId); off += 4;
+            utils::write<uint16_t>(buf + off, link.metric); off += 2;
+            utils::write<uint32_t>(buf + off, link.interfaceId); off += 4;
+            utils::write<uint32_t>(buf + off, link.neighborInterfaceId); off += 4;
+            utils::write<uint32_t>(buf + off, link.neighborRouterId); off += 4;
         }
 
         return true;

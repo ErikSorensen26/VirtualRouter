@@ -250,7 +250,7 @@ std::optional<processing::PacketBuilder> PacketDispatcherV3::buildLSUpdate(Neigh
     builder.offset += 2;
 
     auto updSent = addLSUpdates(builder, nbr);
-    utils::writeU16(trail, static_cast<uint16_t>(updSent));
+    utils::write<uint16_t>(trail, static_cast<uint16_t>(updSent));
     if (updSent == 0)
         return std::nullopt;
 

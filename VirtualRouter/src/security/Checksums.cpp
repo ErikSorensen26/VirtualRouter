@@ -96,7 +96,7 @@ void checksum::calculateChecksum(uint8_t* packet, size_t headerSize, size_t chec
             size_t i = 0;
             while (i + 1 < pseudoHeaderSize)
             {
-                sum += utils::readU16(pseudoHeader + i);
+                sum += utils::read<uint16_t>(pseudoHeader + i);
                 i += 2;
             }
             if (i < pseudoHeaderSize)
@@ -105,7 +105,7 @@ void checksum::calculateChecksum(uint8_t* packet, size_t headerSize, size_t chec
             while (i + 1 < headerSize)
             {
                 if (i < checksumStartIndex || i >= checksumStartIndex + 2)
-                    sum += utils::readU16(packet + i);
+                    sum += utils::read<uint16_t>(packet + i);
                 i += 2;
             }
             if (i < headerSize && (i < checksumStartIndex || i >= checksumStartIndex + 2))
@@ -114,7 +114,7 @@ void checksum::calculateChecksum(uint8_t* packet, size_t headerSize, size_t chec
                 sum = (sum & 0xFFFF) + (sum >> 16);
             uint16_t checksum = ~static_cast<uint16_t>(sum);
             if (swap) std::swap(((uint8_t*)&checksum)[0], ((uint8_t*)&checksum)[1]);
-            utils::writeU16(packet + checksumStartIndex, checksum);
+            utils::write<uint16_t>(packet + checksumStartIndex, checksum);
             break;
         }
         case 4:
@@ -123,7 +123,7 @@ void checksum::calculateChecksum(uint8_t* packet, size_t headerSize, size_t chec
             size_t i = 0;
             while (i + 3 < pseudoHeaderSize) 
             {
-                sum += utils::readU32(pseudoHeader + i);
+                sum += utils::read<uint32_t>(pseudoHeader + i);
                 i += 4;
             }
             if (i < pseudoHeaderSize) 
@@ -138,7 +138,7 @@ void checksum::calculateChecksum(uint8_t* packet, size_t headerSize, size_t chec
             while (i + 3 < headerSize) 
             {
                 if (i < checksumStartIndex || i >= checksumStartIndex + 4)
-                    sum += utils::readU32(packet + i);
+                    sum += utils::read<uint32_t>(packet + i);
                 i += 4;
             }
             if (i < headerSize && (i < checksumStartIndex || i >= checksumStartIndex + 4))
@@ -161,7 +161,7 @@ void checksum::calculateChecksum(uint8_t* packet, size_t headerSize, size_t chec
             }
             else
             {
-                utils::writeU32(packet + checksumStartIndex, checksum);
+                utils::write<uint32_t>(packet + checksumStartIndex, checksum);
             }
             break;
         }

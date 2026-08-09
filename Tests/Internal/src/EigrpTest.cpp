@@ -75,7 +75,7 @@ protected:
         // Create the real EigrpInterface using the mock interface.
         EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_)).Times(::testing::AtLeast(1));
 
-        //network.ip = uint32_t{readU32(ipIntv4Net));
+        //network.ip = uint32_t{read<uint32_t>(ipIntv4Net));
         //network.mask = 24;
         eigrpInstance->getGlobalConfigMgr().addNetworkRange(types::IPv4Prefix{ipIntv4Net.addr, 24});
         eigrpInstance->waitIdle();
@@ -954,11 +954,11 @@ TEST_F(Internal_EigrpTest, ConditionalReceive_Missing_Ack_Resolved)
                 auto opts = extractEigrpOptions(pkt);
                 for (auto& opt : opts)
                 {
-                    if (opt.type == EIGRP_OPTION_MULTICAST_SEQUENCE && utils::readU32(opt.value) == 101)
+                    if (opt.type == EIGRP_OPTION_MULTICAST_SEQUENCE && utils::read<uint32_t>(opt.value) == 101)
                     {
                         seqFound = true;
                     }
-                    else if (opt.type == EIGRP_OPTION_SEQUENCE && utils::readU32(opt.value + 1) == 0xC0A80202)
+                    else if (opt.type == EIGRP_OPTION_SEQUENCE && utils::read<uint32_t>(opt.value + 1) == 0xC0A80202)
                     {
                         neighbor = true;
                     }
@@ -1030,14 +1030,14 @@ TEST_F(Internal_EigrpTest, ConditionalReceive_Multiple_Missing_Acks_Resolved)
                 bool neighbor = false;
                 for (auto& opt : extractEigrpOptions(pkt))
                 {
-                    if (opt.type == EIGRP_OPTION_MULTICAST_SEQUENCE && utils::readU32(opt.value) == 201)
+                    if (opt.type == EIGRP_OPTION_MULTICAST_SEQUENCE && utils::read<uint32_t>(opt.value) == 201)
                     {
                         seqFound = true;
                     }
                     else if (opt.type == EIGRP_OPTION_SEQUENCE && opt.valueSize >= 9)
                     {
-                        uint32_t ip1 = utils::readU32(opt.value + 1);
-                        uint32_t ip2 = utils::readU32(opt.value + 5);
+                        uint32_t ip1 = utils::read<uint32_t>(opt.value + 1);
+                        uint32_t ip2 = utils::read<uint32_t>(opt.value + 5);
                         neighbor = (ip1 == 0xC0A80203 && ip2 == 0xC0A80204) ||
                                    (ip1 == 0xC0A80204 && ip2 == 0xC0A80203);
                     }
@@ -2684,9 +2684,9 @@ TEST_F(Internal_EigrpTest, HighVolume_RouteUpdates_Performance_Extended)
     for (int i = 0; i < 1500; i++)
     {
         ReceivedRoute route = getRoute(eigrpInterface->interfaceKey);
-        utils::writeU16(base + 1, static_cast<uint16_t>(i));
+        utils::write<uint16_t>(base + 1, static_cast<uint16_t>(i));
 
-        route.prefix = { utils::readU32(base), 24 };
+        route.prefix = { utils::read<uint32_t>(base), 24 };
         route.nextHop = nextHop;
         std::vector<ReceivedRoute> rs = {route};
         getDual().processReceivedRoutes(rs, *neighbor);
@@ -3359,8 +3359,8 @@ TEST_F(Internal_EigrpTest, AuthTLV_SHA256_EncodedWith52ByteValue)
 
     // 20 byte header + 32 byte SHA256 digest
     EXPECT_EQ(shaIt->valueSize, 52u);
-    EXPECT_EQ(utils::readU16(shaIt->value), static_cast<uint16_t>(config::eigrp::AuthType::SHA256));
-    EXPECT_EQ(utils::readU16(shaIt->value + 2), 32u);
+    EXPECT_EQ(utils::read<uint16_t>(shaIt->value), static_cast<uint16_t>(config::eigrp::AuthType::SHA256));
+    EXPECT_EQ(utils::read<uint16_t>(shaIt->value + 2), 32u);
 
     // MD5 on the same builder must still encode 36, not SHA256's 52
     security::authentication::KeyChain::Key key{1, "PASSWORD", {}};
@@ -3381,7 +3381,7 @@ TEST_F(Internal_EigrpTest, AuthTLV_SHA256_EncodedWith52ByteValue)
 
     // 20 byte header + 16 byte MD5 digest
     EXPECT_EQ(md5It->valueSize, 36u);
-    EXPECT_EQ(utils::readU16(md5It->value + 2), 16u);
+    EXPECT_EQ(utils::read<uint16_t>(md5It->value + 2), 16u);
 }
 
 TEST_F(Internal_EigrpTest, ParameterTLV_PeerTermination_EncodedWithZeroedKValues)
@@ -3419,7 +3419,7 @@ TEST_F(Internal_EigrpTest, ParameterTLV_PeerTermination_EncodedWithZeroedKValues
     EXPECT_EQ(std::memcmp(termIt->value, zeroed, 6), 0);
 
     // Hold time still rides along after the zeroed K-values
-    EXPECT_EQ(utils::readU16(termIt->value + 6),
+    EXPECT_EQ(utils::read<uint16_t>(termIt->value + 6),
               eigrpInterface->configs.get<config::EigrpInterface::HOLD_TIME>().load());
 
     // The flag is consumed, so the next hello is a normal one again
@@ -3518,15 +3518,15 @@ TEST_F(Internal_EigrpTest, TLVParsing_DuplicateTlvsInPacket_Handled)
 {
     // Two PARAMETER TLVs, distinguishable by their hold time
     uint8_t buf[24] = {0};
-    utils::writeU16(buf, EIGRP_OPTION_PARAMETER);
-    utils::writeU16(buf + 2, 12);
+    utils::write<uint16_t>(buf, EIGRP_OPTION_PARAMETER);
+    utils::write<uint16_t>(buf + 2, 12);
     std::memset(buf + 4, 0x01, 6);
-    utils::writeU16(buf + 10, 100); // first hold time
+    utils::write<uint16_t>(buf + 10, 100); // first hold time
 
-    utils::writeU16(buf + 12, EIGRP_OPTION_PARAMETER);
-    utils::writeU16(buf + 14, 12);
+    utils::write<uint16_t>(buf + 12, EIGRP_OPTION_PARAMETER);
+    utils::write<uint16_t>(buf + 14, 12);
     std::memset(buf + 16, 0x01, 6);
-    utils::writeU16(buf + 22, 200); // second hold time
+    utils::write<uint16_t>(buf + 22, 200); // second hold time
 
     std::vector<packet::TLV16Option> opts;
     ASSERT_TRUE(packet::parseEigrpOptions(buf, sizeof(buf), opts));
@@ -3535,8 +3535,8 @@ TEST_F(Internal_EigrpTest, TLVParsing_DuplicateTlvsInPacket_Handled)
     ASSERT_EQ(opts.size(), 2u);
     EXPECT_EQ(opts[0].type, EIGRP_OPTION_PARAMETER);
     EXPECT_EQ(opts[1].type, EIGRP_OPTION_PARAMETER);
-    EXPECT_EQ(utils::readU16(opts[0].value + 6), 100u);
-    EXPECT_EQ(utils::readU16(opts[1].value + 6), 200u);
+    EXPECT_EQ(utils::read<uint16_t>(opts[0].value + 6), 100u);
+    EXPECT_EQ(utils::read<uint16_t>(opts[1].value + 6), 200u);
 
     // processHello walks opts in order and overwrites holdTime per PARAMETER
     // TLV, so the last duplicate is the one that sticks.
@@ -3548,7 +3548,7 @@ TEST_F(Internal_EigrpTest, TLVParsing_DuplicateTlvsInPacket_Handled)
     uint16_t last = 0;
     for (const auto& opt : opts)
         if (opt.type == EIGRP_OPTION_PARAMETER && opt.length >= 8)
-            last = utils::readU16(opt.value + 6);
+            last = utils::read<uint16_t>(opt.value + 6);
     EXPECT_EQ(last, 200u);
 }
 
@@ -3556,12 +3556,12 @@ TEST_F(Internal_EigrpTest, TLVParsing_MalformedTlvLength_RejectedSafely)
 {
     // A good TLV followed by one claiming far more bytes than remain
     uint8_t buf[16] = {0};
-    utils::writeU16(buf, EIGRP_OPTION_VERSION);
-    utils::writeU16(buf + 2, 8);
-    utils::writeU32(buf + 4, 0x01020304);
+    utils::write<uint16_t>(buf, EIGRP_OPTION_VERSION);
+    utils::write<uint16_t>(buf + 2, 8);
+    utils::write<uint32_t>(buf + 4, 0x01020304);
 
-    utils::writeU16(buf + 8, EIGRP_OPTION_PARAMETER);
-    utils::writeU16(buf + 10, 2000); // overruns the 16 byte buffer
+    utils::write<uint16_t>(buf + 8, EIGRP_OPTION_PARAMETER);
+    utils::write<uint16_t>(buf + 10, 2000); // overruns the 16 byte buffer
 
     std::vector<packet::TLV16Option> opts;
     EXPECT_FALSE(packet::parseEigrpOptions(buf, sizeof(buf), opts));
@@ -3572,16 +3572,16 @@ TEST_F(Internal_EigrpTest, TLVParsing_MalformedTlvLength_RejectedSafely)
 
     // A length below the 4 byte header is equally invalid and must not loop
     uint8_t tooShort[8] = {0};
-    utils::writeU16(tooShort, EIGRP_OPTION_PARAMETER);
-    utils::writeU16(tooShort + 2, 2);
+    utils::write<uint16_t>(tooShort, EIGRP_OPTION_PARAMETER);
+    utils::write<uint16_t>(tooShort + 2, 2);
     std::vector<packet::TLV16Option> shortOpts;
     EXPECT_FALSE(packet::parseEigrpOptions(tooShort, sizeof(tooShort), shortOpts));
     EXPECT_TRUE(shortOpts.empty());
 
     // Trailing bytes that cannot form a TLV header are rejected too
     uint8_t trailing[10] = {0};
-    utils::writeU16(trailing, EIGRP_OPTION_VERSION);
-    utils::writeU16(trailing + 2, 8);
+    utils::write<uint16_t>(trailing, EIGRP_OPTION_VERSION);
+    utils::write<uint16_t>(trailing + 2, 8);
     std::vector<packet::TLV16Option> trailOpts;
     EXPECT_FALSE(packet::parseEigrpOptions(trailing, sizeof(trailing), trailOpts));
 }
@@ -3604,7 +3604,7 @@ TEST_F(Internal_EigrpTest, MalformedTlvPacket_DroppedByHandleIncoming)
     ASSERT_TRUE(packet::parseEigrpOptions(trail.data(), trail.size(), opts));
 
     // Overrun the first TLV's length past the end of the trail
-    utils::writeU16(const_cast<uint8_t*>(trail.data()) + 2, static_cast<uint16_t>(trail.size() + 8));
+    utils::write<uint16_t>(const_cast<uint8_t*>(trail.data()) + 2, static_cast<uint16_t>(trail.size() + 8));
 
     eigrpInterface->getRtp().handleIncoming(nullptr, hdr.value(), n.raw, true);
 
@@ -3616,18 +3616,18 @@ TEST_F(Internal_EigrpTest, TLVParsing_UnknownTlvType_SkippedNotFatal)
 {
     // Unknown type sandwiched between two known ones
     uint8_t buf[28] = {0};
-    utils::writeU16(buf, EIGRP_OPTION_VERSION);
-    utils::writeU16(buf + 2, 8);
-    utils::writeU32(buf + 4, 0x01020304);
+    utils::write<uint16_t>(buf, EIGRP_OPTION_VERSION);
+    utils::write<uint16_t>(buf + 2, 8);
+    utils::write<uint32_t>(buf + 4, 0x01020304);
 
-    utils::writeU16(buf + 8, 0x7FFF); // not a type we implement
-    utils::writeU16(buf + 10, 8);
-    utils::writeU32(buf + 12, 0xDEADBEEF);
+    utils::write<uint16_t>(buf + 8, 0x7FFF); // not a type we implement
+    utils::write<uint16_t>(buf + 10, 8);
+    utils::write<uint32_t>(buf + 12, 0xDEADBEEF);
 
-    utils::writeU16(buf + 16, EIGRP_OPTION_PARAMETER);
-    utils::writeU16(buf + 18, 12);
+    utils::write<uint16_t>(buf + 16, EIGRP_OPTION_PARAMETER);
+    utils::write<uint16_t>(buf + 18, 12);
     std::memset(buf + 20, 0x01, 6);
-    utils::writeU16(buf + 26, 15);
+    utils::write<uint16_t>(buf + 26, 15);
 
     std::vector<packet::TLV16Option> opts;
     ASSERT_TRUE(packet::parseEigrpOptions(buf, sizeof(buf), opts));
@@ -3637,7 +3637,7 @@ TEST_F(Internal_EigrpTest, TLVParsing_UnknownTlvType_SkippedNotFatal)
     EXPECT_EQ(opts[0].type, EIGRP_OPTION_VERSION);
     EXPECT_EQ(opts[1].type, 0x7FFFu);
     EXPECT_EQ(opts[2].type, EIGRP_OPTION_PARAMETER);
-    EXPECT_EQ(utils::readU16(opts[2].value + 6), 15u);
+    EXPECT_EQ(utils::read<uint16_t>(opts[2].value + 6), 15u);
 }
 
 TEST_F(Internal_EigrpTest, WideMetrics_OverflowValues_ClampedOrRejected)

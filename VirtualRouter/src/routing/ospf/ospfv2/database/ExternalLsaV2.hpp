@@ -48,14 +48,14 @@ struct ExternalLsaV2
 
         ExternalLsaV2 lsa;
 
-        lsa.networkMask = utils::readU32(buf);
+        lsa.networkMask = utils::read<uint32_t>(buf);
 
-        uint32_t metricWord = utils::readU32(buf + 4);
+        uint32_t metricWord = utils::read<uint32_t>(buf + 4);
         lsa.isType2 = (metricWord & 0x80000000) != 0;
         lsa.metric = metricWord & 0x7FFFFFFF;
 
-        lsa.forwardingAddress = utils::readU32(buf + 8);
-        lsa.routeTag = utils::readU32(buf + 12);
+        lsa.forwardingAddress = utils::read<uint32_t>(buf + 8);
+        lsa.routeTag = utils::read<uint32_t>(buf + 12);
 
         return lsa;
     }
@@ -70,13 +70,13 @@ struct ExternalLsaV2
     {
         if (len != 16) return false;
 
-        utils::writeU32(buf, networkMask);
+        utils::write<uint32_t>(buf, networkMask);
         uint32_t metricWord = metric & 0x7FFFFFFF;
         if (isType2) metricWord |= 0x80000000;
-        utils::writeU32(buf + 4, metricWord);
+        utils::write<uint32_t>(buf + 4, metricWord);
         if (isType2) buf[4] = 0x80;
-        utils::writeU32(buf + 8, forwardingAddress);
-        utils::writeU32(buf + 12, routeTag);
+        utils::write<uint32_t>(buf + 8, forwardingAddress);
+        utils::write<uint32_t>(buf + 12, routeTag);
         return true;
     }
 

@@ -100,7 +100,7 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
         {
             if (v.type == EIGRP_OPTION_VERSION && v.valueSize >= 4)
             {
-                version = utils::readU16(v.value + 2);
+                version = utils::read<uint16_t>(v.value + 2);
                 sawVersion = true;
                 break;
             }
@@ -162,13 +162,13 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
             }
 
             if (opt.length >= 8)
-                info.neighbor->holdTime.store(utils::readU16(opt.value + 6), std::memory_order_relaxed);
+                info.neighbor->holdTime.store(utils::read<uint16_t>(opt.value + 6), std::memory_order_relaxed);
 
             parametersFound = true;
         }
         else if (opt.type == EIGRP_OPTION_MULTICAST_SEQUENCE && opt.valueSize == 4)
         {
-            conditionalSeq = utils::readU32(opt.value);
+            conditionalSeq = utils::read<uint32_t>(opt.value);
         }
         else if (opt.type == EIGRP_OPTION_SEQUENCE && opt.valueSize > 1)
         {
@@ -183,7 +183,7 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
             if (iface.getBase().getAF() == types::AddressFamily::IPv4)
                 iface.getIface()->configs.ipv4.getPrimaryAddress(ourAddr);
             else
-                utils::writeU128(ourAddr, iface.getIface()->configs.ipv6.getLocalAddress().addr);
+                utils::write<__uint128_t>(ourAddr, iface.getIface()->configs.ipv6.getLocalAddress().addr);
 
             for (size_t off = 0; off + addrLen <= listLen; off += addrLen)
             {

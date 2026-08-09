@@ -45,7 +45,7 @@ void BgpRx::handleIncoming(Session& session, transport::tcp::RxConsumer& consume
             Notification error;
             error.code = BGP_NOTIFICATION_HEADER_BAD_MESSAGE_LENGTH;
             error.data.resize(2);
-            utils::writeU16(error.data.data(), length);
+            utils::write<uint16_t>(error.data.data(), length);
             session.sendNotification(error);
             session.postEvent(FsmEvent::BGP_HEADER_ERR);
             return;
@@ -60,7 +60,7 @@ void BgpRx::handleIncoming(Session& session, transport::tcp::RxConsumer& consume
             Notification error;
             error.code = BGP_NOTIFICATION_HEADER_BAD_MESSAGE_LENGTH;
             error.data.resize(2);
-            utils::writeU16(error.data.data(), length);
+            utils::write<uint16_t>(error.data.data(), length);
             session.sendNotification(error);
             session.postEvent(FsmEvent::BGP_HEADER_ERR);
             return;
@@ -152,7 +152,7 @@ bool BgpRx::processOpen(Session& session, uint64_t cid, std::span<uint8_t> paylo
     {
         error.code = BGP_NOTIFICATION_OPEN_UNSUPPORTED_VERSION;
         error.data.resize(2);
-        utils::writeU16(error.data.data(), BGP_VERSION);
+        utils::write<uint16_t>(error.data.data(), BGP_VERSION);
         return false;
     }
 
@@ -197,7 +197,7 @@ bool BgpRx::processOpen(Session& session, uint64_t cid, std::span<uint8_t> paylo
     uint16_t paramLen = open.getParameterLen();
     if (paramLen == 255 && payload.size() >= packet::BgpOpenHeader::fixedSize + 2)
     {
-        paramLen = utils::readU16(open.getTrailData());
+        paramLen = utils::read<uint16_t>(open.getTrailData());
         extendedParamLen = true;
     }
 
@@ -288,7 +288,7 @@ bool BgpRx::processKeepalive(Session& session, std::span<uint8_t> payload, Notif
     {
         error.code = BGP_NOTIFICATION_HEADER_BAD_MESSAGE_LENGTH;
         error.data.resize(2);
-        utils::writeU16(error.data.data(), static_cast<uint16_t>(packet::BgpHeader::fixedSize));
+        utils::write<uint16_t>(error.data.data(), static_cast<uint16_t>(packet::BgpHeader::fixedSize));
         return false;
     }
     session.onKeepaliveReceived();
@@ -313,7 +313,7 @@ bool BgpRx::processUpdate(Session& session, std::span<uint8_t> payload, Notifica
 
     size_t offset = 0;
 
-    uint16_t withdrawnLen = utils::readU16(payload.data() + offset);
+    uint16_t withdrawnLen = utils::read<uint16_t>(payload.data() + offset);
     offset += 2;
 
     if (offset + withdrawnLen > payload.size())
@@ -332,7 +332,7 @@ bool BgpRx::processUpdate(Session& session, std::span<uint8_t> payload, Notifica
         return false;
     }
 
-    uint16_t attrLen = utils::readU16(payload.data() + offset);
+    uint16_t attrLen = utils::read<uint16_t>(payload.data() + offset);
     offset += 2;
 
     if (offset + attrLen > payload.size())
@@ -383,7 +383,7 @@ AfiSafi findMpAfiSafi(std::span<const uint8_t> attrData)
         if (flags & BGP_ATTR_FLAG_EXTENDED_LENGTH)
         {
             if (ptr + 2 > end) break;
-            length = utils::readU16(ptr);
+            length = utils::read<uint16_t>(ptr);
             ptr += 2;
         }
         else
@@ -395,7 +395,7 @@ AfiSafi findMpAfiSafi(std::span<const uint8_t> attrData)
         {
             if (ptr + 3 <= end)
             {
-                uint16_t afi = utils::readU16(ptr);
+                uint16_t afi = utils::read<uint16_t>(ptr);
                 uint8_t safi = ptr[3];
                 return {afi, safi};
             }
@@ -442,7 +442,7 @@ std::optional<AfiSafi> BgpRx::resolveMultiSessionAf(std::span<uint8_t> data)
                     {
                         if (len == 4)
                         {
-                            uint16_t afi = utils::readU16(p);
+                            uint16_t afi = utils::read<uint16_t>(p);
                             uint8_t safi = p[3];
                             if (multiProtocol.has_value())
                                 return std::nullopt;
@@ -454,7 +454,7 @@ std::optional<AfiSafi> BgpRx::resolveMultiSessionAf(std::span<uint8_t> data)
                     {
                         for (size_t i = 0; i + 4 <= static_cast<size_t>(len); i += 4)
                         {
-                            uint16_t afi = utils::readU16(p + i);
+                            uint16_t afi = utils::read<uint16_t>(p + i);
                             uint8_t safi = p[i + 2];
                             if (multiSession.has_value())
                                 return std::nullopt;
@@ -497,7 +497,7 @@ void BgpRx::parseCapabilities(std::span<uint8_t> data, Capabilities& out)
             {
                 if (len == 4)
                 {
-                    uint16_t afi = utils::readU16(p);
+                    uint16_t afi = utils::read<uint16_t>(p);
                     uint8_t safi = p[3];
                     out.mpFamilies.push_back({afi, safi});
                 }
@@ -517,7 +517,7 @@ void BgpRx::parseCapabilities(std::span<uint8_t> data, Capabilities& out)
             {
                 if (len >= 5)
                 {
-                    uint16_t afi = utils::readU16(p);
+                    uint16_t afi = utils::read<uint16_t>(p);
                     uint8_t safi = p[2];
                     uint8_t count = p[3];
                     size_t pos = 4;
@@ -534,9 +534,9 @@ void BgpRx::parseCapabilities(std::span<uint8_t> data, Capabilities& out)
             {
                 for (size_t pos = 0; pos + 6 <= static_cast<size_t>(len); pos += 6)
                 {
-                    uint16_t nlriAfi = utils::readU16(p + pos);
+                    uint16_t nlriAfi = utils::read<uint16_t>(p + pos);
                     uint8_t nlriSafi = p[pos + 2];
-                    uint16_t nhAfi = utils::readU16(p + pos + 4);
+                    uint16_t nhAfi = utils::read<uint16_t>(p + pos + 4);
                     out.extendedNextHopEntries.push_back({{nlriAfi, nlriSafi}, nhAfi});
                 }
                 if (len >= 6) out.extendedNextHop = true;
@@ -551,7 +551,7 @@ void BgpRx::parseCapabilities(std::span<uint8_t> data, Capabilities& out)
             {
                 if (len == 3)
                 {
-                    uint16_t afi = utils::readU16(p);
+                    uint16_t afi = utils::read<uint16_t>(p);
                     uint8_t safi = p[2];
                     out.bgpsecFamilies.push_back({afi, safi});
                     out.bgpsec = true;
@@ -562,7 +562,7 @@ void BgpRx::parseCapabilities(std::span<uint8_t> data, Capabilities& out)
             {
                 if (len >= 3)
                 {
-                    uint16_t afi = utils::readU16(p);
+                    uint16_t afi = utils::read<uint16_t>(p);
                     uint8_t safi = p[2];
                     out.labeledFamilies.push_back({afi, safi});
                     out.multipleLabels = true;
@@ -573,14 +573,14 @@ void BgpRx::parseCapabilities(std::span<uint8_t> data, Capabilities& out)
             {
                 if (len >= 2)
                 {
-                    uint16_t flagsTime = utils::readU16(p);
+                    uint16_t flagsTime = utils::read<uint16_t>(p);
                     out.gracefulRestart = true;
                     out.restarting = (flagsTime & 0x8000) != 0;
                     out.restartTime = flagsTime & 0x0FFF;
 
                     for (size_t pos = 2; pos + 4 <= static_cast<size_t>(len); pos += 4)
                     {
-                        uint16_t afi = utils::readU16(p + pos);
+                        uint16_t afi = utils::read<uint16_t>(p + pos);
                         uint8_t safi = p[pos + 2];
                         uint8_t flags = p[pos + 3];
                         out.gracefulFamilies.push_back({{afi, safi}, (flags & 0x80) != 0});
@@ -593,7 +593,7 @@ void BgpRx::parseCapabilities(std::span<uint8_t> data, Capabilities& out)
                 if (len == 4)
                 {
                     out.asn32bit = true;
-                    out.asn = utils::readU32(p);
+                    out.asn = utils::read<uint32_t>(p);
                 }
                 break;
             }
@@ -601,7 +601,7 @@ void BgpRx::parseCapabilities(std::span<uint8_t> data, Capabilities& out)
             {
                 for (size_t pos = 0; pos + 4 <= static_cast<size_t>(len); pos += 4)
                 {
-                    uint16_t afi = utils::readU16(p + pos);
+                    uint16_t afi = utils::read<uint16_t>(p + pos);
                     uint8_t safi = p[pos + 2];
                     out.multiSessionFamilies.push_back({afi, safi});
                 }
@@ -612,7 +612,7 @@ void BgpRx::parseCapabilities(std::span<uint8_t> data, Capabilities& out)
             {
                 for (size_t pos = 0; pos + 4 <= static_cast<size_t>(len); pos += 4)
                 {
-                    uint16_t afi = utils::readU16(p + pos);
+                    uint16_t afi = utils::read<uint16_t>(p + pos);
                     uint8_t safi = p[pos + 2];
                     uint8_t mode = p[pos + 3];
                     out.addPathFamilies.push_back({{afi, safi}, mode});
@@ -624,10 +624,10 @@ void BgpRx::parseCapabilities(std::span<uint8_t> data, Capabilities& out)
             {
                 for (size_t pos = 0; pos + 7 <= static_cast<size_t>(len); pos += 7)
                 {
-                    uint16_t afi = utils::readU16(p + pos);
+                    uint16_t afi = utils::read<uint16_t>(p + pos);
                     uint8_t safi = p[pos + 2];
                     uint8_t flags = p[pos + 3];
-                    uint32_t staleTime = utils::readU24(p + pos + 4);
+                    uint32_t staleTime = utils::read<uint32_t, 3>(p + pos + 4);
                     out.llgrFamilies.push_back({{afi, safi}, staleTime, flags});
                 }
                 if (len >= 7) out.llgr = true;
@@ -675,12 +675,12 @@ bool BgpRx::processRouteRefresh(Session& session, std::span<uint8_t> payload, No
     {
         error.code = BGP_NOTIFICATION_HEADER_BAD_MESSAGE_LENGTH;
         error.data.resize(2);
-        utils::writeU16(error.data.data(), static_cast<uint16_t>(packet::BgpHeader::fixedSize + payload.size()));
+        utils::write<uint16_t>(error.data.data(), static_cast<uint16_t>(packet::BgpHeader::fixedSize + payload.size()));
         return false;
     }
 
     AfiSafi family;
-    family.afi  = utils::readU16(payload.data());
+    family.afi  = utils::read<uint16_t>(payload.data());
     uint8_t subtype = payload[2]; // enhanced-RR subtype (BORR/EORR) or ORF when-to-refresh
     family.safi = payload[3];
 
@@ -692,7 +692,7 @@ bool BgpRx::processRouteRefresh(Session& session, std::span<uint8_t> payload, No
         while (pos + 3 <= payload.size())
         {
             uint8_t  orfType = payload[pos];
-            uint16_t orfLen  = utils::readU16(payload.data() + pos + 1);
+            uint16_t orfLen  = utils::read<uint16_t>(payload.data() + pos + 1);
             pos += 3;
             if (pos + orfLen > payload.size()) break;
 
@@ -716,7 +716,7 @@ bool BgpRx::processRouteRefresh(Session& session, std::span<uint8_t> payload, No
                     }
 
                     if (epos + 6 > orfLen) break;
-                    e.sequence = utils::readU32(payload.data() + pos + epos); epos += 4;
+                    e.sequence = utils::read<uint32_t>(payload.data() + pos + epos); epos += 4;
                     e.minLen   = payload[pos + epos++];
                     e.maxLen   = payload[pos + epos++];
 
@@ -727,9 +727,9 @@ bool BgpRx::processRouteRefresh(Session& session, std::span<uint8_t> payload, No
 
                     e.prefix.prefixLength = prefixLen;
                     if (family.afi == BGP_AFI_IPV6) {
-                        e.prefix.setV6(utils::readBytes<__uint128_t>(payload.data() + pos + epos, prefixBytes));
+                        e.prefix.setV6(utils::read<__uint128_t>(payload.data() + pos + epos, prefixBytes));
                     } else {
-                        e.prefix.setV4(utils::readBytes<uint32_t>(payload.data() + pos + epos, prefixBytes));
+                        e.prefix.setV4(utils::read<uint32_t>(payload.data() + pos + epos, prefixBytes));
                     }
                     epos += prefixBytes;
 
@@ -807,7 +807,7 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
                 error.code = BGP_NOTIFICATION_UPDATE_ATTR_LENGTH;
                 return false;
             }
-            attrLen = utils::readU16(data.data() + pos);
+            attrLen = utils::read<uint16_t>(data.data() + pos);
             pos += 2;
         }
         else
@@ -892,8 +892,8 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
                     for (uint8_t i = 0; i < segLen; ++i)
                     {
                         uint32_t asn = use4byte
-                            ? utils::readU32(val.data() + ap + i * 4)
-                            : utils::readU16(val.data() + ap + i * 2);
+                            ? utils::read<uint32_t>(val.data() + ap + i * 4)
+                            : utils::read<uint16_t>(val.data() + ap + i * 2);
                         seg.asns.push_back(asn);
                     }
                     ap += segLen * asnBytes;
@@ -912,7 +912,7 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
                     error.code = BGP_NOTIFICATION_UPDATE_ATTR_LENGTH;
                     return false;
                 }
-                path.nextHop = types::IPAddress(utils::readU32(val.data()));
+                path.nextHop = types::IPAddress(utils::read<uint32_t>(val.data()));
                 sawNextHop = true;
                 break;
             }
@@ -925,7 +925,7 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
                     error.code = BGP_NOTIFICATION_UPDATE_ATTR_LENGTH;
                     return false;
                 }
-                attrs.med = utils::readU32(val.data());
+                attrs.med = utils::read<uint32_t>(val.data());
                 break;
             }
 
@@ -938,7 +938,7 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
                     error.code = BGP_NOTIFICATION_UPDATE_ATTR_LENGTH;
                     return false;
                 }
-                attrs.localPref = utils::readU32(val.data());
+                attrs.localPref = utils::read<uint32_t>(val.data());
                 break;
             }
 
@@ -955,13 +955,13 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
                 Aggregator agg;
                 if (use4byte)
                 {
-                    agg.asn = utils::readU32(val.data());
-                    agg.speaker = types::IPAddress(utils::readU32(val.data() + 4));
+                    agg.asn = utils::read<uint32_t>(val.data());
+                    agg.speaker = types::IPAddress(utils::read<uint32_t>(val.data() + 4));
                 }
                 else
                 {
-                    agg.asn = utils::readU16(val.data());
-                    agg.speaker = types::IPAddress(utils::readU32(val.data() + 2));
+                    agg.asn = utils::read<uint16_t>(val.data());
+                    agg.speaker = types::IPAddress(utils::read<uint32_t>(val.data() + 2));
                 }
                 attrs.asAggregator = std::move(agg);
                 break;
@@ -976,7 +976,7 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
                     return false;
                 }
                 for (uint32_t i = 0; i < attrLen; i += 4)
-                    attrs.communities.push_back(utils::readU32(val.data() + i));
+                    attrs.communities.push_back(utils::read<uint32_t>(val.data() + i));
                 break;
             }
 
@@ -988,7 +988,7 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
                     error.code = BGP_NOTIFICATION_UPDATE_ATTR_LENGTH;
                     return false;
                 }
-                attrs.originatorId = utils::readU32(val.data());
+                attrs.originatorId = utils::read<uint32_t>(val.data());
                 break;
             }
 
@@ -1001,7 +1001,7 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
                     return false;
                 }
                 for (uint32_t i = 0; i < attrLen; i += 4)
-                    attrs.clusterList.push_back(utils::readU32(val.data() + i));
+                    attrs.clusterList.push_back(utils::read<uint32_t>(val.data() + i));
                 break;
             }
 
@@ -1013,7 +1013,7 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
                     error.code = BGP_NOTIFICATION_UPDATE_ATTR_LENGTH;
                     return false;
                 }
-                uint16_t afi = utils::readU16(val.data());
+                uint16_t afi = utils::read<uint16_t>(val.data());
                 uint8_t safi = val[2];
                 uint8_t nhLen = val[3];
                 if (4 + nhLen > attrLen)
@@ -1047,13 +1047,13 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
                 }
                 else if (nhLen == 4)
                 {
-                    path.nextHop = types::IPAddress(utils::readU32(val.data() + 4));
+                    path.nextHop = types::IPAddress(utils::read<uint32_t>(val.data() + 4));
                     sawNextHop = true;
                 }
                 else if (nhLen == 12)
                 {
-                    path.rd = utils::readU64(val.data() + 4);
-                    path.nextHop = types::IPAddress(utils::readU32(val.data() + 12));
+                    path.rd = utils::read<uint64_t>(val.data() + 4);
+                    path.nextHop = types::IPAddress(utils::read<uint32_t>(val.data() + 12));
                     sawNextHop = true;
                 }
 
@@ -1080,7 +1080,7 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
                     error.code = BGP_NOTIFICATION_UPDATE_ATTR_LENGTH;
                     return false;
                 }
-                uint16_t afi = utils::readU16(val.data());
+                uint16_t afi = utils::read<uint16_t>(val.data());
                 uint8_t safi = val[2];
 
                 unreachAfi = AfiSafi{afi, safi};
@@ -1107,7 +1107,7 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
                     AsPathSegment seg;
                     seg.segmentType = segType;
                     for (uint8_t i = 0; i < segLen; ++i)
-                        seg.asns.push_back(utils::readU32(val.data() + ap + i * 4));
+                        seg.asns.push_back(utils::read<uint32_t>(val.data() + ap + i * 4));
                     ap += segLen * 4;
                     attrs.as4Path.push_back(std::move(seg));
                 }
@@ -1123,8 +1123,8 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
                     return false;
                 }
                 Aggregator agg;
-                agg.asn = utils::readU32(val.data());
-                agg.speaker = types::IPAddress(utils::readU32(val.data() + 4));
+                agg.asn = utils::read<uint32_t>(val.data());
+                agg.speaker = types::IPAddress(utils::read<uint32_t>(val.data() + 4));
                 attrs.as4Aggregator = agg;
                 break;
             }
@@ -1132,9 +1132,9 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
             // AIGP
             case BGP_ATTR_AIGP:
             {
-                if (attrLen >= 11 && val[0] == 1 && utils::readU16(val.data() + 1) == 11)
+                if (attrLen >= 11 && val[0] == 1 && utils::read<uint16_t>(val.data() + 1) == 11)
                 {
-                    attrs.aigp = utils::readU64(val.data() + 3);
+                    attrs.aigp = utils::read<uint64_t>(val.data() + 3);
                 }
                 break;
             }
@@ -1150,9 +1150,9 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
                 for (uint32_t i = 0; i < attrLen; i += 12)
                 {
                     std::array<uint32_t, 3> lc;
-                    lc[0] = utils::readU32(val.data() + i);
-                    lc[1] = utils::readU32(val.data() + i + 4);
-                    lc[2] = utils::readU32(val.data() + i + 8);
+                    lc[0] = utils::read<uint32_t>(val.data() + i);
+                    lc[1] = utils::read<uint32_t>(val.data() + i + 4);
+                    lc[2] = utils::read<uint32_t>(val.data() + i + 8);
                     attrs.largeCommunities.push_back(lc);
                 }
                 break;

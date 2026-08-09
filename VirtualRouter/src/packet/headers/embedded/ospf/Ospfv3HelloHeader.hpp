@@ -36,28 +36,28 @@ struct Ospfv3HelloHeader
 {
     DEFINE_FIXED_HEADER(Ospfv3HelloHeaderRaw);
 
-    uint32_t getInterfaceID() const         { return utils::readU32(raw->interfaceID); }
+    uint32_t getInterfaceID() const         { return utils::read<uint32_t>(raw->interfaceID); }
     uint8_t getRouterPriority() const       { return raw->routerPriority; }
-    uint32_t getOptions() const             { return utils::readU24(raw->options); }
-    uint16_t getHelloInterval() const       { return utils::readU16(raw->helloInterval); }
-    uint16_t getDeadInterval() const        { return utils::readU16(raw->deadInterval); }
-    uint32_t getDrID() const                { return utils::readU32(raw->designatedRouterID); }
-    uint32_t getBdrID() const               { return utils::readU32(raw->backupDesignatedRouterID); }
+    uint32_t getOptions() const             { return utils::read<uint32_t, 3>(raw->options); }
+    uint16_t getHelloInterval() const       { return utils::read<uint16_t>(raw->helloInterval); }
+    uint16_t getDeadInterval() const        { return utils::read<uint16_t>(raw->deadInterval); }
+    uint32_t getDrID() const                { return utils::read<uint32_t>(raw->designatedRouterID); }
+    uint32_t getBdrID() const               { return utils::read<uint32_t>(raw->backupDesignatedRouterID); }
 
     void setInterfaceID(uint32_t val)
-        { utils::writeU32(raw->interfaceID, val); }
+        { utils::write<uint32_t>(raw->interfaceID, val); }
     void setRouterPriority(uint8_t val)
         { raw->routerPriority = val; }
     void setOptions(uint32_t val)
-        { utils::writeU24(raw->options, val); }
+        { utils::write<uint32_t, 3>(raw->options, val); }
     void setHelloInterval(uint16_t val)
-        { utils::writeU16(raw->helloInterval, val); }
+        { utils::write<uint16_t>(raw->helloInterval, val); }
     void setDeadInterval(uint16_t val)
-        { utils::writeU16(raw->deadInterval, val); }
+        { utils::write<uint16_t>(raw->deadInterval, val); }
     void setDrID(uint32_t val)
-        { utils::writeU32(raw->designatedRouterID, val); }
+        { utils::write<uint32_t>(raw->designatedRouterID, val); }
     void setBdrID(uint32_t val)
-        { utils::writeU32(raw->backupDesignatedRouterID, val); }
+        { utils::write<uint32_t>(raw->backupDesignatedRouterID, val); }
 };
 
 } // namespace packet

@@ -117,14 +117,14 @@ struct Ospfv2LSAHeader
 {
     DEFINE_PACKET_HEADER(Ospfv2LSAHeaderRaw);
 
-    uint16_t getAge() const                 { return utils::readU16(raw->age); }
+    uint16_t getAge() const                 { return utils::read<uint16_t>(raw->age); }
     uint8_t getOptions() const              { return raw->options; }
     uint8_t getType() const                 { return raw->type; }
-    uint32_t getLsID() const                { return utils::readU32(raw->lsID); }
-    uint32_t getAdvRouter() const           { return utils::readU32(raw->advRouter); }
-    uint32_t getSeqNumber() const           { return utils::readU32(raw->seqNum); }
-    uint16_t getChecksum() const            { return utils::readU16(raw->checksum); }
-    uint16_t getLen() const                 { return utils::readU16(raw->length); }
+    uint32_t getLsID() const                { return utils::read<uint32_t>(raw->lsID); }
+    uint32_t getAdvRouter() const           { return utils::read<uint32_t>(raw->advRouter); }
+    uint32_t getSeqNumber() const           { return utils::read<uint32_t>(raw->seqNum); }
+    uint16_t getChecksum() const            { return utils::read<uint16_t>(raw->checksum); }
+    uint16_t getLen() const                 { return utils::read<uint16_t>(raw->length); }
     
     bool getOptMT() const                   { return raw->options & 0x01; }
     bool getOptE() const                    { return raw->options & 0x02; }
@@ -143,21 +143,21 @@ struct Ospfv2LSAHeader
     bool getFlagH(uint8_t flags) const      { return flags & 0x80; }
 
     void setAge(uint16_t val)
-        { utils::writeU16(raw->age, val); }
+        { utils::write<uint16_t>(raw->age, val); }
     void setOptions(uint8_t val)
         { raw->options = val; }
     void setType(uint8_t val)
         { raw->type = val; }
     void setLsID(uint32_t val)
-        { utils::writeU32(raw->lsID, val); }
+        { utils::write<uint32_t>(raw->lsID, val); }
     void setAdvRouter(uint32_t val)
-        { utils::writeU32(raw->advRouter, val); }
+        { utils::write<uint32_t>(raw->advRouter, val); }
     void setSeqNum(uint32_t val)
-        { utils::writeU32(raw->seqNum, val); }
+        { utils::write<uint32_t>(raw->seqNum, val); }
     void setChecksum(uint16_t val)
-        { utils::writeU16(raw->checksum, val); }
+        { utils::write<uint16_t>(raw->checksum, val); }
     void setLen(uint16_t val)
-        { utils::writeU16(raw->length, val); }
+        { utils::write<uint16_t>(raw->length, val); }
 
     void setOptMT(bool val)
         { utils::setBit(&raw->options, 7, val); }

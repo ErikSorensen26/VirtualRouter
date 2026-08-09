@@ -265,12 +265,12 @@ void Arp::receiveReply(const packet::ArpHeader& receivedReply)
             global.getConfigs().get<config::Global::IP_STICKY_ARP>().load())
             return;
 
-        completeArpEntry(*cacheIt, utils::readU48(mac));
+        completeArpEntry(*cacheIt, utils::read<uint64_t, 6>(mac));
     }
     else if (garp)
     {
         auto [it, ok] = arpCache.emplace(senderIp, ArpCacheEntry{});
-        completeArpEntry(*it, utils::readU48(mac));
+        completeArpEntry(*it, utils::read<uint64_t, 6>(mac));
     }
     else return;
 }
@@ -421,7 +421,7 @@ void Arp::arpRequest(processing::PacketBuilder& packet, types::IPv4Address sourc
     std::memcpy(arp.raw->targetHardwareAddress, ETHERNET_MAC_BROADCAST, 6);
     arp.setTargetIpAddr(targetIp.addr);
 
-    ethernet::build(&iface, packet, utils::readU48(ETHERNET_MAC_BROADCAST), ETHERNET_ARP);
+    ethernet::build(&iface, packet, utils::read<uint64_t, 6>(ETHERNET_MAC_BROADCAST), ETHERNET_ARP);
 }
 
 // Creates and sends an ARP reply packet

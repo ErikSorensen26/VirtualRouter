@@ -34,8 +34,8 @@ struct Ospfv2DBDHeader
 {
     DEFINE_FIXED_HEADER(Ospfv2DBDHeaderRaw);
 
-    uint16_t getMtu() const                 { return utils::readU16(raw->mtu); }
-    uint32_t getSequence() const            { return utils::readU32(raw->sequence); }
+    uint16_t getMtu() const                 { return utils::read<uint16_t>(raw->mtu); }
+    uint32_t getSequence() const            { return utils::read<uint32_t>(raw->sequence); }
     uint8_t getOptions() const              { return raw->options; }
     uint8_t getFlags() const                { return raw->flags; }
 
@@ -45,9 +45,9 @@ struct Ospfv2DBDHeader
     bool getFlagR() const                   { return raw->flags & 0x08; }
 
     void setMtu(uint16_t val)
-        { utils::writeU16(raw->mtu, val); }
+        { utils::write<uint16_t>(raw->mtu, val); }
     void setSequence(uint32_t val)
-        { utils::writeU32(raw->sequence, val); }
+        { utils::write<uint32_t>(raw->sequence, val); }
     void setOptions(uint8_t val)
         { raw->options = val; }
 

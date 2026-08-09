@@ -46,9 +46,9 @@ struct IcmpHeader
     const uint8_t* getChecksum() const
         { return raw->checksum; }
     uint16_t getIdentifier() const
-        { return utils::readU16(raw->identifier); }
+        { return utils::read<uint16_t>(raw->identifier); }
     uint16_t getSequenceNumber() const
-        { return utils::readU16(raw->sequenceNumber); }
+        { return utils::read<uint16_t>(raw->sequenceNumber); }
 
     // Setters
     void setType(uint8_t val)
@@ -56,11 +56,11 @@ struct IcmpHeader
     void setCode(uint8_t val)
         { raw->code = val; }
     void setChecksum(uint16_t val)
-        { utils::writeU16(raw->checksum, val); }
+        { utils::write<uint16_t>(raw->checksum, val); }
     void setIdentifier(uint16_t val)
-        { utils::writeU16(raw->identifier, val); }
+        { utils::write<uint16_t>(raw->identifier, val); }
     void setSequenceNumber(uint16_t val)
-        { utils::writeU16(raw->sequenceNumber, val); }
+        { utils::write<uint16_t>(raw->sequenceNumber, val); }
 };
 
 } // namespace packet

@@ -84,9 +84,9 @@ uint16_t PacketDispatcher::calculateAge(bool floodReduction, const LsaRecord& re
 
 uint16_t PacketDispatcher::addLinkLocalExtension(uint8_t* buf, bool restart, bool resync)
 {
-    utils::writeU32(buf, 0x00000000); // Checksum and size not calculated yet
-    utils::writeU16(buf + 4, 0x0001); // Ext TLV type
-    utils::writeU16(buf + 6, 0x0004); // Ext TLV size
+    utils::write<uint32_t>(buf, 0x00000000); // Checksum and size not calculated yet
+    utils::write<uint16_t>(buf + 4, 0x0001); // Ext TLV type
+    utils::write<uint16_t>(buf + 6, 0x0004); // Ext TLV size
 
     uint32_t options = 0x0000;
     if (resync)
@@ -94,7 +94,7 @@ uint16_t PacketDispatcher::addLinkLocalExtension(uint8_t* buf, bool restart, boo
     if (restart)
         options |= static_cast<uint32_t>(LlsOptions::RESTART);
 
-    utils::writeU32(buf + 8, options);
+    utils::write<uint32_t>(buf + 8, options);
 
     return 12;
 }
@@ -121,10 +121,10 @@ void PacketDispatcher::onResyncRequested(Neighbor& nbr)
 
 void PacketDispatcher::addLinkLocalChecksum(uint8_t* buf)
 {
-    utils::writeU16(buf + 2, 0x0003); // 12 (default)
+    utils::write<uint16_t>(buf + 2, 0x0003); // 12 (default)
     ChecksumFletcher check;
     check.addBytes(buf, 12);
-    utils::writeU16(buf, check.finalize());
+    utils::write<uint16_t>(buf, check.finalize());
 }
 
 void PacketDispatcher::sendReliableLsr(Neighbor& nbr, const std::vector<LsaKey>& dbds)

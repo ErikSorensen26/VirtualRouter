@@ -242,11 +242,11 @@ struct BgpHeader
     DEFINE_PACKET_HEADER(BgpHeaderRaw);
 
     uint8_t* getMarker() const { return raw->marker; }
-    uint16_t getLength() const { return utils::readU16(raw->length); }
+    uint16_t getLength() const { return utils::read<uint16_t>(raw->length); }
     uint8_t  getType()   const { return raw->type; }
 
     void setMarker()             { std::memset(raw->marker, 0xff, sizeof(raw->marker)); }
-    void setLength(uint16_t val) { utils::writeU16(raw->length, val); }
+    void setLength(uint16_t val) { utils::write<uint16_t>(raw->length, val); }
     void setType(uint8_t val)    { raw->type = val; }
 };
 

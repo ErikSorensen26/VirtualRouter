@@ -112,17 +112,17 @@ struct DhcpHeader
     uint8_t getHLen() const { return raw->hLen; }
     uint8_t getHops() const { return raw->hops; }
     const uint8_t* getXid() const { return raw->xId; }
-    uint16_t getSecs() const { return utils::readU16(raw->secs); }
-    uint16_t getFlags() const { return utils::readU16(raw->flags); }
+    uint16_t getSecs() const { return utils::read<uint16_t>(raw->secs); }
+    uint16_t getFlags() const { return utils::read<uint16_t>(raw->flags); }
     const uint8_t* getClientIP() const { return raw->ciaddr; }
-    uint32_t getClientIPInt() const { return utils::readU32(raw->ciaddr); }
+    uint32_t getClientIPInt() const { return utils::read<uint32_t>(raw->ciaddr); }
     const uint8_t* getYourIP() const { return raw->yiaddr; }
     const uint8_t* getNextServerIP() const { return raw->siaddr; }
     const uint8_t* getRelayAgentIP() const { return raw->giaddr; }
     const uint8_t* getClientMac() const { return raw->chaddr; }
     const uint8_t* getServerName() const { return raw->serverName; }
     const uint8_t* getBootFile() const { return raw->file; }
-    uint32_t getMagicCookie() const { return utils::readU32(raw->magicCookie); }
+    uint32_t getMagicCookie() const { return utils::read<uint32_t>(raw->magicCookie); }
 
     void setOpcode(uint8_t val)
         { raw->opcode = val; }
@@ -133,11 +133,11 @@ struct DhcpHeader
     void setHops(uint8_t val)
         { raw->hops = val; }
     void setXid(uint32_t val)
-        { utils::writeU32(raw->xId, val); }
+        { utils::write<uint32_t>(raw->xId, val); }
     void setXid(const uint8_t* val)
         { std::memcpy(raw->xId, val, 4); }
     void setSecs(uint16_t val)
-        { utils::writeU16(raw->secs, val); }
+        { utils::write<uint16_t>(raw->secs, val); }
     void setFlags(const uint8_t* val)
         { std::memcpy(raw->flags, val, 2); }
     void setClientIp(const uint8_t* val)
@@ -155,7 +155,7 @@ struct DhcpHeader
     void setBootFile(const uint8_t* val)
         { std::memcpy(raw->file, val, 128); }
     void setMagicCookie(uint32_t val)
-        { utils::writeU32(raw->magicCookie, val); }
+        { utils::write<uint32_t>(raw->magicCookie, val); }
 };
 
 inline bool parseDhcpOptions(const uint8_t* data, size_t size, std::vector<TLV8Option>& outOptions, bool overload = false)

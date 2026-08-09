@@ -77,7 +77,7 @@ bool EigrpPacketBuilder::appendParameterTLV(packet::TLV16BufferManager& tlv, Eig
     if (iface.getRtp().pendingPeerTermination.load(std::memory_order_relaxed))
     {
         std::memset(val, 0, 6);
-        utils::writeU16(val + 6, iface.configs.get<config::EigrpInterface::HOLD_TIME>().load());
+        utils::write<uint16_t>(val + 6, iface.configs.get<config::EigrpInterface::HOLD_TIME>().load());
         iface.getRtp().pendingPeerTermination.store(false, std::memory_order_release);
     }
     else
@@ -92,8 +92,8 @@ bool EigrpPacketBuilder::appendVersionTLV(packet::TLV16BufferManager& tlv)
 {
     uint8_t* val = tlv.getNextValBuf(4);
     if (!val) return false;
-    utils::writeU16(val, EIGRP_VERSION_RELEASE);
-    utils::writeU16(val + 2, EIGRP_VERSION_TLS);
+    utils::write<uint16_t>(val, EIGRP_VERSION_RELEASE);
+    utils::write<uint16_t>(val + 2, EIGRP_VERSION_TLS);
     return tlv.append(EIGRP_OPTION_VERSION, 8, nullptr, 4);
 }
 
@@ -119,9 +119,9 @@ size_t EigrpPacketBuilder::appendSequenceTLVs(packet::TLV16BufferManager& tlv, c
     {
         const auto& ip = neighbors[i];
         if (ip.isIPv4()) {
-            utils::writeU32(buf + offset, ip.v4());
+            utils::write<uint32_t>(buf + offset, ip.v4());
         } else {
-            utils::writeU128(buf + offset, ip.v6());
+            utils::write<__uint128_t>(buf + offset, ip.v6());
         }
         offset += ipSize;
     }
@@ -134,7 +134,7 @@ bool EigrpPacketBuilder::appendMulticastSeqTLV(packet::TLV16BufferManager& tlv, 
 {
     uint8_t* val = tlv.getNextValBuf(4);
     if (!val) return false;
-    utils::writeU32(val, seq);
+    utils::write<uint32_t>(val, seq);
     return tlv.append(EIGRP_OPTION_MULTICAST_SEQUENCE, 8, nullptr, 4);
 }
 } // namespace routing

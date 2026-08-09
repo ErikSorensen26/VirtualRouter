@@ -47,11 +47,11 @@ struct SummaryRouterLsa
     {
         if (len != 8) return std::nullopt;
 
-        if (utils::readU32(buf) != 0) return std::nullopt;
+        if (utils::read<uint32_t>(buf) != 0) return std::nullopt;
 
         SummaryRouterLsa lsa;
 
-        uint32_t metricWord = utils::readU32(buf + 4);
+        uint32_t metricWord = utils::read<uint32_t>(buf + 4);
         lsa.metric = metricWord & 0x00FFFFFF;
 
         return lsa;
@@ -67,8 +67,8 @@ struct SummaryRouterLsa
     {
         if (len != 8) return false;
 
-        utils::writeU32(buf, 0);
-        utils::writeU32(buf + 4, metric);
+        utils::write<uint32_t>(buf, 0);
+        utils::write<uint32_t>(buf + 4, metric);
 
         return true;
     }

@@ -22,7 +22,7 @@ bool inspect(PacketInfo& packet, uint8_t* data, size_t len)
     packet.headers[packet.count++] = { packet::HeaderType::ETHERNET, packet.offset, packet::EthernetHeader::fixedSize };
     packet.offset += packet::EthernetHeader::fixedSize;
 
-    uint16_t ethernetType = utils::readU16(eth.raw->type);
+    uint16_t ethernetType = utils::read<uint16_t>(eth.raw->type);
 
     // Layer 2.5
     while (true) 

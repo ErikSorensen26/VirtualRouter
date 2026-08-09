@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <cassert>
 #include <arpa/inet.h>
 #include <AddressFamily.hpp>
 #include <type_traits>
@@ -119,375 +120,84 @@ public:
 // MASK HELPERS
 
 /**
- * @brief Returns a mask with the low @p bits of a uint8_t cleared (host order).
- *
- * @param bits  Number of low bits to mask out (0–8). Passing 8 returns 0.
- * @return      Bitmask with the top (8 - @p bits) bits set.
+ * TODO add doxy comment
  */
-inline static uint8_t maskU8Bits(unsigned bits)
+template <typename T>
+inline static T maskBits(size_t bits)
 {
-    return (bits == 8) ? uint8_t(0) : static_cast<uint8_t>((uint8_t(1) << bits) - 1);
-}
-
-/**
- * @brief Returns a mask with the low @p bits of a uint16_t cleared (host order).
- *
- * @param bits  Number of low bits to mask out (0–16). Passing 16 returns 0.
- * @return      Bitmask with the top (16 - @p bits) bits set.
- */
-inline static uint16_t maskU16Bits(unsigned bits)
-{
-    return (bits == 16) ? uint16_t(0) : static_cast<uint16_t>((uint16_t(0) << bits) - 1);
-}
-
-/**
- * @brief Returns a mask with the low @p bits of a uint32_t cleared (host order).
- *
- * @param bits  Number of low bits to mask out (0–32). Passing 32 returns 0.
- * @return      Bitmask with the top (32 - @p bits) bits set.
- */
-inline static uint32_t maskU32Bits(unsigned bits)
-{
-    return (bits == 32) ? uint32_t(0) : static_cast<uint32_t>((uint32_t(0) << bits) - 1);
-}
-
-/**
- * @brief Returns a mask with the low @p bits of a uint64_t cleared (host order).
- *
- * @param bits  Number of low bits to mask out (0–64). Passing 64 returns 0.
- * @return      Bitmask with the top (64 - @p bits) bits set.
- */
-inline static uint64_t maskU64Bits(unsigned bits)
-{
-    return (bits == 64) ? uint64_t(0) : static_cast<uint64_t>((uint64_t(0) << bits) - 1);
-}
-
-/**
- * @brief Returns a mask with the low @p bits of a __uint128_t cleared (host order).
- *
- * @param bits  Number of low bits to mask out (0–128). Passing 128 returns 0.
- * @return      Bitmask with the top (128 - @p bits) bits set.
- */
-inline static __uint128_t maskU128Bits(unsigned bits)
-{
-    return (bits == 128) ? __uint128_t(0) : ((__uint128_t(0) << bits) - 1);
+    constexpr size_t bitSiz = sizeof(T) * 8;
+    assert(bits <= bitSiz);
+    return (bits == bitSiz) ? T(0) : static_cast<T>((T(1) << bits) - 1);
 }
 
 // FIXED-WIDTH BIG-ENDIAN READS
 
 /**
- * @brief Reads two bytes from @p p and returns them as a big-endian uint16_t.
- *
- * @param p  Pointer to at least 2 bytes of data in network byte order.
- * @return   Host-order uint16_t.
+ * TODO add doxy comment
  */
-inline static uint16_t readU16(const uint8_t* p)
+template <typename T, size_t N = sizeof(T)>
+requires std::is_integral_v<T>
+inline static T read(const uint8_t* p)
 {
-    if constexpr (isLittleEndian)
+    static_assert(N >= 1 && N <= sizeof(T), "N must be in [1, sizeof(T)]");
+
+    if constexpr (N == sizeof(T) && !isLittleEndian)
     {
-        return (uint16_t(p[0]) << 8) | uint16_t(p[1]);
-    }
-    else
-    {
-        uint16_t val;
+        T val;
         std::memcpy(&val, p, sizeof(val));
         return val;
     }
-}
-
-/**
- * @brief Reads three bytes from @p p and returns them as a big-endian uint32_t.
- *
- * The most-significant byte of the returned uint32_t is always zero.
- *
- * @param p  Pointer to at least 3 bytes of data in network byte order.
- * @return   Host-order uint32_t with the high byte zeroed.
- */
-inline static uint32_t readU24(const uint8_t* p)
-{
-    if constexpr (isLittleEndian)
-    {
-        return (uint32_t(p[0]) << 16) |
-               (uint32_t(p[1]) << 8)  |
-               uint32_t(p[2]);
-    }
     else
     {
-        return (uint32_t(p[0]) << 0)  |
-               (uint32_t(p[1]) << 8)  |
-               (uint32_t(p[2]) << 16);
-    }
-}
-
-/**
- * @brief Reads four bytes from @p p and returns them as a big-endian uint32_t.
- *
- * @param p  Pointer to at least 4 bytes of data in network byte order.
- * @return   Host-order uint32_t.
- */
-inline static uint32_t readU32(const uint8_t* p)
-{
-    if constexpr (isLittleEndian)
-    {
-        return (uint32_t(p[0]) << 24) |
-               (uint32_t(p[1]) << 16) |
-               (uint32_t(p[2]) << 8)  |
-               uint32_t(p[3]);
-    }
-    else
-    {
-        uint32_t val;
-        std::memcpy(&val, p, sizeof(val));
-        return val;
-    }
-}
-
-/**
- * @brief Reads six bytes from @p p and returns them as a big-endian uint64_t.
- *
- * Used for 48-bit fields such as MAC addresses and MPLS labels.
- * The two most-significant bytes of the returned uint64_t are always zero.
- *
- * @param p  Pointer to at least 6 bytes of data in network byte order.
- * @return   Host-order uint64_t with the two high bytes zeroed.
- */
-inline static uint64_t readU48(const uint8_t* p) {
-    if constexpr (isLittleEndian) {
-        return (uint64_t(p[0]) << 40) |
-               (uint64_t(p[1]) << 32) |
-               (uint64_t(p[2]) << 24) |
-               (uint64_t(p[3]) << 16) |
-               (uint64_t(p[4]) << 8)  |
-               uint64_t(p[5]);
-    } else {
-        return (uint64_t(p[0]) << 0)  |
-               (uint64_t(p[1]) << 8)  |
-               (uint64_t(p[2]) << 16) |
-               (uint64_t(p[3]) << 24) |
-               (uint64_t(p[4]) << 32) |
-               (uint64_t(p[5]) << 40);
-    }
-}
-
-/**
- * @brief Reads eight bytes from @p p and returns them as a big-endian uint64_t.
- *
- * @param p  Pointer to at least 8 bytes of data in network byte order.
- * @return   Host-order uint64_t.
- */
-inline static uint64_t readU64(const uint8_t* p)
-{
-    if constexpr (isLittleEndian)
-    {
-        return (uint64_t(p[0]) << 56) |
-               (uint64_t(p[1]) << 48) |
-               (uint64_t(p[2]) << 40) |
-               (uint64_t(p[3]) << 32) |
-               (uint64_t(p[4]) << 24) |
-               (uint64_t(p[5]) << 16) |
-               (uint64_t(p[6]) << 8)  |
-               uint64_t(p[7]);
-    }
-    else
-    {
-        uint64_t val;
-        std::memcpy(&val, p, sizeof(val));
-        return val;
-    }
-}
-
-/**
- * @brief Reads sixteen bytes from @p p and returns them as a big-endian __uint128_t.
- *
- * Used for IPv6 addresses stored in packet headers.
- *
- * @param p  Pointer to at least 16 bytes of data in network byte order.
- * @return   Host-order __uint128_t.
- */
-inline static __uint128_t readU128(const uint8_t* p)
-{
-    if constexpr (isLittleEndian)
-    {
-        __uint128_t result = 0;
-        for (size_t i = 0; i < 16; ++i)
+        T val = 0;
+        for (size_t i = 0; i < N; ++i)
         {
-            result = (result << 8) | p[i];
+            val = static_cast<T>((val << 8) | T(p[i]));
         }
-        return result;
-    }
-    else
-    {
-        __uint128_t val;
-        std::memcpy(&val, p, sizeof(val));
         return val;
     }
 }
 
 /**
- * @brief Reads @p n bytes from @p p into the high bytes of an unsigned integer of type @p T.
- *
- * Partial-width reads used for variable-length protocol fields (e.g. BGP
- * prefix lengths where only a prefix-length/8 bytes are transmitted).
- * Bytes are placed in the most-significant positions of @p T; unused low
- * bytes are zero.
- *
- * @tparam T  Unsigned destination type. Must satisfy `std::is_unsigned_v<T>`.
- * @param p   Pointer to at least @p n bytes of data in network byte order.
- * @param n   Number of bytes to read (must be ≤ sizeof(T)).
- * @return    Host-order value of type @p T with the @p n bytes in the high positions.
+ * TODO add doxy comment
  */
 template <typename T>
-inline static T readBytes(const uint8_t* p, size_t n)
+requires std::is_integral_v<T>
+inline static T read(const uint8_t* p, size_t n)
 {
-    static_assert(std::is_unsigned_v<T>, "T must be unsigned");
+    assert(n >= 1 && n <= sizeof(T));
 
-    T val = 0;
-
-    if constexpr (isLittleEndian)
+    if (n == sizeof(T) && !isLittleEndian)
     {
-        size_t shift = (sizeof(T) - 1) * 8;
-
-        for (size_t i = 0; i < n; ++i)
-        {
-            val |= (T(p[i]) << shift);
-            shift -= 8;
-        }
+        T val;
+        std::memcpy(&val, p, sizeof(val));
+        return val;
     }
     else
     {
-        std::memcpy(&val, p, n);
+        T val = 0;
+        for (size_t i = 0; i < n; ++i)
+        {
+            val = static_cast<T>((val << 8) | T(p[i]));
+        }
+        return val;
     }
-    return val;
 }
 
 // FIXED-WIDTH BIG-ENDIAN WRITES
 
 /**
- * @brief Writes @p val to @p dest in network (big-endian) byte order as two bytes.
- *
- * @param dest  Destination buffer; must have room for at least 2 bytes.
- * @param val   Host-order value to encode.
- * @return      @p dest (allows chaining).
+ * TODO add doxy comment
  */
-inline static uint8_t* writeU16(uint8_t* dest, uint16_t val)
+template <typename T, size_t N = sizeof(T)>
+requires std::is_integral_v<T>
+inline static uint8_t* write(uint8_t* dest, T val)
 {
+    static_assert(N >= 1 && N <= sizeof(T), "N must be [1, sizeof(T)]");
+
     if constexpr (isLittleEndian)
     {
-        dest[0] = static_cast<uint8_t>((val >> 8) & 0xFF);
-        dest[1] = static_cast<uint8_t>(val & 0xFF);
-    }
-    else
-    {
-        std::memcpy(dest, &val, sizeof(val));
-    }
-    return dest;
-}
-
-/**
- * @brief Writes the low 24 bits of @p val to @p dest in network byte order.
- *
- * @param dest  Destination buffer; must have room for at least 3 bytes.
- * @param val   Host-order value to encode; the high byte is ignored.
- * @return      @p dest (allows chaining).
- */
-inline static uint8_t* writeU24(uint8_t* dest, uint32_t val)
-{
-    if constexpr (isLittleEndian)
-    {
-        dest[0] = static_cast<uint8_t>((val >> 16) & 0xFF);
-        dest[1] = static_cast<uint8_t>((val >> 8) & 0xFF);
-        dest[2] = static_cast<uint8_t>(val & 0xFF);
-    }
-    else
-    {
-        std::memcpy(dest, reinterpret_cast<const uint8_t*>(&val) + 1, 3);
-    }
-    return dest;
-}
-
-/**
- * @brief Writes @p val to @p dest in network (big-endian) byte order as four bytes.
- *
- * @param dest  Destination buffer; must have room for at least 4 bytes.
- * @param val   Host-order value to encode.
- * @return      @p dest (allows chaining).
- */
-inline static uint8_t* writeU32(uint8_t* dest, uint32_t val)
-{
-    if constexpr (isLittleEndian)
-    {
-        dest[0] = static_cast<uint8_t>((val >> 24) & 0xFF);
-        dest[1] = static_cast<uint8_t>((val >> 16) & 0xFF);
-        dest[2] = static_cast<uint8_t>((val >> 8) & 0xFF);
-        dest[3] = static_cast<uint8_t>(val & 0xFF);
-    }
-    else
-    {
-        std::memcpy(dest, &val, sizeof(val));
-    }
-    return dest;
-}
-
-/**
- * @brief Writes the low 48 bits of @p val to @p dest in network byte order.
- *
- * Used for MAC addresses and other 6-byte protocol fields.
- *
- * @param dest  Destination buffer; must have room for at least 6 bytes.
- * @param val   Host-order value to encode; the two high bytes are ignored.
- * @return      @p dest (allows chaining).
- */
-inline static uint8_t* writeU48(uint8_t* dest, uint64_t val) {
-    dest[0] = static_cast<uint8_t>((val >> 40) & 0xFF);
-    dest[1] = static_cast<uint8_t>((val >> 32) & 0xFF);
-    dest[2] = static_cast<uint8_t>((val >> 24) & 0xFF);
-    dest[3] = static_cast<uint8_t>((val >> 16) & 0xFF);
-    dest[4] = static_cast<uint8_t>((val >> 8) & 0xFF);
-    dest[5] = static_cast<uint8_t>(val & 0xFF);
-    return dest;
-}
-
-/**
- * @brief Writes @p val to @p dest in network (big-endian) byte order as eight bytes.
- *
- * @param dest  Destination buffer; must have room for at least 8 bytes.
- * @param val   Host-order value to encode.
- * @return      @p dest (allows chaining).
- */
-inline static uint8_t* writeU64(uint8_t* dest, uint64_t val)
-{
-    if constexpr (isLittleEndian)
-    {
-        dest[0] = static_cast<uint8_t>((val >> 56) & 0xFF);
-        dest[1] = static_cast<uint8_t>((val >> 48) & 0xFF);
-        dest[2] = static_cast<uint8_t>((val >> 40) & 0xFF);
-        dest[3] = static_cast<uint8_t>((val >> 32) & 0xFF);
-        dest[4] = static_cast<uint8_t>((val >> 24) & 0xFF);
-        dest[5] = static_cast<uint8_t>((val >> 16) & 0xFF);
-        dest[6] = static_cast<uint8_t>((val >> 8) & 0xFF);
-        dest[7] = static_cast<uint8_t>(val & 0xFF);
-    }
-    else
-    {
-        std::memcpy(dest, &val, sizeof(val));
-    }
-    return dest;
-}
-
-/**
- * @brief Writes @p val to @p dest in network (big-endian) byte order as sixteen bytes.
- *
- * Used for IPv6 addresses.
- *
- * @param dest  Destination buffer; must have room for at least 16 bytes.
- * @param val   Host-order 128-bit value to encode.
- * @return      @p dest (allows chaining).
- */
-inline static uint8_t* writeU128(uint8_t* dest, __uint128_t val)
-{
-    if constexpr (isLittleEndian)
-    {
-        for (int i = 15; i >= 0; --i)
+        for (int i = N - 1; i >= 0; --i)
         {
             dest[i] = static_cast<uint8_t>(val & 0xFF);
             val >>= 8;
@@ -501,34 +211,25 @@ inline static uint8_t* writeU128(uint8_t* dest, __uint128_t val)
 }
 
 /**
- * @brief Writes the @p n most-significant bytes of @p val to @p dest in network byte order.
- *
- * Partial-width writes mirror readBytes() and are used for variable-length
- * protocol fields where only the significant bytes of a prefix are encoded.
- *
- * @tparam T   Unsigned source type. Must satisfy `std::is_unsigned_v<T>`.
- * @param dest Destination buffer; must have room for at least @p n bytes.
- * @param val  Host-order value whose high @p n bytes are written.
- * @param n    Number of bytes to write (must be ≤ sizeof(T)).
- * @return     @p dest (allows chaining).
+ * TODO add doxy comment
  */
 template <typename T>
-inline static uint8_t* writeBytes(uint8_t* dest, T val, size_t n)
+requires std::is_integral_v<T>
+inline static uint8_t* write(uint8_t* dest, T val, size_t n)
 {
-    static_assert(std::is_unsigned_v<T>, "T must be unsigned");
+    assert(n >= 1 && n <= sizeof(T));
 
     if constexpr (isLittleEndian)
     {
-        size_t shift = (sizeof(T) - 1) * 8;
-        for (size_t i = 0; i < n; ++i)
+        for (int i = n - 1; i >= 0; --i)
         {
-            dest[i] = static_cast<uint8_t>((val >> shift) & 0xFF);
-            shift -= 8;
+            dest[i] = static_cast<uint8_t>(val & 0xFF);
+            val >>= 8;
         }
     }
     else
     {
-        std::memcpy(dest, reinterpret_cast<const uint8_t*>(&val), n);
+        std::memcpy(dest, &val, sizeof(val));
     }
     return dest;
 }

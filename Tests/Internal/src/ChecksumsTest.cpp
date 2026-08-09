@@ -31,7 +31,7 @@ TEST_F(Internal_ChecksumTest, CalculateChecksum_2Byte)
     uint8_t pseudo[4] = { 0xAA, 0xBB, 0xCC, 0xDD };
 
     Checksum::calculateChecksum(packet, 6, 2, 2, pseudo, 4, false);
-    uint16_t csum = readU16(packet + 2);
+    uint16_t csum = read<uint16_t>(packet + 2);
 
     EXPECT_EQ(csum, 0x1FBA);
 }
@@ -41,7 +41,7 @@ TEST_F(Internal_ChecksumTest, CalculateChecksum_2Byte_ZeroChecksum)
     uint8_t packet[4] = { 0x01, 0x02, 0x00, 0x00 };
 
     Checksum::calculateChecksum(packet, 4, 2, 2);
-    uint16_t csum = readU16(packet + 2);
+    uint16_t csum = read<uint16_t>(packet + 2);
     EXPECT_EQ(csum, 0xFEFD);
 }
 
@@ -67,7 +67,7 @@ TEST_F(Internal_ChecksumTest, CalculateChecksum_4Byte)
     uint8_t pseudo[8] = { 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80 };
 
     Checksum::calculateChecksum(packet, 12, 4, 4, pseudo, 8, false);
-    uint32_t sum = readU32(packet + 4);
+    uint32_t sum = read<uint32_t>(packet + 4);
     EXPECT_EQ(sum, 0x99775533);
 }
 
@@ -79,7 +79,7 @@ TEST_F(Internal_ChecksumTest, CalculateChecksum_4Byte_ZeroPseuod)
         0x05, 0x06, 0x07, 0x08
     };
     Checksum::calculateChecksum(packet, 8, 4, 4);
-    uint32_t sum = readU32(packet + 4);
+    uint32_t sum = read<uint32_t>(packet + 4);
     EXPECT_EQ(sum, 0xFEFDFCFB);
 }
 
@@ -119,6 +119,6 @@ TEST_F(Internal_ChecksumTest, CalculateChecksum_ChecksumRegionZeroedFirst)
     uint8_t pseudo[2] = { 0x01, 0x02 };
 
     Checksum::calculateChecksum(packet, 6, 2, 2, pseudo, 2, false);
-    uint16_t sum = readU16(packet + 2);
+    uint16_t sum = read<uint16_t>(packet + 2);
     EXPECT_EQ(sum, 0xFEFD);
 }

@@ -79,8 +79,8 @@ TEST_F(Internal_EncapsulationTest, EthernetOnly)
     eth.setBuffer(h->buffer);
 
     // No layer 2.5 or higher headers
-    eth.setDestinationMac(readU48(ethernetHeader));
-    eth.setSourceMac(readU48(ethernetHeader + 6));
+    eth.setDestinationMac(read<uint64_t, 6>(ethernetHeader));
+    eth.setSourceMac(read<uint64_t, 6>(ethernetHeader + 6));
     eth.setType(ETHERNET_IPV4);
 
     EXPECT_TRUE(encapsulateThis());
@@ -127,16 +127,16 @@ TEST_F(Internal_EncapsulationTest, EthernetArp)
     arp.setProtocolType(ETHERNET_IPV4);
     arp.setProtocolSize(4);
     arp.setOpcode(ARP_OPCODE_REQUEST);
-    arp.setSenderHwAddr(readU48(expectedArp + 8));
-    arp.setSenderIpAddr(readU32(expectedArp + 14));
-    arp.setTargetHwAddr(readU48(expectedArp + 18));
-    arp.setTargetIpAddr(readU32(expectedArp + 24));
+    arp.setSenderHwAddr(read<uint64_t, 6>(expectedArp + 8));
+    arp.setSenderIpAddr(read<uint32_t>(expectedArp + 14));
+    arp.setTargetHwAddr(read<uint64_t, 6>(expectedArp + 18));
+    arp.setTargetIpAddr(read<uint32_t>(expectedArp + 24));
 
     h = pkt->nextBuildHeader();
     EthernetHeader eth;
     eth.setBuffer(h->buffer);
-    eth.setDestinationMac(readU48(expectedEthernet));
-    eth.setSourceMac(readU48(expectedEthernet + 6));
+    eth.setDestinationMac(read<uint64_t, 6>(expectedEthernet));
+    eth.setSourceMac(read<uint64_t, 6>(expectedEthernet + 6));
     eth.setType(ETHERNET_ARP);
 
     EXPECT_TRUE(encapsulateThis());
@@ -205,8 +205,8 @@ TEST_F(Internal_EncapsulationTest, EthernetMplsIPv4)
     h = pkt->nextBuildHeader(); // Ethernet
     EthernetHeader eth;
     eth.setBuffer(h->buffer);
-    eth.setDestinationMac(readU48(expectedEthernet));
-    eth.setSourceMac(readU48(expectedEthernet + 6));
+    eth.setDestinationMac(read<uint64_t, 6>(expectedEthernet));
+    eth.setSourceMac(read<uint64_t, 6>(expectedEthernet + 6));
     eth.setType(ETHERNET_MPLS);
 
     EXPECT_TRUE(encapsulateThis());
@@ -280,8 +280,8 @@ TEST_F(Internal_EncapsulationTest, EthernetIPv4Icmp)
     h = pkt->nextBuildHeader();
     EthernetHeader eth;
     eth.setBuffer(h->buffer);
-    eth.setDestinationMac(readU48(expectedEthernet));
-    eth.setSourceMac(readU48(expectedEthernet + 6));
+    eth.setDestinationMac(read<uint64_t, 6>(expectedEthernet));
+    eth.setSourceMac(read<uint64_t, 6>(expectedEthernet + 6));
     eth.setType(ETHERNET_IPV4);
 
     EXPECT_TRUE(encapsulateThis());
@@ -352,8 +352,8 @@ TEST_F(Internal_EncapsulationTest, EthernetIPv6Icmpv6)
     h = pkt->nextBuildHeader();
     EthernetHeader eth;
     eth.setBuffer(h->buffer);
-    eth.setDestinationMac(readU48(expectedEthernet));
-    eth.setSourceMac(readU48(expectedEthernet + 6));
+    eth.setDestinationMac(read<uint64_t, 6>(expectedEthernet));
+    eth.setSourceMac(read<uint64_t, 6>(expectedEthernet + 6));
     eth.setType(ETHERNET_IPV6);
 
     EXPECT_TRUE(encapsulateThis());
@@ -434,8 +434,8 @@ TEST_F(Internal_EncapsulationTest, EthernetIPv4Tcp)
     h = pkt->nextBuildHeader();
     EthernetHeader eth;
     eth.setBuffer(h->buffer);
-    eth.setDestinationMac(readU48(expectedEthernet));
-    eth.setSourceMac(readU48(expectedEthernet + 6));
+    eth.setDestinationMac(read<uint64_t, 6>(expectedEthernet));
+    eth.setSourceMac(read<uint64_t, 6>(expectedEthernet + 6));
     eth.setType(ETHERNET_IPV4);
 
     EXPECT_TRUE(encapsulateThis());
@@ -505,8 +505,8 @@ TEST_F(Internal_EncapsulationTest, EthernetIPv4Udp)
     h = pkt->nextBuildHeader();
     EthernetHeader eth;
     eth.setBuffer(h->buffer);
-    eth.setDestinationMac(readU48(expectedEthernet));
-    eth.setSourceMac(readU48(expectedEthernet + 6));
+    eth.setDestinationMac(read<uint64_t, 6>(expectedEthernet));
+    eth.setSourceMac(read<uint64_t, 6>(expectedEthernet + 6));
     eth.setType(ETHERNET_IPV4);
 
     EXPECT_TRUE(encapsulateThis());
@@ -631,8 +631,8 @@ TEST_F(Internal_EncapsulationTest, EthernetIPv4UdpDhcp)
     h = pkt->nextBuildHeader();
     EthernetHeader eth;
     eth.setBuffer(h->buffer);
-    eth.setDestinationMac(readU48(expectedEthernet));
-    eth.setSourceMac(readU48(expectedEthernet + 6));
+    eth.setDestinationMac(read<uint64_t, 6>(expectedEthernet));
+    eth.setSourceMac(read<uint64_t, 6>(expectedEthernet + 6));
     eth.setType(ETHERNET_IPV4);
 
     EXPECT_TRUE(encapsulateThis());
@@ -713,8 +713,8 @@ TEST_F(Internal_EncapsulationTest, EthernetIPv4Eigrp)
     h = pkt->nextBuildHeader();
     EthernetHeader eth;
     eth.setBuffer(h->buffer);
-    eth.setDestinationMac(readU48(expectedEthernet));
-    eth.setSourceMac(readU48(expectedEthernet + 6));
+    eth.setDestinationMac(read<uint64_t, 6>(expectedEthernet));
+    eth.setSourceMac(read<uint64_t, 6>(expectedEthernet + 6));
     eth.setType(ETHERNET_IPV4);
 
     EXPECT_TRUE(encapsulateThis());

@@ -233,7 +233,7 @@ bool BgpRx::processUpdate(Session& session, IncomingUpdate& uinfo, ParsedUpdate<
                 error.code = BGP_NOTIFICATION_UPDATE_MALFORMED_ATTR_LIST;
                 return false;
             }
-            pathId = utils::readU32(uinfo.withdrawnData.data() + pos);
+            pathId = utils::read<uint32_t>(uinfo.withdrawnData.data() + pos);
             pos += 4;
         }
 
@@ -274,7 +274,7 @@ bool BgpRx::processUpdate(Session& session, IncomingUpdate& uinfo, ParsedUpdate<
                 error.code = BGP_NOTIFICATION_UPDATE_MALFORMED_ATTR_LIST;
                 return false;
             }
-            pathId = utils::readU32(uinfo.nlriData.data() + pos);
+            pathId = utils::read<uint32_t>(uinfo.nlriData.data() + pos);
             pos += 4;
         }
 

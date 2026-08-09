@@ -55,16 +55,16 @@ struct TcpHeader
     DEFINE_PACKET_HEADER(TcpHeaderRaw);
 
     // Accessors
-    uint16_t getSourcePort() const         { return utils::readU16(raw->sourcePort); }
-    uint16_t getDestinationPort() const    { return utils::readU16(raw->destinationPort); }
-    uint32_t getSequenceNumber() const     { return utils::readU32(raw->sequenceNumber); }
-    uint32_t getAckNumber() const          { return utils::readU32(raw->ackNumber); }
+    uint16_t getSourcePort() const         { return utils::read<uint16_t>(raw->sourcePort); }
+    uint16_t getDestinationPort() const    { return utils::read<uint16_t>(raw->destinationPort); }
+    uint32_t getSequenceNumber() const     { return utils::read<uint32_t>(raw->sequenceNumber); }
+    uint32_t getAckNumber() const          { return utils::read<uint32_t>(raw->ackNumber); }
 
     uint8_t  getHeaderLength() const       { return ((raw->dataOffsetAndFlags1 >> 4) & 0x0F) * 4; }
 
-    uint16_t getWindowSize() const         { return utils::readU16(raw->windowSize); }
+    uint16_t getWindowSize() const         { return utils::read<uint16_t>(raw->windowSize); }
     const uint8_t* getChecksum() const           { return raw->checksum; }
-    uint16_t getUrgentPointer() const      { return utils::readU16(raw->urgentPointer); }
+    uint16_t getUrgentPointer() const      { return utils::read<uint16_t>(raw->urgentPointer); }
 
     bool getFlagNS() const                 { return raw->dataOffsetAndFlags1 & 0x01; }
 
@@ -78,13 +78,13 @@ struct TcpHeader
     bool getFlagFIN() const                { return raw->flags & 0x01; }
 
     // Setters
-    void setSourcePort(uint16_t val)       { utils::writeU16(raw->sourcePort, val); }
-    void setDestinationPort(uint16_t val)  { utils::writeU16(raw->destinationPort, val); }
-    void setSequenceNumber(uint32_t val)   { utils::writeU32(raw->sequenceNumber, val); }
-    void setAckNumber(uint32_t val)        { utils::writeU32(raw->ackNumber, val); }
-    void setWindowSize(uint16_t val)       { utils::writeU16(raw->windowSize, val); }
+    void setSourcePort(uint16_t val)       { utils::write<uint16_t>(raw->sourcePort, val); }
+    void setDestinationPort(uint16_t val)  { utils::write<uint16_t>(raw->destinationPort, val); }
+    void setSequenceNumber(uint32_t val)   { utils::write<uint32_t>(raw->sequenceNumber, val); }
+    void setAckNumber(uint32_t val)        { utils::write<uint32_t>(raw->ackNumber, val); }
+    void setWindowSize(uint16_t val)       { utils::write<uint16_t>(raw->windowSize, val); }
     void setChecksum(const uint8_t* val)   { std::memcpy(raw->checksum, val, 2); }
-    void setUrgentPointer(uint16_t val)    { utils::writeU16(raw->urgentPointer, val); }
+    void setUrgentPointer(uint16_t val)    { utils::write<uint16_t>(raw->urgentPointer, val); }
 
     void setHeaderLengthBytes(uint8_t bytes)
     {

@@ -50,14 +50,14 @@ struct GraceLsaTlv
         uint16_t offset = 0;
         while (offset + 4 <= len)
         {
-            uint16_t type = utils::readU16(buf + offset);
-            uint16_t tlvLen = utils::readU16(buf + offset + 2);
+            uint16_t type = utils::read<uint16_t>(buf + offset);
+            uint16_t tlvLen = utils::read<uint16_t>(buf + offset + 2);
             uint16_t valueOffset = offset + 4;
             if (valueOffset + tlvLen > len) return std::nullopt;
 
             if (type == GRACE_PERIOD_TYPE && tlvLen == 4)
             {
-                tlv.gracePeriodSeconds = utils::readU32(buf + valueOffset);
+                tlv.gracePeriodSeconds = utils::read<uint32_t>(buf + valueOffset);
                 sawPeriod = true;
             }
             else if (type == GRACE_REASON_TYPE && tlvLen == 1)
@@ -66,7 +66,7 @@ struct GraceLsaTlv
             }
             else if (type == GRACE_IP_TYPE && tlvLen == 4)
             {
-                tlv.restartIpAddress = utils::readU32(buf + valueOffset);
+                tlv.restartIpAddress = utils::read<uint32_t>(buf + valueOffset);
             }
 
             // TLVs are padded to 4-byte alignment (RFC 3623 SS3 references RFC 2370's TLV format).
@@ -94,13 +94,13 @@ struct GraceLsaTlv
         if (len < size()) return false;
 
         uint16_t offset = 0;
-        utils::writeU16(buf + offset, GRACE_PERIOD_TYPE);
-        utils::writeU16(buf + offset + 2, 4);
-        utils::writeU32(buf + offset + 4, gracePeriodSeconds);
+        utils::write<uint16_t>(buf + offset, GRACE_PERIOD_TYPE);
+        utils::write<uint16_t>(buf + offset + 2, 4);
+        utils::write<uint32_t>(buf + offset + 4, gracePeriodSeconds);
         offset += 8;
 
-        utils::writeU16(buf + offset, GRACE_REASON_TYPE);
-        utils::writeU16(buf + offset + 2, 1);
+        utils::write<uint16_t>(buf + offset, GRACE_REASON_TYPE);
+        utils::write<uint16_t>(buf + offset + 2, 1);
         buf[offset + 4] = static_cast<uint8_t>(restartReason);
         buf[offset + 5] = 0;
         buf[offset + 6] = 0;
@@ -109,9 +109,9 @@ struct GraceLsaTlv
 
         if (hasRestartIp())
         {
-            utils::writeU16(buf + offset, GRACE_IP_TYPE);
-            utils::writeU16(buf + offset + 2, 4);
-            utils::writeU32(buf + offset + 4, restartIpAddress);
+            utils::write<uint16_t>(buf + offset, GRACE_IP_TYPE);
+            utils::write<uint16_t>(buf + offset + 2, 4);
+            utils::write<uint32_t>(buf + offset + 4, restartIpAddress);
             offset += 8;
         }
 

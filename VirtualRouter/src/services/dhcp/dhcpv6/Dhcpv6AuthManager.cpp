@@ -98,8 +98,8 @@ std::optional<AuthManager::DelayedAuthInfo> AuthManager::addDelayedAuthOption(pa
     option[1] = static_cast<uint8_t>(algo);
     option[2] = static_cast<uint8_t>(rdm);
 
-    utils::writeU64(option + 3, replay);
-    utils::writeU32(option + 11, clientToKey[duid]);
+    utils::write<uint64_t>(option + 3, replay);
+    utils::write<uint32_t>(option + 11, clientToKey[duid]);
 
     // Zero out auth digest for digest calculation
     std::memset(option + 15, 0, headerSize - 15);
@@ -136,8 +136,8 @@ bool AuthManager::validateDelayedAuth(packet::Dhcpv6Header& dhcp, packet::TLV16O
     if (proto != AuthProtocol::DELAYED || rdm != config.rdm.load(std::memory_order_relaxed))
         return false;
 
-    uint64_t replay = utils::readU64(buf + 3);
-    uint64_t keyID = utils::readU64(buf + 11);
+    uint64_t replay = utils::read<uint64_t>(buf + 3);
+    uint64_t keyID = utils::read<uint64_t>(buf + 11);
     uint8_t mac[20];
     size_t macLen = opt->valueSize - 15;
     std::memcpy(mac, opt->value + 15, macLen);
@@ -180,7 +180,7 @@ std::optional<__uint128_t> AuthManager::addRkapAuthOption(packet::TLV16BufferMan
     uint64_t low = gen();
     __uint128_t key = (static_cast<__uint128_t>(high) << 64) | low;
 
-    utils::writeU128(option + 4, key);
+    utils::write<__uint128_t>(option + 4, key);
 
     tlv.append(DHCPV6_OPTION_AUTHENTICATION, 20, nullptr, 20);
 
@@ -205,7 +205,7 @@ bool AuthManager::validateRkapDigest(packet::Dhcpv6Header& dhcp, packet::TLV16Op
 
     // Validate endian
     uint8_t key[16];
-    utils::writeU128(key, secret);
+    utils::write<__uint128_t>(key, secret);
 
     // Harvest digest
     uint8_t digest[16];
@@ -276,8 +276,8 @@ std::optional<ClientAuthManager::DelayedAuthInfo> ClientAuthManager::addDelayedA
     option[1] = static_cast<uint8_t>(algo);
     option[2] = static_cast<uint8_t>(rdm);
 
-    utils::writeU64(option + 3, replay);
-    utils::writeU32(option + 11, key.first);
+    utils::write<uint64_t>(option + 3, replay);
+    utils::write<uint32_t>(option + 11, key.first);
 
     // Zero out auth digest for digest calculation
     std::memset(option + 15, 0, headerSize - 15);
@@ -314,8 +314,8 @@ bool ClientAuthManager::validateDelayedAuth(packet::Dhcpv6Header& dhcp, packet::
     if (proto != AuthProtocol::DELAYED || rdm != config.rdm.load(std::memory_order_relaxed))
         return false;
 
-    uint64_t replay = utils::readU64(buf + 3);
-    uint64_t keyID = utils::readU64(buf + 11);
+    uint64_t replay = utils::read<uint64_t>(buf + 3);
+    uint64_t keyID = utils::read<uint64_t>(buf + 11);
     uint8_t mac[20];
     size_t macLen = opt->valueSize - 15;
     std::memcpy(mac, opt->value + 15, macLen);

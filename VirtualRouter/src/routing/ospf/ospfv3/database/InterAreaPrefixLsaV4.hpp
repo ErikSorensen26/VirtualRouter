@@ -43,11 +43,11 @@ struct InterAreaPrefixLsaV4
         InterAreaPrefixLsaV4 lsa;
 
         if (buf[0] != 0) return std::nullopt;
-        lsa.metric = utils::readU24(buf + 1);
+        lsa.metric = utils::read<uint32_t, 3>(buf + 1);
 
         uint8_t prefixLen = buf[4];
         lsa.options = buf[5];
-        if (utils::readU16(buf + 6) != 0) return std::nullopt;
+        if (utils::read<uint16_t>(buf + 6) != 0) return std::nullopt;
 
         uint8_t prefixWords = (prefixLen + 31) / 32;
         uint8_t prefixBytes = prefixWords * 4;
@@ -76,7 +76,7 @@ struct InterAreaPrefixLsaV4
         if (len < 8) return false;
 
         buf[0] = 0;
-        utils::writeU24(buf + 1, metric);
+        utils::write<uint32_t, 3>(buf + 1, metric);
         buf[4] = prefix.prefixLength;
         buf[5] = options;
         buf[6] = 0;
@@ -85,7 +85,7 @@ struct InterAreaPrefixLsaV4
         uint8_t prefixWords = (prefix.prefixLength + 31) / 32;
         uint8_t prefixBytes = prefixWords * 4;
         if (8 + prefixBytes > len) return false;
-        utils::writeBytes(buf + 8, prefix.addr, prefixBytes);
+        utils::write<__uint128_t>(buf + 8, prefix.addr, prefixBytes);
 
         return true;
     }

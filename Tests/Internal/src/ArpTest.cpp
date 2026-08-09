@@ -104,18 +104,18 @@ void simulateArpReply(uint8_t* buffer, infrastructure::Arp& arp, const uint32_t&
     packet::ArpHeader arpReply;
     arpReply.setBuffer(buffer);
     arpReply.setSenderIpAddr(ip);
-    arpReply.setSenderHwAddr(utils::readU48(mac));
+    arpReply.setSenderHwAddr(utils::read<uint64_t, 6>(mac));
     arp.receiveReply(arpReply);
 }
 
 // Test: StaticEntry_ImmediateResolution
 TEST_F(Internal_ArpTest, StaticEntry_ImmediateResolution)
 {
-    addArpEntry(ip, readU48(mac));
+    addArpEntry(ip, read<uint64_t, 6>(mac));
 
     uint8_t resMac[6];
     uint8_t addr[4];
-    writeU32(addr, ip);
+    write<uint32_t>(addr, ip);
     ASSERT_TRUE(arp->getMac(resMac, addr));
     EXPECT_EQ(std::memcmp(resMac, mac, 6), 0);
 }
@@ -123,14 +123,14 @@ TEST_F(Internal_ArpTest, StaticEntry_ImmediateResolution)
 // Test: StaticEntry_Overwrite
 TEST_F(Internal_ArpTest, StaticEntry_Overwrite)
 {
-    addArpEntry(ip, readU48(mac));
+    addArpEntry(ip, read<uint64_t, 6>(mac));
     uint8_t resolvedMac[6];
     uint8_t addr[4];
-    writeU32(addr, ip);
+    write<uint32_t>(addr, ip);
     ASSERT_TRUE(arp->getMac(resolvedMac, addr));
     EXPECT_EQ(std::memcmp(resolvedMac, mac, 6), 0);
 
-    addArpEntry(ip, readU48(mac2));
+    addArpEntry(ip, read<uint64_t, 6>(mac2));
     ASSERT_TRUE(arp->getMac(resolvedMac, addr));
     EXPECT_EQ(std::memcmp(resolvedMac, mac2, 6), 0);
 }
@@ -138,11 +138,11 @@ TEST_F(Internal_ArpTest, StaticEntry_Overwrite)
 // Test: StaticEntry_Removal
 TEST_F(Internal_ArpTest, StaticEntry_Removal)
 {
-    addArpEntry(ip, readU48(mac));
+    addArpEntry(ip, read<uint64_t, 6>(mac));
 
     uint8_t resolvedMac[6];
     uint8_t addr[4];
-    writeU32(addr, ip);
+    write<uint32_t>(addr, ip);
     ASSERT_TRUE(arp->getMac(resolvedMac, addr));
 
     removeArpEntry(ip);
@@ -160,9 +160,9 @@ TEST_F(Internal_ArpTest, StaticProxyEntry_RepliesToArpRequest)
     request.setTargetIpAddr(ip);
     request.setSenderIpAddr(ifaceIp);
 
-    addArpEntry(ip, readU48(mac));
+    addArpEntry(ip, read<uint64_t, 6>(mac));
 
-    arp->receiveRequest(request, readU48(request.getSenderHwAddr()));
+    arp->receiveRequest(request, read<uint64_t, 6>(request.getSenderHwAddr()));
 }
 
 // Test: StaticNonProxyEntry_DoesNotReplyToUnownedRequest
@@ -174,21 +174,21 @@ TEST_F(Internal_ArpTest, StaticNonProxyEntry_DoesNotReplyToUnownedRequest)
     request.setTargetIpAddr(ip);
     request.setSenderIpAddr(ifaceIp);
 
-    addArpEntry(ip, readU48(mac));
+    addArpEntry(ip, read<uint64_t, 6>(mac));
 
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_)).Times(0); // No reply expected
 
-    arp->receiveRequest(request, readU48(request.getSenderHwAddr()));
+    arp->receiveRequest(request, read<uint64_t, 6>(request.getSenderHwAddr()));
 }
 
 // Test: StaticEntry_NeverExpiresOrProbes
 TEST_F(Internal_ArpTest, StaticEntry_NeverExpiresOrProbes)
 {
-    addArpEntry(ip, readU48(mac));
+    addArpEntry(ip, read<uint64_t, 6>(mac));
 
     uint8_t resolvedMac[6];
     uint8_t addr[4];
-    writeU32(addr, ip);
+    write<uint32_t>(addr, ip);
     ASSERT_TRUE(arp->getMac(resolvedMac, addr));
 
     std::this_thread::sleep_for(std::chrono::seconds(2));
@@ -204,10 +204,10 @@ TEST_F(Internal_ArpTest, StaticEntries_MultipleUniqueEntries)
     {
         uint8_t ipBytes[4] = {(uint8_t)192, (uint8_t)168, (uint8_t)1, (uint8_t)(20 + i)};
         uint8_t macBytes[6] = {0x00, 0x11, 0x22, 0x33, 0x44, (uint8_t)i};
-        addArpEntry(readU32(ipBytes), readU48(macBytes));
+        addArpEntry(read<uint32_t>(ipBytes), read<uint64_t, 6>(macBytes));
 
         uint8_t resolvedMac[6];
-        ASSERT_TRUE(arp->getMac(resolvedMac, utils::readU32(ipBytes)));
+        ASSERT_TRUE(arp->getMac(resolvedMac, utils::read<uint32_t>(ipBytes)));
         EXPECT_EQ(std::memcmp(resolvedMac, macBytes, 6), 0);
     }
 }
@@ -217,7 +217,7 @@ TEST_F(Internal_ArpTest, DynamicEntry_ExpiresAfterTimeout)
 {
     mockInterface->blockEnqueues();
     mockInterface->configs.getConfigs().get<config::Interface::ARP>().get().get<config::Arp::TIMEOUT>().set(1);
-    addArpEntry(ip, readU48(mac));
+    addArpEntry(ip, read<uint64_t, 6>(mac));
 
     uint8_t resolvedMac[6];
     ASSERT_TRUE(arp->getMac(mac, ip));
@@ -274,9 +274,9 @@ TEST_F(Internal_ArpTest, DynamicEntry_RemovedWhenStale_IfIncompleteDisabled)
 // Test: DynamicEntry_TimerIsCancelledWhenOverwritten
 TEST_F(Internal_ArpTest, DynamicEntry_TimerIsCancelledWhenOverwritten)
 {
-    addArpEntry(ip, readU48(mac));
+    addArpEntry(ip, read<uint64_t, 6>(mac));
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    addArpEntry(ip, readU48(mac2));
+    addArpEntry(ip, read<uint64_t, 6>(mac2));
 
     // Wait just under 1 second (timeout default is longer)
     std::this_thread::sleep_for(std::chrono::seconds(2));
@@ -308,7 +308,7 @@ TEST_F(Internal_ArpTest, IncompleteEntry_LateReplyRestoresIfNotCleared)
     global->configs.get<config::Global::IP_ARP_INCOMPLETE_RETRY>().set(10);
 
     uint8_t addr[4];
-    arp->resolveAndSend(writeU32(addr, ip), pkt);
+    arp->resolveAndSend(write<uint32_t>(addr, ip), pkt);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(500)); // before max retries
 
@@ -404,9 +404,9 @@ TEST_F(Internal_ArpTest, PacketQueue_MultiplePacketsSentInOrder)
             {
                 IPv4Header ipv4;
                 ipv4.setBuffer(hdr->buffer);
-                if (utils::readU32(ipv4.getSourceAddress()) == 1)
+                if (utils::read<uint32_t>(ipv4.getSourceAddress()) == 1)
                     pkt1sent = true;
-                if (utils::readU32(ipv4.getSourceAddress()) == 2 && pkt1sent)
+                if (utils::read<uint32_t>(ipv4.getSourceAddress()) == 2 && pkt1sent)
                     pkt2sent = true;
             }
         });
@@ -443,13 +443,13 @@ TEST_F(Internal_ArpTest, GarpAccepted_CreatesEntry)
     garp.setBuffer(buf);
     garp.setSenderIpAddr(ip);
     garp.setTargetIpAddr(ip);
-    garp.setSenderHwAddr(readU48(mac));
+    garp.setSenderHwAddr(read<uint64_t, 6>(mac));
 
     arp->receiveReply(garp);
 
     uint8_t resolvedMac[6];
     uint8_t addr[4];
-    ASSERT_TRUE(arp->getMac(resolvedMac, writeU32(addr, ip)));
+    ASSERT_TRUE(arp->getMac(resolvedMac, write<uint32_t>(addr, ip)));
     EXPECT_EQ(std::memcmp(resolvedMac, mac, 6), 0);
 }
 
@@ -462,20 +462,20 @@ TEST_F(Internal_ArpTest, GarpRejected_IgnoredIfDisabled)
     garp.setBuffer(buf);
     garp.setSenderIpAddr(ip);
     garp.setTargetIpAddr(ip);
-    garp.setSenderHwAddr(readU48(mac));
+    garp.setSenderHwAddr(read<uint64_t, 6>(mac));
 
     arp->receiveReply(garp);
 
     uint8_t resolvedMac[6];
     uint8_t addr[4];
-    ASSERT_FALSE(arp->getMac(resolvedMac, writeU32(addr, ip)));
+    ASSERT_FALSE(arp->getMac(resolvedMac, write<uint32_t>(addr, ip)));
 }
 
 // Test: GarpRefreshes_ExistingEntry
 TEST_F(Internal_ArpTest, GarpRefreshes_ExistingEntry)
 {
     global->configs.get<config::Global::IP_ARP_GRATUITOUS>().set(1);
-    addArpEntry(ip, readU48(mac));
+    addArpEntry(ip, read<uint64_t, 6>(mac));
 
     std::this_thread::sleep_for(std::chrono::milliseconds(50)); // let timer begin
 
@@ -483,13 +483,13 @@ TEST_F(Internal_ArpTest, GarpRefreshes_ExistingEntry)
     garp.setBuffer(buf);
     garp.setSenderIpAddr(ip);
     garp.setTargetIpAddr(ip);
-    garp.setSenderHwAddr(readU48(mac2));
+    garp.setSenderHwAddr(read<uint64_t, 6>(mac2));
 
     arp->receiveReply(garp);
 
     uint8_t resolvedMac[6];
     uint8_t addr[4];
-    ASSERT_TRUE(arp->getMac(resolvedMac, writeU32(addr, ip)));
+    ASSERT_TRUE(arp->getMac(resolvedMac, write<uint32_t>(addr, ip)));
     EXPECT_EQ(std::memcmp(resolvedMac, mac2, 6), 0);
 }
 
@@ -499,19 +499,19 @@ TEST_F(Internal_ArpTest, GarpBlockedByStickyArp)
     global->configs.get<config::Global::IP_ARP_GRATUITOUS>().set(1);
     global->configs.get<config::Global::IP_STICKY_ARP>().set(true);
 
-    addArpEntry(ip, readU48(mac));
+    addArpEntry(ip, read<uint64_t, 6>(mac));
 
     ArpHeader garp;
     garp.setBuffer(buf);
     garp.setSenderIpAddr(ip);
     garp.setTargetIpAddr(ip);
-    garp.setSenderHwAddr(readU48(mac2));
+    garp.setSenderHwAddr(read<uint64_t, 6>(mac2));
 
     arp->receiveReply(garp);
 
     uint8_t resolvedMac[6];
     uint8_t addr[4];
-    ASSERT_TRUE(arp->getMac(resolvedMac, writeU32(addr, ip)));
+    ASSERT_TRUE(arp->getMac(resolvedMac, write<uint32_t>(addr, ip)));
     ASSERT_EQ(std::memcmp(resolvedMac, mac, 6), 0);
 }
 
@@ -522,20 +522,20 @@ TEST_F(Internal_ArpTest, StickyArp_PreventsOverwrite)
     global->configs.get<config::Global::IP_ARP_GRATUITOUS>().set(1);
 
     // Add initial dynamic entry
-    addArpEntry(ip, readU48(mac));
+    addArpEntry(ip, read<uint64_t, 6>(mac));
 
     // Simulate GARP with different MAC
     ArpHeader garp;
     garp.setBuffer(buf);
     garp.setSenderIpAddr(ip);
     garp.setTargetIpAddr(ip);
-    garp.setSenderHwAddr(readU48(mac2));
+    garp.setSenderHwAddr(read<uint64_t, 6>(mac2));
 
     arp->receiveReply(garp);
 
     uint8_t resolvedMac[6];
     uint8_t addr[4];
-    ASSERT_TRUE(arp->getMac(resolvedMac, writeU32(addr, ip)));
+    ASSERT_TRUE(arp->getMac(resolvedMac, write<uint32_t>(addr, ip)));
     ASSERT_EQ(std::memcmp(resolvedMac, mac, 6), 0); // Should not overwrite
 }
 
@@ -546,20 +546,20 @@ TEST_F(Internal_ArpTest, StickyArp_Off_AllowsOverwrite)
     global->configs.get<config::Global::IP_ARP_GRATUITOUS>().set(1);
 
     // Add initial dynamic entry
-    addArpEntry(ip, readU48(mac));
+    addArpEntry(ip, read<uint64_t, 6>(mac));
 
     // Simulate GARP with different MAC
     ArpHeader garp;
     garp.setBuffer(buf);
     garp.setSenderIpAddr(ip);
     garp.setTargetIpAddr(ip);
-    garp.setSenderHwAddr(readU48(mac2));
+    garp.setSenderHwAddr(read<uint64_t, 6>(mac2));
 
     arp->receiveReply(garp);
 
     uint8_t resolvedMac[6];
     uint8_t addr[4];
-    ASSERT_TRUE(arp->getMac(resolvedMac, writeU32(addr, ip)));
+    ASSERT_TRUE(arp->getMac(resolvedMac, write<uint32_t>(addr, ip)));
     EXPECT_EQ(std::memcmp(resolvedMac, mac2, 6), 0); // Should overwrite
 }
 
@@ -569,14 +569,14 @@ TEST_F(Internal_ArpTest, ProxyEntry_RepliesToRequest)
     ArpHeader request;
     request.setBuffer(buf);
     request.setTargetIpAddr(ifaceIp);
-    request.setTargetHwAddr(readU48(mac));
+    request.setTargetHwAddr(read<uint64_t, 6>(mac));
     request.setSenderIpAddr(ip);
     uint8_t macAddr[6];
-    request.setSenderHwAddr(readU48(mockInterface->configs.getMac(macAddr)));
+    request.setSenderHwAddr(read<uint64_t, 6>(mockInterface->configs.getMac(macAddr)));
 
     global->configs.get<config::Global::IP_ARP_PROXY>().set(false);
 
-    addArpEntry(ip, readU48(mac));
+    addArpEntry(ip, read<uint64_t, 6>(mac));
 
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_))
         .Times(1)
@@ -593,7 +593,7 @@ TEST_F(Internal_ArpTest, ProxyEntry_RepliesToRequest)
             FAIL();
         }));
 
-    arp->receiveRequest(request, readU48(request.raw->senderHardwareAddress));
+    arp->receiveRequest(request, read<uint64_t, 6>(request.raw->senderHardwareAddress));
 }
 
 // Test: NonProxyEntry_DoesNotReplyToRequest
@@ -602,18 +602,18 @@ TEST_F(Internal_ArpTest, NonProxyEntry_DoesNotReplyToRequest)
     ArpHeader request;
     request.setBuffer(buf);
     request.setTargetIpAddr(ip);
-    request.setSenderHwAddr(readU48(mac));
+    request.setSenderHwAddr(read<uint64_t, 6>(mac));
     request.setSenderIpAddr(ifaceIp);
     uint8_t macAddr[6];
-    request.setSenderHwAddr(readU48(mockInterface->configs.getMac(macAddr)));
+    request.setSenderHwAddr(read<uint64_t, 6>(mockInterface->configs.getMac(macAddr)));
 
     global->configs.get<config::Global::IP_ARP_PROXY>().set(false);
 
-    addArpEntry(ip, readU48(mac));
+    addArpEntry(ip, read<uint64_t, 6>(mac));
 
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_)).Times(0); // no reply expected
 
-    arp->receiveRequest(request, readU48(request.raw->senderHardwareAddress));
+    arp->receiveRequest(request, read<uint64_t, 6>(request.raw->senderHardwareAddress));
 }
 
 // Test: ProxyAllowed_WhenNotDisabled
@@ -626,7 +626,7 @@ TEST_F(Internal_ArpTest, ProxyAllowed_WhenNotDisabled)
     request.setTargetIpAddr(ip);
     request.setSenderIpAddr(ifaceIp);
     uint8_t macAddr[6];
-    request.setSenderHwAddr(readU48(mockInterface->configs.getMac(macAddr)));
+    request.setSenderHwAddr(read<uint64_t, 6>(mockInterface->configs.getMac(macAddr)));
 
     core::RibEntry<uint32_t>* entry = new core::RibEntry<uint32_t>();
     entry->prefix = 0xC0A80000;
@@ -634,10 +634,10 @@ TEST_F(Internal_ArpTest, ProxyAllowed_WhenNotDisabled)
     mockInterface->getVRF()->getRib().addRoute(entry);
     mockInterface->getVRF()->getRib().wait<uint32_t>();
 
-    addArpEntry(ip, readU48(mac));
+    addArpEntry(ip, read<uint64_t, 6>(mac));
 
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_)).Times(1);
-    arp->receiveRequest(request, readU48(request.raw->senderHardwareAddress));
+    arp->receiveRequest(request, read<uint64_t, 6>(request.raw->senderHardwareAddress));
 }
 
 // Test: ProxyBlocked_WhenDisabled
@@ -650,12 +650,12 @@ TEST_F(Internal_ArpTest, ProxyBlocked_WhenDisabled)
     request.setTargetIpAddr(ip);
     request.setSenderIpAddr(ifaceIp);
     uint8_t macAddr[6];
-    request.setSenderHwAddr(readU48(mockInterface->configs.getMac(macAddr)));
+    request.setSenderHwAddr(read<uint64_t, 6>(mockInterface->configs.getMac(macAddr)));
 
-    addArpEntry(ip, readU48(mac));
+    addArpEntry(ip, read<uint64_t, 6>(mac));
 
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_)).Times(0); // blocked by config
-    arp->receiveRequest(request, readU48(request.raw->senderHardwareAddress));
+    arp->receiveRequest(request, read<uint64_t, 6>(request.raw->senderHardwareAddress));
 }
 
 // Test: UnknownIp_NoReply
@@ -666,12 +666,12 @@ TEST_F(Internal_ArpTest, UnknownIp_NoReply)
     request.setTargetIpAddr(ip);
     request.setSenderIpAddr(ifaceIp);
     uint8_t macAddr[6];
-    request.setSenderHwAddr(readU48(mockInterface->configs.getMac(macAddr)));
+    request.setSenderHwAddr(read<uint64_t, 6>(mockInterface->configs.getMac(macAddr)));
 
     global->configs.get<config::Global::IP_ARP_PROXY>().set(false);
 
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_)).Times(0); // no reply
-    arp->receiveRequest(request, readU48(request.raw->senderHardwareAddress));
+    arp->receiveRequest(request, read<uint64_t, 6>(request.raw->senderHardwareAddress));
 }
 
 // Test: LocalIp_RepliesToRequest
@@ -681,9 +681,9 @@ TEST_F(Internal_ArpTest, LocalIp_RepliesToRequest)
     request.setBuffer(buf);
     request.setTargetIpAddr(ifaceIp);
     uint8_t macAddr[6];
-    request.setTargetHwAddr(readU48(mockInterface->configs.getMac(macAddr)));
+    request.setTargetHwAddr(read<uint64_t, 6>(mockInterface->configs.getMac(macAddr)));
     request.setSenderIpAddr(ip);
-    request.setSenderHwAddr(readU48(mac));
+    request.setSenderHwAddr(read<uint64_t, 6>(mac));
 
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_))
         .Times(1)
@@ -700,7 +700,7 @@ TEST_F(Internal_ArpTest, LocalIp_RepliesToRequest)
             FAIL();
         }));
 
-    arp->receiveRequest(request, readU48(request.raw->senderHardwareAddress));
+    arp->receiveRequest(request, read<uint64_t, 6>(request.raw->senderHardwareAddress));
 }
 
 // Test: ExceedIncompleteLimit_QueuesExcess
@@ -731,7 +731,7 @@ TEST_F(Internal_ArpTest, Shutdown_ClearsAllState)
 {
     mockInterface->blockEnqueues();
     PacketBuilder pkt(mockInterface);
-    arp->addStaticArpEntry(ip, readU48(mac));
+    arp->addStaticArpEntry(ip, read<uint64_t, 6>(mac));
     uint8_t addr[4] = { 0xC0, 0xA8, 0x09, 0x02 };
     arp->resolveAndSend(addr, pkt); // creates incomplete
 
@@ -741,7 +741,7 @@ TEST_F(Internal_ArpTest, Shutdown_ClearsAllState)
 
     uint8_t resolvedMac[6];
     uint8_t addrIp[4];
-    writeU32(addrIp, ip);
+    write<uint32_t>(addrIp, ip);
     EXPECT_FALSE(arp->getMac(resolvedMac, addrIp));
 
     EXPECT_EQ(getIncompletes(), 0u);
@@ -750,11 +750,11 @@ TEST_F(Internal_ArpTest, Shutdown_ClearsAllState)
 // Test: Reinitiation_DoesNotRestorePreviousEntries
 TEST_F(Internal_ArpTest, Reinitiation_DoesNotRestorePreviousEntries)
 {
-    addArpEntry(ip, readU48(mac));
+    addArpEntry(ip, read<uint64_t, 6>(mac));
 
     uint8_t resolvedMac[6];
     uint8_t addr[4];
-    ASSERT_TRUE(arp->getMac(resolvedMac, writeU32(addr, ip)));
+    ASSERT_TRUE(arp->getMac(resolvedMac, write<uint32_t>(addr, ip)));
 
     arp->shutdown();
 
@@ -777,9 +777,9 @@ TEST_F(Internal_ArpTest, ThreadSafety_AddRemoveConcurrent)
         threads.emplace_back([&, i] {
             uint8_t ipBytes[4] = { 192, 168, 10, (uint8_t)i };
             uint8_t macBytes[6] = { 0x10, 0x20, 0x30, 0x40, 0x50, (uint8_t)i };
-            arp->addStaticArpEntry(readU32(ipBytes), readU48(macBytes));
+            arp->addStaticArpEntry(read<uint32_t>(ipBytes), read<uint64_t, 6>(macBytes));
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            arp->removeStaticArpEntry(readU32(ipBytes));
+            arp->removeStaticArpEntry(read<uint32_t>(ipBytes));
         });
     }
 
@@ -796,10 +796,10 @@ TEST_F(Internal_ArpTest, InvalidRequest_ZeroSenderIp_Ignored)
     request.setSenderIpAddr((uint32_t)0);
     request.setTargetIpAddr(ip);
     uint8_t macAddr[6];
-    request.setSenderHwAddr(readU48(mockInterface->configs.getMac(macAddr)));
+    request.setSenderHwAddr(read<uint64_t, 6>(mockInterface->configs.getMac(macAddr)));
 
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_)).Times(0);
-    arp->receiveRequest(request, readU48(request.raw->senderHardwareAddress));
+    arp->receiveRequest(request, read<uint64_t, 6>(request.raw->senderHardwareAddress));
 }
 
 // Test: InvalidRequest_SenderEqualsTarget_Ignored
@@ -810,10 +810,10 @@ TEST_F(Internal_ArpTest, InvalidRequest_SenderEqualsTarget_Ignored)
     request.setSenderIpAddr(ip);
     request.setTargetIpAddr(ip);
     uint8_t macAddr[6];
-    request.setSenderHwAddr(readU48(mockInterface->configs.getMac(macAddr)));
+    request.setSenderHwAddr(read<uint64_t, 6>(mockInterface->configs.getMac(macAddr)));
 
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_)).Times(0);
-    arp->receiveRequest(request, readU48(request.raw->senderHardwareAddress));
+    arp->receiveRequest(request, read<uint64_t, 6>(request.raw->senderHardwareAddress));
 }
 
 // Test: ReplyWithInvalidMac_Ignored
@@ -825,18 +825,18 @@ TEST_F(Internal_ArpTest, ReplyWithInvalidMac_Ignored)
     reply.setBuffer(buf);
     reply.setSenderIpAddr(ip);
     reply.setTargetIpAddr(ip);
-    reply.setSenderHwAddr(readU48(ETHERNET_MAC_BROADCAST));
+    reply.setSenderHwAddr(read<uint64_t, 6>(ETHERNET_MAC_BROADCAST));
 
     // MAC is broadcast — invalid in reply
     uint8_t addr[4];
     arp->receiveReply(reply);
-    EXPECT_FALSE(arp->getMac(invalidMac, writeU32(addr, ip)));
+    EXPECT_FALSE(arp->getMac(invalidMac, write<uint32_t>(addr, ip)));
 }
 
 // Test: ResolvedEntry_ReResolutionResetsTimer
 TEST_F(Internal_ArpTest, ResolvedEntry_ReResolutionResetsTimer)
 {
-    addArpEntry(ip, readU48(mac));
+    addArpEntry(ip, read<uint64_t, 6>(mac));
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     // Save current expiry
@@ -847,7 +847,7 @@ TEST_F(Internal_ArpTest, ResolvedEntry_ReResolutionResetsTimer)
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     // Re-add same entry (should overwrite and reset expiry)
-    addArpEntry(ip, readU48(mac));
+    addArpEntry(ip, read<uint64_t, 6>(mac));
 
     entry = getArpCacheEntry(ip);
     ASSERT_NE(entry, nullptr);
@@ -866,12 +866,12 @@ TEST_F(Internal_ArpTest, UnsolicitedReply_CreatesOnlyIfGarp)
     reply1.setBuffer(buf);
     reply1.setSenderIpAddr(ip);
     reply1.setTargetIpAddr(ip2);
-    reply1.setSenderHwAddr(readU48(mac));
+    reply1.setSenderHwAddr(read<uint64_t, 6>(mac));
     arp->receiveReply(reply1);
 
     uint8_t resolvedMac[6];
     uint8_t addr[4];
-    EXPECT_FALSE(arp->getMac(resolvedMac, writeU32(addr, ip)));
+    EXPECT_FALSE(arp->getMac(resolvedMac, write<uint32_t>(addr, ip)));
 
     // GARP reply
     ArpHeader reply2;
@@ -879,7 +879,7 @@ TEST_F(Internal_ArpTest, UnsolicitedReply_CreatesOnlyIfGarp)
     reply2.setBuffer(buf);
     reply2.setSenderIpAddr(ip);
     reply2.setTargetIpAddr(ip); // GARP
-    reply2.setSenderHwAddr(readU48(mac));
+    reply2.setSenderHwAddr(read<uint64_t, 6>(mac));
     arp->receiveReply(reply2);
 
     ASSERT_TRUE(arp->getMac(resolvedMac, addr));
@@ -895,10 +895,10 @@ TEST_F(Internal_ArpTest, ReplyIgnored_IfArpNotRunning)
     reply.setBuffer(buf);
     reply.setSenderIpAddr(ip);
     reply.setTargetIpAddr(ip);
-    reply.setSenderHwAddr(readU48(mac));
+    reply.setSenderHwAddr(read<uint64_t, 6>(mac));
 
     EXPECT_NO_THROW(arp->receiveReply(reply));
     uint8_t resolvedMac[6];
     uint8_t addr[4];
-    EXPECT_FALSE(arp->getMac(resolvedMac, writeU32(addr, ip)));
+    EXPECT_FALSE(arp->getMac(resolvedMac, write<uint32_t>(addr, ip)));
 }

@@ -184,7 +184,7 @@ std::optional<size_t> NeighborTable::addNeighborList(uint8_t* buf, size_t maxSiz
     size_t off = 0;
     for (auto& [rid, _] : neighbors)
     {
-        utils::writeU32(buf + off, rid);
+        utils::write<uint32_t>(buf + off, rid);
         off += 4;
     }
     return off;

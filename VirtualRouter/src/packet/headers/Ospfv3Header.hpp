@@ -55,10 +55,10 @@ struct Ospfv3Header
 
     uint8_t getVersion() const              { return raw->version; }
     uint8_t getType() const                 { return raw->type; }
-    uint16_t getPacketLen() const           { return utils::readU16(raw->packetLength); }
-    uint32_t getRouterID() const            { return utils::readU32(raw->routerID); }
-    uint32_t getAreaID() const              { return utils::readU32(raw->areaID); }
-    uint16_t getChecksum() const            { return utils::readU16(raw->checksum); }
+    uint16_t getPacketLen() const           { return utils::read<uint16_t>(raw->packetLength); }
+    uint32_t getRouterID() const            { return utils::read<uint32_t>(raw->routerID); }
+    uint32_t getAreaID() const              { return utils::read<uint32_t>(raw->areaID); }
+    uint16_t getChecksum() const            { return utils::read<uint16_t>(raw->checksum); }
     uint8_t getInstanceID() const           { return raw->instanceID; }
 
     void setVersion(uint8_t val)
@@ -66,13 +66,13 @@ struct Ospfv3Header
     void setType(uint8_t val)
         { raw->type = val; }
     void setPacketLen(uint16_t val)
-        { utils::writeU16(raw->packetLength, val); }
+        { utils::write<uint16_t>(raw->packetLength, val); }
     void setRouterID(uint32_t val)
-        { utils::writeU32(raw->routerID, val); }
+        { utils::write<uint32_t>(raw->routerID, val); }
     void setAreaID(uint32_t val)
-        { utils::writeU32(raw->areaID, val); }
+        { utils::write<uint32_t>(raw->areaID, val); }
     void setChecksum(uint16_t val)
-        { utils::writeU16(raw->checksum, val); }
+        { utils::write<uint16_t>(raw->checksum, val); }
     void setInstanceID(uint8_t val)
         { raw->instanceID = val; }
 };

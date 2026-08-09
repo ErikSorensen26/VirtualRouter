@@ -100,7 +100,7 @@ struct RouterLsaV2
         RouterLsaV2 lsa;
 
         lsa.flags = buf[0];
-        uint16_t linkNum = utils::readU16(buf + 2);
+        uint16_t linkNum = utils::read<uint16_t>(buf + 2);
 
         size_t offset = 4;
 
@@ -109,13 +109,13 @@ struct RouterLsaV2
             if (offset + 12 > len) return std::nullopt;
 
             RouterLinkV2 link;
-            link.linkId = utils::readU32(buf + offset); offset += 4;
-            link.linkData = utils::readU16(buf + offset); offset += 4;
+            link.linkId = utils::read<uint32_t>(buf + offset); offset += 4;
+            link.linkData = utils::read<uint16_t>(buf + offset); offset += 4;
 
             link.type = buf[offset++];
             uint8_t tosCount = buf[offset++];
 
-            link.metric = utils::readU16(buf + offset); offset += 2;
+            link.metric = utils::read<uint16_t>(buf + offset); offset += 2;
 
             size_t tosBytes = static_cast<size_t>(tosCount) * 4;
             if (offset + tosBytes > len) return std::nullopt;
@@ -140,16 +140,16 @@ struct RouterLsaV2
 
         buf[0] = flags;
         buf[1] = 0;
-        utils::writeU16(buf + 2, static_cast<uint16_t>(links.size()));
+        utils::write<uint16_t>(buf + 2, static_cast<uint16_t>(links.size()));
 
         size_t off = 4;
         for (auto& link : links)
         {
-            utils::writeU32(buf + off, link.linkId);
-            utils::writeU32(buf + off + 4, link.linkData);
+            utils::write<uint32_t>(buf + off, link.linkId);
+            utils::write<uint32_t>(buf + off + 4, link.linkData);
             buf[off + 8] = link.type;
             buf[off + 9] = 0;
-            utils::writeU16(buf + off + 10, link.metric);
+            utils::write<uint16_t>(buf + off + 10, link.metric);
             off += 12;
         }
         return true;

@@ -818,7 +818,7 @@ protected:
         size_t offset = packet::Ospfv2Header::fixedSize + packet::Ospfv2HelloHeader::fixedSize;
         for (uint32_t rid : neighborRids)
         {
-            utils::writeU32(buf + offset, rid);
+            utils::write<uint32_t>(buf + offset, rid);
             offset += 4;
         }
 
@@ -837,7 +837,7 @@ protected:
         hdr.trailing = std::span<uint8_t>(buf + packet::Ospfv2Header::fixedSize,
                                            hdr.getPacketLen() - packet::Ospfv2Header::fixedSize + authTrailerSize);
         uint8_t srcBytes[4];
-        utils::writeU32(srcBytes, sourceIp.addr);
+        utils::write<uint32_t>(srcBytes, sourceIp.addr);
         OspfInterfaceBase* i = iface ? iface : ospfInterface;
         std::lock_guard lock(i->process.scheduler.getLock());
         getDispatcherV2(i).handleIncoming(hdr, srcBytes, multicast);
@@ -932,7 +932,7 @@ protected:
         hdr.setBuffer(buf);
 
         size_t offset = packet::Ospfv2Header::fixedSize;
-        utils::writeU32(buf + offset, static_cast<uint32_t>(keys.size()));
+        utils::write<uint32_t>(buf + offset, static_cast<uint32_t>(keys.size()));
         offset += 4;
 
         for (size_t i = 0; i < keys.size(); ++i)
@@ -1053,7 +1053,7 @@ protected:
         size_t offset = packet::Ospfv3Header::fixedSize + packet::Ospfv3HelloHeader::fixedSize;
         for (uint32_t rid : neighborRids)
         {
-            utils::writeU32(buf + offset, rid);
+            utils::write<uint32_t>(buf + offset, rid);
             offset += 4;
         }
 
@@ -1072,7 +1072,7 @@ protected:
         hdr.trailing = std::span<uint8_t>(buf + packet::Ospfv3Header::fixedSize,
                                            hdr.getPacketLen() - packet::Ospfv3Header::fixedSize);
         uint8_t srcBytes[16];
-        utils::writeU128(srcBytes, sourceIp.addr);
+        utils::write<__uint128_t>(srcBytes, sourceIp.addr);
         OspfInterface* i = iface ? iface : ospfv3Interface;
         std::lock_guard lock(i->process.scheduler.getLock());
         getDispatcherV3(i).handleIncoming(hdr, srcBytes, multicast);
@@ -1090,7 +1090,7 @@ protected:
         packet::Ospfv3DBDHeader dbd;
         dbd.setBuffer(buf + packet::Ospfv3Header::fixedSize);
         dbd.setMtu(mtu);
-        utils::writeU24(dbd.raw->options, options);
+        utils::write<uint32_t, 3>(dbd.raw->options, options);
         dbd.raw->flags = flags;
         dbd.setSequence(sequence);
 
@@ -1152,7 +1152,7 @@ protected:
         hdr.setBuffer(buf);
 
         size_t offset = packet::Ospfv3Header::fixedSize;
-        utils::writeU32(buf + offset, static_cast<uint32_t>(keys.size()));
+        utils::write<uint32_t>(buf + offset, static_cast<uint32_t>(keys.size()));
         offset += 4;
 
         for (size_t i = 0; i < keys.size(); ++i)
@@ -7838,10 +7838,10 @@ TEST_F(Internal_OspfTest, Lls_DataBlock_Appended_When_Enabled)
             // LLS Data Block starts right after the OSPF payload (RFC 5613 Sec 2:
             // not counted in the OSPF header's own packet-length field).
             uint8_t* lls = hdr.buffer + hdr.getPacketLen();
-            llsChecksum = utils::readU16(lls);
-            llsLenWords = utils::readU16(lls + 2);
-            tlvType = utils::readU16(lls + 4);
-            tlvSize = utils::readU16(lls + 6);
+            llsChecksum = utils::read<uint16_t>(lls);
+            llsLenWords = utils::read<uint16_t>(lls + 2);
+            tlvType = utils::read<uint16_t>(lls + 4);
+            tlvSize = utils::read<uint16_t>(lls + 6);
 
             // Recompute over the block with the checksum field zeroed, matching
             // how addLinkLocalChecksum() computed it before writing the result.
@@ -7895,15 +7895,15 @@ TEST_F(Internal_OspfTest, Lls_Md5Auth_Validates_Block_Checksum)
             sawHello = true;
 
             uint8_t* lls = hdr.buffer + hdr.getPacketLen() + 16;
-            llsLenWords = utils::readU16(lls + 2);
+            llsLenWords = utils::read<uint16_t>(lls + 2);
 
             // EO-TLV (12 bytes) followed by the Authentication TLV (24 bytes).
             uint8_t* authTlv = lls + 12;
-            authTlvType = utils::readU16(authTlv);
-            authTlvSize = utils::readU16(authTlv + 2);
+            authTlvType = utils::read<uint16_t>(authTlv);
+            authTlvSize = utils::read<uint16_t>(authTlv + 2);
 
             uint8_t secret[16];
-            utils::writeU128(secret, getAuthKey().value());
+            utils::write<__uint128_t>(secret, getAuthKey().value());
 
             uint8_t digest[16];
             security::authentication::generateHMAC(digest, lls, 12 + 8, secret, 16, security::authentication::HmacType::MD5);
@@ -7978,7 +7978,7 @@ TEST_F(Internal_OspfTest, Opaque_OriginateRouterCapability_FloodedToFullNeighbor
 
             uint8_t* buf = hdr.buffer + packet::Ospfv2Header::fixedSize;
             size_t payloadLimit = hdr.getPacketLen() - packet::Ospfv2Header::fixedSize;
-            uint16_t count = utils::readU16(buf);
+            uint16_t count = utils::read<uint16_t>(buf);
             size_t offset = 2;
             for (uint32_t i = 0; i < count; ++i)
             {
@@ -8089,7 +8089,7 @@ TEST_F(Internal_OspfTest, Opaque_ReceivedOpaqueLsa_ParsedAndInstalled_ViaExistin
     hdr.setBuffer(testPacket);
 
     size_t offset = packet::Ospfv2Header::fixedSize;
-    utils::writeU32(testPacket + offset, 1);
+    utils::write<uint32_t>(testPacket + offset, 1);
     offset += 4;
 
     uint16_t lsaLen = packet::Ospfv2LSAHeader::fixedSize + static_cast<uint16_t>(sizeof(tlvBuf));
@@ -8182,7 +8182,7 @@ TEST_F(Internal_OspfTest, Resync_TriggerResync_Sends_LlsResyncBit_InUnicastHello
 
             // LLS Data Block starts right after the OSPF payload (RFC 5613 Sec 2).
             uint8_t* lls = hdr.buffer + hdr.getPacketLen();
-            extendedOptions = utils::readU32(lls + 8);
+            extendedOptions = utils::read<uint32_t>(lls + 8);
         }));
 
     getDispatcherV2().triggerResync(*nbr);
@@ -8216,7 +8216,7 @@ TEST_F(Internal_OspfTest, Resync_MulticastHello_NeverSetsResyncBit)
             sawHello = true;
 
             uint8_t* lls = hdr.buffer + hdr.getPacketLen();
-            extendedOptions = utils::readU32(lls + 8);
+            extendedOptions = utils::read<uint32_t>(lls + 8);
         }));
 
     getDispatcherV2().sendHello();
@@ -8243,15 +8243,15 @@ TEST_F(Internal_OspfTest, Resync_ReceivedResyncBit_ReflooedsFullLsdbToNeighbor_W
     // Manually append a minimal LLS Data Block (RFC 5613/4813) with the resync
     // extended option set, since buildHelloV2() has no native LLS support.
     uint8_t* lls = testPacket + packetLen;
-    utils::writeU16(lls + 2, 3); // length in 32-bit words: checksum+length+EO-TLV
-    utils::writeU16(lls + 4, 0x0001); // Extended Options and Flags TLV type
-    utils::writeU16(lls + 6, 0x0004); // TLV value size
-    utils::writeU32(lls + 8, getLlsResyncBit());
+    utils::write<uint16_t>(lls + 2, 3); // length in 32-bit words: checksum+length+EO-TLV
+    utils::write<uint16_t>(lls + 4, 0x0001); // Extended Options and Flags TLV type
+    utils::write<uint16_t>(lls + 6, 0x0004); // TLV value size
+    utils::write<uint32_t>(lls + 8, getLlsResyncBit());
 
     ChecksumFletcher check;
     check.addU16(0);
     check.addBytes(lls + 2, 10); // 12-byte block minus the 2-byte checksum field
-    utils::writeU16(lls, check.finalize());
+    utils::write<uint16_t>(lls, check.finalize());
 
     deliverV2(testPacket, types::IPv4Address{0xC0A80102}, false /* unicast */, nullptr, 12 /* LLS block size */);
     wait();
@@ -8320,7 +8320,7 @@ TEST_F(Internal_OspfTest, GracefulRestart_BeginGracefulRestart_SetsRestartBitOnH
             sawHello = true;
 
             uint8_t* lls = hdr.buffer + hdr.getPacketLen();
-            extendedOptions = utils::readU32(lls + 8);
+            extendedOptions = utils::read<uint32_t>(lls + 8);
         }));
 
     getDispatcherV2().sendHello();
@@ -8418,15 +8418,15 @@ TEST_F(Internal_OspfTest, GracefulRestart_ReceivedRestartBitWithoutGraceLsa_Does
     // Manually append a minimal LLS Data Block (RFC 5613/4813) with only the
     // restart extended option set -- no Grace-LSA is ever sent.
     uint8_t* lls = testPacket + packetLen;
-    utils::writeU16(lls + 2, 3);
-    utils::writeU16(lls + 4, 0x0001);
-    utils::writeU16(lls + 6, 0x0004);
-    utils::writeU32(lls + 8, getLlsRestartBit());
+    utils::write<uint16_t>(lls + 2, 3);
+    utils::write<uint16_t>(lls + 4, 0x0001);
+    utils::write<uint16_t>(lls + 6, 0x0004);
+    utils::write<uint32_t>(lls + 8, getLlsRestartBit());
 
     ChecksumFletcher check;
     check.addU16(0);
     check.addBytes(lls + 2, 10);
-    utils::writeU16(lls, check.finalize());
+    utils::write<uint16_t>(lls, check.finalize());
 
     deliverV2(testPacket, types::IPv4Address{0xC0A80102}, false /* unicast */, nullptr, 12 /* LLS block size */);
     wait();
@@ -8458,7 +8458,7 @@ TEST_F(Internal_OspfTest, AuthV2_SimplePassword_Correct_Accepted)
     hdr.setBuffer(testPacket);
     hdr.setAuthType(OSPFV2_AUTH_SIMPLE);
     uint8_t authField[8];
-    utils::writeU64(authField, secret);
+    utils::write<uint64_t>(authField, secret);
     hdr.setAuthentication(authField);
     finalizeOspfV2Checksum(testPacket, hdr.getPacketLen());
 
@@ -8489,7 +8489,7 @@ TEST_F(Internal_OspfTest, AuthV2_SimplePassword_Incorrect_Rejected)
     hdr.setBuffer(testPacket);
     hdr.setAuthType(OSPFV2_AUTH_SIMPLE);
     uint8_t authField[8];
-    utils::writeU64(authField, wrongSecret);
+    utils::write<uint64_t>(authField, wrongSecret);
     hdr.setAuthentication(authField);
     finalizeOspfV2Checksum(testPacket, hdr.getPacketLen());
 
@@ -8534,12 +8534,12 @@ TEST_F(Internal_OspfTest, AuthV2_Md5_Correct_Digest_Accepted)
     uint8_t authField[8] = {0};
     authField[2] = keyId;
     authField[3] = 16;
-    utils::writeU32(authField + 4, 1); // sequence number
+    utils::write<uint32_t>(authField + 4, 1); // sequence number
     hdr.setAuthentication(authField);
 
     // HMAC-MD5 over the packet (checksum field left as-is; crypto skips it).
     uint8_t authSecret[16];
-    utils::writeU128(authSecret, getAuthKey().value());
+    utils::write<__uint128_t>(authSecret, getAuthKey().value());
     uint8_t digest[16];
     security::authentication::generateHMAC(digest, testPacket, packetLen, authSecret, 16, security::authentication::HmacType::MD5);
     std::memcpy(testPacket + packetLen, digest, 16);
@@ -8583,7 +8583,7 @@ TEST_F(Internal_OspfTest, AuthV2_Md5_Incorrect_Digest_Rejected)
     uint8_t authField[8] = {0};
     authField[2] = keyId;
     authField[3] = 16;
-    utils::writeU32(authField + 4, 1); // sequence number
+    utils::write<uint32_t>(authField + 4, 1); // sequence number
     hdr.setAuthentication(authField);
 
     // Wrong digest bytes appended.
@@ -8633,11 +8633,11 @@ TEST_F(Internal_OspfTest, AuthV2_Md5_KeyId_Mismatch_Rejected)
     uint8_t authField[8] = {0};
     authField[2] = wrongKeyId; // does not match configured authKeyId
     authField[3] = 16;
-    utils::writeU32(authField + 4, 1);
+    utils::write<uint32_t>(authField + 4, 1);
     hdr.setAuthentication(authField);
 
     uint8_t authSecret[16];
-    utils::writeU128(authSecret, getAuthKey().value());
+    utils::write<__uint128_t>(authSecret, getAuthKey().value());
     uint8_t digest[16];
     security::authentication::generateHMAC(digest, testPacket, packetLen, authSecret, 16, security::authentication::HmacType::MD5);
     std::memcpy(testPacket + packetLen, digest, 16);
@@ -8674,7 +8674,7 @@ TEST_F(Internal_OspfTest, AuthV2_ReplayDetection_Old_Sequence_Rejected)
     uint32_t selfRid = ospfInstance->getRouterId();
 
     uint8_t authSecret[16];
-    utils::writeU128(authSecret, getAuthKey().value());
+    utils::write<__uint128_t>(authSecret, getAuthKey().value());
 
     auto sendWithSeq = [&](uint32_t seq) {
         uint16_t packetLen = buildHelloV2(testPacket, neighborRouterId, ospfInterface->getAreaId(),
@@ -8685,7 +8685,7 @@ TEST_F(Internal_OspfTest, AuthV2_ReplayDetection_Old_Sequence_Rejected)
         uint8_t authField[8] = {0};
         authField[2] = keyId;
         authField[3] = 16;
-        utils::writeU32(authField + 4, seq);
+        utils::write<uint32_t>(authField + 4, seq);
         hdr.setAuthentication(authField);
 
         uint8_t digest[16];
@@ -8750,7 +8750,7 @@ TEST_F(Internal_OspfTest, AuthV2_SyncDigestKey_Picks_Active_KeyChain_Entry)
     wait();
     ASSERT_TRUE(getAuthKeyId().has_value());
     EXPECT_EQ(getAuthKeyId().value(), keyId1);
-    EXPECT_EQ(getAuthKey().value(), utils::readU128(keyBytes1.data()));
+    EXPECT_EQ(getAuthKey().value(), utils::read<__uint128_t>(keyBytes1.data()));
 
     // Adding a second key makes it the active (last) entry per syncDigestKey().
     getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::MESSAGE_DIGEST_KEYS>().withWrite([&](auto& list) {
@@ -8759,7 +8759,7 @@ TEST_F(Internal_OspfTest, AuthV2_SyncDigestKey_Picks_Active_KeyChain_Entry)
     });
     wait();
     EXPECT_EQ(getAuthKeyId().value(), keyId2);
-    EXPECT_EQ(getAuthKey().value(), utils::readU128(keyBytes2.data()));
+    EXPECT_EQ(getAuthKey().value(), utils::read<__uint128_t>(keyBytes2.data()));
 }
 
 #pragma endregion AuthenticationV2

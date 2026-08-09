@@ -61,11 +61,11 @@ struct ExternalLsaV3
 
         uint8_t exOpts = buf[0];
         lsa.isType2 = (exOpts & 0x04) != 0;
-        lsa.metric = utils::readU24(buf + 1);
+        lsa.metric = utils::read<uint32_t, 3>(buf + 1);
 
         uint8_t prefixLen = buf[4];
         lsa.options = buf[5];
-        lsa.referencedLsType = utils::readU16(buf + 6);
+        lsa.referencedLsType = utils::read<uint16_t>(buf + 6);
 
         if (prefixLen > 128) return std::nullopt;
 
@@ -88,13 +88,13 @@ struct ExternalLsaV3
         if (exOpts & 0x01)
         {
             if (off + 4 > len) return std::nullopt;
-            lsa.routeTag = utils::readU32(buf + off);
+            lsa.routeTag = utils::read<uint32_t>(buf + off);
             off += 4;
         }
         if (lsa.referencedLsType != 0)
         {
             if (off + 4 > len) return std::nullopt;
-            lsa.referencedLsId = utils::readU32(buf + off);
+            lsa.referencedLsId = utils::read<uint32_t>(buf + off);
             off += 4;
         }
 
@@ -121,18 +121,18 @@ struct ExternalLsaV3
 
         uint8_t& exOpts = buf[0];
         if (isType2) exOpts |= 0x04;
-        utils::writeU24(buf + 1, metric);
+        utils::write<uint32_t, 3>(buf + 1, metric);
 
         buf[4] = prefix.prefixLength;
         buf[5] = options;
-        utils::writeU16(buf + 6, referencedLsType);
+        utils::write<uint16_t>(buf + 6, referencedLsType);
 
         uint8_t prefixBytes = (prefix.prefixLength + 7) / 8;
         uint16_t off = 8;
 
         if (off + prefixBytes > len) return false;
 
-        utils::writeBytes(buf + 8, prefix.addr, prefixBytes);
+        utils::write<__uint128_t>(buf + 8, prefix.addr, prefixBytes);
 
         off += prefixBytes;
 
@@ -140,20 +140,20 @@ struct ExternalLsaV3
         {
             exOpts |= 0x02;
             if (off + 16 > len) return false;
-            utils::writeU128(buf + off, forwardingAddress.value().addr);
+            utils::write<__uint128_t>(buf + off, forwardingAddress.value().addr);
             off += 16;
         }
         if (routeTag.has_value())
         {
             exOpts |= 0x01;
             if (off + 4 > len) return false;
-            utils::writeU32(buf + off, routeTag.value());
+            utils::write<uint32_t>(buf + off, routeTag.value());
             off += 4;
         }
         if (referencedLsType != 0)
         {
             if (off + 4 > len || !referencedLsId.has_value()) return false;
-            utils::writeU32(buf + off, referencedLsId.value());
+            utils::write<uint32_t>(buf + off, referencedLsId.value());
         }
 
         return true;

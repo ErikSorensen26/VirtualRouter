@@ -148,7 +148,7 @@ public:
     {
         buf[0] = n.prefixLength;
         size_t bytes = (static_cast<size_t>(n.prefixLength) + 7u) / 8u;
-        utils::writeBytes(buf + 1, n.addr, bytes);
+        utils::write<decltype(n.addr)>(buf + 1, n.addr, bytes);
     }
 
     /**
@@ -164,7 +164,7 @@ public:
     {
         n.prefixLength = buf[0];
         size_t bytes = (static_cast<size_t>(n.prefixLength) + 7u) / 8u;
-        n.addr = utils::readBytes<uint32_t>(buf + 1, bytes);
+        n.addr = utils::read<uint32_t>(buf + 1, bytes);
         return 1u + bytes;
     }
 

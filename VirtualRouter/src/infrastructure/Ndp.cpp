@@ -459,7 +459,7 @@ void Ndp::receiveNeighborAdvertisement(const packet::Icmpv6Header& receivedNA, t
     {
         if (opt.type == ICMPV6_OPTION_NDP_TARGET && opt.valueSize == 6)
         {
-            mac      = utils::readU48(opt.value);
+            mac      = utils::read<uint64_t, 6>(opt.value);
             macFound = true;
             break;
         }
@@ -468,7 +468,7 @@ void Ndp::receiveNeighborAdvertisement(const packet::Icmpv6Header& receivedNA, t
 
     // Check if this NA is for a tentative DAD address
     {
-        __uint128_t addrValue = utils::readU128(trail.data());
+        __uint128_t addrValue = utils::read<__uint128_t>(trail.data());
         for (const auto& addr : iface.configs.ipv6.globalAddresses)
         {
             if (addr->prefix == addrValue && addr->tentative)
@@ -498,7 +498,7 @@ void Ndp::receiveNeighborAdvertisement(const packet::Icmpv6Header& receivedNA, t
 void Ndp::receiveNeighborSolicitation(const packet::Icmpv6Header& nsHeader, types::IPv6Address srcIp, types::Mac srcMac)
 {
     auto trail = nsHeader.getTrail();
-    types::IPv6Address targetIp = utils::readU128(trail.data());
+    types::IPv6Address targetIp = utils::read<__uint128_t>(trail.data());
 
     bool isOwned = false;
     bool isProxy = false;
@@ -569,7 +569,7 @@ void Ndp::receiveRouteAdvertisement(const packet::Icmpv6Header& receivedRA, type
         }
     }
 
-    uint16_t routerLifetime = utils::readU16(receivedRA.getReserved() + 2);
+    uint16_t routerLifetime = utils::read<uint16_t>(receivedRA.getReserved() + 2);
     uint8_t  flags          = receivedRA.getReserved()[1];
     bool mFlag = flags & 0x80;
     bool oFlag = flags & 0x40;
@@ -626,8 +626,8 @@ void Ndp::receiveRouteAdvertisement(const packet::Icmpv6Header& receivedRA, type
             uint8_t  prefixLen         = opt.value[0];
             uint8_t  prefixFlags       = opt.value[1];
             bool     A                 = prefixFlags & 0x40;
-            uint32_t validLifetime     = utils::readU32(opt.value + 2);
-            uint32_t preferredLifetime = utils::readU32(opt.value + 6);
+            uint32_t validLifetime     = utils::read<uint32_t>(opt.value + 2);
+            uint32_t preferredLifetime = utils::read<uint32_t>(opt.value + 6);
 
             if (preferredLifetime > validLifetime) continue;
 
@@ -651,7 +651,7 @@ void Ndp::receiveRouteAdvertisement(const packet::Icmpv6Header& receivedRA, type
                 uint8_t mac[6];
                 uint8_t slac[16];
                 calculateEui64(slac, opt.value + 14, iface.configs.getMac(mac));
-                slaacAddr->prefix.addr = utils::readU128(slac);
+                slaacAddr->prefix.addr = utils::read<__uint128_t>(slac);
 
                 iface.configs.ipv6.globalAddresses.push_back(slaacAddr);
 
@@ -680,8 +680,8 @@ void Ndp::receiveRouteAdvertisement(const packet::Icmpv6Header& receivedRA, type
 void Ndp::receiveRedirectMessage(const packet::Icmpv6Header& redirect, types::IPv6Address sourceIp)
 {
     auto trail = redirect.getTrail();
-    types::IPv6Address betterNextHop = utils::readU128(trail.data());
-    types::IPv6Address destinationIp = utils::readU128(trail.data() + 16);
+    types::IPv6Address betterNextHop = utils::read<__uint128_t>(trail.data());
+    types::IPv6Address destinationIp = utils::read<__uint128_t>(trail.data() + 16);
     types::Mac nextHopMac;
     bool macFound = false;
 
@@ -692,7 +692,7 @@ void Ndp::receiveRedirectMessage(const packet::Icmpv6Header& redirect, types::IP
     {
         if (opt.type == ICMPV6_OPTION_NDP_TARGET && opt.valueSize == 6)
         {
-            nextHopMac = utils::readU48(opt.value);
+            nextHopMac = utils::read<uint64_t, 6>(opt.value);
             macFound   = true;
             break;
         }
@@ -810,8 +810,8 @@ void Ndp::sendRedirectMessage(types::IPv6Address targetIp, types::IPv6Address de
     icmp.setReserved(0);
 
     uint8_t* trail = icmp.getTrailData();
-    utils::writeU128(trail,      destinationIp.addr);
-    utils::writeU128(trail + 16, targetIp.addr);
+    utils::write<__uint128_t>(trail,      destinationIp.addr);
+    utils::write<__uint128_t>(trail + 16, targetIp.addr);
 
     packet::TLV8BufferManager options(trail + 32, 8);
     options.append(ICMPV6_OPTION_NDP_TARGET, 1, 0, 0);
@@ -847,8 +847,8 @@ void Ndp::sendRedirectIfNeeded(const packet::PacketInfo& originalPacket, const u
     }
     if (!ipv6) return;
 
-    types::IPv6Address srcIp { utils::readU128(ipv6->sourceAddress)      };
-    types::IPv6Address dstIp { utils::readU128(ipv6->destinationAddress) };
+    types::IPv6Address srcIp { utils::read<__uint128_t>(ipv6->sourceAddress)      };
+    types::IPv6Address dstIp { utils::read<__uint128_t>(ipv6->destinationAddress) };
 
     // Helper: check if addr falls within prefix/prefixLen
     auto isOnLink = [](const uint8_t* addr, const uint8_t* prefix, uint8_t prefixLen) {
@@ -866,9 +866,9 @@ void Ndp::sendRedirectIfNeeded(const packet::PacketInfo& originalPacket, const u
     {
         if (!addr->valid) continue;
         uint8_t pfxBytes[16];
-        utils::writeU128(pfxBytes, addr->prefix.addr);
+        utils::write<__uint128_t>(pfxBytes, addr->prefix.addr);
         uint8_t srcBytes[16];
-        utils::writeU128(srcBytes, srcIp.addr);
+        utils::write<__uint128_t>(srcBytes, srcIp.addr);
         if (isOnLink(srcBytes, pfxBytes, addr->prefix.prefixLength))
         {
             srcOnLink = true;
@@ -932,7 +932,7 @@ void Ndp::scheduleNextRA()
 
             auto localAddr = iface.configs.ipv6.getLocalAddress();
             if (localAddr.addr)
-                sendRouteAdvertisement(utils::readU48(ETHERNET_MAC_BROADCAST), localAddr);
+                sendRouteAdvertisement(utils::read<uint64_t, 6>(ETHERNET_MAC_BROADCAST), localAddr);
 
             scheduleNextRA();
         }
@@ -1101,13 +1101,13 @@ void Ndp::neighborSolicitation(processing::PacketBuilder& packet, types::IPv6Add
     icmp.setReservedInt(0);
 
     uint8_t* trail = icmp.getTrailData();
-    utils::writeU128(trail, targetIp.addr);
+    utils::write<__uint128_t>(trail, targetIp.addr);
 
     if (currentMac)
     {
         packet::TLV8BufferManager options(trail + 16, 8);
         uint8_t* buf = options.getNextValBuf(6);
-        utils::writeU48(buf, *currentMac);
+        utils::write<uint64_t, 6>(buf, *currentMac);
         options.append(ICMPV6_OPTION_NDP_SOURCE, 1, nullptr, 6);
         nextHeader->length = packet::Icmpv6Header::fixedSize + 16 + options.size();
     }
@@ -1138,13 +1138,13 @@ void Ndp::neighborAdvertisement(processing::PacketBuilder& packet, types::Mac cu
 
     uint8_t* trail = icmp.getTrailData();
     if (targetIp)
-        utils::writeU128(trail, targetIp->addr);
+        utils::write<__uint128_t>(trail, targetIp->addr);
     else
-        utils::writeU128(trail, iface.configs.ipv6.getLocalAddress().addr);
+        utils::write<__uint128_t>(trail, iface.configs.ipv6.getLocalAddress().addr);
 
     packet::TLV8BufferManager options(trail + 16, 8);
     uint8_t* buf = options.getNextValBuf(6);
-    utils::writeU48(buf, currentMac);
+    utils::write<uint64_t, 6>(buf, currentMac);
     options.append(ICMPV6_OPTION_NDP_TARGET, 1, nullptr, 6);
 
     nextHeader->length = packet::Icmpv6Header::fixedSize + 16 + options.size();
@@ -1168,7 +1168,7 @@ void Ndp::routeSolicitation(processing::PacketBuilder& packet, types::Mac curren
     uint8_t* trail = icmp.getTrailData();
     packet::TLV8BufferManager options(trail, 8);
     uint8_t* buf = options.getNextValBuf(6);
-    utils::writeU48(buf, currentMac);
+    utils::write<uint64_t, 6>(buf, currentMac);
     options.append(ICMPV6_OPTION_NDP_SOURCE, 1, nullptr, 6);
 
     nextHeader->length = packet::Icmpv6Header::fixedSize + options.size();
@@ -1200,23 +1200,23 @@ void Ndp::routeAdvertisement(processing::PacketBuilder& packet, types::Mac curre
     }
 
     reserved[0] |= configs.get<config::Ndp::RA_HOP_LIMIT_UNSPECIFIED>().load() ? 0 : 64;
-    utils::writeU16(reserved + 2, configs.get<config::Ndp::RA_LIFETIME>().load());
+    utils::write<uint16_t>(reserved + 2, configs.get<config::Ndp::RA_LIFETIME>().load());
     icmp.setReserved(reserved);
 
     uint8_t* trail = icmp.getTrailData();
     uint32_t reachableTime = configs.get<config::Ndp::BASE>().get().get<config::NdpBase::REACHABLE_TIME>().load();
-    utils::writeU32(trail,     reachableTime);
-    utils::writeU32(trail + 4, 0); // retrans timer — let neighbor use its own
+    utils::write<uint32_t>(trail,     reachableTime);
+    utils::write<uint32_t>(trail + 4, 0); // retrans timer — let neighbor use its own
 
     packet::TLV8BufferManager options(trail + 8);
     uint8_t* buf = options.getNextValBuf(6);
-    utils::writeU48(buf, currentMac);
+    utils::write<uint64_t, 6>(buf, currentMac);
     options.append(ICMPV6_OPTION_NDP_SOURCE, 1, nullptr, 6);
 
     if (!configs.get<config::Ndp::RA_MTU_SUPPRESS>().load())
     {
         uint8_t mtu[6] = {};
-        utils::writeU32(mtu + 2, iface.configs.ipv6.mtu.load(std::memory_order_relaxed));
+        utils::write<uint32_t>(mtu + 2, iface.configs.ipv6.mtu.load(std::memory_order_relaxed));
         options.append(ICMPV6_OPTION_NDP_MTU, 1, mtu, 6);
     }
 
@@ -1235,9 +1235,9 @@ void Ndp::routeAdvertisement(processing::PacketBuilder& packet, types::Mac curre
             uint8_t value[30] = {};
             value[0] = prefixLen;
             value[1] = flags;
-            utils::writeU32(value + 2,  lifetime);
-            utils::writeU32(value + 6,  preferredLifetime);
-            utils::writeU128(value + 14, types::IPv6Address{addr->prefix.addr, prefixLen}.addr);
+            utils::write<uint32_t>(value + 2,  lifetime);
+            utils::write<uint32_t>(value + 6,  preferredLifetime);
+            utils::write<__uint128_t>(value + 14, types::IPv6Address{addr->prefix.addr, prefixLen}.addr);
 
             options.append(ICMPV6_OPTION_NDP_PREFIX, 4, value, 30);
         }

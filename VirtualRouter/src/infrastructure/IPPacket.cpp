@@ -48,13 +48,13 @@ static bool getDestinationMac(uint64_t& outMac, interface::Interface* iface, con
         if (destIp.isMulticast())
         {
             deriveMulticastMac(macBuf, destIp);
-            outMac = utils::readU48(macBuf);
+            outMac = utils::read<uint64_t, 6>(macBuf);
             return true;
         }
         types::IPv4Address v4addr(destIp.v4());
         if (iface->arp.getMac(macBuf, v4addr))
         {
-            outMac = utils::readU48(macBuf);
+            outMac = utils::read<uint64_t, 6>(macBuf);
             return true;
         }
         else
@@ -68,13 +68,13 @@ static bool getDestinationMac(uint64_t& outMac, interface::Interface* iface, con
         if (destIp.isMulticast())
         {
             deriveMulticastMac(macBuf, destIp);
-            outMac = utils::readU48(macBuf);
+            outMac = utils::read<uint64_t, 6>(macBuf);
             return true;
         }
         types::IPv6Address v6addr(destIp.v6());
         if (iface->ndp.getMac(macBuf, v6addr))
         {
-            outMac = utils::readU48(macBuf);
+            outMac = utils::read<uint64_t, 6>(macBuf);
             return true;
         }
         else

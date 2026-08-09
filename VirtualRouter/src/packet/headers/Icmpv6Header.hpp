@@ -98,7 +98,7 @@ struct Icmpv6Header
     void setReserved(uint8_t* val)
         { memcpy(raw->reserved, val, 4); }
     void setReservedInt(uint32_t val)
-        { utils::writeU32(raw->reserved, val); }
+        { utils::write<uint32_t>(raw->reserved, val); }
 };
 
 // Parses trailing data into ICMPv6 options

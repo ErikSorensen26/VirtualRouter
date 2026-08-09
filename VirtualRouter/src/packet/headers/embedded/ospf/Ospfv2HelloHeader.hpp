@@ -37,26 +37,26 @@ struct Ospfv2HelloHeader
 {
     DEFINE_FIXED_HEADER(Ospfv2HelloHeaderRaw);
 
-    uint32_t getMask() const                { return utils::readU32(raw->networkMask); }
-    uint16_t getHelloInterval() const       { return utils::readU16(raw->helloInterval); }
+    uint32_t getMask() const                { return utils::read<uint32_t>(raw->networkMask); }
+    uint16_t getHelloInterval() const       { return utils::read<uint16_t>(raw->helloInterval); }
     uint8_t getPriority() const             { return raw->routerPriority; }
-    uint32_t getDeadInterval() const        { return utils::readU32(raw->deadInterval); }
-    uint32_t getDR() const                  { return utils::readU32(raw->designatedRouter); }
-    uint32_t getBDR() const                 { return utils::readU32(raw->backupDesignatedRouter); }
+    uint32_t getDeadInterval() const        { return utils::read<uint32_t>(raw->deadInterval); }
+    uint32_t getDR() const                  { return utils::read<uint32_t>(raw->designatedRouter); }
+    uint32_t getBDR() const                 { return utils::read<uint32_t>(raw->backupDesignatedRouter); }
     uint8_t getOptions() const              { return raw->options; }
 
     void setMask(uint32_t val)
-        { utils::writeU32(raw->networkMask, val); }
+        { utils::write<uint32_t>(raw->networkMask, val); }
     void setHelloInterval(uint16_t val)
-        { utils::writeU16(raw->helloInterval, val); }
+        { utils::write<uint16_t>(raw->helloInterval, val); }
     void setPriority(uint8_t val)
         { raw->routerPriority = val; }
     void setDeadInterval(uint32_t val)
-        { utils::writeU32(raw->deadInterval, val); }
+        { utils::write<uint32_t>(raw->deadInterval, val); }
     void setDR(uint32_t val)
-        { utils::writeU32(raw->designatedRouter, val); }
+        { utils::write<uint32_t>(raw->designatedRouter, val); }
     void setBDR(uint32_t val)
-        { utils::writeU32(raw->backupDesignatedRouter, val); }
+        { utils::write<uint32_t>(raw->backupDesignatedRouter, val); }
     void setOptions(uint8_t val)
         { raw->options = val; }
 };

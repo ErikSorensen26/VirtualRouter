@@ -129,8 +129,8 @@ inline bool parseDhcpv6Options(const uint8_t* data, size_t size, std::vector<TLV
     size_t offset = 0;
     while (offset + 4 <= size)
     {
-        uint16_t code = utils::readU16(data + offset);
-        uint16_t length = utils::readU16(data + offset + 2);
+        uint16_t code = utils::read<uint16_t>(data + offset);
+        uint16_t length = utils::read<uint16_t>(data + offset + 2);
 
         if (offset + 4 + length > size) return false;
 

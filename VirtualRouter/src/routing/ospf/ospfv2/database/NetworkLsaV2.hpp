@@ -47,7 +47,7 @@ struct NetworkLsaV2
 
         NetworkLsaV2 lsa;
 
-        lsa.networkMask = utils::readU32(buf);
+        lsa.networkMask = utils::read<uint32_t>(buf);
         size_t offset = 4;
 
         if ((len - offset) % 4 != 0)
@@ -55,7 +55,7 @@ struct NetworkLsaV2
 
         while (offset + 4 <= len)
         {
-            uint32_t rid = utils::readU32(buf + offset);
+            uint32_t rid = utils::read<uint32_t>(buf + offset);
             lsa.attachedRouters.push_back(rid);
             offset += 4;
         }
@@ -74,11 +74,11 @@ struct NetworkLsaV2
         if ((attachedRouters.size() * 4) + 4 != len)
             return false;
 
-        utils::writeU32(buf, networkMask);
+        utils::write<uint32_t>(buf, networkMask);
         size_t off = 4;
         for (auto& r : attachedRouters)
         {
-            utils::writeU32(buf + off, r);
+            utils::write<uint32_t>(buf + off, r);
             off += 4;
         }
         return true;

@@ -558,21 +558,21 @@ TEST_F(Internal_BgpTest, BgpTx_BuildOpen_TwoByteAs_RoundTripFields)
     // BGP header: 16-byte marker (all 0xFF), 2-byte length, 1-byte type.
     for (int i = 0; i < 16; ++i)
         EXPECT_EQ(buf[i], 0xFF);
-    uint16_t msgLen = utils::readU16(buf + 16);
+    uint16_t msgLen = utils::read<uint16_t>(buf + 16);
     EXPECT_EQ(buf[18], BGP_TYPE_OPEN);
     EXPECT_EQ(msgLen, pair.sinkB.bytes.size());
 
     const uint8_t* open = buf + packet::BgpHeader::fixedSize;
     EXPECT_EQ(open[0], BGP_VERSION); // version
 
-    uint16_t asField = utils::readU16(open + 1);
+    uint16_t asField = utils::read<uint16_t>(open + 1);
     // AS 65001 fits in two bytes, no AS_TRANS needed.
     EXPECT_EQ(asField, kLocalAs);
 
-    uint16_t holdField = utils::readU16(open + 3);
+    uint16_t holdField = utils::read<uint16_t>(open + 3);
     EXPECT_EQ(holdField, sess.holdTime);
 
-    uint32_t rid = utils::readU32(open + 5);
+    uint32_t rid = utils::read<uint32_t>(open + 5);
     EXPECT_EQ(rid, proc->getRouterId());
 }
 
@@ -596,7 +596,7 @@ TEST_F(Internal_BgpTest, BgpTx_BuildOpen_FourByteAs_UsesAsTrans)
     const uint8_t* buf = pair.sinkB.bytes.data();
     const uint8_t* open = buf + packet::BgpHeader::fixedSize;
 
-    uint16_t asField = utils::readU16(open + 1);
+    uint16_t asField = utils::read<uint16_t>(open + 1);
     EXPECT_EQ(asField, kAsTrans);
 
     // Capabilities must include the 32-bit ASN capability carrying the real AS.
@@ -621,7 +621,7 @@ TEST_F(Internal_BgpTest, BgpTx_BuildOpen_FourByteAs_UsesAsTrans)
             if (code == BGP_CAPABILITY_32_BIT_AS)
             {
                 ASSERT_EQ(len, 4);
-                uint32_t as4 = utils::readU32(params + capPos + 2);
+                uint32_t as4 = utils::read<uint32_t>(params + capPos + 2);
                 EXPECT_EQ(as4, 400000u);
                 found32bitAs = true;
             }
@@ -714,7 +714,7 @@ TEST_F(Internal_BgpTest, BgpTx_BuildOpen_MultiprotocolCapability_AfterEnableAf)
             if (code == BGP_CAPABILITY_MULTIPROTOCOL)
             {
                 ASSERT_EQ(len, 4);
-                uint16_t afi = utils::readU16(params + capPos + 2);
+                uint16_t afi = utils::read<uint16_t>(params + capPos + 2);
                 uint8_t safi = params[capPos + 5];
                 EXPECT_EQ(afi, BGP_AFI_IPV4);
                 EXPECT_EQ(safi, BGP_SAFI_UNICAST);
@@ -741,7 +741,7 @@ TEST_F(Internal_BgpTest, BgpTx_BuildKeepalive_Fixed19Bytes)
     const uint8_t* buf = pair.sinkB.bytes.data();
     for (int i = 0; i < 16; ++i)
         EXPECT_EQ(buf[i], 0xFF);
-    EXPECT_EQ(utils::readU16(buf + 16), 19u);
+    EXPECT_EQ(utils::read<uint16_t>(buf + 16), 19u);
     EXPECT_EQ(buf[18], BGP_TYPE_KEEPALIVE);
 }
 
@@ -759,10 +759,10 @@ TEST_F(Internal_BgpTest, BgpTx_BuildNotification_NoDataPayload)
 
     ASSERT_EQ(pair.sinkB.bytes.size(), packet::BgpHeader::fixedSize + 2u);
     const uint8_t* buf = pair.sinkB.bytes.data();
-    EXPECT_EQ(utils::readU16(buf + 16), packet::BgpHeader::fixedSize + 2u);
+    EXPECT_EQ(utils::read<uint16_t>(buf + 16), packet::BgpHeader::fixedSize + 2u);
     EXPECT_EQ(buf[18], BGP_TYPE_NOTIFICATION);
 
-    uint16_t code = utils::readU16(buf + packet::BgpHeader::fixedSize);
+    uint16_t code = utils::read<uint16_t>(buf + packet::BgpHeader::fixedSize);
     EXPECT_EQ(code, n.code);
     EXPECT_EQ((code >> 8) & 0xFF, BGP_NOTIFICATION_HOLD);
     EXPECT_EQ(code & 0xFF, 0u);
@@ -786,8 +786,8 @@ TEST_F(Internal_BgpTest, BgpTx_BuildNotification_WithDataPayload)
     EXPECT_EQ(buf[18], BGP_TYPE_NOTIFICATION);
 
     const uint8_t* notif = buf + packet::BgpHeader::fixedSize;
-    EXPECT_EQ((utils::readU16(notif) >> 8) & 0xFF, BGP_NOTIFICATION_OPEN);
-    EXPECT_EQ(utils::readU16(notif) & 0xFF, BGP_NOTIFICATION_OPEN_BAD_PEER_AS & 0xFF);
+    EXPECT_EQ((utils::read<uint16_t>(notif) >> 8) & 0xFF, BGP_NOTIFICATION_OPEN);
+    EXPECT_EQ(utils::read<uint16_t>(notif) & 0xFF, BGP_NOTIFICATION_OPEN_BAD_PEER_AS & 0xFF);
     for (size_t i = 0; i < n.data.size(); ++i)
         EXPECT_EQ(notif[2 + i], n.data[i]);
 }
@@ -828,7 +828,7 @@ TEST_F(Internal_BgpTest, BgpTx_BuildUpdate_WithdrawnOnly_LegacyIPv4)
     EXPECT_EQ(buf[18], BGP_TYPE_UPDATE);
 
     const uint8_t* body = buf + packet::BgpHeader::fixedSize;
-    uint16_t withdrawnLen = utils::readU16(body);
+    uint16_t withdrawnLen = utils::read<uint16_t>(body);
     EXPECT_EQ(withdrawnLen, 4u); // 1 length byte + 3 bytes for a /24
 
     EXPECT_EQ(body[2], 24); // prefix length
@@ -838,7 +838,7 @@ TEST_F(Internal_BgpTest, BgpTx_BuildUpdate_WithdrawnOnly_LegacyIPv4)
 
     // Total path attribute length field follows immediately, must be 0
     // (no announcements -> no attributes).
-    uint16_t attrLen = utils::readU16(body + 2 + withdrawnLen);
+    uint16_t attrLen = utils::read<uint16_t>(body + 2 + withdrawnLen);
     EXPECT_EQ(attrLen, 0u);
 }
 
@@ -874,11 +874,11 @@ TEST_F(Internal_BgpTest, BgpTx_BuildUpdate_FullAttributeSet_LegacyIPv4)
     EXPECT_EQ(buf[18], BGP_TYPE_UPDATE);
 
     const uint8_t* body = buf + packet::BgpHeader::fixedSize;
-    uint16_t withdrawnLen = utils::readU16(body);
+    uint16_t withdrawnLen = utils::read<uint16_t>(body);
     EXPECT_EQ(withdrawnLen, 0u);
 
     const uint8_t* attrsStart = body + 2;
-    uint16_t attrLen = utils::readU16(attrsStart);
+    uint16_t attrLen = utils::read<uint16_t>(attrsStart);
     ASSERT_GT(attrLen, 0u);
 
     const uint8_t* a = attrsStart + 2;
@@ -898,27 +898,27 @@ TEST_F(Internal_BgpTest, BgpTx_BuildUpdate_FullAttributeSet_LegacyIPv4)
     const uint8_t* asPathVal = a + pos + 3;
     EXPECT_EQ(asPathVal[0], BGP_AS_SEQUENCE);
     EXPECT_EQ(asPathVal[1], 2u); // segment count
-    EXPECT_EQ(utils::readU16(asPathVal + 2), 65010u);
-    EXPECT_EQ(utils::readU16(asPathVal + 4), 65020u);
+    EXPECT_EQ(utils::read<uint16_t>(asPathVal + 2), 65010u);
+    EXPECT_EQ(utils::read<uint16_t>(asPathVal + 4), 65020u);
     pos += 3 + asPathLen;
 
     // NEXT_HOP
     EXPECT_EQ(a[pos + 1], BGP_ATTR_NEXT_HOP);
     uint8_t nhLen = a[pos + 2];
     EXPECT_EQ(nhLen, 4u);
-    EXPECT_EQ(utils::readU32(a + pos + 3), 0x0A0000FEu);
+    EXPECT_EQ(utils::read<uint32_t>(a + pos + 3), 0x0A0000FEu);
     pos += 3 + nhLen;
 
     // MULTI_EXIT_DISC (MED)
     EXPECT_EQ(a[pos + 1], BGP_ATTR_MULTI_EXIT_DISC);
     EXPECT_EQ(a[pos + 2], 4u);
-    EXPECT_EQ(utils::readU32(a + pos + 3), 50u);
+    EXPECT_EQ(utils::read<uint32_t>(a + pos + 3), 50u);
     pos += 3 + 4;
 
     if (a[pos + 1] == BGP_ATTR_LOCAL_PREF)
     {
         EXPECT_EQ(a[pos + 2], 4u);
-        EXPECT_EQ(utils::readU32(a + pos + 3), 200u);
+        EXPECT_EQ(utils::read<uint32_t>(a + pos + 3), 200u);
         pos += 3 + 4;
     }
 
@@ -964,7 +964,7 @@ TEST_F(Internal_BgpTest, BgpTx_BuildUpdate_AsSetAndConfedSegments)
 
     const uint8_t* buf = pair.sinkB.bytes.data();
     const uint8_t* body = buf + packet::BgpHeader::fixedSize;
-    uint16_t withdrawnLen = utils::readU16(body);
+    uint16_t withdrawnLen = utils::read<uint16_t>(body);
     const uint8_t* attrsStart = body + 2 + withdrawnLen;
     const uint8_t* a = attrsStart + 2;
 
@@ -981,18 +981,18 @@ TEST_F(Internal_BgpTest, BgpTx_BuildUpdate_AsSetAndConfedSegments)
 
     EXPECT_EQ(asPathVal[p], BGP_AS_CONFED_SEQUENCE);
     EXPECT_EQ(asPathVal[p + 1], 1u);
-    EXPECT_EQ(utils::readU16(asPathVal + p + 2), 64512u);
+    EXPECT_EQ(utils::read<uint16_t>(asPathVal + p + 2), 64512u);
     p += 2 + 2 * 1;
 
     EXPECT_EQ(asPathVal[p], BGP_AS_SEQUENCE);
     EXPECT_EQ(asPathVal[p + 1], 1u);
-    EXPECT_EQ(utils::readU16(asPathVal + p + 2), 65010u);
+    EXPECT_EQ(utils::read<uint16_t>(asPathVal + p + 2), 65010u);
     p += 2 + 2 * 1;
 
     EXPECT_EQ(asPathVal[p], BGP_AS_SET);
     EXPECT_EQ(asPathVal[p + 1], 2u);
-    EXPECT_EQ(utils::readU16(asPathVal + p + 2), 65020u);
-    EXPECT_EQ(utils::readU16(asPathVal + p + 4), 65021u);
+    EXPECT_EQ(utils::read<uint16_t>(asPathVal + p + 2), 65020u);
+    EXPECT_EQ(utils::read<uint16_t>(asPathVal + p + 4), 65021u);
     p += 2 + 2 * 2;
 }
 
@@ -1022,9 +1022,9 @@ TEST_F(Internal_BgpTest, BgpTx_BuildUpdate_AggregatorTwoByteAs)
 
     const uint8_t* buf = pair.sinkB.bytes.data();
     const uint8_t* body = buf + packet::BgpHeader::fixedSize;
-    uint16_t withdrawnLen = utils::readU16(body);
+    uint16_t withdrawnLen = utils::read<uint16_t>(body);
     const uint8_t* attrsStart = body + 2 + withdrawnLen;
-    uint16_t attrLen = utils::readU16(attrsStart);
+    uint16_t attrLen = utils::read<uint16_t>(attrsStart);
     const uint8_t* a = attrsStart + 2;
 
     // Find AGGREGATOR attribute by scanning.
@@ -1036,14 +1036,14 @@ TEST_F(Internal_BgpTest, BgpTx_BuildUpdate_AggregatorTwoByteAs)
         uint8_t type = a[pos + 1];
         bool extLen = (flags & BGP_ATTR_FLAG_EXTENDED_LENGTH) != 0;
         size_t hdr = extLen ? 4 : 3;
-        size_t len = extLen ? utils::readU16(a + pos + 2) : a[pos + 2];
+        size_t len = extLen ? utils::read<uint16_t>(a + pos + 2) : a[pos + 2];
 
         if (type == BGP_ATTR_AGGREGATOR)
         {
             // 2-byte AS aggregator: 2-byte ASN + 4-byte address = 6 bytes.
             EXPECT_EQ(len, 6u);
-            EXPECT_EQ(utils::readU16(a + pos + hdr), 65010u);
-            EXPECT_EQ(utils::readU32(a + pos + hdr + 2), 0x0A0000FEu);
+            EXPECT_EQ(utils::read<uint16_t>(a + pos + hdr), 65010u);
+            EXPECT_EQ(utils::read<uint32_t>(a + pos + hdr + 2), 0x0A0000FEu);
             foundAggregator = true;
         }
         pos += hdr + len;
@@ -1181,7 +1181,7 @@ TEST_F(Internal_BgpTest, BgpTx_BuildRouteRefresh_BasicNormal)
     EXPECT_EQ(buf[18], BGP_TYPE_ROUTE_REFRESH);
 
     const uint8_t* body = buf + packet::BgpHeader::fixedSize;
-    EXPECT_EQ(utils::readU16(body), BGP_AFI_IPV6);
+    EXPECT_EQ(utils::read<uint16_t>(body), BGP_AFI_IPV6);
     EXPECT_EQ(body[2], BGP_ROUTE_REFRESH_NORMAL);
     EXPECT_EQ(body[3], BGP_SAFI_UNICAST);
 }

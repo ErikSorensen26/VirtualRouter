@@ -1,0 +1,151 @@
+
+#pragma once
+
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct XXH3Fast128 {
+    uint64_t low64;
+    uint64_t high64;
+} XXH3Fast128;
+
+/*
+ * One-shot XXH3-64.
+ */
+uint64_t xxh3_fast_64(const void* data, size_t len);
+
+/*
+ * One-shot XXH128.
+ */
+XXH3Fast128 xxh3_fast_128(const void* data, size_t len);
+
+/*
+ * Seeded variants.
+ */
+uint64_t xxh3_fast_64_seed(
+    const void* data,
+    size_t len,
+    uint64_t seed);
+
+XXH3Fast128 xxh3_fast_128_seed(
+    const void* data,
+    size_t len,
+    uint64_t seed);
+
+/*
+ * Batch hashing.
+ *
+ * inputs[i] may be NULL only when sizes[i] == 0.
+ */
+void xxh3_fast_64_batch(
+    const void* const* inputs,
+    const size_t* sizes,
+    uint64_t* hashes,
+    size_t count);
+
+void xxh3_fast_128_batch(
+    const void* const* inputs,
+    const size_t* sizes,
+    XXH3Fast128* hashes,
+    size_t count);
+
+#ifdef __cplusplus
+}
+#endif
+
+
+
+#include "xxh3_fast.h"
+
+#include "xxhash.h"
+
+#include <stddef.h>
+#include <stdint.h>
+
+#if defined(_MSC_VER)
+#   define XXH3FAST_FORCE_INLINE __forceinline
+#elif defined(__GNUC__) || defined(__clang__)
+#   define XXH3FAST_FORCE_INLINE inline __attribute__((always_inline))
+#else
+#   define XXH3FAST_FORCE_INLINE inline
+#endif
+
+static XXH3FAST_FORCE_INLINE
+XXH3Fast128 convert128(XXH128_hash_t h)
+{
+    XXH3Fast128 r;
+    r.low64  = h.low64;
+    r.high64 = h.high64;
+    return r;
+}
+
+extern "C"
+uint64_t xxh3_fast_64(const void* data, size_t len)
+{
+    return XXH3_64bits(data, len);
+}
+
+extern "C"
+XXH3Fast128 xxh3_fast_128(const void* data, size_t len)
+{
+    return convert128(XXH3_128bits(data, len));
+}
+
+extern "C"
+uint64_t xxh3_fast_64_seed(
+    const void* data,
+    size_t len,
+    uint64_t seed)
+{
+    return XXH3_64bits_withSeed(data, len, seed);
+}
+
+extern "C"
+XXH3Fast128 xxh3_fast_128_seed(
+    const void* data,
+    size_t len,
+    uint64_t seed)
+{
+    return convert128(
+        XXH3_128bits_withSeed(data, len, seed)
+    );
+}
+
+extern "C"
+void xxh3_fast_64_batch(
+    const void* const* inputs,
+    const size_t* sizes,
+    uint64_t* hashes,
+    size_t count)
+{
+    /*
+     * Keep this loop extremely simple.
+     *
+     * The individual XXH3 calls are already highly optimized,
+     * while the compiler can unroll this outer loop when count
+     * is known or small.
+     */
+    for (size_t i = 0; i < count; ++i) {
+        hashes[i] = XXH3_64bits(inputs[i], sizes[i]);
+    }
+}
+
+extern "C"
+void xxh3_fast_128_batch(
+    const void* const* inputs,
+    const size_t* sizes,
+    XXH3Fast128* hashes,
+    size_t count)
+{
+    for (size_t i = 0; i < count; ++i) {
+        const XXH128_hash_t h =
+            XXH3_128bits(inputs[i], sizes[i]);
+
+        hashes[i].low64  = h.low64;
+        hashes[i].high64 = h.high64;
+    }
+}

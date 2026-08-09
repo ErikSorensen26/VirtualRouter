@@ -257,7 +257,7 @@ void appendNlri(std::span<const NlriPath<typename N::Nlri>> nlri, bool addPath, 
         const size_t entrySize = (addPath ? 4u : 0u) + N::nlriEncodedSize(n.nlri);
         std::span<uint8_t> buf = c.reserveSpan(entrySize);
         if (addPath)
-            utils::writeU32(buf.data(), n.pathId);
+            utils::write<uint32_t>(buf.data(), n.pathId);
         N::encodeNlri(buf.data() + (addPath ? 4 : 0), n.nlri);
         c.commit(entrySize);
     }
@@ -294,7 +294,7 @@ size_t BgpTx::appendMpReach(const Session& session, size_t& attrSize, size_t nlr
         // AFI + SAFI
         {
             auto buf = c.reserveSpan(3);
-            utils::writeU16(buf.data(), N::afi.afi);
+            utils::write<uint16_t>(buf.data(), N::afi.afi);
             buf[2] = N::afi.safi;
             c.commit(3);
         }
@@ -349,7 +349,7 @@ size_t BgpTx::appendMpUnreach(const Session& session, size_t& attrSize, size_t w
 
     {
         auto buf = c.reserveSpan(3);
-        utils::writeU16(buf.data(), mp.family.afi);
+        utils::write<uint16_t>(buf.data(), mp.family.afi);
         buf[2] = mp.family.safi;
         c.commit(3);
     }
@@ -413,8 +413,8 @@ void BgpTx::buildUpdate(transport::tcp::Connection& connection, Session& session
                 }
 
                 buildHeader(BGP_TYPE_UPDATE, static_cast<uint16_t>(4 + attrBytes), hdrBuf.data());
-                utils::writeU16(wdLenBuf.data(), 0);
-                utils::writeU16(attrLenBuf.data(), static_cast<uint16_t>(attrBytes));
+                utils::write<uint16_t>(wdLenBuf.data(), 0);
+                utils::write<uint16_t>(attrLenBuf.data(), static_cast<uint16_t>(attrBytes));
             }
             else
             {
@@ -445,8 +445,8 @@ void BgpTx::buildUpdate(transport::tcp::Connection& connection, Session& session
                 nlriIdx += nlriEntries;
 
                 buildHeader(BGP_TYPE_UPDATE, static_cast<uint16_t>(4 + wdBytes + attrBytes + nlriBytes), hdrBuf.data());
-                utils::writeU16(wdLenBuf.data(), static_cast<uint16_t>(wdBytes));
-                utils::writeU16(attrLenBuf.data(), static_cast<uint16_t>(attrBytes));
+                utils::write<uint16_t>(wdLenBuf.data(), static_cast<uint16_t>(wdBytes));
+                utils::write<uint16_t>(attrLenBuf.data(), static_cast<uint16_t>(attrBytes));
             }
         }
     }
@@ -472,8 +472,8 @@ void BgpTx::buildUpdate(transport::tcp::Connection& connection, Session& session
             withdrawIdx += withdrawnAdded;
 
             buildHeader(BGP_TYPE_UPDATE, static_cast<uint16_t>(4 + attrBytes), hdrBuf.data());
-            utils::writeU16(wdLenBuf.data(), 0);
-            utils::writeU16(attrLenBuf.data(), static_cast<uint16_t>(attrBytes));
+            utils::write<uint16_t>(wdLenBuf.data(), 0);
+            utils::write<uint16_t>(attrLenBuf.data(), static_cast<uint16_t>(attrBytes));
         }
         else
         {
@@ -490,8 +490,8 @@ void BgpTx::buildUpdate(transport::tcp::Connection& connection, Session& session
             connection.commit(2);
 
             buildHeader(BGP_TYPE_UPDATE, static_cast<uint16_t>(4 + wdBytes), hdrBuf.data());
-            utils::writeU16(wdLenBuf.data(), static_cast<uint16_t>(wdBytes));
-            utils::writeU16(attrLenBuf.data(), 0);
+            utils::write<uint16_t>(wdLenBuf.data(), static_cast<uint16_t>(wdBytes));
+            utils::write<uint16_t>(attrLenBuf.data(), 0);
         }
     }
 }

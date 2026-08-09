@@ -26,7 +26,7 @@ static bool verifyOspfFletcher(const uint8_t* lsa, uint16_t len)
     check.addBytes(lsa + 2, 14);   // type..seqNum (LSA offset 2..15)
     check.addU16(0);               // checksum field (LSA offset 16..17), treated as zero
     check.addBytes(lsa + 18, len - 18); // length..end of body (LSA offset 18..len-1)
-    return check.finalize() == utils::readU16(lsa + 16);
+    return check.finalize() == utils::read<uint16_t>(lsa + 16);
 }
 
 void PacketDispatcherV3::handleIncoming(const packet::Ospfv3Header& ospfHeader, const uint8_t* neighborIp, bool multicast)
@@ -156,7 +156,7 @@ void PacketDispatcherV3::processHello(PacketDispatcher::HeaderInfo& info, bool u
         bool ridFound = false;
         for (size_t i = 0; i < listSize; i += 4)
         {
-            if (utils::readU32(neighborList + i) == iface.area.process.getRouterId())
+            if (utils::read<uint32_t>(neighborList + i) == iface.area.process.getRouterId())
             {
                 ridFound = true;
                 break;
@@ -397,7 +397,7 @@ void PacketDispatcherV3::processLSUpdate(PacketDispatcher::HeaderInfo& info)
     if (info.neighbor->getState() < Neighbor::State::EXCHANGE)
         return;
 
-    uint32_t lsuSize = utils::readU32(info.payload);
+    uint32_t lsuSize = utils::read<uint32_t>(info.payload);
     uint32_t routerId = iface.area.process.getRouterId();
 
     info.offset += 4;
@@ -476,7 +476,7 @@ void PacketDispatcherV3::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
         return;
 
     // RFC 5613 SS2.2: the LLS length field is a count of 32-bit words, not bytes.
-    uint16_t llsLen = static_cast<uint16_t>(utils::readU16(llsBase + 2) * 4);
+    uint16_t llsLen = static_cast<uint16_t>(utils::read<uint16_t>(llsBase + 2) * 4);
     if (llsLen < 4 || info.offset + llsLen > info.packetSize)
         return;
 
@@ -488,15 +488,15 @@ void PacketDispatcherV3::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
         if (size != 4 || offset + 4 > llsLen) 
             return false;
 
-        extension = utils::readU32(llsBase + offset);
+        extension = utils::read<uint32_t>(llsBase + offset);
         offset += 4;
         return true;
     };
 
     while (offset + 4 < llsLen)
     {
-        uint16_t type = utils::readU16(llsBase + offset);
-        uint16_t size = utils::readU16(llsBase + offset + 2);
+        uint16_t type = utils::read<uint16_t>(llsBase + offset);
+        uint16_t size = utils::read<uint16_t>(llsBase + offset + 2);
         offset += 4;
 
         switch (type)
@@ -515,7 +515,7 @@ void PacketDispatcherV3::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
 
     ChecksumFletcher check;
     check.addBytes(llsBase + 2, llsLen - 2);
-    if (check.finalize() != utils::readU16(llsBase))
+    if (check.finalize() != utils::read<uint16_t>(llsBase))
         return;
 
     if (getLlsOption(extension, LlsOptions::RESYNC) && info.neighbor)

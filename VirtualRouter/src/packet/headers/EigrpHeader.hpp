@@ -101,10 +101,10 @@ struct EigrpHeader
 
     uint8_t getVersion() const             { return raw->version; }
     uint8_t getOpcode() const              { return raw->opcode; }
-    uint32_t getSequence() const           { return utils::readU32(raw->sequence); }
-    uint32_t getAck() const                { return utils::readU32(raw->ack); }
-    uint16_t getVirtualRouterID() const    { return utils::readU16(raw->virtualRouterId); }
-    uint16_t getAutonomousSystem() const   { return utils::readU16(raw->autonomousSystem); }
+    uint32_t getSequence() const           { return utils::read<uint32_t>(raw->sequence); }
+    uint32_t getAck() const                { return utils::read<uint32_t>(raw->ack); }
+    uint16_t getVirtualRouterID() const    { return utils::read<uint16_t>(raw->virtualRouterId); }
+    uint16_t getAutonomousSystem() const   { return utils::read<uint16_t>(raw->autonomousSystem); }
 
     bool getFlagInit() const               { return raw->flags[3] & 0x01; }
     bool getFlagCondRecv() const           { return raw->flags[3] & 0x02; }
@@ -116,13 +116,13 @@ struct EigrpHeader
     void setOpcode(uint8_t val) 
         { raw->opcode = val; }
     void setSequence(uint32_t val) 
-        { utils::writeU32(raw->sequence, val); }
+        { utils::write<uint32_t>(raw->sequence, val); }
     void setAck(uint32_t val)
-        { utils::writeU32(raw->ack, val); }
+        { utils::write<uint32_t>(raw->ack, val); }
     void setVirtualRouterId(uint16_t val)
-        { utils::writeU16(raw->virtualRouterId, val); }
+        { utils::write<uint16_t>(raw->virtualRouterId, val); }
     void setAutonomousSystem(uint16_t val)
-        { utils::writeU16(raw->autonomousSystem, val); }
+        { utils::write<uint16_t>(raw->autonomousSystem, val); }
 
     void setFlagInit(bool val)
         { utils::setBit(raw->flags, 31, val); }
@@ -139,8 +139,8 @@ struct EigrpHeader
     size_t offset = 0;
     while (offset + 4 <= size)
     {
-        const uint16_t type = utils::readU16(data + offset);
-        const uint16_t length = utils::readU16(data + offset + 2);
+        const uint16_t type = utils::read<uint16_t>(data + offset);
+        const uint16_t length = utils::read<uint16_t>(data + offset + 2);
         if (length < 4 || offset + length > size) return false;
 
         uint8_t* value = const_cast<uint8_t*>(data) + offset + 4;

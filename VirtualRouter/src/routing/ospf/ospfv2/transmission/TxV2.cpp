@@ -50,7 +50,7 @@ void PacketDispatcherV2::finalizeHeader(packet::Ospfv2Header& hdr, OspfBuilder& 
 
             // Add auth
             uint8_t secret[16] = {};
-            utils::writeU128(secret, key.value());
+            utils::write<__uint128_t>(secret, key.value());
             if (!buildOspfCryptoAuthentication(builder, hdr, seq, id.value(), secret))
                 return;
 
@@ -312,7 +312,7 @@ std::optional<processing::PacketBuilder> PacketDispatcherV2::buildLSUpdate(Neigh
     builder.offset += 2;
 
     auto updSent = addLSUpdates(builder, nbr);
-    utils::writeU16(trail, static_cast<uint16_t>(updSent));
+    utils::write<uint16_t>(trail, static_cast<uint16_t>(updSent));
     if (updSent == 0)
         return std::nullopt;
 
@@ -540,11 +540,11 @@ bool PacketDispatcherV2::buildLLSAuthentication(OspfBuilder& info, uint16_t llsS
     uint8_t* auth = info.getBuf();
 
     // Total LLS Data Block length, in 32-bit words, including this Auth TLV.
-    utils::writeU16(llsBase + 2, (llsSize + 24) / 4);
+    utils::write<uint16_t>(llsBase + 2, (llsSize + 24) / 4);
 
-    utils::writeU16(auth, 0x0002);
-    utils::writeU16(auth + 2, 0x0014);
-    utils::writeU32(auth + 4, seq);
+    utils::write<uint16_t>(auth, 0x0002);
+    utils::write<uint16_t>(auth + 2, 0x0014);
+    utils::write<uint32_t>(auth + 4, seq);
 
     security::authentication::generateHMAC(auth + 8, llsBase, llsSize + 8, secret, 16, security::authentication::HmacType::MD5);
 
@@ -556,7 +556,7 @@ void PacketDispatcherV2::buildOspfSimpleAuthentication(packet::Ospfv2Header& hdr
 {
     hdr.setAuthType(static_cast<uint16_t>(config::ospf::AuthType::SIMPLE));
     uint8_t* auth = hdr.getAuthentication();
-    utils::writeU64(auth, secret);
+    utils::write<uint64_t>(auth, secret);
 }
 
 bool PacketDispatcherV2::buildOspfCryptoAuthentication(OspfBuilder& info, packet::Ospfv2Header& hdr, uint32_t seq, uint8_t id, uint8_t* secret)
@@ -564,10 +564,10 @@ bool PacketDispatcherV2::buildOspfCryptoAuthentication(OspfBuilder& info, packet
     hdr.setAuthType(static_cast<uint16_t>(config::ospf::AuthType::CRYPTO));
     if (info.offset + 16 > info.maxSize) return false;
     uint8_t* auth = hdr.getAuthentication();
-    utils::writeU16(auth, 0);
+    utils::write<uint16_t>(auth, 0);
     auth[2] = id;
     auth[3] = 0x10;
-    utils::writeU32(auth + 4, seq);
+    utils::write<uint32_t>(auth + 4, seq);
 
     uint16_t packetLen = static_cast<uint16_t>(info.offset + packet::Ospfv2Header::fixedSize);
     security::authentication::generateHMAC(hdr.buffer + packetLen, hdr.buffer, packetLen, secret, 16, security::authentication::HmacType::MD5);
