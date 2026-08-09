@@ -66,8 +66,8 @@
     X(Bgp) \
     X(Interface) \
     X(OspfArea) \
-    X(Ospf) \
-    X(Ospfv3AddressFamily)
+    X(OspfIPsec) \
+    X(Ospf)
 
 namespace config
 {

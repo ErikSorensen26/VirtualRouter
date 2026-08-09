@@ -49,7 +49,6 @@
     X(RouterEigrpClassicV6,             "(config-rtr)#", "eigrp_classic") \
     X(RouterEigrpAddressFamilyV4,       "(config-router-af)#", "eigrp-ipv4") \
     X(RouterEigrpAddressFamilyV6,       "(config-router-af)#", "eigrp-ipv6") \
-    X(RouterEigrpClassicVRF,            "(config-router-af)#", "eigrp-vrf") \
     X(RouterEigrpInterfaceV4,           "(config-router-af-interface)#", "eigrp-ipv4") \
     X(RouterEigrpInterfaceV6,           "(config-router-af-interface)#", "eigrp-ipv6") \
     X(RouterEigrpTopologyV4,            "(config-router-af-topology)#", "eigrp-ipv4") \
@@ -57,8 +56,6 @@
 /*Ospf*/ \
     X(RouterOspf,                       "(config-router)#", "ospf") \
     X(RouterOspfv3,                     "(config-router)#", "ospfv3") \
-    X(RouterOspfv6,                     "(config-rtr)#", "ospfv6") \
-    X(RouterOspfAddressFamily,          "(config-router-af)#", "ospf-af") \
     X(RouterOspfAddressFamilyV4,        "(config-router-af)#", "ospf-ipv4") \
     X(RouterOspfAddressFamilyV6,        "(config-router-af)#", "ospf-ipv6") \
     X(RouterOspfTopologyV4,             "(config-router-af-topology)#", "ospf-ipv4") \

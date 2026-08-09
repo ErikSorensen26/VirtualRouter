@@ -31,6 +31,8 @@ constexpr std::string_view KEY_ENUM        = "enum";
 constexpr std::string_view KEY_ARGS        = "args";
 constexpr std::string_view KEY_DEFERRED    = "deferred";
 constexpr std::string_view KEY_RESOLVER    = "resolver";
+/// @brief CSV of sibling names this `recurse_exclude` member drops from the re-offer.
+constexpr std::string_view KEY_RECURSE_EXCLUDE = "recurse_exclude";
 
 /// @brief Marks a value that names an argument rather than being one.
 constexpr char ARG_SIGIL = '$';
@@ -49,7 +51,7 @@ constexpr std::string_view KEY_VARIABLES   = "VARIABLES";
 constexpr std::string_view COMMAND_KEYS[] = {
     KEY_NAME, KEY_DESCRIPTION, KEY_SUBCOMMANDS, KEY_PROPERTIES,
     KEY_SUPPORT, KEY_CONFIG, KEY_ENUM, KEY_MODE, KEY_ARGS,
-    KEY_DEFERRED, KEY_RESOLVER,
+    KEY_DEFERRED, KEY_RESOLVER, KEY_RECURSE_EXCLUDE,
 };
 
 // Keys of a per-mode grammar file. Each file is one mode: its prompt, the

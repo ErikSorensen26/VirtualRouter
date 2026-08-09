@@ -628,32 +628,39 @@ void setOwnedField(T& field, cli::ContextBase& ctx, typename T::Field::key& key,
  * @brief Builds an owned-list key from the tokens that carry it.
  *
  * Some keys span two tokens -- an InterfaceKey is the type and the number,
- * as in `interface Vlan 10` -- and the single-token translation rejects those
- * outright rather than partially, so the arity is decided from the key type
- * rather than from how many tokens the line happened to carry.
+ * as in `interface GigabitEthernet 1` -- and the single-token translation
+ * rejects those outright rather than partially, so the arity is decided from
+ * the key type rather than from how many tokens the line happened to carry.
  *
- * The key tokens are the pattern tokens: the field token is the keyword that
- * named the binding, and the values that follow are what identifies which
- * instance of it.
+ * @p last is the pattern token that carries the value, same as the
+ * single-token case -- `1` here. A double-keyed type also needs @p prev, but
+ * that half is a literal keyword (`GigabitEthernet`), not a placeholder, so
+ * it is P_NONE and would never be found by scanning for another pattern
+ * token; it is simply whatever token sits right before @p last instead.
  */
 template <typename Key>
 bool resolveKey(std::span<Token*> toks, Key& key)
 {
     Token* last = nullptr;
-    Token* prev = nullptr;
-    for (auto it = toks.rbegin(); it != toks.rend(); ++it)
+    size_t lastPos = 0;
+    for (size_t idx = toks.size(); idx > 0; --idx)
     {
-        if (!(*it) || (*it)->pattern == P_NONE) continue;
-        if (!last)      last = *it;
-        else if (!prev) prev = *it;
-        else            break;
+        Token* t = toks[idx - 1];
+        if (!t || t->pattern == P_NONE) continue;
+        last = t;
+        lastPos = idx - 1;
+        break;
     }
 
     if (!last) return false;
 
     if constexpr (DoubleKeyed<Key>)
     {
+        if (lastPos == 0) return false;
+
+        Token* prev = toks[lastPos - 1];
         if (!prev) return false;
+
         return utils::translateDoubleValue(key, *prev, *last);
     }
     else

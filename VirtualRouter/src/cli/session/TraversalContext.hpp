@@ -108,6 +108,7 @@ struct TraversalContext
         uint64_t used = 0;          // Bit per consumed sibling.
         bool excludeAll = false;    // A `recurse_exclude_all` member was used: no more offers.
         bool showAll = false;       // A `recurse_show_all` member was used: `recurse_hide` is waived.
+        std::vector<std::string_view> excludedNames; // Named by `recurse_exclude` members used so far.
     };
     std::vector<RepeatFrame> repeatStack;
 
@@ -441,16 +442,40 @@ private:
     }
 
     /**
+     * @brief Splits a `recurse_exclude` payload on commas into bare names.
+     *
+     * No trimming beyond the split: a grammar author who writes "a, b" gets a
+     * name with a leading space that will never match a sibling, silently --
+     * the CSV is written by hand right beside the sibling names it must match,
+     * so a strict split makes a typo visible instead of forgiving it.
+     */
+    static void appendExcludedNames(std::vector<std::string_view>& out, std::string_view csv)
+    {
+        size_t start = 0;
+        while (start <= csv.size())
+        {
+            size_t comma = csv.find(',', start);
+            size_t end = (comma == std::string_view::npos) ? csv.size() : comma;
+            if (end > start) out.push_back(csv.substr(start, end - start));
+            if (comma == std::string_view::npos) break;
+            start = comma + 1;
+        }
+    }
+
+    /**
      * @brief Folds a just-used member's `recurse_*` properties into its frame.
      *
      * `recurse_exclude_all` and `recurse_show_all` are one-way switches for the
      * rest of the line: once a member carrying either is used, the frame stays
-     * that way regardless of what else follows.
+     * that way regardless of what else follows. `recurse_exclude` instead
+     * accumulates: every used member's named siblings add to the drop set,
+     * they never remove from it.
      */
     static void applyRecurseFlags(RepeatFrame& f, const tree::Command& child)
     {
         if (child.hasProp(tree::CommandNode::RECURSE_EXCLUDE_ALL)) f.excludeAll = true;
         if (child.hasProp(tree::CommandNode::RECURSE_SHOW_ALL)) f.showAll = true;
+        if (child.node().hasRecurseExclude()) appendExcludedNames(f.excludedNames, child.recurseExcludeCsv());
     }
 
 public:
@@ -496,6 +521,14 @@ public:
 
             if (!used && f.used != 0 && !f.showAll
                 && child.hasProp(tree::CommandNode::RECURSE_HIDE)) continue;
+
+            if (!used && !f.excludedNames.empty())
+            {
+                bool excluded = false;
+                for (std::string_view n : f.excludedNames)
+                    if (n == child.name()) { excluded = true; break; }
+                if (excluded) continue;
+            }
 
             out.push_back(child);
         }

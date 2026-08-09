@@ -893,13 +893,13 @@ TEST_F(Internal_CliTreeTest, EachMemberGetsItsOwnValue)
         { "name": "normal", "description": "",
           "config": "OspfArea::AREA_TYPE", "enum": "AreaType::NORMAL" },
         { "name": "nssa", "description": "",
-          "config": "OspfArea::AREA_TYPE", "enum": "AreaType::TOTALLY_NSSA" }
+          "config": "OspfArea::AREA_TYPE", "enum": "AreaType::NSSA" }
     ])");
 
     EXPECT_EQ(commandAt(t, 0).node().configExt,
               static_cast<uint8_t>(config::ospf::AreaType::NORMAL));
     EXPECT_EQ(commandAt(t, 1).node().configExt,
-              static_cast<uint8_t>(config::ospf::AreaType::TOTALLY_NSSA));
+              static_cast<uint8_t>(config::ospf::AreaType::NSSA));
 }
 
 // Several commands set the same enum field to different members, which is the
@@ -1559,7 +1559,7 @@ TEST_F(Internal_CliTreeTest, BindingAContainerRescopesImplicitly)
 TEST_F(Internal_CliTreeTest, BindingAValueFieldDoesNotRescope)
 {
     CommandTree t = buildCommands(R"([
-        { "name": "x", "description": "", "config": "Ospf::PRIORITY" }
+        { "name": "x", "description": "", "config": "Ospf::REFERENCE_BANDWIDTH" }
     ])");
 
     EXPECT_FALSE(commandAt(t, 0).node().hasRegistryChange());
@@ -1613,7 +1613,7 @@ TEST_F(Internal_CliTreeTest, ADescendantOfAnotherRegistryIsRejected)
     EXPECT_THROW(buildCommands(R"([
         { "name": "area", "description": "", "config": "Ospf::AREA_CONFIGS",
           "subcommands": [
-            { "name": "priority", "description": "", "config": "Ospf::PRIORITY" }
+            { "name": "priority", "description": "", "config": "Ospf::REFERENCE_BANDWIDTH" }
           ] }
     ])"), std::runtime_error);
 }
@@ -1699,7 +1699,7 @@ TEST_F(Internal_CliTreeTest, DeferredKeepsItsFieldAndCarriesTheKey)
 {
     CommandTree t = buildCommands(R"([
         { "name": "cost", "description": "",
-          "config": "Ospf::PRIORITY", "deferred": "auto_cost" },
+          "config": "Ospf::REFERENCE_BANDWIDTH", "deferred": "auto_cost" },
         { "name": "compute", "description": "", "resolver": "auto_cost" }
     ])");
 
@@ -1708,7 +1708,7 @@ TEST_F(Internal_CliTreeTest, DeferredKeepsItsFieldAndCarriesTheKey)
     ASSERT_TRUE(d.hasDeferred());
     EXPECT_FALSE(d.hasResolver());
     ASSERT_TRUE(d.hasConfig());
-    EXPECT_EQ(d.enumIndex(), static_cast<uint16_t>(config::Ospf::PRIORITY));
+    EXPECT_EQ(d.enumIndex(), static_cast<uint16_t>(config::Ospf::REFERENCE_BANDWIDTH));
 }
 
 // The id is a position in the flattener's table, not a hash of the name, so the
@@ -1717,7 +1717,7 @@ TEST_F(Internal_CliTreeTest, OneKeyNumbersTheSameOnBothSides)
 {
     CommandTree t = buildCommands(R"([
         { "name": "cost", "description": "",
-          "config": "Ospf::PRIORITY", "deferred": "auto_cost" },
+          "config": "Ospf::REFERENCE_BANDWIDTH", "deferred": "auto_cost" },
         { "name": "compute", "description": "", "resolver": "auto_cost" }
     ])");
 
@@ -1734,7 +1734,7 @@ TEST_F(Internal_CliTreeTest, DistinctKeysGetDistinctIds)
 {
     CommandTree t = buildCommands(R"([
         { "name": "a", "description": "",
-          "config": "Ospf::PRIORITY", "deferred": "key_a" },
+          "config": "Ospf::REFERENCE_BANDWIDTH", "deferred": "key_a" },
         { "name": "ra", "description": "", "resolver": "key_a" },
         { "name": "b", "description": "",
           "config": "Ospf::SHUTDOWN", "deferred": "key_b" },
@@ -1753,9 +1753,9 @@ TEST_F(Internal_CliTreeTest, SeveralDeferredCommandsMayShareOneField)
 {
     CommandTree t = buildCommands(R"([
         { "name": "a", "description": "",
-          "config": "Ospf::PRIORITY", "deferred": "key_a" },
+          "config": "Ospf::REFERENCE_BANDWIDTH", "deferred": "key_a" },
         { "name": "b", "description": "",
-          "config": "Ospf::PRIORITY", "deferred": "key_b" },
+          "config": "Ospf::REFERENCE_BANDWIDTH", "deferred": "key_b" },
         { "name": "ra", "description": "", "resolver": "key_a" },
         { "name": "rb", "description": "", "resolver": "key_b" }
     ])");
@@ -1777,7 +1777,7 @@ TEST_F(Internal_CliTreeTest, ADeferredKeyNothingResolvesIsRejected)
 {
     EXPECT_THROW(buildCommands(R"([
         { "name": "x", "description": "",
-          "config": "Ospf::PRIORITY", "deferred": "auto_cost" }
+          "config": "Ospf::REFERENCE_BANDWIDTH", "deferred": "auto_cost" }
     ])"), std::runtime_error);
 }
 
@@ -1792,36 +1792,50 @@ TEST_F(Internal_CliTreeTest, AMisspelledKeyPairsWithNothing)
 {
     EXPECT_THROW(buildCommands(R"([
         { "name": "x", "description": "",
-          "config": "Ospf::PRIORITY", "deferred": "auto_cost" },
+          "config": "Ospf::REFERENCE_BANDWIDTH", "deferred": "auto_cost" },
         { "name": "r", "description": "", "resolver": "auto_cst" }
     ])"), std::runtime_error);
 }
 
-// configExt holds one value, so every other claim on it conflicts.
+// deferKeyId holds one key, so a node cannot be both halves of one pairing.
 TEST_F(Internal_CliTreeTest, DeferredAndResolverOnOneCommandIsRejected)
 {
     EXPECT_THROW(buildCommands(R"([
-        { "name": "x", "description": "", "config": "Ospf::PRIORITY",
+        { "name": "x", "description": "", "config": "Ospf::REFERENCE_BANDWIDTH",
           "deferred": "a", "resolver": "b" }
     ])"), std::runtime_error);
 }
 
-TEST_F(Internal_CliTreeTest, DeferredAlongsideAnEnumMemberIsRejected)
+// deferKeyId lives apart from configExt now, so a deferral no longer competes
+// with an enum member for the same byte -- both are accepted on one node.
+TEST_F(Internal_CliTreeTest, DeferredAlongsideAnEnumMemberIsAccepted)
 {
-    EXPECT_THROW(buildCommands(R"([
+    CommandTree t = buildCommands(R"([
         { "name": "x", "description": "", "config": "OspfArea::AREA_TYPE",
           "enum": "AreaType::STUB", "deferred": "k" },
         { "name": "r", "description": "", "resolver": "k" }
-    ])"), std::runtime_error);
+    ])");
+
+    const CommandNode& d = commandAt(t, 0).node();
+
+    EXPECT_TRUE(d.hasDeferred());
+    EXPECT_TRUE(d.hasEnumChange());
 }
 
-TEST_F(Internal_CliTreeTest, DeferredAlongsideAModeChangeIsRejected)
+// Likewise for a mode change: entering a mode still claims configExt for the
+// mode id, but deferring which key it waits on no longer costs it that byte.
+TEST_F(Internal_CliTreeTest, DeferredAlongsideAModeChangeIsAccepted)
 {
-    EXPECT_THROW(buildCommands(R"([
+    CommandTree t = buildCommands(R"([
         { "name": "x", "description": "", "config": "Ospf::AREA_CONFIGS",
           "mode": "(config-router)#", "deferred": "k" },
         { "name": "r", "description": "", "resolver": "k" }
-    ])"), std::runtime_error);
+    ])");
+
+    const CommandNode& d = commandAt(t, 0).node();
+
+    EXPECT_TRUE(d.hasDeferred());
+    EXPECT_TRUE(d.hasModeChange());
 }
 
 // A container binding is what a deferral is usually for: the key it holds says
@@ -1869,7 +1883,7 @@ TEST_F(Internal_CliTreeTest, AResolverOnAContainerIsRejected)
 {
     EXPECT_THROW(buildCommands(R"([
         { "name": "x", "description": "",
-          "config": "Ospf::PRIORITY", "deferred": "k" },
+          "config": "Ospf::REFERENCE_BANDWIDTH", "deferred": "k" },
         { "name": "r", "description": "",
           "config": "Ospf::AREA_CONFIGS", "resolver": "k" }
     ])"), std::runtime_error);
@@ -1879,7 +1893,7 @@ TEST_F(Internal_CliTreeTest, AnEmptyDeferralKeyIsRejected)
 {
     EXPECT_THROW(buildCommands(R"([
         { "name": "x", "description": "",
-          "config": "Ospf::PRIORITY", "deferred": "" }
+          "config": "Ospf::REFERENCE_BANDWIDTH", "deferred": "" }
     ])"), std::runtime_error);
 }
 
@@ -1889,7 +1903,7 @@ TEST_F(Internal_CliTreeTest, DeferralSurvivesSerialization)
 {
     CommandTree t(flattenCommands(R"([
         { "name": "cost", "description": "",
-          "config": "Ospf::PRIORITY", "deferred": "auto_cost" },
+          "config": "Ospf::REFERENCE_BANDWIDTH", "deferred": "auto_cost" },
         { "name": "compute", "description": "", "resolver": "auto_cost" }
     ])"));
 
@@ -2126,4 +2140,65 @@ TEST_F(Internal_CliTreeTest, AFieldThatIsNotAnOwnedListRefusesQuietly)
 
     EXPECT_FALSE(f.exec.execute(line.tokens()));
     EXPECT_EQ(f.ctx.ctx, static_cast<void*>(&f.reg));
+}
+
+// ===================================================================
+// DEFERRED/RESOLVER MERGE
+//
+// A resolver may now carry its own config, independently of the deferred
+// word it pairs with -- see [[command-node-spare-flag-bits]]. Merging picks
+// whichever of the two nodes is the more complete one to run; disagreement
+// on any of config, pattern or value leaves them as two separate writes.
+// ===================================================================
+
+// The resolver names a different field than the deferred word. Nothing to
+// choose between them, so both run: the deferred word writes its own field
+// with its own value, and the resolver writes its own as an ordinary command.
+TEST_F(Internal_CliTreeTest, AResolverNamingADifferentFieldRunsAlongsideTheDeferredWrite)
+{
+    OspfFixture f(R"([
+        { "name": "cost", "description": "",
+          "config": "Ospf::REFERENCE_BANDWIDTH", "deferred": "k",
+          "subcommands": [
+            { "name": "disable", "description": "",
+              "config": "Ospf::SHUTDOWN", "resolver": "k" }
+          ] }
+    ])");
+
+    Command cost    = f.cmd(0);
+    Command disable = cost.at(0);
+
+    Line line;
+    line.push("100", cost);
+    line.push("disable", disable);
+
+    EXPECT_TRUE(f.exec.execute(line.tokens()));
+
+    EXPECT_EQ(f.reg.get<config::Ospf::REFERENCE_BANDWIDTH>().load(), 100u);
+    EXPECT_TRUE(f.reg.get<config::Ospf::SHUTDOWN>().load());
+}
+
+// The resolver names the same field the deferred word already does, and
+// carries no value of its own beyond `<cr>`. Nothing conflicts and nothing is
+// missing, so the deferred word's own value stands -- same outcome as before
+// resolvers could carry config at all.
+TEST_F(Internal_CliTreeTest, AResolverNamingTheSameFieldAgreesRatherThanConflicts)
+{
+    OspfFixture f(R"([
+        { "name": "cost", "description": "",
+          "config": "Ospf::REFERENCE_BANDWIDTH", "deferred": "k",
+          "subcommands": [
+            { "name": "<cr>", "description": "",
+              "config": "Ospf::REFERENCE_BANDWIDTH", "resolver": "k" }
+          ] }
+    ])");
+
+    Command cost = f.cmd(0);
+
+    Line line;
+    line.push("250", cost);
+    line.pushCr(cost.at(0));
+
+    EXPECT_TRUE(f.exec.execute(line.tokens()));
+    EXPECT_EQ(f.reg.get<config::Ospf::REFERENCE_BANDWIDTH>().load(), 250u);
 }

@@ -427,6 +427,7 @@ template <typename T CONFIG_INDEX_PARAM, auto H = nullptr>
 class AtomicField : public ApplierHolder<AtomicFieldFlag, H>
 {
 public:
+    using node = T;
     using type = T;
     CONFIG_INDEX_MEMBER
     void setMask(const AtomicField* p) noexcept { mask = p; }
@@ -461,6 +462,7 @@ template <typename T CONFIG_INDEX_PARAM, auto H = nullptr>
 class OptionalAtomicField : public ApplierHolder<OptionalAtomicFieldFlag, H>
 {
 public:
+    using node = T;
     using type = T;
     CONFIG_INDEX_MEMBER
     void setMask(const OptionalAtomicField* p) noexcept { mask = p; }

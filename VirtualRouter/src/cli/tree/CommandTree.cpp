@@ -24,6 +24,7 @@ CommandTree::CommandTree(Storage storage)
 
 CommandTree::CommandTree(const std::string& sourcePath, const std::string& binaryPath)
 {
+
     const uint32_t sources = parser::hashDir(sourcePath);
 
     auto discard = [this]

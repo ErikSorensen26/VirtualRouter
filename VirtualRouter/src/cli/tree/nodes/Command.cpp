@@ -40,6 +40,12 @@ std::string_view Command::desc() const
     return tree->strText(resolveNode().descId);
 }
 
+std::string_view Command::recurseExcludeCsv() const
+{
+    if (!tree) return {};
+    return tree->strText(resolveNode().recurseExcludeId);
+}
+
 size_t Command::size() const
 {
     if (!tree) return 0;
@@ -51,6 +57,14 @@ Command Command::at(size_t i) const
 {
     if (!tree) return {};
     return Command(tree, tree->childIndex(resolveNode(), static_cast<uint32_t>(i)));
+}
+
+Command Command::parent() const
+{
+    if (!tree) return {};
+    const CommandNode& n = resolveNode();
+    if (!n.hasParent()) return {};
+    return Command(tree, n.parentIndex);
 }
 
 size_t Command::find(std::string_view childName) const

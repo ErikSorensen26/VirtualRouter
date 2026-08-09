@@ -124,6 +124,10 @@ required.
 | `deferred` | string | Hold this value under a key instead of writing now |
 | `resolver` | string | This command supplies the value a deferred key waits on |
 
+There is no `retarget` key. Binding a container field (an owned-list or reference
+registry) with no `mode` implicitly retargets write scope to that container for
+the rest of the line, then reverts — see [Mid-command registry retarget](#mid-command-registry-retarget).
+
 **Any other key is an error.** This is deliberate: six misspellings
 (`descirption`, `subcommads`) were already in the grammar when the check went
 in, and a mistyped `subcommands` silently costs an entire subtree.
@@ -224,6 +228,36 @@ never itself an enum.
 **Bitmap fields** take `enum` keys the same way. A run of flags typed on one
 line is recorded as a single command, attributed to the node that opened the run.
 
+### Mid-command registry retarget
+
+A command node whose `config` names an **owned-list or reference container**
+field, and which carries no `mode`, implicitly retargets: the field it binds
+becomes the write target for the rest of that line, then reverts when the line
+ends. This is the lighter, non-persistent half of a mode change — same
+underlying pointer repoint, but scoped to one line instead of the session. It
+would let a hypothetical `ip dhcp pool LAN dns-server 8.8.8.8` edit the pool
+without leaving the mode the operator is standing in, rather than requiring
+`ip dhcp pool LAN` / `dns-server ...` / `exit` as separate lines through a mode.
+
+**No shipped grammar exercises this yet.** Every `config` key currently under
+`VirtualRouter/commands/` names a value or tuple field; the only container
+bindings in the grammar (`router ospf <1-65535>` → `Global::ROUTER_OSPF`,
+`router ospfv3 <1-65535>` → `Global::ROUTER_OSPFV3`) both carry `mode`, so they
+stay mode changes, not retargets. The mechanism is implemented and covered by
+`CliTreeTest.cpp` but has no first grammar consumer yet.
+
+`mode` wins over inference — a container node that also carries `mode` is a
+mode change, not a retarget. Every `config` beneath a retargeted node must
+name the retargeted registry (or name none at all); the flattener checks this
+by reachability the same way it tracks two-token keys and shared-definition
+arguments. A nested retarget rebases for its own subtree and is itself checked
+against the outer expectation first. There is no explicit key for this —
+inference is deliberate, since a container field names a scope, not a value,
+so no other reading applies. (An explicit `retarget` key existed briefly and
+was removed once inference covered the same checks with nothing to disagree.)
+
+---
+
 ### `mode` — entering a mode
 
 ```json
@@ -271,19 +305,34 @@ the double-write warning.
 | `negate_all` | `no` on this command clears all of the bound collection |
 | `negate_hide` | Hide this command from help in its negated form |
 | `negate_show` | Show this command in help only in its negated form |
-| `recursive` | This sibling is repeatable; spent once used |
-| `subcmd_sequence` | Children may be typed in any order and repeat |
-| `subcmd_single_use` | Within a `subcmd_sequence`, this child is spent once used |
+| `recursive` | Marks a **parent**: its children form a repeatable set |
+| `multi_use` | Within a `recursive` set, this child is not spent when used |
+| `recurse_exclude_all` | Within a `recursive` set, using this member ends the set outright — only `<cr>` remains |
+| `recurse_hide` | Within a `recursive` set, this member drops out of the re-offer once any other sibling has been used |
+| `recurse_show_all` | Within a `recursive` set, using this member waives every sibling's `recurse_hide` for the rest of the line |
+| `recurse_exclude` | Within a `recursive` set, using this member drops the sibling names listed in its `recurse_exclude` CSV from the re-offer (the rest of the set stays available) |
 | `mode_exit` | Leaves the current mode, as `exit` does |
 
 Any other property name is an error.
 
-### `recursive` marks siblings, not the parent
+### `recursive` marks the parent; siblings are spent as used
 
-Put `recursive` on **each repeatable sibling**, never on the node that contains
-them. After `metric 100` completes, the candidate set returns without `metric`.
+Put `recursive` on the node whose **children** are repeatable — unlike the
+per-child properties below it, `recursive` itself is the one marked on the
+parent. Each child is spent once used: after `metric 100` completes, the
+candidate set returns without `metric`. A child marked `multi_use` is the
+exception and stays on offer for as long as the operator keeps typing.
 
-A `subcmd_sequence` returns whole, except children marked `subcmd_single_use`.
+`recurse_exclude_all`, `recurse_hide`, `recurse_show_all`, and `recurse_exclude`
+refine what a repeat set re-offers after a specific member is used — for
+example, a value like `receive-only` that may only open a set and never follow
+another sibling (`recurse_hide`), or a threshold argument that waives another
+member's `recurse_hide` once given (`recurse_show_all`). A `recurse_exclude_all`
+or `recurse_show_all`-style property can sit deeper than the set's direct
+child — e.g. on the `WORD` value that completes a `leak-map WORD` pair — since
+what matters is which node the operator's last word actually matched, not
+which node is the set's immediate child. None of the four imply `recursive` on
+their own; the parent still needs the flag.
 
 Repeat tracking uses a bitmask, which caps a repeatable set at 64 members
 (`MAX_TRACKED_SIBLINGS`).
@@ -361,9 +410,16 @@ Rules the flattener enforces:
   every `resolver` needs a matching `deferred`. An unpaired key on either side
   is an error.
 - A node cannot be both `deferred` and a `resolver`.
-- Neither can coexist with `enum` or a tuple binding: all three want `configExt`.
+- `deferred`/`resolver` key ids live in their own `deferKeyId` slot, separate
+  from `configExt`, so a node may defer a key **and** carry an `enum` or tuple
+  binding in the same command — the three no longer contend for one byte.
+  `mode` is the one binding still exclusive with `deferred`/`resolver`.
 - A `resolver` binds no field of its own. What it resolves is whatever deferred
-  commands named the key, wherever they live and in whatever registry.
+  commands named the key, wherever they live and in whatever registry. A node
+  that names a field of its own resolves into it once the key resolves; one
+  that names none inherits the field from whichever resolver its key pairs
+  with — used when a shared deferred value has resolvers that write different
+  fields (e.g. a filter-list's `WORD`, resolved by either `in` or `out`).
 
 ---
 
@@ -379,9 +435,11 @@ Rules the flattener enforces:
 | Enum-valued tuple member | 15 (4 bits) | Member and enum index share the byte |
 | Registry id | `CONFIG_FIELD_MAX_REGISTRY` | Does not fit `configId` |
 
-`CommandNode` is 16 bytes and that layout **is** the on-disk format. All 16 flag
-bits are currently allocated, so a new node property costs either a widened
-record plus a `CT_VERSION` bump, or a bit reclaimed by merging two properties.
+`CommandNode` is 32 bytes and that layout **is** the on-disk format. `flags` is
+a `uint32_t`; bits 0-19 are allocated as of this writing (bits 16-31 were freed
+by the widening, so headroom currently exists) — a new node property still
+costs either a widened record plus a `CT_VERSION` bump once the remaining bits
+run out, or a bit reclaimed by merging two properties.
 
 ### Writing one field twice on one line
 

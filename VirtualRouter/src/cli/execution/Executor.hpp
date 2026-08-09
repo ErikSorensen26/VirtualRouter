@@ -171,8 +171,7 @@ public:
 
                 if (r.resolver() && r.node.node().deferKey() == deferKey)
                 {
-                    if (r.hasNode()) tok.node = r.node;
-                    if (!r.hasNode()) toks.push_back(&r);
+                    if (!mergeDeferredResolver(tok, r)) toks.push_back(&r);
                     break;
                 }
             }
@@ -239,6 +238,73 @@ public:
     }
 
 private:
+
+    /**
+     * @brief Points a deferred token at whichever of it or its resolver is the
+     * more complete command, so only one of the two runs.
+     *
+     * A deferred word and its resolver are two halves of one command split
+     * across the line -- `area 5` (deferred, holds the key) and the `<cr>` or
+     * literal that eventually names the value (resolver). Config, enum,
+     * pattern and value are each checked independently: whichever side is the
+     * only one to carry a given one of the four contributes it, and where both
+     * sides carry the same one it has to agree or there is nothing to choose
+     * between them.
+     *
+     * @ref Token::node is a cursor into the flattened tree, so it can only
+     * ever point at one of the two existing nodes -- never a synthesis of
+     * both. The four checks below are therefore run to decide whether one
+     * side is a strict superset of the other (has everything the other has,
+     * plus at least one thing it does not), which is the only shape a single
+     * cursor can stand in for both. Any actual disagreement -- two different
+     * config fields, two different enum members, two different pattern
+     * classes, two different literal words -- refuses the merge outright
+     * rather than guessing which one the grammar meant.
+     *
+     * @return True when @p tok now stands for both, so the caller must not
+     *         also walk @p r; false when they stay two separate commands.
+     */
+    bool mergeDeferredResolver(Token& tok, Token& r)
+    {
+        const tree::CommandNode& d = tok.node.node();
+        const tree::CommandNode& rn = r.node.node();
+
+        // config: the bound field itself.
+        const bool dHasConfig = d.hasConfig();
+        const bool rHasConfig = rn.hasConfig();
+        if (dHasConfig && rHasConfig && d.configId != rn.configId) return false;
+
+        // enum: which member the field is set to, meaningless without config.
+        const bool dHasEnum = d.hasEnumChange();
+        const bool rHasEnum = rn.hasEnumChange();
+        if (dHasEnum && rHasEnum && d.configExt != rn.configExt) return false;
+
+        // pattern: the placeholder class a matched word belongs to.
+        const Pattern dPattern = tok.pattern;
+        const Pattern rPattern = r.pattern;
+        const bool dHasPattern = dPattern != P_NONE;
+        const bool rHasPattern = rPattern != P_NONE;
+        if (dHasPattern && rHasPattern && dPattern != rPattern) return false;
+
+        // value: the literal word matched, fixed keywords included -- a bare
+        // `<cr>` carries none.
+        const bool dHasValue = tok.node.name() != "<cr>";
+        const bool rHasValue = r.node.name() != "<cr>";
+        if (dHasValue && rHasValue && tok.value != r.value) return false;
+
+        // Nothing conflicted, so whichever side uniquely supplies something
+        // wins the merge; the resolver naming any of the four is the usual
+        // case and takes the token over outright, matching what used to be
+        // an unconditional replacement here.
+        if ((rHasConfig && !dHasConfig) || (rHasEnum && !dHasEnum)
+            || (rHasPattern && !dHasPattern) || (rHasValue && !dHasValue))
+        {
+            tok.node = r.node;
+            tok.pattern = r.pattern;
+        }
+
+        return true;
+    }
 
     /**
      * @brief Writes the tuples staged so far, and empties the staging list.
@@ -369,7 +435,7 @@ private:
                     using Key = typename Field::key;
 
                     Key key{};
-                    if (!utils::resolveKey<Key>(toks, key)) return;
+                    if (!utils::resolveKey<Key>(toks, key) && !std::ranges::range<Key>) return;
 
                     auto& entered = field.emplaceBack(key, binding->node.nodeIndex());
                     ok = nav.changeMode(
@@ -436,7 +502,7 @@ private:
          *
          * A mode change on a rescoped line needs both pointers, for different
          * things. Its binding lives in the registry the rescope moved to --
-         * `router eigrp 1` reads ROUTER_EIGRP_V4 out of the VRF that `eigrp`
+         * `router eigrp 1` reads ROUTER_EIGRP out of the VRF that `eigrp`
          * selected -- so ctx.ctx has to still be the rescoped one when the
          * field is resolved. But the frame `exit` comes back to has to be the
          * pointer the line started on, or popMode restores a registry whose type

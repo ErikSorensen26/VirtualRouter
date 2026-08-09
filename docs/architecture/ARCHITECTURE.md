@@ -870,20 +870,29 @@ paid once at build rather than once per process start.
 memory.**
 
 The flattener resolves the entire grammar — includes, shared definitions,
-grammar variable arguments — into a flat array of 16-byte `CommandNode` records
+grammar variable arguments — into a flat array of 32-byte `CommandNode` records
 plus one string blob. Children of a node occupy a contiguous run, so a node
 locates them with an offset and a count rather than a pointer list. At runtime
 nothing is allocated per traversal: `Command` and `ModeEntry` are cursors into
 the mapping, and every name and help string is a `string_view` into the blob.
 
-`CommandNode` is 16 bytes and *is* the on-disk format. Its `configId` packs the
-registry id and the field's enum index; its `flags` word carries the node
-properties (`recursive`, `subcmd_sequence`, enum-change, tuple-change, deferred,
-resolver). All 16 flag bits are allocated and `configExt` is a single byte-wide
-slot, so the record's spare capacity — not the grammar syntax — is the binding
-constraint on adding new node properties. A new property costs either a widened
-record and a format-version bump, or a bit reclaimed by merging two existing
-properties.
+`CommandNode` is 32 bytes and *is* the on-disk format — it started at 16 bytes
+and widened once, adding three reserved `uint32_t` words and growing `flags`
+from `uint16_t` to `uint32_t`. Its `configId` packs the registry id and the
+field's enum index; its `flags` word carries the node properties (`recursive`,
+`multi_use`, enum-change, tuple-change, deferred, resolver, the mid-command
+registry retarget, and the `recurse_exclude*`/`recurse_hide`/`recurse_show_all`
+repeat-set refinements). Bits 0–19 are allocated as of this writing; the
+widening freed bits 16–31, so there is headroom again, but the record's spare
+capacity — not the grammar syntax — remains the binding constraint on adding
+new node properties once it runs out. A new property then costs either another
+widened record and a format-version bump, or a bit reclaimed by merging two
+existing properties. `deferred`/`resolver` key ids were pulled out of the
+shared `configExt` byte into their own `deferKeyId` field for the same reason
+that motivated the widening: `configExt` was multiplexed three ways (tuple
+member, enum member, mode id) and a deferred key needed a fourth meaning that
+had nowhere left to go without contending with an enum or tuple binding on the
+same node.
 
 Rejected alternative: keeping the parsed JSON object graph in memory, as the
 previous design did. That paid full JSON parse cost at every process start,
@@ -1012,6 +1021,38 @@ detour left them. Three entry points are kept distinct: `changeMode` pushes,
 `saveAndChangeMode` marks a depth for detours like `do <command>` that must
 leave the session where they found it.
 
+**Mid-command registry retarget is the non-persistent half of a mode change.**
+A grammar node whose bound field is an owned-list or reference container, and
+which carries no `mode`, implicitly repoints `ContextBase::ctx` to that
+container for the rest of the line and reverts when the line ends — `ip dhcp
+pool LAN dns-server 8.8.8.8` writes into the pool without moving the session
+out of the mode the operator is standing in. It reuses the exact resolution
+`handleModeChange` already has for turning a bound container field into a
+pointer, so the addition is close to free at the call site; what it needed was
+new lifetime handling. Whether a node retargets is inferred from the field's
+kind rather than spelled in the grammar, since a container field names a scope
+and there is no other command a bare container binding could mean.
+
+Rejected alternative: an explicit `retarget` grammar key. It was implemented
+first and then removed — both of its flatten-time checks re-expressed
+identically against the inferred flag, so the explicit key added a place for
+the grammar and the inference to disagree for no expressive gain.
+
+The dangerous part is that the guard restoring `ctx.ctx` on scope exit must
+stay conditional. A mode change repoints the same pointer through
+`nav.changeMode` and *means* it to persist; unconditionally reverting on scope
+exit reverted every mode change the instant its line finished, pointing the
+session at the wrong registry for everything typed afterward. The guard is
+therefore armed only when a retarget actually ran, and is explicitly disarmed
+by both `MODE_CHANGE` and `MODE_EXIT` — a mode pop already restores the target
+itself, so a saved retarget pointer would be stale.
+
+No shipped grammar triggers a retarget yet — the only container bindings in
+`VirtualRouter/commands/` (`router ospf <1-65535>`, `router ospfv3
+<1-65535>`) both carry `mode`, so they stay mode changes. The mechanism is
+implemented and covered by `CliTreeTest.cpp` ahead of its first grammar
+consumer.
+
 **`negate` / `defaulted` flags on `ContextBase`:** the tokenizer sets a flag
 when it sees `no` or `default` rather than routing to a separate command. The
 positive and negative forms are therefore the same grammar node and cannot
@@ -1037,6 +1078,10 @@ column, so there is one place stating which modes `end` unwinds.
   constructed in place.
 - `exit` restores the mode, prompt, grammar cursor, and config pointer together
   or restores none of them.
+- A mid-command registry retarget reverts `ctx.ctx` at the end of the line that
+  triggered it, and never on a mode change or mode exit — the guard that would
+  revert it is explicitly disarmed by both, since a mode pop already restores
+  the target and reverting again would point the session at a stale registry.
 - Traversal state borrows from the grammar tree and the input line and outlives
   neither.
 - A command that fails in the current mode and is retried in

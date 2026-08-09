@@ -76,6 +76,12 @@ using EnumTableOf = typename EnumSchema<ENUM>::table;
  * values, so position and value are the same number and the flattener can store
  * what it finds here directly.
  */
+template <typename ENUM, typename = void>
+inline constexpr bool hasEnumValuesV = false;
+
+template <typename ENUM>
+inline constexpr bool hasEnumValuesV<ENUM, std::void_t<decltype(EnumSchema<ENUM>::table::values)>> = true;
+
 template <typename ENUM>
 constexpr uint16_t findEnumMember(uint32_t nameHash)
 {
@@ -84,7 +90,12 @@ constexpr uint16_t findEnumMember(uint32_t nameHash)
         using Table = EnumTableOf<ENUM>;
         for (std::size_t i = 0; i < Table::count; ++i)
             if (Table::members[i] == nameHash)
-                return static_cast<uint16_t>(i);
+            {
+                if constexpr (hasEnumValuesV<ENUM>)
+                    return static_cast<uint16_t>(Table::values[i]);
+                else
+                    return static_cast<uint16_t>(i);
+            }
     }
     return ENUM_NOT_FOUND;
 }
@@ -101,8 +112,16 @@ constexpr std::string_view enumMemberName(uint16_t index)
     if constexpr (hasEnumSchemaV<ENUM>)
     {
         using Table = EnumTableOf<ENUM>;
-        if (index < Table::count)
+        if constexpr (hasEnumValuesV<ENUM>)
+        {
+            for (std::size_t i = 0; i < Table::count; ++i)
+                if (Table::values[i] == index)
+                    return Table::names[i];
+        }
+        else if (index < Table::count)
+        {
             return Table::names[index];
+        }
     }
     return {};
 }
@@ -127,6 +146,8 @@ constexpr std::size_t enumMemberCount()
 #define CONFIG_ENUM_M_NAME(NAME) std::string_view(#NAME),
 #define CONFIG_VALUE_ENUM_M_NAME(NAME, VALUE) std::string_view(#NAME),
 
+#define CONFIG_VALUE_ENUM_M_VALUE(NAME, VALUE) static_cast<uint32_t>(VALUE),
+
 #define DEFINE_CONFIG_ENUM(NAME, MEMBER_LIST, MACRO_TYPE, HASH_TYPE, NAME_TYPE, TYPE)     \
     enum class NAME TYPE { MEMBER_LIST(MACRO_TYPE) COUNT };                               \
     struct NAME##EnumTable                                                                \
@@ -139,6 +160,19 @@ constexpr std::size_t enumMemberCount()
             { MEMBER_LIST(HASH_TYPE) };                                                   \
         static constexpr std::array<std::string_view, count> names =                      \
             { MEMBER_LIST(NAME_TYPE) };                                                   \
+    }
+
+#define DEFINE_CONFIG_VALUE_ENUM(NAME, MEMBER_LIST, TYPE)                                 \
+    enum class NAME : TYPE { MEMBER_LIST(CONFIG_VALUE_ENUM_M) COUNT };                    \
+    struct NAME##EnumTable                                                                \
+    {                                                                                     \
+        using type = NAME;                                                                \
+        static constexpr uint32_t typeHash = config::tokenHash(#NAME);                    \
+        static constexpr std::string_view typeName = std::string_view(#NAME);             \
+        static constexpr std::array members = { MEMBER_LIST(CONFIG_VALUE_ENUM_M_HASH) };  \
+        static constexpr std::array names = { MEMBER_LIST(CONFIG_VALUE_ENUM_M_NAME) };    \
+        static constexpr std::array values = { MEMBER_LIST(CONFIG_VALUE_ENUM_M_VALUE) };  \
+        static constexpr std::size_t count = members.size();                              \
     }
 
 #define DEFINE_CONFIG_ENUM_HERE(NAME, MEMBER_LIST)                                        \
@@ -157,12 +191,12 @@ constexpr std::size_t enumMemberCount()
 
 
 #define DEFINE_CONFIG_VALUE_ENUM_HERE(NAME, MEMBER_LIST, TYPE)                            \
-    DEFINE_CONFIG_ENUM(NAME, MEMBER_LIST, CONFIG_VALUE_ENUM_M, CONFIG_VALUE_ENUM_M_HASH, CONFIG_VALUE_ENUM_M_NAME, : TYPE); \
+    DEFINE_CONFIG_VALUE_ENUM(NAME, MEMBER_LIST, TYPE);                                    \
     template <>                                                                           \
     struct EnumSchema<NAME> { using table = NAME##EnumTable; }
 
 #define DEFINE_CONFIG_VALUE_ENUM_NS(NS, NAME, MEMBER_LIST, TYPE)                          \
-    DEFINE_CONFIG_ENUM(NAME, MEMBER_LIST, CONFIG_VALUE_ENUM_M, CONFIG_VALUE_ENUM_M_HASH, CONFIG_VALUE_ENUM_M_NAME, : TYPE); \
+    DEFINE_CONFIG_VALUE_ENUM(NAME, MEMBER_LIST, TYPE);                                    \
     }                                                                                     \
     template <>                                                                           \
     struct EnumSchema<NS::NAME> { using table = NS::NAME##EnumTable; };                   \

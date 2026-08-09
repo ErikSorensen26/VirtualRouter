@@ -355,6 +355,7 @@ struct TreeEmitter
         const JsonNode* cont; // Site subcommands to graft at a dead-end.
         const Args* args;     // What the call site passed in, if anything.
         uint16_t expect = REGISTRY_ANY;
+        uint32_t parent = CommandNode::NODE_NONE;
     };
 
     // No ancestor has rescoped, so any registry is in scope.
@@ -395,7 +396,7 @@ struct TreeEmitter
     }
 
     // Reserves a contiguous run for one node's children and queues them.
-    void emitChildren(std::deque<Frame>& queue, CommandNode& n,
+    void emitChildren(std::deque<Frame>& queue, CommandNode& n, uint32_t nIdx,
                       const JsonNode& kids, const JsonNode* cont,
                       const Args* args, uint16_t expect)
     {
@@ -422,7 +423,7 @@ struct TreeEmitter
         n.subcmdSiz = static_cast<uint16_t>(count);
         for (uint32_t i = 0; i < count; ++i)
             queue.push_back({firstChild + i, slots[i].src,
-                             slots[i].cont, slots[i].args, expect});
+                             slots[i].cont, slots[i].args, expect, nIdx});
     }
 
     /**
@@ -598,56 +599,49 @@ struct TreeEmitter
     /**
      * @brief The id a deferral key is stored under, assigning one if the key is new.
      *
-     * Numbered rather than hashed. configExt is a byte with 0xFF spoken for, so
-     * a hash would have to be truncated into 255 values and two keys colliding
-     * would resolve each other's -- silently, and only in a grammar large enough
-     * to reach the collision. Positions cannot collide, and running out of them
+     * Numbered rather than hashed. deferKeyId is a uint16 with 0xFFFF spoken
+     * for, so a hash would have to be truncated and two keys colliding would
+     * resolve each other's -- silently, and only in a grammar large enough to
+     * reach the collision. Positions cannot collide, and running out of them
      * is a build error rather than a wrong answer at runtime.
      */
-    uint8_t deferKeyId(const std::string& key, const std::string& emitName,
-                       std::string_view which)
+    uint16_t resolveDeferKeyId(const std::string& key, const std::string& emitName,
+                               std::string_view which)
     {
         if (key.empty())
             throw std::runtime_error("cli::grammar: '" + emitName
                 + "' has an empty " + std::string(which));
 
         for (size_t i = 0; i < deferKeys.size(); ++i)
-            if (deferKeys[i] == key) return static_cast<uint8_t>(i);
+            if (deferKeys[i] == key) return static_cast<uint16_t>(i);
 
         if (deferKeys.size() >= CommandNode::CONFIG_EXT_NONE)
             throw std::runtime_error("cli::grammar: '" + emitName + "' names key '"
                 + key + "', which is deferral key "
                 + std::to_string(deferKeys.size())
-                + "; configExt holds "
+                + "; deferKeyId holds "
                 + std::to_string(CommandNode::CONFIG_EXT_NONE));
 
         deferKeys.push_back(key);
-        return static_cast<uint8_t>(deferKeys.size() - 1);
+        return static_cast<uint16_t>(deferKeys.size() - 1);
     }
 
     /**
      * @brief Holds this command's value under a key instead of writing it now.
      *
-     * The field is still named and still checked -- what the key changes is when
-     * the write lands, not where. configExt carries the key's id, which is why
-     * this cannot sit alongside an enum, tuple or mode binding: each of those
-     * wants the same byte for its own meaning.
+     * The field named here, if any, is still checked. A deferred node may also
+     * name no field: it then inherits one from whichever resolver its key
+     * pairs with at execution time (@ref Executor::mergeDeferredResolver) --
+     * needed when one deferred word feeds resolvers that write different
+     * fields, e.g. filter-list's shared WORD resolved by either `in` or `out`.
+     * The key's id lives in its own deferKeyId field, apart from configExt, so
+     * a deferral composes freely with an enum, tuple or mode binding on the
+     * same node.
      */
     void bindDeferred(CommandNode& n, const std::string& key,
                       const std::string& emitName, const std::string& cfgKeyText)
     {
-        if (!n.hasConfig())
-            throw std::runtime_error("cli::grammar: '" + emitName
-                + "' defers under '" + key + "' but names no "
-                + std::string(KEY_CONFIG)
-                + "; a deferred value needs the field it resolves into");
-
-        if (n.flags & (CommandNode::ENUM_CHANGE | CommandNode::TUPLE_CHANGE))
-            throw std::runtime_error("cli::grammar: '" + emitName
-                + "' defers under '" + key + "' and also sets an enum or tuple"
-                " member of '" + cfgKeyText + "'; configExt holds one");
-
-        n.configExt = deferKeyId(key, emitName, KEY_DEFERRED);
+        n.deferKeyId = resolveDeferKeyId(key, emitName, KEY_DEFERRED);
         n.flags |= CommandNode::DEFERRED;
     }
 
@@ -663,15 +657,30 @@ struct TreeEmitter
     {
         if (n.flags & CommandNode::DEFERRED)
             throw std::runtime_error("cli::grammar: '" + emitName
-                + "' is both deferred and a resolver; configExt holds one key");
+                + "' is both deferred and a resolver; deferKeyId holds one key");
 
-        if (n.flags & (CommandNode::ENUM_CHANGE | CommandNode::TUPLE_CHANGE))
-            throw std::runtime_error("cli::grammar: '" + emitName
-                + "' resolves '" + key + "' and also sets an enum or tuple member"
-                " of '" + cfgKeyText + "'; configExt holds one");
-
-        n.configExt = deferKeyId(key, emitName, KEY_RESOLVER);
+        n.deferKeyId = resolveDeferKeyId(key, emitName, KEY_RESOLVER);
         n.flags |= CommandNode::RESOLVER;
+    }
+
+    /**
+     * @brief Marks this command as excluding specific named siblings once used.
+     *
+     * Unlike `recurse_exclude_all`, which is a plain property flag that ends the
+     * whole repeat set, this names which siblings drop out -- so it needs a
+     * payload and can't just be a `properties` entry. The CSV is interned as one
+     * string rather than resolved to sibling ordinals here: the node doesn't yet
+     * know its final sibling set when this runs, and traversal already has
+     * @ref Command::find to match a name against one.
+     */
+    void bindRecurseExclude(CommandNode& n, const std::string& csv, const std::string& emitName)
+    {
+        if (csv.empty())
+            throw std::runtime_error("cli::grammar: '" + emitName
+                + "' has an empty " + std::string(KEY_RECURSE_EXCLUDE));
+
+        n.recurseExcludeId = internStr(csv);
+        n.flags |= CommandNode::RECURSE_EXCLUDE;
     }
 
     /**
@@ -753,7 +762,7 @@ struct TreeEmitter
                 n.flags |= propertyFlag(p.strValue);
 
         // "exit" and "end" are the grammar's only mode exits.
-        if (emitName == "exit" || emitName == "end")
+        if (emitName.starts_with("exit") || emitName == "end")
             n.flags |= CommandNode::MODE_EXIT;
 
         if (const JsonNode* sup = member(src, KEY_SUPPORT))
@@ -786,13 +795,19 @@ struct TreeEmitter
         if (const std::string* en = keyValue(KEY_ENUM); en && !configDropped)
             bindEnum(n, *en, emitName, cfgKeyText);
 
-        // Both name a deferral key, and both land in configExt, so they run
-        // after the bindings that also claim it and refuse to share.
+        // Both name a deferral key, and both land in deferKeyId, so a node that
+        // named both would have one overwrite the other -- bindDeferred/bindResolver
+        // each refuse a node that already claimed deferKeyId as the other kind.
         if (const std::string* key = keyValue(KEY_DEFERRED); key && !configDropped)
             bindDeferred(n, *key, emitName, cfgKeyText);
 
         if (const std::string* key = keyValue(KEY_RESOLVER); key && !configDropped)
             bindResolver(n, *key, emitName, cfgKeyText);
+
+        // "member1,member2,..." names siblings this member drops from the
+        // repeat set's re-offer once used.
+        if (const std::string* csv = keyValue(KEY_RECURSE_EXCLUDE))
+            bindRecurseExclude(n, *csv, emitName);
 
         // "prompt/variant" makes this command enter that mode.
         if (const std::string* md = keyValue(KEY_MODE))
@@ -812,10 +827,8 @@ struct TreeEmitter
                     + "' enters a mode and also sets an enum or tuple member;"
                     " configExt holds one");
 
-            if (n.flags & (CommandNode::DEFERRED | CommandNode::RESOLVER))
-                throw std::runtime_error("cli::grammar: '" + emitName
-                    + "' enters a mode and also names a deferral key;"
-                    " configExt holds one");
+            // Deferring a mode change composes fine: deferKeyId is its own
+            // field now, so it costs configExt nothing that MODE_CHANGE needs.
 
             n.configExt = static_cast<uint8_t>(resolveMode(*md, emitName));
             n.flags |= CommandNode::MODE_CHANGE;
@@ -869,10 +882,11 @@ struct TreeEmitter
 
         while (!queue.empty())
         {
-            auto [idx, src, cont, args, expect] = queue.front();
+            auto [idx, src, cont, args, expect, parent] = queue.front();
             queue.pop_front();
 
             CommandNode n{};
+            n.parentIndex = parent;
 
             // Synthetic array roots carry no grammar of their own.
             const JsonNode* subs = src->type == JsonNode::ARRAY
@@ -880,9 +894,9 @@ struct TreeEmitter
                                  : emitCommand(n, idx, *src, args, expect);
 
             if (subs && !subs->children.empty())
-                emitChildren(queue, n, *subs, cont, args, expect);
+                emitChildren(queue, n, idx, *subs, cont, args, expect);
             else if (cont)
-                emitChildren(queue, n, *cont, nullptr, nullptr, expect);
+                emitChildren(queue, n, idx, *cont, nullptr, nullptr, expect);
 
             nodes[idx] = n;
         }

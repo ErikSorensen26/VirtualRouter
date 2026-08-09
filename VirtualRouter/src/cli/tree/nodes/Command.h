@@ -56,6 +56,7 @@ struct CommandNode
         RECURSE_EXCLUDE_ALL = 1u << 16, // In a repeat set: using this member ends the set outright.
         RECURSE_HIDE        = 1u << 17, // In a repeat set: absent from the re-offer once a sibling is used.
         RECURSE_SHOW_ALL    = 1u << 18, // In a repeat set: using this member waives RECURSE_HIDE for the rest of the line.
+        RECURSE_EXCLUDE     = 1u << 19, // In a repeat set: using this member drops the named siblings in recurseExcludeId.
     };
 
     /**
@@ -96,6 +97,9 @@ struct CommandNode
     /// @brief Id of an interned string that is absent rather than empty.
    static constexpr uint16_t STR_NONE = 0xFFFFu;
 
+    /// @brief Value of parentIndex for a node with no parent: a mode's synthetic root.
+    static constexpr uint32_t NODE_NONE = 0xFFFFFFFFu;
+
     uint32_t subcmdOff;               ///< Index of the first child node.
     uint32_t configId = CONFIG_NONE;  ///< Packed registry id and field index.
     uint32_t flags = 0;               ///< Property bits.
@@ -104,12 +108,38 @@ struct CommandNode
     uint16_t subcmdSiz = 0;           ///< Children under subcmdOff.
     uint16_t configExt = CONFIG_EXT_NONE;
 
-    // Reserved
-    uint32_t reserved0 = 0;
-    uint32_t reserved1 = 0;
+    /**
+     * @brief Id of the deferral key this node holds under or resolves.
+     *
+     * Split out of configExt so DEFERRED and RESOLVER no longer contend with
+     * ENUM_CHANGE, TUPLE_CHANGE or MODE_CHANGE for the same byte -- a node can
+     * now defer a key and also set an enum member, or enter a mode, in one
+     * command. Carved from the reserved words rather than widening the
+     * struct; see command-node-spare-flag-bits.
+     */
+    uint16_t deferKeyId = CONFIG_EXT_NONE;
+
+    /**
+     * @brief Id of the interned CSV of sibling names this member excludes when used.
+     *
+     * Only meaningful alongside RECURSE_EXCLUDE. Unlike RECURSE_EXCLUDE_ALL, which
+     * ends the whole repeat set, this drops only the named siblings from the
+     * re-offer -- the rest of the set stays available. Stored as one interned
+     * string rather than a set of ids so the payload rides the existing string
+     * blob instead of a new table; split and matched against sibling names by
+     * @ref hasRecurseExclude callers at traversal time.
+     */
+    uint16_t recurseExcludeId = STR_NONE;
+
+    uint32_t parentIndex = NODE_NONE; ///< Index of the node this one is a child of; NODE_NONE for a mode's root.
     uint32_t reserved2 = 0;
 
     bool has(Property o) const { return flags & o; }
+
+    /**
+     * @brief True when this node has a parent; false only for a mode's synthetic root.
+     */
+    bool hasParent() const { return parentIndex != NODE_NONE; }
 
     /**
      * @brief True when this command writes a config field.
@@ -202,16 +232,22 @@ struct CommandNode
     /**
      * @brief True when this command's value is held under a key rather than written.
      *
-     * configExt holds the key's id, not the key itself: the flattener numbers the
-     * names it meets across the whole grammar and stores the position, the way a
-     * mode change stores a CLI_MODE_TABLE index. Two commands naming one key
-     * therefore carry the same id, and the name itself does not reach the binary.
+     * deferKeyId holds the key's id, not the key itself: the flattener numbers
+     * the names it meets across the whole grammar and stores the position, the
+     * way a mode change stores a CLI_MODE_TABLE index. Two commands naming one
+     * key therefore carry the same id, and the name itself does not reach the
+     * binary. It lives apart from configExt, so a deferral no longer contends
+     * with an enum, tuple or mode binding for the same byte -- a node may defer
+     * a key and also set an enum member in one command.
      *
-     * Implies hasConfig(): a deferred value still names the field it will land in
-     * once the key resolves. Until then the field keeps whatever default it
-     * declared, which is what makes the deferral invisible to a reader.
+     * Independent of hasConfig(), like hasResolver() is: a node that names a
+     * field resolves into it once the key resolves; one that names none
+     * instead inherits the field from whichever resolver its key pairs with --
+     * needed when a shared deferred value's resolvers write different fields
+     * (e.g. filter-list's WORD, resolved by either `in` or `out`). Until then
+     * the eventual field keeps its declared default.
      */
-    bool hasDeferred() const { return (flags & DEFERRED) && configExt != CONFIG_EXT_NONE; }
+    bool hasDeferred() const { return (flags & DEFERRED) && deferKeyId != CONFIG_EXT_NONE; }
 
     /**
      * @brief True when this command supplies the value a deferred key waits on.
@@ -225,12 +261,18 @@ struct CommandNode
      * value, so execution leaves it out of the walk and reads it by key; one
      * that binds a field is a command as well, and is walked in its place.
      */
-    bool hasResolver() const { return (flags & RESOLVER) && configExt != CONFIG_EXT_NONE; }
+    bool hasResolver() const { return (flags & RESOLVER) && deferKeyId != CONFIG_EXT_NONE; }
 
     /**
      * @brief The key id this command defers under or resolves; only with either flag.
      */
-    uint16_t deferKey() const { return configExt; }
+    uint16_t deferKey() const { return deferKeyId; }
+
+    /**
+     * @brief True when using this member drops specific named siblings from the
+     * repeat set's re-offer, rather than ending the set outright.
+     */
+    bool hasRecurseExclude() const { return (flags & RECURSE_EXCLUDE) && recurseExcludeId != STR_NONE; }
 
     /**
      * @brief Registry id of the bound field; meaningless unless hasConfig().
@@ -307,11 +349,17 @@ public:
     /// @brief The help text shown beside the name; empty when none was written.
     std::string_view desc() const;
 
+    /// @brief The raw "member1,member2,..." payload of a `recurse_exclude`; empty when absent.
+    std::string_view recurseExcludeCsv() const;
+
     /// @brief Number of children; zero for a leaf or a default cursor.
     size_t size() const;
 
     /// @brief A cursor on the nth child; invalid when @p i is out of range.
     Command at(size_t i) const;
+
+    /// @brief A cursor on this node's parent; invalid at a mode's synthetic root.
+    Command parent() const;
 
     /// @brief Ordinal of the child named @p childName, or NPOS when absent.
     size_t find(std::string_view childName) const;

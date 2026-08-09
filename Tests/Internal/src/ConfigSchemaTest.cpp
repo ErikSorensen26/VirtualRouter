@@ -26,19 +26,17 @@ TEST(Internal_ConfigSchemaTest, EnumMemberIndexIsTheEnumValue)
 
     static_assert(findEnumMember<ospf::AreaType>(tokenHash("NORMAL")) == 0);
     static_assert(findEnumMember<ospf::AreaType>(tokenHash("STUB")) == 1);
-    static_assert(findEnumMember<ospf::AreaType>(tokenHash("TOTALLY_STUB")) == 2);
-    static_assert(findEnumMember<ospf::AreaType>(tokenHash("NSSA")) == 3);
-    static_assert(findEnumMember<ospf::AreaType>(tokenHash("TOTALLY_NSSA")) == 4);
+    static_assert(findEnumMember<ospf::AreaType>(tokenHash("NSSA")) == 2);
 
     static_assert(static_cast<std::size_t>(ospf::AreaType::NORMAL) == 0);
-    static_assert(static_cast<std::size_t>(ospf::AreaType::TOTALLY_NSSA) == 4);
+    static_assert(static_cast<std::size_t>(ospf::AreaType::NSSA) == 2);
 
     SUCCEED();
 }
 
 TEST(Internal_ConfigSchemaTest, EnumCountIsNotAMember)
 {
-    static_assert(enumMemberCount<ospf::AreaType>() == 5);
+    static_assert(enumMemberCount<ospf::AreaType>() == 3);
     static_assert(findEnumMember<ospf::AreaType>(tokenHash("COUNT")) == ENUM_NOT_FOUND);
     SUCCEED();
 }
@@ -47,7 +45,7 @@ TEST(Internal_ConfigSchemaTest, UnknownEnumMemberDoesNotResolve)
 {
     static_assert(findEnumMember<ospf::AreaType>(tokenHash("")) == ENUM_NOT_FOUND);
     static_assert(findEnumMember<ospf::AreaType>(tokenHash("stub")) == ENUM_NOT_FOUND);
-    static_assert(findEnumMember<ospf::AreaType>(tokenHash("TOTALLY")) == ENUM_NOT_FOUND);
+    static_assert(findEnumMember<ospf::AreaType>(tokenHash("TOTALLY_STUB")) == ENUM_NOT_FOUND);
     SUCCEED();
 }
 
@@ -61,11 +59,11 @@ TEST(Internal_ConfigSchemaTest, EnumCarriesItsTypeName)
 TEST(Internal_ConfigSchemaTest, EnumNamesAreForDiagnosticsOnly)
 {
     static_assert(enumMemberName<ospf::AreaType>(1) == "STUB");
-    static_assert(enumMemberName<ospf::AreaType>(4) == "TOTALLY_NSSA");
+    static_assert(enumMemberName<ospf::AreaType>(2) == "NSSA");
 
     // Out of range is empty rather than undefined; a bad index reaches this from
     // a corrupt binary, where reading past the table would be worse than a blank.
-    static_assert(enumMemberName<ospf::AreaType>(5).empty());
+    static_assert(enumMemberName<ospf::AreaType>(3).empty());
     static_assert(enumMemberName<ospf::AreaType>(0xFFFF).empty());
     SUCCEED();
 }
@@ -84,7 +82,7 @@ TEST(Internal_ConfigSchemaTest, TupleMemberIndexIsThePosition)
     static_assert(OspfAreaRange::count == 3);
 
     static_assert(OspfAreaRange::members[0] == tokenHash("prefix"));
-    static_assert(OspfAreaRange::members[1] == tokenHash("advertise"));
+    static_assert(OspfAreaRange::members[1] == tokenHash("nonAdvertise"));
     static_assert(OspfAreaRange::members[2] == tokenHash("cost"));
 
     static_assert(OspfAreaRange::names[0] == "prefix");
@@ -107,14 +105,14 @@ TEST(Internal_ConfigSchemaTest, TupleAccessorMatchesTheNamedIndex)
 {
     OspfAreaRange::Tuple t{};
 
-    OspfAreaRange::advertise(t) = true;
+    OspfAreaRange::nonAdvertise(t) = true;
     OspfAreaRange::cost(t) = 42u;
 
     EXPECT_TRUE(std::get<1>(t));
     ASSERT_TRUE(std::get<2>(t).has_value());
     EXPECT_EQ(*std::get<2>(t), 42u);
 
-    EXPECT_TRUE(OspfAreaRange::advertise(t));
+    EXPECT_TRUE(OspfAreaRange::nonAdvertise(t));
     EXPECT_EQ(*OspfAreaRange::cost(t), 42u);
 }
 
