@@ -79,7 +79,7 @@ void BgpProcess::unshutdownNeighbor(Neighbor& nbr)
 {
     auto& cfgs = nbr.getConfigs();
     auto connMode = cfgs.get<config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
-    bool passive = connMode.hasValue() && !connMode.load();
+    bool passive = connMode.hasValue() && connMode.load() == config::bgp::BgpConnectionMode::PASSIVE;
 
     // If a session already exists (likely in IDLE after being shut down), restart it in place.
     auto it = sessions.find(nbr.neighborAddress);
@@ -180,11 +180,11 @@ void BgpProcess::onAcceptCallback(transport::tcp::AcceptCallbackCtx& ctx) noexce
             [&](const auto& rangesList)
             {
                 uint32_t remoteV4 = nbrIp.v4();
-                for (const auto& [netAddr, prefixLen, pgName] : rangesList)
+                for (const auto& [prefix, pgName] : rangesList)
                 {
-                    if (prefixLen > 32) continue;
-                    uint32_t mask = types::v4Mask(static_cast<uint8_t>(prefixLen));
-                    if ((remoteV4 & mask) == (netAddr & mask))
+                    if (prefix.prefixLength > 32) continue;
+                    uint32_t mask = types::v4Mask(static_cast<uint8_t>(prefix.prefixLength));
+                    if ((remoteV4 & mask) == (prefix.v4() & mask))
                     {
                         matchedGroup = pgName;
                         break;
@@ -199,7 +199,7 @@ void BgpProcess::onAcceptCallback(transport::tcp::AcceptCallbackCtx& ctx) noexce
     // Check if accepting a connection is allowed
     auto allowPassive = [&]() {
         auto connMode = nbr->getConfigs().get<config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
-        return !(connMode.hasValue() && connMode.load() /*active = true*/);
+        return (!connMode.hasValue() && connMode.load() == config::bgp::BgpConnectionMode::ACTIVE);
     };
 
     // eBGP Neighbor IP must be in same subnet

@@ -31,7 +31,6 @@
 #include "bgp/neighbor/NeighborTable.h"
 #include "bgp/neighbor/NeighborAf.h"
 #include "bgp/attributes/AttributeManager.hpp"
-#include "bgp/features/Dampening.h"
 
 namespace routing::bgp
 {
@@ -102,7 +101,6 @@ inline static AsPathSegment& getConfedAsSegment(Attributes& attrs)
  * - Maintains Adj-RIB-Out per peer and drives UPDATE generation through @ref BgpTx.
  *
  * Additional features per instance:
- * - BGP Route Dampening (RFC 2439)
  * - Minimum Route Advertisement Interval (MRAI) per peer
  * - Enhanced Route Refresh / stale-path tracking (RFC 7313)
  * - Next-Hop Tracking (NHT) with RIB watch callbacks
@@ -692,8 +690,6 @@ private:
      *   refreshing IGP costs, plus any locally-originated network-command routes.
      * - Applies deterministic-MED grouping when BGP_DETERMINISTIC_MED is configured.
      * - Passes candidates to @ref DecisionEngine::selectBest (and ADD-PATH pool logic).
-     * - Applies BGP Route Dampening: suppresses a newly reachable prefix or penalises
-     *   a newly unreachable one; suppressed prefixes are held until the reuse timer fires.
      * - Installs the winning route into the Loc-RIB via @ref installToRib and schedules
      *   aggregate recompute; withdraws and removes the entry if no best exists.
      * - Drives @ref recomputeAdjRibOut so all peers receive the correct announcement or
@@ -733,8 +729,8 @@ private:
             }
 
             BestPathConfig bpCfg;
-            bpCfg.compareRouterId   = configs.get<config::BgpAddressFamily::BGP_BEST_PATH_COMPARE_ROUTER_ID>().load();
-            bpCfg.medMissingAsWorst = configs.get<config::BgpAddressFamily::BGP_BEST_PATH_MED_MISSING_AS_WORST>().load();
+            bpCfg.compareRouterId   = ProcessAccessor::getConfigs(process).get<config::Bgp::BGP_BEST_PATH_COMPARE_ROUTER_ID>().load();
+            bpCfg.medMissingAsWorst = ProcessAccessor::getConfigs(process).get<config::Bgp::BGP_BEST_PATH_MED_MISSING_AS_WORST>().load();
             bpCfg.ignoreIgpMetric   = configs.get<config::BgpAddressFamily::BGP_BEST_PATH_IGP_METRIC_IGNORE>().load();
 
             if (ProcessAccessor::getConfigs(process).get<config::Bgp::BGP_DETERMINISTIC_MED>().load())
@@ -785,11 +781,11 @@ private:
             if (best.has_value())
             {
                 config::BgpAfBaseRegistry& base = configs.get<config::BgpAddressFamily::AF_BASE>().get();
-                bool selectBackup    = configs.get<config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BACKUP>().load();
-                bool selectBestExt   = configs.get<config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BEST_EXTERNAL>().load();
-                bool selectAll       = base.get<config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_ALL>().load();
-                auto selectBestFld  = base.get<config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_BEST>();
-                bool selectGroupBest = base.get<config::BgpAfBase::ADVERTISE_ADDITIONAL_GROUP_BEST>().load();
+                bool selectBackup    = base.get<config::BgpAfBase::ADDITIONAL_PATHS_SELECT_BACKUP>().load();
+                bool selectBestExt   = base.get<config::BgpAfBase::ADDITIONAL_PATHS_SELECT_BEST_EXTERNAL>().load();
+                bool selectAll       = base.get<config::BgpAfBase::ADDITIONAL_PATHS_SELECT_ALL>().load();
+                auto selectBestFld   = base.get<config::BgpAfBase::ADDITIONAL_PATHS_SELECT_BEST>();
+                bool selectGroupBest = base.get<config::BgpAfBase::ADDITIONAL_PATHS_SELECT_GROUP_BEST>().load();
 
                 if (selectAll || selectBackup || selectBestFld.hasValue() || selectBestExt || selectGroupBest)
                 {
@@ -844,42 +840,6 @@ private:
 
             auto lit = locRib.find(nlri);
             const bool had = (lit != locRib.end());
-
-            // BGP Route Dampening
-            if (configs.get<config::BgpAddressFamily::BGP_DAMPENING>().load())
-            {
-                auto now    = std::chrono::steady_clock::now();
-                auto params = getDampenParams();
-                auto& state = dampenTable[nlri];
-
-                if (!best.has_value() && had)
-                {
-                    // Prefix transitioning reachable → unreachable: penalise.
-                    state.onWithdraw(params, now);
-                    if (state.suppressed)
-                        startDampenReuseTimer();
-                    // Fall through to normal withdrawal below.
-                }
-                else if (best.has_value() && !had)
-                {
-                    if (state.pendingReuse)
-                    {
-                        // Reuse timer un-suppressed this prefix; no additional penalty.
-                        state.pendingReuse = false;
-                    }
-                    else
-                    {
-                        // Prefix transitioning unreachable → reachable: penalise re-announcement.
-                        bool suppress = state.onAnnounce(params, now);
-                        if (suppress)
-                        {
-                            startDampenReuseTimer();
-                            return; // hold suppressed: do not install into Loc-RIB
-                        }
-                    }
-                }
-                // had && best: path-attribute change, not a reachability flap; no penalty.
-            }
 
             if (!best.has_value())
             {
@@ -1020,9 +980,10 @@ private:
         // AS-PATH loop prevention (check all segments)
         {
             NeighborConfigs& nbrCfgs = nbr.getConfigs();
-            bool localAsEnabled = nbrCfgs.get<config::BgpNeighborSession::LOCAL_AS>().load();
-            bool dualAs = nbrCfgs.get<config::BgpNeighborSession::LOCAL_AS_DUAL_AS>().load();
-            auto localAsField = nbrCfgs.get<config::BgpNeighborSession::LOCAL_AS_AS>();
+            auto localAsField = nbrCfgs.get<config::BgpNeighborSession::LOCAL_AS>();
+            bool localAsEnabled = localAsField.hasValue();
+            auto localProps = localAsField.hasValue() ? config::BgpLocalAs::props(localAsField.load()) : 0;
+            bool dualAs = localProps.test(config::bgp::BgpLocalAsProps::DUAL_AS);
 
             NeighborAfConfigs& nbrAfCfgs = nbr.getAfNeighbor(family).getConfigs();
             bool allowAsIn = nbrAfCfgs.get<config::BgpNeighbor::ALLOWAS_IN>().load();
@@ -1049,7 +1010,7 @@ private:
                     if (inConfed && asn == confedId &&
                         (seg.segmentType == BGP_AS_SEQUENCE || seg.segmentType == BGP_AS_SET))
                         ownAsCount++;
-                    if (localAsEnabled && !dualAs && localAsField.hasValue() && asn == localAsField.load())
+                    if (localAsEnabled && !dualAs && localAsField.hasValue() && asn == config::BgpLocalAs::as(localAsField.load()))
                         localAsCount++;
                 }
             }
@@ -1138,17 +1099,19 @@ private:
 
             AsPathSegment& seg = getAsSegment(pa.attrs);
             const uint32_t confedId = getConfedId();
-            auto localAs = sesCfgs.get<config::BgpNeighborSession::LOCAL_AS_AS>();
-            if (!sesCfgs.get<config::BgpNeighborSession::LOCAL_AS>().load() || !localAs.hasValue())
+            auto localAs = sesCfgs.get<config::BgpNeighborSession::LOCAL_AS>();
+            auto localProps = localAs.hasValue() ? config::BgpLocalAs::props(localAs.load()) : 0;
+
+            if (!localAs.hasValue())
                 seg.asns.insert(seg.asns.begin(), confedId);
-            else if (sesCfgs.get<config::BgpNeighborSession::LOCAL_AS_REPLACE_AS>().load())
-                seg.asns.insert(seg.asns.begin(), localAs.load());
-            else if (sesCfgs.get<config::BgpNeighborSession::LOCAL_AS_NO_PREPEND>().load())
+            else if (localProps.test(config::bgp::BgpLocalAsProps::REPLACE_AS))
+                seg.asns.insert(seg.asns.begin(), config::BgpLocalAs::as(localAs.load()));
+            else if (localProps.test(config::bgp::BgpLocalAsProps::NO_PREPEND))
                 seg.asns.insert(seg.asns.begin(), confedId);
             else
             {
                 seg.asns.insert(seg.asns.begin(), confedId);
-                seg.asns.insert(seg.asns.begin(), localAs.load());
+                seg.asns.insert(seg.asns.begin(), config::BgpLocalAs::as(localAs.load()));
             }
         }
         else if (session.isConfedEbgp())
@@ -1205,9 +1168,10 @@ private:
                 pa.attrs.largeCommunities.clear();
 
             // REMOVE_PRIVATE_AS: strip private ASNs from egress AS-PATH.
-            bool removePrivate = cfgs.get<config::BgpNeighbor::REMOVE_PRIVATE_AS>().load();
-            bool removeAll     = cfgs.get<config::BgpNeighbor::REMOVE_PRIVATE_AS_ALL>().load();
-            if (removePrivate || removeAll)
+            auto removePrivate = cfgs.get<config::BgpNeighbor::REMOVE_PRIVATE_AS>();
+            bool removeAll = removePrivate.hasValue() ? config::BgpRemovePrivateAs::all(removePrivate.load()) : false;
+
+            if (removePrivate.hasValue() || removeAll)
             {
                 auto isPrivateAs = [](uint32_t asn) {
                     return (asn >= 64512u && asn <= 65534u) ||
@@ -1509,18 +1473,18 @@ private:
                 if (!best->additionalPaths.empty())
                 {
                     config::BgpAfBaseRegistry& baseCfg = configs.get<config::BgpAddressFamily::AF_BASE>().get();
-                    bool advBackup    = configs.get<config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BACKUP>().load();
-                    bool advBestExt   = configs.get<config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BEST_EXTERNAL>().load();
-                    bool advAll       = baseCfg.get<config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_ALL>().load();
-                    auto advBestFld  = baseCfg.get<config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_BEST>();
-                    bool advGroupBest = baseCfg.get<config::BgpAfBase::ADVERTISE_ADDITIONAL_GROUP_BEST>().load();
+                    bool backup    = baseCfg.get<config::BgpAfBase::ADDITIONAL_PATHS_SELECT_BACKUP>().load();
+                    bool bestExt   = baseCfg.get<config::BgpAfBase::ADDITIONAL_PATHS_SELECT_BEST_EXTERNAL>().load();
+                    bool all       = baseCfg.get<config::BgpAfBase::ADDITIONAL_PATHS_SELECT_ALL>().load();
+                    auto bestFld   = baseCfg.get<config::BgpAfBase::ADDITIONAL_PATHS_SELECT_BEST>();
+                    bool groupBest = baseCfg.get<config::BgpAfBase::ADDITIONAL_PATHS_SELECT_GROUP_BEST>().load();
 
-                    if (advAll)
+                    if (all)
                     {
                         for (auto* r : best->additionalPaths)
                             paths.push_back(r);
                     }
-                    else if (advBestFld.hasValue() || advGroupBest || advBestExt || advBackup)
+                    else if (bestFld.hasValue() || groupBest || bestExt || backup)
                     {
                         const size_t base = paths.size();
                         auto tryAdd = [&](InboundRoute<NlriT>* r) {
@@ -1528,23 +1492,23 @@ private:
                                 paths.push_back(r);
                         };
 
-                        if (advBestFld.hasValue())
+                        if (bestFld.hasValue())
                         {
-                            uint8_t n = advBestFld.load();
+                            uint8_t n = bestFld.load();
                             for (auto* r : best->additionalPaths) {
                                 if (paths.size() - base >= n) break;
                                 tryAdd(r);
                             }
                         }
 
-                        if (advBackup && !best->additionalPaths.empty())
+                        if (backup && !best->additionalPaths.empty())
                             tryAdd(best->additionalPaths[0]);
 
-                        if (advBestExt)
+                        if (bestExt)
                             for (auto* r : best->additionalPaths)
                                 if (r->ebgp) { tryAdd(r); break; }
 
-                        if (advGroupBest)
+                        if (groupBest)
                         {
                             std::unordered_set<uint32_t> seenAs;
                             for (auto* r : paths)
@@ -1829,19 +1793,19 @@ public:
             AsPathSegment seg;
             seg.segmentType = BGP_AS_SEQUENCE;
 
-            bool localAsEnabled = sesCfgs.get<config::BgpNeighborSession::LOCAL_AS>().load();
-            auto localAsField  = sesCfgs.get<config::BgpNeighborSession::LOCAL_AS_AS>();
+            auto localAsField = sesCfgs.get<config::BgpNeighborSession::LOCAL_AS>();
+            auto localProps = localAsField.hasValue() ? config::BgpLocalAs::props(localAsField.load()) : 0;
             const uint32_t confedId = getConfedId();
 
-            if (!localAsEnabled || !localAsField.hasValue())
+            if (!localAsField.hasValue())
                 seg.asns.push_back(confedId);
-            else if (sesCfgs.get<config::BgpNeighborSession::LOCAL_AS_REPLACE_AS>().load())
-                seg.asns.push_back(localAsField.load());
-            else if (sesCfgs.get<config::BgpNeighborSession::LOCAL_AS_NO_PREPEND>().load())
+            else if (localProps.test(config::bgp::BgpLocalAsProps::REPLACE_AS))
+                seg.asns.push_back(config::BgpLocalAs::as(localAsField.load()));
+            else if (localProps.test(config::bgp::BgpLocalAsProps::NO_PREPEND))
                 seg.asns.push_back(confedId);
             else
             {
-                seg.asns.push_back(localAsField.load());
+                seg.asns.push_back(config::BgpLocalAs::as(localAsField.load()));
                 seg.asns.push_back(confedId);
             }
 
@@ -2148,19 +2112,24 @@ private:
                 pa.attrs.asPath.end());
 
             AsPathSegment& seg = getAsSegment(pa.attrs);
+
+            auto localAsField = sesCfgs.get<config::BgpNeighborSession::LOCAL_AS>();
+            auto localProps = localAsField.hasValue() ? config::BgpLocalAs::props(localAsField.load()) : 0;
             const uint32_t confedId = getConfedId();
-            auto localAsField = sesCfgs.get<config::BgpNeighborSession::LOCAL_AS_AS>();
-            if (!sesCfgs.get<config::BgpNeighborSession::LOCAL_AS>().load() || !localAsField.hasValue())
-                seg.asns.insert(seg.asns.begin(), confedId);
-            else if (sesCfgs.get<config::BgpNeighborSession::LOCAL_AS_REPLACE_AS>().load())
-                seg.asns.insert(seg.asns.begin(), localAsField.load());
-            else if (sesCfgs.get<config::BgpNeighborSession::LOCAL_AS_NO_PREPEND>().load())
-                seg.asns.insert(seg.asns.begin(), confedId);
+
+            if (!localAsField.hasValue())
+                seg.asns.push_back(confedId);
+            else if (localProps.test(config::bgp::BgpLocalAsProps::REPLACE_AS))
+                seg.asns.push_back(config::BgpLocalAs::as(localAsField.load()));
+            else if (localProps.test(config::bgp::BgpLocalAsProps::NO_PREPEND))
+                seg.asns.push_back(confedId);
             else
             {
-                seg.asns.insert(seg.asns.begin(), confedId);
-                seg.asns.insert(seg.asns.begin(), localAsField.load());
+                seg.asns.push_back(config::BgpLocalAs::as(localAsField.load()));
+                seg.asns.push_back(confedId);
             }
+
+            pa.attrs.asPath.push_back(std::move(seg));
         }
         else if (session.isConfedEbgp())
         {
@@ -2248,86 +2217,6 @@ private:
             withdraw.withdrawn.push_back({aggNlri, 0});
             session->sendUpdate<N>(withdraw);
         });
-    }
-
-    /**
-     * @brief Reads dampening configuration and returns a populated DampenParams struct.
-     *
-     * Converts all config fields (half-life, reuse, suppress, max-suppress-time) from
-     * their config units (minutes) to seconds, and pre-computes the penalty ceiling as
-     * `suppress * 2^(maxSuppressSecs / halfLifeSecs)`.
-     *
-     * @return Current dampening parameters derived from registry configuration.
-     */
-    DampenParams getDampenParams() const
-    {
-        DampenParams p;
-        p.halfLifeSecs    = configs.get<config::BgpAddressFamily::BGP_DAMPENING_HALF_LIFE>().load() * 60.0;
-        p.reuse           = configs.get<config::BgpAddressFamily::BGP_DAMPENING_REUSE_THRESHOLD>().load();
-        p.suppress        = configs.get<config::BgpAddressFamily::BGP_DAMPENING_SUPPRESS_THRESHOLD>().load();
-        p.maxSuppressSecs = configs.get<config::BgpAddressFamily::BGP_DAMPENING_MAXIMUM_SUPPRESS_TIME>().load() * 60.0;
-        p.ceiling         = p.suppress * std::pow(2.0, p.maxSuppressSecs / p.halfLifeSecs);
-        return p;
-    }
-
-    /**
-     * @brief Arms the 5-second dampening reuse scan timer if not already running.
-     *
-     * The timer fires once and calls @ref onDampenReuseTimer. If any prefixes remain
-     * suppressed after that scan, the timer is re-armed by `onDampenReuseTimer`
-     * itself to ensure continuous reuse checking.
-     */
-    void startDampenReuseTimer()
-    {
-        if (dampenReuseTimerId_ != 0)
-            return;
-        dampenReuseTimerId_ = ProcessAccessor::getScheduler(process).postAfter(
-            std::chrono::steady_clock::now() + std::chrono::seconds(5),
-            [this](uint32_t) { dampenReuseTimerId_ = 0; onDampenReuseTimer(); });
-    }
-
-    /**
-     * @brief Periodic dampening reuse check; re-injects un-suppressed prefixes into the Loc-RIB.
-     *
-     * Evaluates every entry in the dampen table against the current time and parameters.
-     * Prefixes whose penalty has decayed below the reuse threshold have `pendingReuse`
-     * set to `true` and are queued for @ref recomputeNlri (which will bypass the
-     * suppress check because `pendingReuse` is set). Stale dampen entries (penalty fully
-     * decayed, no longer suppressed) are pruned. If any prefixes remain suppressed after
-     * the scan, the timer is re-armed via @ref startDampenReuseTimer.
-     */
-    void onDampenReuseTimer()
-    {
-        auto params = getDampenParams();
-        auto now    = std::chrono::steady_clock::now();
-
-        bool anySuppressed = false;
-        std::vector<NlriT> toReuse;
-
-        for (auto it = dampenTable.begin(); it != dampenTable.end(); )
-        {
-            auto& [nlri, state] = *it;
-
-            if (state.checkReuse(params, now))
-            {
-                state.pendingReuse = true;
-                toReuse.push_back(nlri);
-            }
-
-            if (state.suppressed)
-                anySuppressed = true;
-
-            if (state.isStale())
-                it = dampenTable.erase(it);
-            else
-                ++it;
-        }
-
-        for (const NlriT& nlri : toReuse)
-            recomputeNlri(nlri);
-
-        if (anySuppressed)
-            startDampenReuseTimer();
     }
 
     /**
@@ -2473,8 +2362,10 @@ private:
         auto& rt = ProcessAccessor::getRoutingInstance(process).getRib();
         for (auto& [nh, entry] : nhtTable)
             if (entry.watchId)
+            {
                 if (entry.isV6) rt.unwatchAddress<__uint128_t>(entry.watchId);
                 else rt.unwatchAddress<uint32_t>(entry.watchId);
+            }
         nhtTable.clear();
         nlriToNextHop.clear();
     }
@@ -2527,17 +2418,14 @@ private:
                 {
                     for (const auto& range : rangesList)
                     {
-                        uint8_t rangeDist       = config::BgpDistanceRange::distance(range);
-                        const auto& pfxList     = config::BgpDistanceRange::prefixes(range).value;
+                        uint8_t rangeDist = config::BgpDistanceRange::distance(range);
+                        auto pfx = config::BgpDistanceRange::prefix(range);
                         types::IPPrefix nlriAsPfx(nlri.addr, nlri.prefixLength);
-                        for (const auto& [pfx, pfxListName] : pfxList)
+                        if (pfx == nlriAsPfx ||
+                            (pfx.prefixLength <= nlri.prefixLength && pfx.contains(nlriAsPfx)))
                         {
-                            if (pfx == nlriAsPfx ||
-                                (pfx.prefixLength <= nlri.prefixLength && pfx.contains(nlriAsPfx)))
-                            {
-                                dist = rangeDist;
-                                return;
-                            }
+                            dist = rangeDist;
+                            return;
                         }
                     }
                 });
@@ -2808,8 +2696,10 @@ private:
         auto& rt = ProcessAccessor::getRoutingInstance(process).getRib();
         for (auto& [nlri, entry] : networkWatches)
             if (entry.watchId)
+            {
                 if (entry.isV6) rt.unwatchAddress<__uint128_t>(entry.watchId);
                 else rt.unwatchAddress<uint32_t>(entry.watchId);
+            }
 
         networkWatches.clear();
         networkLocalRoutes.clear();
@@ -2852,8 +2742,7 @@ private:
     {
         if (nhtTimerId != 0) return;
 
-        auto delayField = configs.get<config::BgpAddressFamily::BGP_NEXT_HOP_TRIGGER_DELAY>();
-        uint16_t delaySecs = delayField.hasValue() ? delayField.load() : 5;
+        uint16_t delaySecs = configs.get<config::BgpAddressFamily::BGP_NEXT_HOP_TRIGGER_DELAY>().load();
 
         nhtTimerId = ProcessAccessor::getScheduler(process).postAfter(
             std::chrono::steady_clock::now() + std::chrono::seconds(delaySecs),
@@ -2943,9 +2832,6 @@ private:
 
     std::unordered_map<uint32_t, MraiState> mraiState;        ///< MRAI rate-limit state per peer RID.
     uint32_t mraiBypassPeer = 0;                              ///< Peer RID currently draining via MRAI timer; 0 when not active.
-
-    std::unordered_map<NlriT, DampenState> dampenTable;       ///< Dampening penalty and suppression state per prefix.
-    uint32_t dampenReuseTimerId_ = 0;                         ///< Timer ID for the next dampening reuse scan; 0 when not armed.
 
     std::unordered_set<uint32_t> defaultOriginatedPeers;      ///< Set of peer RIDs to which a default route has been sent.
     std::unordered_map<NlriT, AggregateState> aggregateStates; ///< Per-aggregate-prefix origination state.

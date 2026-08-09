@@ -87,9 +87,8 @@ void Session::buildLocalCapabilities()
 
     {
         auto& cfgs = neighbor.getConfigs();
-        auto localAs = cfgs.get<config::BgpNeighborSession::LOCAL_AS_AS>();
-        localCaps.asn = (cfgs.get<config::BgpNeighborSession::LOCAL_AS>().load() && localAs.hasValue())
-            ? localAs.load() : neighbor.getProcess().asNumber;
+        auto localAsField = cfgs.get<config::BgpNeighborSession::LOCAL_AS>();
+        localCaps.asn = localAsField.hasValue() ? config::BgpLocalAs::as(localAsField.load()) : neighbor.getProcess().asNumber;
     }
 
     localCaps.asn32bit = true;
@@ -101,7 +100,7 @@ void Session::buildLocalCapabilities()
     if (grEnabled)
     {
         localCaps.gracefulRestart = true;
-        localCaps.restartTime = procCfg.get<config::Bgp::BGP_GRACEFUL_RESTART_RESTART_TIME>().load();
+        localCaps.restartTime = procCfg.get<config::Bgp::BGP_GRACEFUL_RESTART_TIME>().load();
     }
 
     localCaps.multiSess = neighbor.getConfigs().get<config::BgpNeighborSession::TRANSPORT_MULTI_SESSION>().load();
@@ -256,7 +255,7 @@ void Session::onFsmTransition(FsmState from, FsmState to, FsmEvent /*trigger*/)
             if (negotiated.multiSess)
             {
                 auto connectionMode = neighbor.getConfigs().get<config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
-                bool passive = connectionMode.hasValue() && !connectionMode.load();
+                bool passive = connectionMode.hasValue() && connectionMode.load() == config::bgp::BgpConnectionMode::PASSIVE;
                 for (const auto& fam : negotiated.multiSessionFamilies)
                 {
                     if (passive)

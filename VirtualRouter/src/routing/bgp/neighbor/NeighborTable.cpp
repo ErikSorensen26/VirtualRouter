@@ -68,7 +68,7 @@ Neighbor* NeighborTable::createNeighbor(const types::IPAddress& ipAddress)
 void NeighborTable::startConfiguredSession(Neighbor& nbr)
 {
     auto connectionMode = nbr.getConfigs().get<config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
-    if (connectionMode.hasValue() && !connectionMode.load() /*active = true*/)
+    if (connectionMode.hasValue() && connectionMode.load() == config::bgp::BgpConnectionMode::PASSIVE)
         process.startPassiveSession(nbr);
     else
         process.startActiveSession(nbr);

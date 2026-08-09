@@ -16,7 +16,6 @@
 
 #include "bgp/BgpProcess.h"
 #include "bgp/BgpTypes.hpp"
-#include "bgp/features/Dampening.h"
 #include "bgp/session/Session.h"
 #include "bgp/session/Fsm.h"
 #include "bgp/session/SessionTimers.h"
@@ -64,7 +63,7 @@ protected:
     {
         utils::RCU::registerThread();
         global = new core::Global(fs, {}, false, true);
-        vrf = global->getRoutingInstance("default", types::AddressFamily::IPv4);
+        vrf = global->getRoutingInstance("", types::AddressFamily::IPv4);
         vrf->getTcp().swapEngineForTesting(new MockTcpEngine(*vrf));
 
         proc = new BgpProcess(kLocalAs, vrf);
@@ -214,196 +213,6 @@ struct TcpLoopbackPair
         }
     }
 };
-
-namespace
-{
-constexpr DampenParams kDefaultDampenParams{
-    /*halfLifeSecs*/    15,
-    /*reuse*/           750,
-    /*suppress*/        2000,
-    /*maxSuppressSecs*/ 60,
-    /*ceiling*/         16000.0
-};
-
-std::chrono::steady_clock::time_point t0()
-{
-    return std::chrono::steady_clock::now();
-}
-} // namespace
-
-TEST_F(Internal_BgpTest, Dampen_OnAnnounce_FreshRoute_NoPenalty)
-{
-    DampenState d;
-    auto now = t0();
-
-    bool suppressed = d.onAnnounce(kDefaultDampenParams, now);
-
-    EXPECT_FALSE(suppressed);
-    EXPECT_DOUBLE_EQ(d.penalty, 0.0);
-    EXPECT_FALSE(d.suppressed);
-}
-
-TEST_F(Internal_BgpTest, Dampen_OnWithdraw_IncreasesPenalty)
-{
-    DampenState d;
-    auto now = t0();
-
-    bool suppressed = d.onWithdraw(kDefaultDampenParams, now);
-
-    EXPECT_GT(d.penalty, 0.0);
-    EXPECT_TRUE(d.everWithdrawn);
-    EXPECT_FALSE(suppressed); // single withdraw shouldn't cross suppress=2000
-}
-
-TEST_F(Internal_BgpTest, Dampen_DecayTo_HalvesAfterHalfLife)
-{
-    DampenState d;
-    auto now = t0();
-
-    d.onWithdraw(kDefaultDampenParams, now);
-    double initial = d.penalty;
-    ASSERT_GT(initial, 0.0);
-
-    auto later = now + std::chrono::seconds(kDefaultDampenParams.halfLifeSecs);
-    d.decayTo(kDefaultDampenParams.halfLifeSecs, later);
-
-    EXPECT_NEAR(d.penalty, initial / 2.0, initial * 0.05);
-    EXPECT_EQ(d.lastUpdate, later);
-}
-
-TEST_F(Internal_BgpTest, Dampen_DecayTo_NoOpAtSameTime)
-{
-    DampenState d;
-    auto now = t0();
-
-    d.onWithdraw(kDefaultDampenParams, now);
-    double before = d.penalty;
-
-    d.decayTo(kDefaultDampenParams.halfLifeSecs, now);
-
-    EXPECT_DOUBLE_EQ(d.penalty, before);
-}
-
-TEST_F(Internal_BgpTest, Dampen_FlapSequence_CrossesSuppressThreshold)
-{
-    DampenState d;
-    auto now = t0();
-
-    bool suppressed = false;
-    // Repeated flaps without time advancing -> penalty accumulates monotonically.
-    for (int i = 0; i < 20 && !suppressed; ++i)
-    {
-        d.onWithdraw(kDefaultDampenParams, now);
-        suppressed = d.onAnnounce(kDefaultDampenParams, now) || d.suppressed;
-        // also directly check via onWithdraw's return on the next iteration
-        if (d.penalty >= kDefaultDampenParams.suppress)
-            suppressed = true;
-    }
-
-    EXPECT_TRUE(d.penalty >= kDefaultDampenParams.suppress || d.suppressed);
-}
-
-TEST_F(Internal_BgpTest, Dampen_OnWithdraw_SetsSuppressedWhenOverThreshold)
-{
-    DampenState d;
-    auto now = t0();
-
-    // Drive penalty above the suppress threshold via repeated withdraws at
-    // the same instant (no decay between events).
-    bool suppressed = false;
-    for (int i = 0; i < 50; ++i)
-    {
-        suppressed = d.onWithdraw(kDefaultDampenParams, now);
-        if (suppressed) break;
-    }
-
-    EXPECT_TRUE(suppressed);
-    EXPECT_TRUE(d.suppressed);
-    EXPECT_GT(d.suppressExpiry, now);
-}
-
-TEST_F(Internal_BgpTest, Dampen_CheckReuse_ClearsAfterDecayBelowReuse)
-{
-    DampenState d;
-    auto now = t0();
-
-    // Push into suppression.
-    for (int i = 0; i < 50; ++i)
-        if (d.onWithdraw(kDefaultDampenParams, now)) break;
-
-    ASSERT_TRUE(d.suppressed);
-
-    // Decay far enough that penalty drops below reuse threshold.
-    auto muchLater = now + std::chrono::seconds(20 * kDefaultDampenParams.halfLifeSecs);
-    bool becameEligible = d.checkReuse(kDefaultDampenParams, muchLater);
-
-    EXPECT_TRUE(becameEligible);
-    EXPECT_FALSE(d.suppressed);
-}
-
-TEST_F(Internal_BgpTest, Dampen_CheckReuse_SuppressExpiryForcesClear)
-{
-    DampenState d;
-    auto now = t0();
-
-    for (int i = 0; i < 50; ++i)
-        if (d.onWithdraw(kDefaultDampenParams, now)) break;
-    ASSERT_TRUE(d.suppressed);
-
-    // Jump past maxSuppressSecs but keep penalty artificially high by using a
-    // tiny half-life budget (decay still occurs, but suppressExpiry alone
-    // must force clearing per the cap below).
-    auto pastExpiry = d.suppressExpiry + std::chrono::seconds(1);
-    bool becameEligible = d.checkReuse(kDefaultDampenParams, pastExpiry);
-
-    EXPECT_TRUE(becameEligible);
-    EXPECT_FALSE(d.suppressed);
-}
-
-TEST_F(Internal_BgpTest, Dampen_MaxSuppressSecs_CapsExpiry)
-{
-    DampenState d;
-    auto now = t0();
-
-    for (int i = 0; i < 50; ++i)
-        if (d.onWithdraw(kDefaultDampenParams, now)) break;
-    ASSERT_TRUE(d.suppressed);
-
-    auto maxAllowed = now + std::chrono::seconds(kDefaultDampenParams.maxSuppressSecs);
-    EXPECT_LE(d.suppressExpiry, maxAllowed + std::chrono::seconds(1));
-}
-
-TEST_F(Internal_BgpTest, Dampen_IsStale_AfterLongDecay)
-{
-    DampenState d;
-    auto now = t0();
-
-    d.onWithdraw(kDefaultDampenParams, now);
-    EXPECT_FALSE(d.isStale()); // fresh penalty, not suppressed but >= 1.0 likely
-
-    auto muchLater = now + std::chrono::seconds(50 * kDefaultDampenParams.halfLifeSecs);
-    d.decayTo(kDefaultDampenParams.halfLifeSecs, muchLater);
-
-    EXPECT_TRUE(d.isStale());
-    EXPECT_FALSE(d.suppressed);
-    EXPECT_LT(d.penalty, 1.0);
-}
-
-TEST_F(Internal_BgpTest, Dampen_PendingReuse_AnnounceDoesNotAddPenalty)
-{
-    DampenState d;
-    auto now = t0();
-
-    d.onWithdraw(kDefaultDampenParams, now);
-    double penaltyAfterWithdraw = d.penalty;
-
-    d.pendingReuse = true;
-    d.onAnnounce(kDefaultDampenParams, now);
-
-    // Reuse-flagged announce should not add the normal announce penalty on
-    // top of the withdraw penalty (allow equal or decayed-equal).
-    EXPECT_LE(d.penalty, penaltyAfterWithdraw + 1e-9);
-}
 
 TEST_F(Internal_BgpTest, AttrMgr_AcquireRetainRelease_RefCounting)
 {
@@ -2125,10 +1934,14 @@ TEST_F(Internal_BgpTest, Neighbor_BuildAttributeRanges_DiscardAndWithdraw)
     Neighbor* nbr = proc->getNtable().createNeighbor(nbrAddr);
     ASSERT_NE(nbr, nullptr);
 
-    nbr->getConfigs().get<config::BgpNeighborSession::PATH_ATTRIBUTE>().withWrite(
-        [](std::vector<std::tuple<bool, uint8_t, uint8_t>>& ranges) {
-            ranges.push_back({true, 10, 12});   // discard
-            ranges.push_back({false, 200, 201}); // treat-as-withdraw
+    nbr->getConfigs().get<config::BgpNeighborSession::PATH_ATTRIBUTE_DISCARD>().withWrite(
+        [](std::vector<std::tuple<uint8_t, uint8_t>>& ranges) {
+            ranges.push_back({10, 12});   // discard
+            return true;
+        });
+    nbr->getConfigs().get<config::BgpNeighborSession::PATH_ATTRIBUTE_TREAT_AS_WITHDRAW>().withWrite(
+        [](std::vector<std::tuple<uint8_t, uint8_t>>& ranges) {
+            ranges.push_back({200, 201}); // treat-as-withdraw
             return true;
         });
     proc->getScheduler().waitIdle();
@@ -2151,8 +1964,13 @@ TEST_F(Internal_BgpTest, Neighbor_BuildAttributeRanges_DiscardAndWithdraw)
     EXPECT_FALSE(ranges.withdraw.test(10));
 
     // Re-building after clearing the list resets both bitsets.
-    nbr->getConfigs().get<config::BgpNeighborSession::PATH_ATTRIBUTE>().withWrite(
-        [](std::vector<std::tuple<bool, uint8_t, uint8_t>>& ranges) {
+    nbr->getConfigs().get<config::BgpNeighborSession::PATH_ATTRIBUTE_DISCARD>().withWrite(
+        [](std::vector<std::tuple<uint8_t, uint8_t>>& ranges) {
+            ranges.clear();
+            return true;
+        });
+    nbr->getConfigs().get<config::BgpNeighborSession::PATH_ATTRIBUTE_TREAT_AS_WITHDRAW>().withWrite(
+        [](std::vector<std::tuple<uint8_t, uint8_t>>& ranges) {
             ranges.clear();
             return true;
         });
@@ -3486,9 +3304,11 @@ TEST_F(Internal_BgpPolicyTest, Ingress_LocalAsLoop_ConfiguredLocalAsInPath_Rejec
 
     auto peer = makePeer(mkV4(0x0A000011), 0x0101010F, 65099);
     auto& sessCfg = peer.nbr->getConfigs();
-    sessCfg.get<config::BgpNeighborSession::LOCAL_AS>().set(true);
-    sessCfg.get<config::BgpNeighborSession::LOCAL_AS_AS>().set(kLocalAsOverride);
-    sessCfg.get<config::BgpNeighborSession::LOCAL_AS_DUAL_AS>().set(false);
+    config::BgpLocalAs::Tuple la;
+    std::get<0>(la) = kLocalAsOverride;
+    types::EnumBitMap<config::bgp::BgpLocalAsProps>& props = std::get<1>(la);
+    props.set(config::bgp::BgpLocalAsProps::DUAL_AS);
+    sessCfg.getConfigs().get<config::BgpNeighborSession::LOCAL_AS>().set(la);
 
     Attributes attrs;
     attrs.origin = BGP_ORIGIN_IGP;
@@ -3645,9 +3465,7 @@ TEST_F(Internal_BgpPolicyTest, Update_DistanceRange_OverridesDefaultDistance)
     afConfigs().get<config::BgpAddressFamily::DISTANCE_RANGE>().withWrite(
         [&](auto& ranges)
         {
-            std::vector<std::tuple<types::IPPrefix, std::string>> pfxList;
-            pfxList.emplace_back(types::IPPrefix(0xC0120000u, 24, true), std::string{});
-            ranges.emplace_back(uint8_t{50}, std::move(pfxList));
+            ranges.emplace_back(uint8_t{50}, types::IPPrefix(0xC0120000u, 24, true), std::string{});
             return true;
         });
 
@@ -3966,7 +3784,7 @@ TEST_F(Internal_BgpPolicyTest, SoftReconfig_SoftClearInbound_ReappliesIngressPol
     EXPECT_TRUE(isInstalled(0xC01A0000, 24));
 }
 
-TEST_F(Internal_BgpPolicyTest, FINDING_RecomputeNlri_DampeningSuppressReturnExitsBatch)
+TEST_F(Internal_BgpPolicyTest, RecomputeNlri_BatchUpdate_BothIndependentPrefixesInstalled)
 {
     installConnectedNextHop(0x0A000000, 24);
 
@@ -4028,18 +3846,6 @@ TEST_F(Internal_BgpPolicyTest, AggregateAddress_SummaryOnly_SuppressesMoreSpecif
 // not receive advertisements for routes that would otherwise be
 // best-path (withdraw-and-skip branch).
 TEST_F(Internal_BgpPolicyTest, RecomputeAdjRibOut_NeighborAfNotActivated_WithdrawnAndSkipped)
-{
-    GTEST_SKIP();
-}
-
-// Proper repro for the recomputeNlri dampening-suppress `return;` vs
-// `continue;` bug (AddressFamilyInstance.h ~line 886): drive a prefix
-// through repeated withdraw/announce flaps until its dampening penalty
-// crosses the suppress threshold (per Section C), then send a single
-// UPDATE containing that suppressed prefix plus a second, independent
-// prefix. Once fixed (`continue;`), the second prefix must still be
-// recomputed/installed; currently the bare `return;` may skip it.
-TEST_F(Internal_BgpPolicyTest, FINDING_RecomputeNlri_SuppressedPrefixDoesNotBlockSiblingRecompute)
 {
     GTEST_SKIP();
 }

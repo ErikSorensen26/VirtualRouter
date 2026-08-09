@@ -71,10 +71,6 @@ struct NeighborConfigs
         std::bitset<config::toIndex<config::BgpNeighborSession::COUNT>> b;
 
         b.set(config::toIndex<config::BgpNeighborSession::LOCAL_AS>);
-        b.set(config::toIndex<config::BgpNeighborSession::LOCAL_AS_AS>);
-        b.set(config::toIndex<config::BgpNeighborSession::LOCAL_AS_NO_PREPEND>);
-        b.set(config::toIndex<config::BgpNeighborSession::LOCAL_AS_REPLACE_AS>);
-        b.set(config::toIndex<config::BgpNeighborSession::LOCAL_AS_DUAL_AS>);
 
         return b;
     }();

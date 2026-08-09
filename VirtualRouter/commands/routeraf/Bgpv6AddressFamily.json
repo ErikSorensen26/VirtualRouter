@@ -1,0 +1,11 @@
+{
+    "prompt": "(config-router-af)#",
+    "variant": "bgp-ipv6",
+    "registry": "BgpAddressFamily",
+    "commands": [
+        {
+            "description": "",
+            "name": "<cr>"
+        }
+    ]
+}

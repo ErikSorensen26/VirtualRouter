@@ -87,10 +87,10 @@ struct NeighborAfConfigs
 
         b.set(config::toIndex<config::BgpAfBase::ADDITIONAL_PATHS_RECEIVE>);
         b.set(config::toIndex<config::BgpAfBase::ADDITIONAL_PATHS_SEND>);
-        b.set(config::toIndex<config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_ALL>);
-        b.set(config::toIndex<config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_BEST>);
-        b.set(config::toIndex<config::BgpAfBase::ADVERTISE_ADDITIONAL_GROUP_BEST>);
-        b.set(config::toIndex<config::BgpAfBase::ADVERTISE_BEST_EXTERNAL>);
+        b.set(config::toIndex<config::BgpAfBase::ADDITIONAL_PATHS_SELECT_ALL>);
+        b.set(config::toIndex<config::BgpAfBase::ADDITIONAL_PATHS_SELECT_BEST>);
+        b.set(config::toIndex<config::BgpAfBase::ADDITIONAL_PATHS_SELECT_GROUP_BEST>);
+        b.set(config::toIndex<config::BgpAfBase::ADDITIONAL_PATHS_SELECT_BEST_EXTERNAL>);
 
         return b;
     }();
@@ -118,7 +118,6 @@ struct NeighborAfConfigs
         b.set(config::toIndex<config::BgpNeighbor::NEXT_HOP_UNCHANGED>);
         b.set(config::toIndex<config::BgpNeighbor::PREFIX_LIST_OUT>);
         b.set(config::toIndex<config::BgpNeighbor::REMOVE_PRIVATE_AS>);
-        b.set(config::toIndex<config::BgpNeighbor::REMOVE_PRIVATE_AS_ALL>);
         b.set(config::toIndex<config::BgpNeighbor::ROUTE_MAP_OUT>);
         b.set(config::toIndex<config::BgpNeighbor::ROUTE_REFLECTOR_CLIENT>);
         b.set(config::toIndex<config::BgpNeighbor::ROUTE_SERVER_CLIENT>);

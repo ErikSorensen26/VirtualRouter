@@ -105,19 +105,18 @@ void Neighbor::buildAttributeRanges()
     attrRanges.discard.reset();
     attrRanges.withdraw.reset();
 
-    configs.get<config::BgpNeighborSession::PATH_ATTRIBUTE>().withRead([this](const auto& rangesList) {
-        for (const auto& [disc, lo, hi] : rangesList)
+    configs.get<config::BgpNeighborSession::PATH_ATTRIBUTE_DISCARD>().withRead([this](const auto& rangesList) {
+        for (const auto& [lo, hi] : rangesList)
         {
-            if (disc)
-            {
-                for (uint16_t i = lo; i <= hi; ++i)
-                    attrRanges.discard.set(i);
-            }
-            else
-            {
-                for (uint16_t i = lo; i <= hi; ++i)
-                    attrRanges.withdraw.set(i);
-            }
+            for (uint16_t i = lo; i <= hi; ++i)
+                attrRanges.discard.set(i);
+        }
+    });
+    configs.get<config::BgpNeighborSession::PATH_ATTRIBUTE_TREAT_AS_WITHDRAW>().withRead([this](const auto& rangesList) {
+        for (const auto& [lo, hi] : rangesList)
+        {
+            for (uint16_t i = lo; i <= hi; ++i)
+                attrRanges.withdraw.set(i);
         }
     });
 }

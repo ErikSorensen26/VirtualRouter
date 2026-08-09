@@ -19,9 +19,8 @@ NeighborAf::NeighborAf(const AfiSafi& fam, Neighbor& p)
       mpNegotiated(false),
       parent(p),
       configs(fam, [&p, &fam]() -> config::BgpNeighborRegistry& {
-          auto neighborConfigs = p.configs.get<config::BgpNeighborSession::AF_NEIGHBOR>();
-          uint32_t id = fam.afi | uint32_t(fam.afi) << 16;
-          return neighborConfigs.emplaceBack(id);
+          auto& af = p.process.getConfigs().get<config::Bgp::ADDRESS_FAMILIES>().get().at(fam.flatten());
+          return af->get<config::BgpAddressFamily::NEIGHBOR>().emplaceBack(p.neighborAddress);;
       }())
 {
     configs.getConfigs().context().set(this);
@@ -96,7 +95,7 @@ void NeighborAf::cancelPfxRestart()
 NeighborAf::~NeighborAf()
 {
     cancelPfxRestart();
-    parent.getConfigs().get<config::BgpNeighborSession::AF_NEIGHBOR>().erase(
-        family.afi | uint32_t(family.afi << 16));
+    //parent.getConfigs().get<config::BgpNeighborSession::AF_NEIGHBOR>().erase(
+        //family.afi | uint32_t(family.afi << 16));
 }
 } // namespace routing
