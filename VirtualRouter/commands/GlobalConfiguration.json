@@ -2115,14 +2115,12 @@
                 {
                     "description": "IEEE 802.3",
                     "name": "Ethernet",
+                    "config": "Global::INTERFACE",
+                    "mode": "(config-if)#/ethernet",
                     "subcommands": [
                         {
                             "description": "",
                             "name": "<Ethernet>",
-                            "args": {
-                                "CONFIG": "Global::INTERFACE",
-                                "MODE": "(config-if)#/ethernet"
-                            },
                             "subcommands": [
                                 {
                                     "description": "",
@@ -2135,14 +2133,12 @@
                 {
                     "description": "FastEthernet IEEE 802.3",
                     "name": "FastEthernet",
+                    "config": "Global::INTERFACE",
+                    "mode": "(config-if)#/ethernet",
                     "subcommands": [
                         {
                             "description": "",
                             "name": "<FastEthernet>",
-                            "args": {
-                                "CONFIG": "Global::INTERFACE",
-                                "MODE": "(config-if)#/ethernet"
-                            },
                             "subcommands": [
                                 {
                                     "description": "",
@@ -2155,14 +2151,12 @@
                 {
                     "description": "GigabitEthernet IEEE 802.3z",
                     "name": "GigabitEthernet",
+                    "config": "Global::INTERFACE",
+                    "mode": "(config-if)#/ethernet",
                     "subcommands": [
                         {
                             "description": "",
                             "name": "<GigabitEthernet>",
-                            "args": {
-                                "CONFIG": "Global::INTERFACE",
-                                "MODE": "(config-if)#/ethernet"
-                            },
                             "subcommands": [
                                 {
                                     "description": "",
@@ -2175,42 +2169,36 @@
                 {
                     "description": "Loopback interface",
                     "name": "Loopback",
+                    "config": "Global::INTERFACE",
+                    "mode": "(config-if)#/ethernet",
                     "subcommands": [
                         {
                             "description": "",
-                            "name": "<Loopback>",
-                            "args": {
-                                "CONFIG": "Global::INTERFACE",
-                                "MODE": "(config-if)#/ethernet"
-                            }
+                            "name": "<Loopback>"
                         }
                     ]
                 },
                 {
                     "description": "NAT virtual interface",
                     "name": "NVI",
+                    "config": "Global::INTERFACE",
+                    "mode": "(config-if)#/ethernet",
                     "subcommands": [
                         {
                             "description": "",
-                            "name": "<NVI>",
-                            "args": {
-                                "CONFIG": "Global::INTERFACE",
-                                "MODE": "(config-if)#/ethernet"
-                            }
+                            "name": "<NVI>"
                         }
                     ]
                 },
                 {
                     "description": "Null interface",
                     "name": "Null",
+                    "config": "Global::INTERFACE",
+                    "mode": "(config-if)#/null",
                     "subcommands": [
                         {
                             "description": "",
                             "name": "<NullIface>",
-                            "args": {
-                                "CONFIG": "Global::INTERFACE",
-                                "MODE": "(config-if)#/null"
-                            },
                             "subcommands": [
                                 {
                                     "description": "",
@@ -2223,14 +2211,12 @@
                 {
                     "description": "Ethernet Channel of interfaces",
                     "name": "Port-channel",
+                    "config": "Global::INTERFACE",
+                    "mode": "(config-if)#/Portchannel",
                     "subcommands": [
                         {
                             "description": "",
                             "name": "<Portchannel>",
-                            "args": {
-                                "CONFIG": "Global::INTERFACE",
-                                "MODE": "(config-if)#/Portchannel"
-                            },
                             "subcommands": [
                                 {
                                     "description": "",
@@ -2259,14 +2245,12 @@
                 {
                     "description": "Tunnel interface",
                     "name": "Tunnel",
+                    "config": "Global::INTERFACE",
+                    "mode": "(config-if)#/Tunnel",
                     "subcommands": [
                         {
                             "description": "",
                             "name": "<Tunnel>",
-                            "args": {
-                                "CONFIG": "Global::INTERFACE",
-                                "MODE": "(config-if)#/Tunnel"
-                            },
                             "subcommands": [
                                 {
                                     "description": "",
@@ -2279,14 +2263,12 @@
                 {
                     "description": "Virtual Template interface",
                     "name": "Virtual-Template",
+                    "config": "Global::INTERFACE",
+                    "mode": "(config-if)#/virtual-template",
                     "subcommands": [
                         {
                             "description": "",
                             "name": "<VirtualTemplate>",
-                            "args": {
-                                "CONFIG": "Global::INTERFACE",
-                                "MODE": "(config-if)#/virtual-template"
-                            },
                             "subcommands": [
                                 {
                                     "description": "",
@@ -2299,14 +2281,12 @@
                 {
                     "description": "Vlan Interface",
                     "name": "Vlan",
+                    "config": "Global::INTERFACE",
+                    "mode": "(config-if)#/vlan",
                     "subcommands": [
                         {
                             "description": "",
                             "name": "<Vlan>",
-                            "args": {
-                                "CONFIG": "Global::INTERFACE",
-                                "MODE": "(config-if)#/vlan"
-                            },
                             "subcommands": [
                                 {
                                     "description": "",
@@ -107122,73 +107102,13 @@
                     "support": true,
                     "description": "Enhanced Interior Gateway Routing Protocol (EIGRP)",
                     "name": "eigrp",
-                    "config": "Global::VRF_CONFIGS",
                     "subcommands": [
                         {
                             "support": true,
                             "description": "Autonomous System",
                             "name": "<1-65535>",
-                            "config": "Vrf::ROUTER_EIGRP_V4",
+                            "config": "Global::ROUTER_EIGRP",
                             "mode": "(config-router)#/eigrp_classic",
-                            "subcommands": [
-                                {
-                                    "description": "Send EIGRP updates via unicast instead of multicast",
-                                    "name": "unicast",
-                                    "subcommands": [
-                                        {
-                                            "description": "Specify a specific virtual routing/forwarding instance",
-                                            "name": "vrf",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Virtual Routing/Forwarding instance name",
-                                                    "name": "WORD",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                },
-                                {
-                                    "description": "Specify a specific virtual routing/forwarding instance",
-                                    "name": "vrf",
-                                    "subcommands": [
-                                        {
-                                            "description": "Virtual Routing/Forwarding instance name",
-                                            "name": "WORD",
-                                            "subcommands": [
-                                                {
-                                                    "description": "Send EIGRP updates via unicast instead of multicast",
-                                                    "name": "unicast",
-                                                    "subcommands": [
-                                                        {
-                                                            "description": "",
-                                                            "name": "<cr>"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "description": "",
-                                                    "name": "<cr>"
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                },
-                                {
-                                    "description": "",
-                                    "name": "<cr>"
-                                }
-                            ]
-                        },
-                        {
-                            "support": true,
-                            "description": "EIGRP Virtual-Instance Name",
-                            "name": "WORD",
                             "subcommands": [
                                 {
                                     "description": "",
@@ -107245,7 +107165,7 @@
                         {
                             "description": "Process ID",
                             "name": "<1-65535>",
-                            "config": "Global::ROUTER_OSPF_DEFAULT",
+                            "config": "Global::ROUTER_OSPF",
                             "mode": "(config-router)#/ospf",
                             "subcommands": [
                                 {
@@ -107279,7 +107199,7 @@
                         {
                             "description": "Process ID",
                             "name": "<1-65535>",
-                            "config": "Global::ROUTER_OSPFV3_DEFAULT",
+                            "config": "Global::ROUTER_OSPFV3",
                             "mode": "(config-router)#/ospfv3",
                             "subcommands": [
                                 {

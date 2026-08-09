@@ -377,9 +377,9 @@ using GlobalLineRange = std::pair<uint16_t, uint16_t>;
     OWNED_LIST_FIELD(X, Y, ROUTE_MAP, RouteMapRegistry, std::string) \
     OWNED_LIST_FIELD(X, Y, ROUTE_TAG_LIST, EmptyRegistry, std::string) TODO \
     ATOMIC_FIELD(X, Y, ROUTE_TAG_NOTATION_DOTTED_DECIMAL, bool, false) TODO \
-    OWNED_LIST_FIELD(X, Y, ROUTER_EIGRP_NAMED, EigrpNamedRegistry, std::string) \
-    OWNED_LIST_FIELD(X, Y, ROUTER_OSPF_DEFAULT, OspfRegistry, uint16_t) \
-    OWNED_LIST_FIELD(X, Y, ROUTER_OSPFV3_DEFAULT, OspfRegistry, uint16_t) \
+    OWNED_LIST_FIELD(X, Y, ROUTER_EIGRP, EigrpNamedRegistry, uint32_t) \
+    OWNED_LIST_FIELD(X, Y, ROUTER_OSPF, OspfRegistry, uint16_t) \
+    OWNED_LIST_FIELD(X, Y, ROUTER_OSPFV3, OspfRegistry, uint16_t) \
     OWNED_LIST_FIELD(X, Y, SAMPLER, EmptyRegistry, std::string) TODO \
     OWNED_LIST_FIELD(X, Y, SASL_PROFILE, EmptyRegistry, std::string) TODO \
     LIST_FIELD(X, Y, SCRIPTING_TCL_ENCDIR, Incomplete) TODO \

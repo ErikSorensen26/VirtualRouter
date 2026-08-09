@@ -3,72 +3,63 @@
         {
             "description": "GigabitEthernet interface number",
             "name": "<0>",
-            "config": "$CONFIG",
-            "mode": "$MODE"
+            "config": "$CONFIG"
         }
     ],
     "FastEthernet": [
         {
             "description": "FastEthernet interface number",
             "name": "<0>",
-            "config": "$CONFIG",
-            "mode": "$MODE"
+            "config": "$CONFIG"
         }
     ],
     "Ethernet": [
         {
             "description": "Ethernet interface number",
             "name": "<0>",
-            "config": "$CONFIG",
-            "mode": "$MODE"
+            "config": "$CONFIG"
         }
     ],
     "Loopback": [
         {
             "description": "Loopback interface number",
             "name": "<0-2147483647>",
-            "config": "$CONFIG",
-            "mode": "$MODE"
+            "config": "$CONFIG"
         }
     ],
     "Tunnel": [
         {
             "description": "Tunnel interface number",
             "name": "<0-2147483647>",
-            "config": "$CONFIG",
-            "mode": "$MODE"
+            "config": "$CONFIG"
         }
     ],
     "Pseudowire": [
         {
             "description": "pseudowire interface number",
             "name": "<1-231072>",
-            "config": "$CONFIG",
-            "mode": "$MODE"
+            "config": "$CONFIG"
         }
     ],
     "Portchannel": [
         {
             "description": "Port-channel interface number",
             "name": "<1-64>",
-            "config": "$CONFIG",
-            "mode": "$MODE"
+            "config": "$CONFIG"
         }
     ],
     "NullIface": [
         {
             "description": "Null interface number",
             "name": "<0-0>",
-            "config": "$CONFIG",
-            "mode": "$MODE"
+            "config": "$CONFIG"
         }
     ],
     "NVI": [
         {
             "description": "NVI interface number",
             "name": "<0-2147483647>",
-            "config": "$CONFIG",
-            "mode": "$MODE"
+            "config": "$CONFIG"
         }
     ],
     "VirtualTemplate": [
@@ -76,7 +67,6 @@
             "description": "Virtual-Template interface number",
             "name": "<1-1000>",
             "config": "$CONFIG",
-            "mode": "$MODE",
             "subcommands": [
                 {
                     "description": "type of the virtual-template",
@@ -103,8 +93,7 @@
         {
             "description": "Vlan interface number",
             "name": "<1-4095>",
-            "config": "$CONFIG",
-            "mode": "$MODE"
+            "config": "$CONFIG"
         }
     ],
     "interface": [
@@ -112,13 +101,13 @@
             "description": "IEEE 802.3",
             "name": "Ethernet",
             "config": "$CONFIG",
+            "mode": "$MODE",
             "subcommands": [
                 {
                     "description": "",
                     "name": "<Ethernet>",
                     "args": {
-                        "CONFIG": "$CONFIG",
-                        "MODE": "$MODE"
+                        "CONFIG": "$CONFIG"
                     }
                 }
             ]
@@ -127,13 +116,13 @@
             "description": "FastEthernet IEEE 802.3",
             "name": "FastEthernet",
             "config": "$CONFIG",
+            "mode": "$MODE",
             "subcommands": [
                 {
                     "description": "",
                     "name": "<FastEthernet>",
                     "args": {
-                        "CONFIG": "$CONFIG",
-                        "MODE": "$MODE"
+                        "CONFIG": "$CONFIG"
                     }
                 }
             ]
@@ -142,13 +131,13 @@
             "description": "GigabitEthernet IEEE 802.3z",
             "name": "GigabitEthernet",
             "config": "$CONFIG",
+            "mode": "$MODE",
             "subcommands": [
                 {
                     "description": "",
                     "name": "<GigabitEthernet>",
                     "args": {
-                        "CONFIG": "$CONFIG",
-                        "MODE": "$MODE"
+                        "CONFIG": "$CONFIG"
                     }
                 }
             ]
@@ -157,13 +146,13 @@
             "description": "Loopback interface",
             "name": "Loopback",
             "config": "$CONFIG",
+            "mode": "$MODE",
             "subcommands": [
                 {
                     "description": "",
                     "name": "<Loopback>",
                     "args": {
-                        "CONFIG": "$CONFIG",
-                        "MODE": "$MODE"
+                        "CONFIG": "$CONFIG"
                     }
                 }
             ]
@@ -172,13 +161,13 @@
             "description": "NAT virtual interface",
             "name": "NVI",
             "config": "$CONFIG",
+            "mode": "$MODE",
             "subcommands": [
                 {
                     "description": "",
                     "name": "<NVI>",
                     "args": {
-                        "CONFIG": "$CONFIG",
-                        "MODE": "$MODE"
+                        "CONFIG": "$CONFIG"
                     }
                 }
             ]
@@ -187,13 +176,13 @@
             "description": "Null interface",
             "name": "Null",
             "config": "$CONFIG",
+            "mode": "$MODE",
             "subcommands": [
                 {
                     "description": "",
                     "name": "<NullIface>",
                     "args": {
-                        "CONFIG": "$CONFIG",
-                        "MODE": "$MODE"
+                        "CONFIG": "$CONFIG"
                     }
                 }
             ]
@@ -202,13 +191,13 @@
             "description": "Ethernet Channel of interfaces",
             "name": "Port-channel",
             "config": "$CONFIG",
+            "mode": "$MODE",
             "subcommands": [
                 {
                     "description": "",
                     "name": "<Portchannel>",
                     "args": {
-                        "CONFIG": "$CONFIG",
-                        "MODE": "$MODE"
+                        "CONFIG": "$CONFIG"
                     }
                 }
             ]
@@ -217,13 +206,13 @@
             "description": "Pseudowire Interface",
             "name": "pseudowire",
             "config": "$CONFIG",
+            "mode": "$MODE",
             "subcommands": [
                 {
                     "description": "",
                     "name": "<Pseudowire>",
                     "args": {
-                        "CONFIG": "$CONFIG",
-                        "MODE": "$MODE"
+                        "CONFIG": "$CONFIG"
                     }
                 }
             ]
@@ -232,13 +221,13 @@
             "description": "Tunnel interface",
             "name": "Tunnel",
             "config": "$CONFIG",
+            "mode": "$MODE",
             "subcommands": [
                 {
                     "description": "",
                     "name": "<Tunnel>",
                     "args": {
-                        "CONFIG": "$CONFIG",
-                        "MODE": "$MODE"
+                        "CONFIG": "$CONFIG"
                     }
                 }
             ]
@@ -247,13 +236,13 @@
             "description": "Virtual Template interface",
             "name": "Virtual-Template",
             "config": "$CONFIG",
+            "mode": "$MODE",
             "subcommands": [
                 {
                     "description": "",
                     "name": "<VirtualTemplate>",
                     "args": {
                         "CONFIG": "$CONFIG",
-                        "MODE": "$MODE",
                         "VT_TYPE_CONFIG": "$VT_TYPE_CONFIG",
                         "VT_TYPE_ENUM": "$VT_TYPE_ENUM"
                     }
@@ -264,13 +253,13 @@
             "description": "Vlan Interface",
             "name": "Vlan",
             "config": "$CONFIG",
+            "mode": "$MODE",
             "subcommands": [
                 {
                     "description": "",
                     "name": "<Vlan>",
                     "args": {
-                        "CONFIG": "$CONFIG",
-                        "MODE": "$MODE"
+                        "CONFIG": "$CONFIG"
                     }
                 }
             ]
@@ -315,9 +304,10 @@
             "description": "",
             "name": "<access_list>",
             "args": {
-                "CONFIG": "DistributeList::filterList",
-                "IN_INTERFACE": "DistributeList::interface",
-                "OUT_INTERFACE": "DistributeList::interface",
+                "CONFIG_IN": "$CONFIG_IN",
+                "CONFIG_OUT": "$CONFIG_OUT",
+                "IN_INTERFACE": "$IN_INTERFACE",
+                "OUT_INTERFACE": "$OUT_INTERFACE",
                 "ENUM": "DistributeListType::ACL",
                 "IN": "$IN",
                 "OUT": "$OUT"
@@ -327,9 +317,10 @@
             "description": "",
             "name": "<access_list_extended>",
             "args": {
-                "CONFIG": "DistributeList::filterList",
-                "IN_INTERFACE": "DistributeList::interface",
-                "OUT_INTERFACE": "DistributeList::interface",
+                "CONFIG_IN": "$CONFIG_IN",
+                "CONFIG_OUT": "$CONFIG_OUT",
+                "IN_INTERFACE": "$IN_INTERFACE",
+                "OUT_INTERFACE": "$OUT_INTERFACE",
                 "ENUM": "DistributeListType::ACL",
                 "IN": "$IN",
                 "OUT": "$OUT"
@@ -339,9 +330,10 @@
             "description": "",
             "name": "<access_list_named>",
             "args": {
-                "CONFIG": "DistributeList::filterList",
-                "IN_INTERFACE": "DistributeList::interface",
-                "OUT_INTERFACE": "DistributeList::interface",
+                "CONFIG_IN": "$CONFIG_IN",
+                "CONFIG_OUT": "$CONFIG_OUT",
+                "IN_INTERFACE": "$IN_INTERFACE",
+                "OUT_INTERFACE": "$OUT_INTERFACE",
                 "ENUM": "DistributeListType::ACL",
                 "IN": "$IN",
                 "OUT": "$OUT"
@@ -355,9 +347,10 @@
                     "description": "",
                     "name": "<prefix_list>",
                     "args": {
-                        "CONFIG": "DistributeList::filterList",
-                        "IN_INTERFACE": "DistributeList::interface",
-                        "OUT_INTERFACE": "DistributeList::interface",
+                        "CONFIG_IN": "$CONFIG_IN",
+                        "CONFIG_OUT": "$CONFIG_OUT",
+                        "IN_INTERFACE": "$IN_INTERFACE",
+                        "OUT_INTERFACE": "$OUT_INTERFACE",
                         "ENUM": "DistributeListType::GATEWAY",
                         "IN": "$IN",
                         "OUT": "$OUT"
@@ -372,7 +365,6 @@
                 {
                     "description": "Name of an IP prefix-list",
                     "name": "WORD",
-                    "config": "DistributeList::prefixList",
                     "subcommands": [
                         {
                             "description": "Filtering incoming updates based on gateway",
@@ -382,9 +374,10 @@
                                     "description": "",
                                     "name": "<prefix_list>",
                                     "args": {
-                                        "CONFIG": "DistributeList::filterList",
-                                        "IN_INTERFACE": "DistributeList::interface",
-                                        "OUT_INTERFACE": "DistributeList::interface",
+                                        "CONFIG_IN": "$CONFIG_IN",
+                                        "CONFIG_OUT": "$CONFIG_OUT",
+                                        "IN_INTERFACE": "$IN_INTERFACE",
+                                        "OUT_INTERFACE": "$OUT_INTERFACE",
                                         "ENUM": "DistributeListType::PREFIX_GATEWAY",
                                         "IN": "$IN",
                                         "OUT": "$OUT"
@@ -397,12 +390,15 @@
                             "name": "in",
                             "config": "$IN",
                             "enum": "DistributeListType::PREFIX",
+                            "args": {
+                                "CONFIG": "$PREFIX_LIST_IN"
+                            },
                             "subcommands": [
                                 {
                                     "description": "",
                                     "name": "<interface>",
                                     "args": {
-                                        "CONFIG": "DistributeList::interface"
+                                        "CONFIG": "$IN_INTERFACE"
                                     },
                                     "subcommands": [
                                         {
@@ -422,12 +418,15 @@
                             "name": "out",
                             "config": "$OUT",
                             "enum": "DistributeListType::PREFIX",
+                            "args": {
+                                "CONFIG": "$PREFIX_LIST_OUT"
+                            },
                             "subcommands": [
                                 {
                                     "description": "",
                                     "name": "<interface>",
                                     "args": {
-                                        "CONFIG": "DistributeList::interface"
+                                        "CONFIG": "$OUT_INTERFACE"
                                     },
                                     "subcommands": [
                                         {
@@ -451,13 +450,15 @@
         {
             "description": "IP access list number",
             "name": "<1-199>",
-            "config": "$CONFIG",
             "subcommands": [
                 {
                     "description": "Filter incoming routing updates",
                     "name": "in",
                     "config": "$IN",
                     "enum": "$ENUM",
+                    "args": {
+                        "CONFIG": "$CONFIG_IN"
+                    },
                     "subcommands": [
                         {
                             "description": "",
@@ -483,6 +484,9 @@
                     "name": "out",
                     "config": "$OUT",
                     "enum": "$ENUM",
+                    "args": {
+                        "CONFIG": "$CONFIG_OUT"
+                    },
                     "subcommands": [
                         {
                             "description": "",
@@ -510,13 +514,15 @@
         {
             "description": "IP expanded access list number",
             "name": "<1300-2699>",
-            "config": "$CONFIG",
             "subcommands": [
                 {
                     "description": "Filter incoming routing updates",
                     "name": "in",
                     "config": "$IN",
                     "enum": "$ENUM",
+                    "args": {
+                        "CONFIG": "$CONFIG_IN"
+                    },
                     "subcommands": [
                         {
                             "description": "",
@@ -542,6 +548,9 @@
                     "name": "out",
                     "config": "$OUT",
                     "enum": "$ENUM",
+                    "args": {
+                        "CONFIG": "$CONFIG_OUT"
+                    },
                     "subcommands": [
                         {
                             "description": "",
@@ -569,13 +578,15 @@
         {
             "description": "Access-list name",
             "name": "WORD",
-            "config": "$CONFIG",
             "subcommands": [
                 {
                     "description": "Filter incoming routing updates",
                     "name": "in",
                     "config": "$IN",
                     "enum": "$ENUM",
+                    "args": {
+                        "CONFIG": "$CONFIG_IN"
+                    },
                     "subcommands": [
                         {
                             "description": "",
@@ -601,6 +612,9 @@
                     "name": "out",
                     "config": "$OUT",
                     "enum": "$ENUM",
+                    "args": {
+                        "CONFIG": "$CONFIG_OUT"
+                    },
                     "subcommands": [
                         {
                             "description": "",
@@ -628,13 +642,15 @@
         {
             "description": "Prefix-list name",
             "name": "WORD",
-            "config": "$CONFIG",
             "subcommands": [
                 {
                     "description": "Filter incoming routing updates",
                     "name": "in",
                     "config": "$IN",
                     "enum": "$ENUM",
+                    "args": {
+                        "CONFIG": "$CONFIG_IN"
+                    },
                     "subcommands": [
                         {
                             "description": "",
@@ -660,6 +676,9 @@
                     "name": "out",
                     "config": "$OUT",
                     "enum": "$ENUM",
+                    "args": {
+                        "CONFIG": "$CONFIG_OUT"
+                    },
                     "subcommands": [
                         {
                             "description": "",
@@ -687,13 +706,15 @@
         {
             "description": "route-map name",
             "name": "WORD",
-            "config": "$CONFIG",
             "subcommands": [
                 {
                     "description": "Filter incoming service updates",
                     "name": "in",
                     "config": "$IN",
                     "enum": "$ENUM",
+                    "args": {
+                        "CONFIG": "$CONFIG_IN"
+                    },
                     "subcommands": [
                         {
                             "description": "",
@@ -719,6 +740,9 @@
                     "name": "out",
                     "config": "$OUT",
                     "enum": "$ENUM",
+                    "args": {
+                        "CONFIG": "$CONFIG_OUT"
+                    },
                     "subcommands": [
                         {
                             "description": "",

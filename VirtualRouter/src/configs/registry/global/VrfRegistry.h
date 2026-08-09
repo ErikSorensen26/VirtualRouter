@@ -110,10 +110,7 @@ void VrfRouterEigrpV6(void*);
 #define VRF_FIELD_LIST(X, Y) \
     LIST_FIELD(X, Y, ARP_STATIC_ENTRY, StaticArpEntry) \
     OPTIONAL_REGISTRY_CONTAINER(X, Y,       ROUTER_BGP, BgpRegistry) TODO \
-    OWNED_LIST_FIELD_CB(X, Y,               ROUTER_EIGRP_V4, EigrpRegistry, uint16_t, VrfRouterEigrpV4) \
-    OWNED_LIST_FIELD_CB(X, Y,               ROUTER_EIGRP_V6, EigrpRegistry, uint16_t, VrfRouterEigrpV6) \
     OWNED_LIST_FIELD(X, Y,                  ROUTER_OSPF, OspfRegistry, uint16_t) TODO \
-    OWNED_LIST_FIELD(X, Y,                  ROUTER_OSPFV3, Ospfv3AddressFamilyRegistry, uint16_t) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y,             IP_DOMAIN_LIST, Incomplete) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y,             IP_DOMAIN_LOOKUP_SOURCE_INTERFACE, interface::InterfaceKey) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y,             IP_DOMAIN_NAME, Incomplete) TODO \
@@ -145,7 +142,6 @@ void VrfRouterEigrpV6(void*);
     LIST_FIELD(X, Y,                        IPV6_ROUTE, IPv6Route) TODO \
     LIST_FIELD(X, Y,                        IPV6_ROUTE_STATIC_BFD, IPv6RouteStaticBfd) TODO \
     ATOMIC_FIELD(X, Y,                      IPV6_ROUTE_STATIC_RESOLVE, bool, false) TODO \
-    OWNED_LIST_FIELD(X, Y,                  IPV6_ROUTER_OSPF, OspfRegistry, uint16_t) TODO
 
 DEFINE_CONFIG_GROUP(Vrf, VRF_FIELD_LIST)
 

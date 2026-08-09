@@ -316,33 +316,21 @@ public:
     void refreshOspfv3();
 
     /**
-     * @brief Creates a OSPFv3 instance.
-     *
-     * OSPFv3 allows IPv4 and IPv6 processes under a single process ID.
+     * @brief Creates an OSPFv3 process.
      *
      * @param id Process ID.
-     * @return Reference to the newly created OSPFv2 instance.
-     */
-    routing::ospf::OspfV3Instance& addOspfv3(uint16_t id);
-
-    /**
-     * @brief Creates a OSPFv3 address family instance.
-     *
-     * Creates 1 address family running either ipv4 or ipv6.
-     *
-     * @param id Process ID.
-     * @param af Address Family.
-     * @return Reference to the newly created OSPFv2 instance.
+     * @param af Address family this process services.
+     * @return Reference to the newly created OSPFv3 process.
      */
     routing::ospf::OspfProcess& addOspfv3(uint16_t id, types::AddressFamily af);
 
     /**
-     * @brief Retreives an OSPFv3 instance.
+     * @brief Retreives an OSPFv3 process.
      *
      * @param id Process ID.
-     * @return Pointer to instance or nullptr if missing.
+     * @return Pointer to the process or nullptr if missing.
      */
-    routing::ospf::OspfV3Instance* getOspfv3(uint16_t id);
+    routing::ospf::OspfProcess* getOspfv3(uint16_t id);
 
     /**
      * @brief Remove and delete an OSPFv3 process.
@@ -351,15 +339,6 @@ public:
      * @return True if removed, false if missing.
      */
     bool removeOspfv3(uint16_t id);
-
-    /**
-     * @brief Remove and delete a OSPFv3 address family.
-     *
-     * @param id Process ID to remove.
-     * @param af Address Family.
-     * @return True if removed, false if missing.
-     */
-    bool removeOspfv3(uint16_t id, types::AddressFamily af);
 
     // GLOBAL HELPERS
 
@@ -432,7 +411,7 @@ private:
     std::unordered_map<std::string, routing::eigrp::EigrpNamed> namedEigrpList; ///< Named-mode EIGRP groups. Keyed by instance name.
 
     std::unordered_map<uint32_t, routing::ospf::OspfProcess> ospfList; ///< OSPFv2 process instances. Keyed by process ID.
-    std::unordered_map<uint32_t, routing::ospf::OspfV3Instance> ospfv3List; ///< OSPFv3 instances. Keyed by process ID.
+    std::unordered_map<uint32_t, routing::ospf::OspfProcess> ospfv3List; ///< OSPFv3 instances. Keyed by process ID.
 
     std::string instanceName; ///< Human-readable VRF identifier.
 

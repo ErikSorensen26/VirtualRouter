@@ -191,35 +191,16 @@ bool VirtualRouter::removeOspf(uint16_t id)
     return false;
 }
 
-routing::ospf::OspfV3Instance& VirtualRouter::addOspfv3(uint16_t id)
+routing::ospf::OspfProcess& VirtualRouter::addOspfv3(uint16_t id, types::AddressFamily af)
 {
+    if (auto it = ospfv3List.find(id); it == ospfv3List.end())
+    {
+        ospfv3List.try_emplace(id, true, id, af, this);
+    }
     return ospfv3List.at(id);
 }
 
-routing::ospf::OspfProcess& VirtualRouter::addOspfv3(uint16_t id, types::AddressFamily af)
-{
-    if (ospfv3List.find(id) == ospfv3List.end())
-    {
-        config::Ospfv3AddressFamilyRegistry& afConfigs = configs.get<config::Vrf::ROUTER_OSPFV3>().emplaceBack(id);
-        ospfv3List.emplace(id, afConfigs);
-    }
-    auto& ospf = ospfv3List.at(id);
-
-    if (af == types::AddressFamily::IPv4)
-    {
-        if (!ospf.ipv4)
-            ospf.ipv4 = new routing::ospf::OspfProcess(true, id, af, this);
-        return *ospf.ipv4;
-    }
-    else
-    {
-        if (!ospf.ipv6)
-            ospf.ipv6 = new routing::ospf::OspfProcess(true, id, af, this);
-        return *ospf.ipv6;
-    }
-}
-
-routing::ospf::OspfV3Instance* VirtualRouter::getOspfv3(uint16_t id)
+routing::ospf::OspfProcess* VirtualRouter::getOspfv3(uint16_t id)
 {
     if (auto it = ospfv3List.find(id); it != ospfv3List.end())
         return &it->second;
@@ -230,47 +211,7 @@ bool VirtualRouter::removeOspfv3(uint16_t id)
 {
     if (auto it = ospfv3List.find(id); it != ospfv3List.end())
     {
-        auto& ospf = it->second;
-        if (ospf.ipv4)
-        {
-            delete ospf.ipv4;
-            ospf.ipv4 = nullptr;
-        }
-        if (ospf.ipv6)
-        {
-            delete ospf.ipv6;
-            ospf.ipv6 = nullptr;
-        }
-        ospfv3List.erase(id);
-        return true;
-    }
-    return false;
-}
-
-bool VirtualRouter::removeOspfv3(uint16_t id, types::AddressFamily af)
-{
-    if (auto it = ospfv3List.find(id); it != ospfv3List.end())
-    {
-        auto& ospf = it->second;
-        if (af == types::AddressFamily::IPv4)
-        {
-            if (ospf.ipv4)
-            {
-                delete ospf.ipv4;
-                ospf.ipv4 = nullptr;
-            }
-        }
-        else
-        {
-            if (ospf.ipv6)
-            {
-                delete ospf.ipv6;
-                ospf.ipv6 = nullptr;
-            }
-        }
-
-        if (!ospf.ipv4 && !ospf.ipv6)
-            ospfv3List.erase(id);
+        ospfv3List.erase(it);
         return true;
     }
     return false;

@@ -108,14 +108,6 @@ DEFINE_TUPLE_SCHEMA(RouteMapApathsAdvertise, ROUTE_MAP_APATHS_ADVERTISE_FIELDS);
 
 DEFINE_TUPLE_SCHEMA(RouteMapMetricRange, ROUTE_MAP_METRIC_RANGE_FIELDS);
 
-#define ROUTE_MAP_DAMPENING_FIELDS(X) \
-    X(uint8_t,  halfLife) \
-    X(uint16_t, reuse) \
-    X(uint16_t, suppress) \
-    X(uint8_t,  maxSuppressTime)
-
-DEFINE_TUPLE_SCHEMA(RouteMapDampening, ROUTE_MAP_DAMPENING_FIELDS);
-
 /**
  * @brief All configuration fields for a single route-map sequence entry.
  * @ingroup CONFIG_POLICY
@@ -180,7 +172,6 @@ using RouteMapSourceProtocol = std::pair<core::RouteSource, uint32_t>;
     ATOMIC_FIELD(X, Y, SET_AUTOMATIC_TAG, bool, false) \
     VALUE_FIELD(X, Y, SET_COMM_LIST_DEL, std::string) \
     LIST_FIELD(X, Y, SET_COMMUNITY, uint32_t) \
-    VALUE_FIELD(X, Y, SET_DAMPENING, RouteMapDampening) \
     OPTIONAL_ATOMIC_FIELD(X, Y, SET_EXTCOM_LIST_DEL, uint32_t) \
     OPTIONAL_ATOMIC_FIELD(X, Y, SET_EXTCOMMUNITY_COST, uint32_t) \
     OPTIONAL_ATOMIC_FIELD(X, Y, SET_EXTCOMMUNITY_COST_ID, uint8_t) \

@@ -33,6 +33,12 @@ DEFINE_CONFIG_ENUM_NS(policy, DistributeListType, DISTRIBUTE_LIST_TYPES);
     X(std::string, prefixList)
 
 DEFINE_TUPLE_SCHEMA(DistributeList, DISTRIBUTE_LIST_FIELDS);
+
+#define TABLE_MAP_FIELDS(X) \
+    X(std::string, list) \
+    X(bool, filter)
+
+DEFINE_TUPLE_SCHEMA(TableMap, TABLE_MAP_FIELDS);
 }
 }
 
