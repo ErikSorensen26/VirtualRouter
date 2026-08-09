@@ -27,6 +27,21 @@ constexpr bool isLittleEndian = false;
 #endif
 
 /**
+ * @brief Swaps the byte order of a 32-bit value unconditionally.
+ *
+ * Implemented using one htonl call to ensure correctness on all
+ * platforms without relying on compiler builtins.
+ *
+ * @param val  Value to byte-swap.
+ * @return     @p val with its bytes reversed.
+ */
+inline uint32_t byteSwap32(uint32_t val)
+{
+    return ((val << 24) & 0xFF000000u) | ((val << 8) & 0x00FF0000u)
+        | ((val >> 8) & 0x0000FF00u) | ((val >> 24) & 0x000000FFu);
+}
+
+/**
  * @brief Swaps the byte order of a 64-bit value unconditionally.
  *
  * Implemented using two htonl() calls to ensure correctness on all
@@ -35,8 +50,10 @@ constexpr bool isLittleEndian = false;
  * @param val  Value to byte-swap.
  * @return     @p val with its bytes reversed.
  */
-inline uint64_t byteSwap64(uint64_t val) {
-    return (static_cast<uint64_t>(htonl(val & 0xFFFFFFFF)) << 32) | htonl(val >> 32);
+inline uint64_t byteSwap64(uint64_t val)
+{
+    return (static_cast<uint64_t>(byteSwap32(static_cast<uint32_t>(val))) << 32)
+        | byteSwap32(static_cast<uint32_t>(val >> 32));
 }
 
 /**
@@ -123,7 +140,7 @@ public:
  * TODO add doxy comment
  */
 template <typename T>
-inline static T maskBits(size_t bits)
+inline T maskBits(size_t bits)
 {
     constexpr size_t bitSiz = sizeof(T) * 8;
     assert(bits <= bitSiz);
@@ -137,7 +154,7 @@ inline static T maskBits(size_t bits)
  */
 template <typename T, size_t N = sizeof(T)>
 requires std::is_integral_v<T>
-inline static T read(const uint8_t* p)
+inline T read(const uint8_t* p)
 {
     static_assert(N >= 1 && N <= sizeof(T), "N must be in [1, sizeof(T)]");
 
@@ -163,7 +180,7 @@ inline static T read(const uint8_t* p)
  */
 template <typename T>
 requires std::is_integral_v<T>
-inline static T read(const uint8_t* p, size_t n)
+inline T read(const uint8_t* p, size_t n)
 {
     assert(n >= 1 && n <= sizeof(T));
 
@@ -191,7 +208,7 @@ inline static T read(const uint8_t* p, size_t n)
  */
 template <typename T, size_t N = sizeof(T)>
 requires std::is_integral_v<T>
-inline static uint8_t* write(uint8_t* dest, T val)
+inline uint8_t* write(uint8_t* dest, T val)
 {
     static_assert(N >= 1 && N <= sizeof(T), "N must be [1, sizeof(T)]");
 
@@ -215,7 +232,7 @@ inline static uint8_t* write(uint8_t* dest, T val)
  */
 template <typename T>
 requires std::is_integral_v<T>
-inline static uint8_t* write(uint8_t* dest, T val, size_t n)
+inline uint8_t* write(uint8_t* dest, T val, size_t n)
 {
     assert(n >= 1 && n <= sizeof(T));
 
@@ -246,7 +263,7 @@ inline static uint8_t* write(uint8_t* dest, T val, size_t n)
  * @param value     True to set the bit, false to clear it.
  * @return          @p bytes (allows chaining).
  */
-inline static uint8_t* setBit(uint8_t* bytes, uint8_t bitIndex, bool value)
+inline uint8_t* setBit(uint8_t* bytes, uint8_t bitIndex, bool value)
 {
     const size_t byteIndex = bitIndex / 8;
     const size_t bitInByte = 7 - (bitIndex % 8);

@@ -10,10 +10,12 @@
 #include <vector>
 #include <cstdint>
 
+#include "security/crypto/Hmac.hpp"
+
 namespace security::authentication
 {
 class KeyChain;
-enum class HmacType : int;
+using hmac::HmacType;
 
 /**
  * @brief Owns and indexes all @ref KeyChain instances configured on the router.

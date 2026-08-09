@@ -9,6 +9,7 @@
 #include "nodes/FileHeader.hpp"
 #include "configs/RegistryTable.hpp"
 #include "cli/modes/Mode.hpp"
+#include "security/Digest.hpp"
 #include <deque>
 #include <cstdio>
 #include <cstring>
@@ -1117,14 +1118,12 @@ uint32_t hashDir(const std::string& dir)
     std::error_code ec;
     if (!fs::is_directory(dir, ec)) return 0;
 
-    uint32_t h = 0x811C9DC5u;
+    // XXH3-64
+    security::digest::Xxh3_64 h;
+    h.init();
     auto mix = [&h](std::string_view bytes)
     {
-        for (const char c : bytes)
-        {
-            h ^= static_cast<uint8_t>(c);
-            h *= 0x01000193u;
-        }
+        h.update(reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size());
     };
 
     for (const fs::path& p : grammarFiles(dir))
@@ -1140,8 +1139,18 @@ uint32_t hashDir(const std::string& dir)
         mix(body.str());
     }
 
+    uint8_t digest[security::digest::Xxh3_64::DIGEST];
+    h.final(digest);
+    uint64_t full = 0;
+    for (size_t i = 0; i < sizeof(digest); ++i)
+        full |= uint64_t(digest[i]) << (8 * i);
+
+    // Folded to 32 bits to fit FileHeader::grammarHash; XOR-fold rather than
+    // truncate so both halves of the digest contribute.
+    const uint32_t h32 = static_cast<uint32_t>(full) ^ static_cast<uint32_t>(full >> 32);
+
     // Reserved for "could not read", so a real hash never collides with it.
-    return h ? h : 1u;
+    return h32 ? h32 : 1u;
 }
 
 std::vector<std::byte> flattenDir(const std::string& dir)

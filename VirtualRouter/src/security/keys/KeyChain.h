@@ -17,6 +17,8 @@
 #include <optional>
 #include <chrono>
 
+#include "security/crypto/Hmac.hpp"
+
 namespace security { static uint32_t KEY_CHAIN_ID = 0; }
 
 /**
@@ -25,7 +27,7 @@ namespace security { static uint32_t KEY_CHAIN_ID = 0; }
  */
 namespace security::authentication
 {
-enum class HmacType : int;
+using hmac::HmacType;
 
 /**
  * @brief A named collection of time-bounded authentication keys for a routing protocol.

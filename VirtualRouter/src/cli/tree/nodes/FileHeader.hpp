@@ -41,7 +41,7 @@ static_assert(sizeof(StrRef) == 8, "StrRef layout is the on-disk format");
 struct FileHeader
 {
     static constexpr uint32_t CT_MAGIC = 0x5844494Au;
-    static constexpr uint16_t CT_VERSION = 8;
+    static constexpr uint16_t CT_VERSION = 9; // grammarHash: FNV-1a -> XXH3-64 (truncated)
 
     uint32_t magic         = CT_MAGIC;
     uint16_t version       = CT_VERSION;
