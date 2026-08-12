@@ -39,28 +39,6 @@
 
 #include "configs/TupleSchema.hpp"
 
-#define ENABLE_CONFIG_INDEX 0
-
-#if defined(NDEBUG)
-    #define USE_CONFIG_INDEX 0
-#else
-    #if ENABLE_CONFIG_INDEX
-        #define USE_CONFIG_INDEX 1
-    #else
-        #define USE_CONFIG_INDEX 0
-    #endif
-#endif
-
-#if USE_CONFIG_INDEX
-    #define CONFIG_INDEX_PARAM , auto F
-    #define CONFIG_INDEX_ARG(x) , x
-    #define CONFIG_INDEX_MEMBER static constexpr auto field = F;
-#else
-    #define CONFIG_INDEX_PARAM
-    #define CONFIG_INDEX_ARG(x)
-    #define CONFIG_INDEX_MEMBER
-#endif
-
 #define IGNOR(type) config::IgnoreCompare<type>
 
 /**
@@ -77,6 +55,7 @@ class RegistryDatabase;
 
 // TYPE ALIASES
 using ApplyFn = void (*)(void* ctx); ///< Callback signature for live-notification appliers.
+using ValidFn = bool (*)(void* ctx, void* obj); ///< Callback signature for live-validation.
 
 /// @brief Command-tree node index of a field never written from the CLI.
 inline constexpr uint32_t NO_COMMAND_INDEX = 0xFFFFFFFFu;
@@ -85,21 +64,6 @@ template <typename ...Fields>
 struct FieldTuple;
 template <typename Base, typename ENUM, ApplyFn H, typename Fields>
 class SubRegistry;
-
-/**
- * @brief Satisfied by callables that accept a `T&` and return `bool` indicating whether the value changed.
- *
- * Used as the constraint on the lambda passed to `ListField::withWrite`.
- * Returning `true` signals that the applier should be fired after the lock is released.
- *
- * @tparam T  The guarded value type.
- * @tparam F  Callable type to test.
- */
-template <typename T, typename F>
-concept WriteFn = requires(F f, T t)
-{
-    { f(t) } -> std::same_as<bool>;
-};
 
 // FIELD FLAG TAGS
 
@@ -170,6 +134,7 @@ struct OwnedListFieldFlag {};
 struct IgnoreCompareFlag {};
 
 /**
+ * TODO finish doxy comment
  * @brief Carries the optional live-notification applier for a field type.
  * @ingroup CONFIG
  *
@@ -187,12 +152,12 @@ struct IgnoreCompareFlag {};
  * @tparam Flag  Field-category flag base (e.g. `AtomicFieldFlag`).
  * @tparam H     `nullptr` for no notification, or an `ApplyFn` to install.
  */
-template <typename Flag, auto H>
-struct ApplierHolder : Flag {};
+template <typename Flag, auto H, auto V> // applier, validator
+struct CallbackHolder : Flag {};
 
 /// @brief `ApplierHolder` specialization that installs the applier callback.
-template <typename Flag, ApplyFn H>
-struct ApplierHolder<Flag, H> : Flag
+template <typename Flag, ApplyFn H, ValidFn V>
+struct CallbackHolder<Flag, H, V> : Flag
 {
     static constexpr ApplyFn applier = H; ///< Callback invoked whenever the effective value changes.
 };
@@ -423,13 +388,12 @@ private:
  * @see OptionalAtomicField
  * @see SubRegistry
  */
-template <typename T CONFIG_INDEX_PARAM, auto H = nullptr>
-class AtomicField : public ApplierHolder<AtomicFieldFlag, H>
+template <typename T, auto H = nullptr, auto V = nullptr>
+class AtomicField : public CallbackHolder<AtomicFieldFlag, H, V>
 {
 public:
     using node = T;
     using type = T;
-    CONFIG_INDEX_MEMBER
     void setMask(const AtomicField* p) noexcept { mask = p; }
 private:
     template <typename, typename, ApplyFn, typename>
@@ -458,13 +422,12 @@ private:
  *
  * @see AtomicField
  */
-template <typename T CONFIG_INDEX_PARAM, auto H = nullptr>
-class OptionalAtomicField : public ApplierHolder<OptionalAtomicFieldFlag, H>
+template <typename T, auto H = nullptr, auto V = nullptr>
+class OptionalAtomicField : public CallbackHolder<OptionalAtomicFieldFlag, H, V>
 {
 public:
     using node = T;
     using type = T;
-    CONFIG_INDEX_MEMBER
     void setMask(const OptionalAtomicField* p) noexcept { mask = p; }
 private:
     template <typename, typename, ApplyFn, typename>
@@ -499,13 +462,12 @@ private:
  * @see ListField
  * @see OptionalAtomicField
  */
-template <typename T CONFIG_INDEX_PARAM, auto H = nullptr>
-class ValueField : public ApplierHolder<ValueFieldFlag, H>
+template <typename T, auto H = nullptr, auto V = nullptr>
+class ValueField : public CallbackHolder<ValueFieldFlag, H, V>
 {
 public:
     using node = T;
     using type = config::StorageOf<T>;
-    CONFIG_INDEX_MEMBER
     void setMask(const ValueField* p) noexcept { mask = p; }
 
     ~ValueField() { delete value.load(std::memory_order_relaxed); }
@@ -549,14 +511,13 @@ private:
  * @see AtomicField
  * @see SubRegistry
  */
-template <typename T CONFIG_INDEX_PARAM, auto H = nullptr>
-class ListField : public ApplierHolder<ListFieldFlag, H>
+template <typename T, auto H = nullptr, auto V = nullptr>
+class ListField : public CallbackHolder<ListFieldFlag, H, V>
 {
 public:
     using node    = T;
     using element = config::StorageOf<T>;
     using type    = std::vector<element>;
-    CONFIG_INDEX_MEMBER
 
     ~ListField() { delete value.load(std::memory_order_relaxed); }
 private:
@@ -601,13 +562,12 @@ private:
  * @see RegistryDatabase::emplaceBack
  * @see Reference
  */
-template <typename T, typename K CONFIG_INDEX_PARAM, auto H = nullptr>
-class OwnedListField : public ApplierHolder<OwnedListFieldFlag, H>
+template <typename T, typename K, auto H = nullptr, auto V = nullptr>
+class OwnedListField : public CallbackHolder<OwnedListFieldFlag, H, V>
 {
 public:
     using type = T; ///< Child entry type.
     using key = K;  ///< Key type used to look up children.
-    CONFIG_INDEX_MEMBER
 
     ~OwnedListField() {
         for (auto& [k, v] : children)

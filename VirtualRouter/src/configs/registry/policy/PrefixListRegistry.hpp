@@ -28,9 +28,9 @@ enum class PrefixList
 
 template <types::IsIPPrefix P>
 struct PrefixListFields : FieldTuple<
-    ValueField<std::string CONFIG_INDEX_ARG(PrefixList::DESCRIPTION)>,
-    ListField<std::tuple<uint32_t, IGNOR(P), IGNOR(uint8_t), IGNOR(uint8_t)> CONFIG_INDEX_ARG(PrefixList::PERMIT)>,
-    ListField<std::tuple<uint32_t, IGNOR(P), IGNOR(uint8_t), IGNOR(uint8_t)> CONFIG_INDEX_ARG(PrefixList::DENY)>
+    ValueField<std::string>,
+    ListField<std::tuple<uint32_t, IGNOR(P), IGNOR(uint8_t), IGNOR(uint8_t)>>,
+    ListField<std::tuple<uint32_t, IGNOR(P), IGNOR(uint8_t), IGNOR(uint8_t)>>
 > {};
 
 /**

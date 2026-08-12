@@ -18,8 +18,8 @@
  * ```cpp
  * enum class MyConfig { TIMEOUT, RETRIES, COUNT };
  * using MyRegistry = SubRegistry<MyConfig,
- *     AtomicField<uint16_t CONFIG_INDEX_ARG(MyConfig::TIMEOUT)>,
- *     AtomicField<uint8_t CONFIG_INDEX_ARG(MyConfig::RETRIES)>
+ *     AtomicField<uint16_t>,
+ *     AtomicField<uint8_t>
  * >;
  * ```
  */
@@ -138,19 +138,6 @@ public:
 
     static_assert(std::tuple_size_v<FieldTuple> == config::toIndex<ENUM::COUNT>);
 
-#if USE_CONFIG_INDEX
-    static_assert(
-        []<size_t... Is>(std::index_sequence<Is...>) constexpr
-        {
-            return (
-                (static_cast<size_t>(
-                    std::tuple_element_t<Is, FieldTuple>::field
-                ) == Is) && ...
-            );
-        }(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{}),
-        "Tuple order must match enum field indicies"
-    );
-#endif
     SubRegistry()
         : ctxProvider(),
           fields(),
@@ -342,7 +329,7 @@ public:
     }
 
 private:
-    template <typename T, typename K CONFIG_INDEX_PARAM, auto A>
+    template <typename T, typename K, auto A, auto V>
     friend class OwnedListField;
 
     /**

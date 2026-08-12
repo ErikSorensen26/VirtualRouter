@@ -37,12 +37,11 @@ namespace config
  * @see Reference
  * @see SubRegistry
  */
-template <typename T CONFIG_INDEX_PARAM>
+template <typename T>
 class RegistryContainer : public RefContainerFieldFlag
 {
 public:
     using type = T;
-    CONFIG_INDEX_MEMBER
 
     // CONSTRUCTION
 
@@ -92,12 +91,11 @@ private:
  * @see RegistryContainer
  * @see SubRegistry
  */
-template <typename T CONFIG_INDEX_PARAM>
+template <typename T>
 class OptionalRegistryContainer : public RefContainerFieldFlag
 {
 public:
     using type = T;
-    CONFIG_INDEX_MEMBER
 
     // CONSTRUCTION
 
