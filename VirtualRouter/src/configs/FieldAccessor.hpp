@@ -46,9 +46,9 @@ public:
     requires (!std::is_const_v<std::remove_reference<S>>)
     AtomicFieldAccessor(S& sub, AccessorField<EF>)
         : field(sub.template getValue<EF>()),
-          applier(S::applier),
           getDefaultValue(getDefaultGetter<typename F::type, EF>()),
-          provider(sub.getProvider())
+          ctx(&sub),
+          applier(+[](void* ctx) { static_cast<S*>(ctx)->template runApplier<EF>(); })
     {
         static_assert(std::is_same_v<decltype(EF), typename S::type>, "The provided field does not belong to this sub-registry.");
     }
@@ -72,12 +72,9 @@ public:
         field.value.store(v, std::memory_order_release);
         field.state.store(FieldState::CANNED, std::memory_order_release);
         field.commandIndex = cmdIdx;
-        if (apply && provider.hasCtx())
+        if (apply && applier)
         {
-            if constexpr (RequiresContext<F>)
-                F::applier(provider.get());
-            if (applier)
-                applier(provider.get());
+            applier(ctx);
         }
     }
 
@@ -86,12 +83,9 @@ public:
         typename F::type old = load();
         field.value.store(getDefault(), std::memory_order_relaxed);
         field.state.store(FieldState::INHERIT, std::memory_order_relaxed);
-        if (load() != old && provider.hasCtx())
+        if (load() != old && applier)
         {
-            if constexpr (RequiresContext<F>)
-                F::applier(provider.get());
-            if (applier)
-                applier(provider.get());
+            applier(ctx);
         }
     }
 
@@ -113,9 +107,9 @@ public:
 
 private:
     F& field;
-    ContextProvider& provider;
-    ApplyFn applier;
     DefaultGetter<typename F::type> getDefaultValue;
+    void* ctx;
+    void (*applier)(void*) = nullptr;
 };
 
 /**
@@ -137,8 +131,8 @@ public:
     template <IsSubRegistry S, auto EF>
     OptionalAtomicFieldAccessor(S& sub, AccessorField<EF>)
         : field(sub.template getValue<EF>()),
-          applier(S::applier),
-          provider(sub.getProvider())
+          ctx(&sub),
+          applier(+[](void* ctx) { static_cast<S*>(ctx)->template runApplier<EF>(); })
     {
         static_assert(std::is_same_v<decltype(EF), typename S::type>, "The provided field does not belong to this sub-registry.");
     }
@@ -169,12 +163,9 @@ public:
         field.value.store(v, std::memory_order_release);
         field.state.store(FieldState::CANNED, std::memory_order_release);
         field.commandIndex = cmdIdx;
-        if (apply && provider.hasCtx())
+        if (apply && applier)
         {
-            if constexpr (RequiresContext<F>)
-                F::applier(provider.get());
-            if (applier)
-                applier(provider.get());
+            applier(ctx);
         }
     }
 
@@ -183,12 +174,9 @@ public:
         if (field.state.load(std::memory_order_relaxed) != FieldState::INHERIT)
         {
             field.state.store(FieldState::INHERIT, std::memory_order_release);
-            if (provider.hasCtx())
+            if (applier)
             {
-                if constexpr (RequiresContext<F>)
-                    F::applier(provider.get());
-                if (applier)
-                    applier(provider.get());
+                applier(ctx);
             }
         }
     }
@@ -199,12 +187,9 @@ public:
         if (state != FieldState::UNSET)
         {
             field.state.store(FieldState::UNSET, std::memory_order_release);
-            if (provider.hasCtx())
+            if (applier)
             {
-                if constexpr (RequiresContext<F>)
-                    F::applier(provider.get());
-                if (applier)
-                    applier(provider.get());
+                applier(ctx);
             }
         }
     }
@@ -217,8 +202,8 @@ public:
 
 private:
     F& field;
-    ContextProvider& provider;
-    ApplyFn applier;
+    void* ctx;
+    void (*applier)(void*) = nullptr;
 };
 
 /**
@@ -240,8 +225,8 @@ public:
     template <IsSubRegistry S, auto EF>
     ValueFieldAccessor(S& sub, AccessorField<EF>)
         : field(sub.template getValue<EF>()),
-          applier(S::applier),
-          provider(sub.getProvider())
+          ctx(&sub),
+          applier(+[](void* ctx) { static_cast<S*>(ctx)->template runApplier<EF>(); })
     {
         static_assert(std::is_same_v<decltype(EF), typename S::type>, "The provided field does not belong to this sub-registry.");
     }
@@ -272,18 +257,15 @@ public:
         bool apply = !hasValue() || load() != v;
         typename F::type* val = new F::type(v);
         typename F::type* old = field.value.exchange(val, std::memory_order_relaxed);
-        utils::RCU::retire([](void* ctx) {
-            typename F::type* o = static_cast<F::type*>(ctx);
+        utils::RCU::retire([](void* retireCtx) {
+            typename F::type* o = static_cast<F::type*>(retireCtx);
             delete o;
         }, old);
         field.state.store(FieldState::CANNED, std::memory_order_release);
         field.commandIndex = cmdIdx;
-        if (apply && provider.hasCtx())
+        if (apply && applier)
         {
-            if constexpr (RequiresContext<F>)
-                F::applier(provider.get());
-            if (applier)
-                applier(provider.get());
+            applier(ctx);
         }
     }
 
@@ -291,12 +273,9 @@ public:
     {
         typename F::type old = load();
         field.state.store(FieldState::INHERIT, std::memory_order_relaxed);
-        if (load() != old && provider.hasCtx())
+        if (load() != old && applier)
         {
-            if constexpr (RequiresContext<F>)
-                F::applier(provider.get());
-            if (applier)
-                applier(provider.get());
+            applier(ctx);
         }
     }
 
@@ -306,12 +285,9 @@ public:
         if (state != FieldState::UNSET)
         {
             field.state.store(FieldState::UNSET, std::memory_order_release);
-            if (provider.hasCtx())
+            if (applier)
             {
-                if constexpr (RequiresContext<F>)
-                    F::applier(provider.get());
-                if (applier)
-                    applier(provider.get());
+                applier(ctx);
             }
         }
     }
@@ -323,8 +299,8 @@ public:
 
 private:
     F& field;
-    ContextProvider& provider;
-    ApplyFn applier;
+    void* ctx;
+    void (*applier)(void*) = nullptr;
 };
 
 /**
@@ -348,8 +324,8 @@ public:
     ListFieldAccessor(S& sub, AccessorField<EF>)
         : field(sub.template getValue<EF>()),
           mu(sub.mu),
-          applier(S::applier),
-          provider(sub.getProvider())
+          ctx(&sub),
+          applier(+[](void* ctx) { static_cast<S*>(ctx)->template runApplier<EF>(); })
     {
         static_assert(std::is_same_v<decltype(EF), typename S::type>, "The provided field does not belong to this sub-registry.");
     }
@@ -371,7 +347,7 @@ public:
     void withWrite(Fn&& fn, uint32_t cmdIdx = NO_COMMAND_INDEX)
     {
         field.commandIndex = cmdIdx;
-        bool runApplier{false};
+        bool shouldApply{false};
         {
             std::lock_guard<std::mutex> lk(mu);
             if (!field.value.load(std::memory_order_relaxed))
@@ -379,22 +355,19 @@ public:
                 typename Field::type* list = new Field::type{};
                 field.value.store(list, std::memory_order_release);
             }
-            runApplier = std::forward<Fn>(fn)(*field.value.load(std::memory_order_relaxed));
+            shouldApply = std::forward<Fn>(fn)(*field.value.load(std::memory_order_relaxed));
         }
-        if (runApplier && provider.hasCtx())
+        if (shouldApply && applier)
         {
-            if constexpr (RequiresContext<F>)
-                F::applier(provider.get());
-            if (applier)
-                applier(provider.get());
+            applier(ctx);
         }
     }
 
 private:
     F& field;
     std::mutex& mu;
-    ContextProvider& provider;
-    ApplyFn applier;
+    void* ctx;
+    void (*applier)(void*) = nullptr;
 };
 
 /**
@@ -419,8 +392,8 @@ public:
     template <IsSubRegistry S, auto EF>
     OwnedListFieldAccessor(S& sub, AccessorField<EF>)
         : field(sub.template getValue<EF>()),
-          applier(S::applier),
-          provider(sub.getProvider())
+          ctx(&sub),
+          applier(+[](void* ctx) { static_cast<S*>(ctx)->template runApplier<EF>(); })
     {
         static_assert(std::is_same_v<decltype(EF), typename S::type>, "The provided field does not belong to this sub-registry.");
     }
@@ -436,8 +409,8 @@ public:
      */
     void notifyChanged() noexcept
     {
-        if (applier && provider.hasCtx())
-            applier(provider.get());
+        if (applier)
+            applier(ctx);
     }
 
     /**
@@ -548,8 +521,8 @@ public:
 
 private:
     F& field;
-    ContextProvider& provider;
-    ApplyFn applier;
+    void* ctx;
+    void (*applier)(void*) = nullptr;
 };
 
 template <typename Base, typename ENUM, ApplyFn H, typename Fields>

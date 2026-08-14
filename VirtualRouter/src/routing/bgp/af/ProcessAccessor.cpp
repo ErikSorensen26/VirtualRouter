@@ -7,12 +7,12 @@ namespace routing::bgp
 {
 core::VirtualRouter& ProcessAccessor::getRoutingInstance(BgpProcess& proc)
 {
-    return *proc.routingInstance;
+    return proc.routingInstance;
 }
 
 NeighborTable& ProcessAccessor::getNtable(BgpProcess& proc)
 {
-    return proc.getNtable();
+    return proc.ntable;
 }
 
 uint32_t ProcessAccessor::getAsNum(BgpProcess& proc)
@@ -27,21 +27,16 @@ uint32_t ProcessAccessor::getRid(BgpProcess& proc)
 
 config::BgpRegistry& ProcessAccessor::getConfigs(BgpProcess& proc)
 {
-    return proc.getConfigs();
+    return proc.configs;
 }
 
 AttributeManager& ProcessAccessor::getAttrMgr(BgpProcess& proc)
 {
-    return proc.getAttrMgr();
+    return proc.attrMgr;
 }
 
 core::ProcessQueue& ProcessAccessor::getScheduler(BgpProcess& proc)
 {
-    return proc.getScheduler();
-}
-
-core::ProcessQueue& ProcessAccessor::getSchedulerQueue(BgpProcess& proc)
-{
-    return proc.getScheduler();
+    return proc.scheduler;
 }
 } // namespace routing

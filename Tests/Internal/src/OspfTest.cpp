@@ -5992,7 +5992,7 @@ TEST_F(Internal_OspfTest, RouteDerive_External_ForwardingAddress_NonZero_Anchors
     std::vector<std::pair<types::IPPrefix, OspfPath>> pathList;
     getIntraRouteManager().deriveIntraAreaRoutes<PolicyV2>(result, pathList);
     getRib().replaceArea(area, pathList);
-    ospfInstance->routingInstance->getRib().wait<uint32_t>();
+    ospfInstance->routingInstance.getRib().wait<uint32_t>();
 
     uint32_t extNet = 0x15151500;
     uint32_t fwdAddr = 0x14141401; // inside 0x14141400/24

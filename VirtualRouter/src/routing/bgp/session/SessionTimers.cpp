@@ -6,15 +6,16 @@
 
 namespace routing::bgp
 {
-SessionTimers::SessionTimers(Session& session) noexcept
-    : session(session), scheduler(session.getNeighbor().getScheduler())
+SessionTimers::SessionTimers(Session& session, core::ProcessQueue& schldr) noexcept
+    : session(session), scheduler(schldr)
 {}
 
-bool SessionTimers::cancel(std::atomic<uint32_t>& timerId) noexcept
+bool SessionTimers::cancel(uint32_t& timerId) noexcept
 {
-    uint32_t id = timerId.exchange(0, std::memory_order_acq_rel);
-    if (id == 0) return false;
-    return scheduler.cancel(id);
+    if (timerId == 0) return false;
+    bool canceled = scheduler.cancel(timerId);
+    timerId = 0;
+    return canceled;
 }
 
 void SessionTimers::startConnectRetry(std::chrono::seconds interval)
@@ -22,10 +23,9 @@ void SessionTimers::startConnectRetry(std::chrono::seconds interval)
     cancel(connectionRetryTimerId);
 
     auto expiry = std::chrono::steady_clock::now() + interval;
-    uint32_t id = scheduler.postAfter(expiry, [this](uint32_t) {
+    connectionRetryTimerId = scheduler.postAfter(expiry, [this](uint32_t) {
         session.postEvent(FsmEvent::CONNECTION_RETRY_TIMER_EXPIRES);
     });
-    connectionRetryTimerId.store(id, std::memory_order_release);
 }
 
 void SessionTimers::restartConnectRetry(std::chrono::seconds interval)
@@ -45,10 +45,9 @@ void SessionTimers::startHoldTimer(std::chrono::seconds holdTime)
     if (holdTime.count() == 0) return;
 
     auto expiry = std::chrono::steady_clock::now() + holdTime;
-    uint32_t id = scheduler.postAfter(expiry, [this](uint32_t) {
+    holdTimerId = scheduler.postAfter(expiry, [this](uint32_t) {
         session.postEvent(FsmEvent::HOLD_TIMER_EXPIRES);
     });
-    holdTimerId.store(id, std::memory_order_release);
 }
 
 void SessionTimers::restartHoldTimer() noexcept
@@ -57,10 +56,9 @@ void SessionTimers::restartHoldTimer() noexcept
     cancel(holdTimerId);
 
     auto expiry = std::chrono::steady_clock::now() + lastHoldTime;
-    uint32_t id = scheduler.postAfter(expiry, [this](uint32_t) {
+    holdTimerId = scheduler.postAfter(expiry, [this](uint32_t) {
         session.postEvent(FsmEvent::HOLD_TIMER_EXPIRES);
     });
-    holdTimerId.store(id, std::memory_order_release);
 }
 
 void SessionTimers::stopHoldTimer() noexcept
@@ -75,10 +73,9 @@ void SessionTimers::startKeepaliveTimer(std::chrono::seconds interval)
     if (interval.count() == 0) return;
 
     auto expiry = std::chrono::steady_clock::now() + interval;
-    uint32_t id = scheduler.postAfter(expiry, [this](uint32_t) {
+    keepaliveTimerId = scheduler.postAfter(expiry, [this](uint32_t) {
         session.postEvent(FsmEvent::KEEPALIVE_TIMER_EXPIRES);
     });
-    keepaliveTimerId.store(id, std::memory_order_release);
 }
 
 void SessionTimers::restartKeepaliveTimer() noexcept
@@ -86,10 +83,9 @@ void SessionTimers::restartKeepaliveTimer() noexcept
     if (lastKeepaliveInterval.count() == 0) return;
     cancel(keepaliveTimerId);
     auto expiry = std::chrono::steady_clock::now() + lastKeepaliveInterval;
-    uint32_t id = scheduler.postAfter(expiry, [this](uint32_t) {
+    keepaliveTimerId = scheduler.postAfter(expiry, [this](uint32_t) {
         session.postEvent(FsmEvent::KEEPALIVE_TIMER_EXPIRES);
     });
-    keepaliveTimerId.store(id, std::memory_order_release);
 }
 
 void SessionTimers::stopKeepaliveTimer() noexcept
@@ -107,10 +103,9 @@ void SessionTimers::startIdleHoldTimer(std::chrono::seconds interval)
     }
 
     auto expiry = std::chrono::steady_clock::now() + interval;
-    uint32_t id = scheduler.postAfter(expiry, [this](uint32_t) {
+    idleHoldTimerId = scheduler.postAfter(expiry, [this](uint32_t) {
         session.postEvent(FsmEvent::IDLE_HOLD_TIMER_EXPIRES);
     });
-    idleHoldTimerId.store(id, std::memory_order_release);
 }
 
 void SessionTimers::stopIdleHoldTimer() noexcept

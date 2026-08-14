@@ -53,7 +53,7 @@ void Fsm::transitionTo(FsmState newState, FsmEvent trigger)
         transitionCallback(from, newState, trigger);
 }
 
-void Fsm::resetToIdle(bool sendNotification, uint16_t notifCode)
+void Fsm::resetToIdle(bool sendNotification, uint16_t notifCode, FsmEvent trigger)
 {
     session.getTimers().cancelAll();
     session.getTimers().connectionRetryCount = 0;
@@ -62,7 +62,7 @@ void Fsm::resetToIdle(bool sendNotification, uint16_t notifCode)
         session.sendNotification(notifCode);
 
     session.closeAllConnections();
-    transitionTo(FsmState::IDLE, FsmEvent::MANUAL_STOP);
+    transitionTo(FsmState::IDLE, trigger);
 }
 
 void Fsm::resetAndReconnect()
@@ -91,6 +91,48 @@ void Fsm::initiateOutgoingTcp()
     session.initiateConnection();
 }
 
+bool Fsm::negotiateHoldTime()
+{
+    // RFC 4271 4.2: the negotiated hold time is the smaller of the two advertised
+    // values. session.holdTime currently carries the peer's advertised value.
+    auto& baseCfg = session.getBaseConfig();
+
+    auto minHtCfg = baseCfg.get<config::BgpTransportBase::MINIMUM_HOLDTIME>();
+    if (minHtCfg.hasValue() && session.holdTime != 0 && session.holdTime < minHtCfg.load())
+    {
+        resetToIdle(true, BGP_NOTIFICATION_OPEN_UNACCEPTABLE_HOLD, FsmEvent::BGP_OPEN_MSG_ERR);
+        return false;
+    }
+
+    const uint16_t cfg   = baseCfg.get<config::BgpTransportBase::HOLDTIME>().load();
+    const uint16_t minHt = std::min<uint16_t>(session.holdTime, cfg);
+    session.holdTime = minHt;
+
+    // Prefer the configured keepalive interval when it is shorter than holdtime/3.
+    const uint16_t cfgKa = baseCfg.get<config::BgpTransportBase::KEEPALIVE_INTERVAL>().load();
+    uint16_t kaInterval;
+    if (minHt == 0)
+        kaInterval = 0;
+    else if (cfgKa > 0 && cfgKa < minHt)
+        kaInterval = cfgKa;
+    else
+        kaInterval = minHt / 3;
+    session.keepaliveInterval = kaInterval;
+
+    if (minHt != 0)
+    {
+        session.getTimers().startHoldTimer(std::chrono::seconds(minHt));
+        session.getTimers().startKeepaliveTimer(std::chrono::seconds(kaInterval));
+    }
+    else
+    {
+        // Hold time 0 disables both timers for the life of the session.
+        session.getTimers().stopHoldTimer();
+        session.getTimers().stopKeepaliveTimer();
+    }
+    return true;
+}
+
 void Fsm::handleIdle(FsmEvent event)
 {
     switch (event)
@@ -98,6 +140,7 @@ void Fsm::handleIdle(FsmEvent event)
         case FsmEvent::MANUAL_START:
         case FsmEvent::AUTOMATIC_START:
         {
+            session.initialize();
             passiveMode = false;
             session.getTimers().connectionRetryCount = 0;
             session.getTimers().startConnectRetry(kConnectRetryInterval);
@@ -108,6 +151,7 @@ void Fsm::handleIdle(FsmEvent event)
         case FsmEvent::MANUAL_START_PASSIVE_TCP:
         case FsmEvent::AUTOMATIC_START_PASSIVE_TCP:
         {
+            session.initialize();
             passiveMode = true;
             session.getTimers().connectionRetryCount = 0;
             session.getTimers().startConnectRetry(kConnectRetryInterval);
@@ -117,6 +161,7 @@ void Fsm::handleIdle(FsmEvent event)
         case FsmEvent::AUTOMATIC_START_DAMP:
         case FsmEvent::AUTOMATIC_START_DAMP_PASSIVE_TCP:
         {
+            session.initialize();
             auto count = session.getTimers().connectionRetryCount;
             auto secs = std::chrono::seconds(5u << std::min<uint32_t>(count, 4));
             if (secs > std::chrono::seconds(120)) secs = std::chrono::seconds(120);
@@ -159,9 +204,10 @@ void Fsm::handleConnect(FsmEvent event)
         case FsmEvent::TCP_CONNECTION_CONFIRMED:
         case FsmEvent::TCP_CR_ACKED:
         {
-            // TCP established, send OPEN, start initial hold timer.
+            // TCP established, send OPEN, start initial hold timer (RFC 4271 8.2.2).
             session.getTimers().stopConnectRetry();
             session.sendOpen();
+            session.getTimers().startHoldTimer(kInitialHoldTime);
             transitionTo(FsmState::OPEN_SENT, event);
             break;
         }
@@ -190,30 +236,26 @@ void Fsm::handleConnect(FsmEvent event)
             session.getTimers().stopConnectRetry();
             session.sendOpen();
             session.sendKeepalive();
-            {
-                uint16_t ht = session.holdTime;
-                if (ht != 0)
-                    session.getTimers().startKeepaliveTimer(
-                        std::chrono::seconds(ht / 3));
-            }
+            if (!negotiateHoldTime())
+                break;
             transitionTo(FsmState::OPEN_CONFIRMED, event);
             break;
         }
         case FsmEvent::BGP_HEADER_ERR:
         case FsmEvent::BGP_OPEN_MSG_ERR:
         {
-            resetToIdle(true, BGP_NOTIFICATION_FSM_OPEN_SENT);
+            resetToIdle(true, BGP_NOTIFICATION_FSM_OPEN_SENT, event);
             break;
         }
         case FsmEvent::AUTOMATIC_STOP:
         //case FsmEvent::MANUAL_STOP:
         {
-            resetToIdle(false);
+            resetToIdle(false, BGP_NOTIFICATION_CEASE_UNSPECIFIC, event);
             break;
         }
         default:
         {
-            resetToIdle(true, BGP_NOTIFICATION_FSM_OPEN_SENT);
+            resetToIdle(true, BGP_NOTIFICATION_FSM_OPEN_SENT, event);
             break;
         }
     }
@@ -243,6 +285,7 @@ void Fsm::handleActive(FsmEvent event)
         {
             session.getTimers().stopConnectRetry();
             session.sendOpen();
+            session.getTimers().startHoldTimer(kInitialHoldTime);
             transitionTo(FsmState::OPEN_SENT, event);
             break;
         }
@@ -255,17 +298,17 @@ void Fsm::handleActive(FsmEvent event)
         case FsmEvent::BGP_HEADER_ERR:
         case FsmEvent::BGP_OPEN_MSG_ERR:
         {
-            resetToIdle(true, BGP_NOTIFICATION_FSM_OPEN_SENT);
+            resetToIdle(true, BGP_NOTIFICATION_FSM_OPEN_SENT, event);
             break;
         }
         case FsmEvent::AUTOMATIC_STOP:
         {
-            resetToIdle(false);
+            resetToIdle(false, BGP_NOTIFICATION_CEASE_UNSPECIFIC, event);
             break;
         }
         default:
         {
-            resetToIdle(true, BGP_NOTIFICATION_FSM_OPEN_SENT);
+            resetToIdle(true, BGP_NOTIFICATION_FSM_OPEN_SENT, event);
             break;
         }
     }
@@ -277,17 +320,17 @@ void Fsm::handleOpenSent(FsmEvent event)
     {
         case FsmEvent::MANUAL_STOP:
         {
-            resetToIdle(true, BGP_NOTIFICATION_CEASE_ADMIN_SHUT);
+            resetToIdle(true, BGP_NOTIFICATION_CEASE_ADMIN_SHUT, event);
             break;
         }
         case FsmEvent::AUTOMATIC_STOP:
         {
-            resetToIdle(true, BGP_NOTIFICATION_CEASE_ADMIN_RESET);
+            resetToIdle(true, BGP_NOTIFICATION_CEASE_ADMIN_RESET, event);
             break;
         }
         case FsmEvent::HOLD_TIMER_EXPIRES:
         {
-            resetToIdle(true, BGP_NOTIFICATION_HOLD_TIMER_EXPIRED);
+            resetToIdle(true, BGP_NOTIFICATION_HOLD_TIMER_EXPIRED, event);
             break;
         }
         case FsmEvent::TCP_CONNECTION_FAILS:
@@ -301,76 +344,44 @@ void Fsm::handleOpenSent(FsmEvent event)
         case FsmEvent::BGP_OPEN:
         // Peer open received. The session has already validated content
         {
-            // Reject if peer's hold time is below our configured minimum
-            auto minHtCfg = session.getBaseConfig().get<config::BgpTransportBase::MINIMUM_HOLDTIME>();
-            if (minHtCfg.hasValue() && session.holdTime != 0 && session.holdTime < minHtCfg.load())
-            {
-                resetToIdle(true, BGP_NOTIFICATION_OPEN_UNACCEPTABLE_HOLD);
-                break;
-            }
-
-            uint16_t cfg = session.getBaseConfig().get<config::BgpTransportBase::HOLDTIME>().load();
-            uint16_t minHt = std::min<uint16_t>(session.holdTime, cfg);
-            session.holdTime = minHt;
-
-            // Prefer configured keepalive interval over holdtime/3
-            uint16_t cfgKa = session.getBaseConfig().get<config::BgpTransportBase::KEEPALIVE_INTERVAL>().load();
-            uint16_t kaInterval;
-            if (minHt == 0)
-                kaInterval = 0;
-            else if (cfgKa > 0 && cfgKa < minHt)
-                kaInterval = cfgKa;
-            else
-                kaInterval = minHt / 3;
-            session.keepaliveInterval = kaInterval;
-
             session.getTimers().stopConnectRetry();
             session.sendKeepalive();
-
-            if (minHt != 0)
-            {
-                session.getTimers().startHoldTimer(std::chrono::seconds(minHt));
-                session.getTimers().startKeepaliveTimer(std::chrono::seconds(kaInterval));
-            }
-            else
-            {
-                session.getTimers().stopHoldTimer();
-                session.getTimers().stopKeepaliveTimer();
-            }
+            if (!negotiateHoldTime())
+                break;
             transitionTo(FsmState::OPEN_CONFIRMED, event);
             break;
         }
         case FsmEvent::OPEN_COLLISION_DUMP:
         {
-            resetToIdle(true, BGP_NOTIFICATION_CEASE_COLLISION_RESOLUTION);
+            resetToIdle(true, BGP_NOTIFICATION_CEASE_COLLISION_RESOLUTION, event);
             break;
         }
         case FsmEvent::BGP_HEADER_ERR:
         {
-            resetToIdle(true, BGP_NOTIFICATION_HEADER_BAD_MESSAGE_TYPE);
+            resetToIdle(true, BGP_NOTIFICATION_HEADER_BAD_MESSAGE_TYPE, event);
             break;
         }
         case FsmEvent::BGP_OPEN_MSG_ERR:
         {
-            resetToIdle(false);
+            resetToIdle(false, BGP_NOTIFICATION_CEASE_UNSPECIFIC, event);
             break;
         }
         case FsmEvent::NOTIF_MSG_VER_ERR:
         case FsmEvent::NOTIF_MSG:
         {
-            resetToIdle(false);
+            resetToIdle(false, BGP_NOTIFICATION_CEASE_UNSPECIFIC, event);
             break;
         }
         case FsmEvent::KEEPALIVE_MSG:
         case FsmEvent::UPDATE_MSG_ERR:
         case FsmEvent::UPDATE_MSG:
         {
-            resetToIdle(true, BGP_NOTIFICATION_FSM_OPEN_SENT);
+            resetToIdle(true, BGP_NOTIFICATION_FSM_OPEN_SENT, event);
             break;
         }
         default:
         {
-            resetToIdle(true, BGP_NOTIFICATION_FSM_OPEN_SENT);
+            resetToIdle(true, BGP_NOTIFICATION_FSM_OPEN_SENT, event);
             break;
         }
     }
@@ -382,17 +393,17 @@ void Fsm::handleOpenConfirm(FsmEvent event)
     {
         case FsmEvent::MANUAL_STOP:
         {
-            resetToIdle(true, BGP_NOTIFICATION_CEASE_ADMIN_SHUT);
+            resetToIdle(true, BGP_NOTIFICATION_CEASE_ADMIN_SHUT, event);
             break;
         }
         case FsmEvent::AUTOMATIC_STOP:
         {
-            resetToIdle(true, BGP_NOTIFICATION_CEASE_ADMIN_RESET);
+            resetToIdle(true, BGP_NOTIFICATION_CEASE_ADMIN_RESET, event);
             break;
         }
         case FsmEvent::HOLD_TIMER_EXPIRES:
         {
-            resetToIdle(true, BGP_NOTIFICATION_HOLD_TIMER_EXPIRED);
+            resetToIdle(true, BGP_NOTIFICATION_HOLD_TIMER_EXPIRED, event);
             break;
         }
         case FsmEvent::KEEPALIVE_TIMER_EXPIRES:
@@ -403,7 +414,7 @@ void Fsm::handleOpenConfirm(FsmEvent event)
         }
         case FsmEvent::TCP_CONNECTION_FAILS:
         {
-            resetToIdle(false);
+            resetToIdle(false, BGP_NOTIFICATION_CEASE_UNSPECIFIC, event);
             break;
         }
         case FsmEvent::BGP_OPEN:
@@ -411,29 +422,29 @@ void Fsm::handleOpenConfirm(FsmEvent event)
             uint32_t peerRid = session.getPeerRid();
             if (!session.resolveCollision(peerRid))
             {
-                resetToIdle(true, BGP_NOTIFICATION_CEASE_COLLISION_RESOLUTION);
+                resetToIdle(true, BGP_NOTIFICATION_CEASE_COLLISION_RESOLUTION, event);
             }
             break;
         }
         case FsmEvent::OPEN_COLLISION_DUMP:
         {
-            resetToIdle(true, BGP_NOTIFICATION_CEASE_COLLISION_RESOLUTION);
+            resetToIdle(true, BGP_NOTIFICATION_CEASE_COLLISION_RESOLUTION, event);
             break;
         }
         case FsmEvent::BGP_HEADER_ERR:
         {
-            resetToIdle(true, BGP_NOTIFICATION_HEADER_BAD_MESSAGE_TYPE);
+            resetToIdle(true, BGP_NOTIFICATION_HEADER_BAD_MESSAGE_TYPE, event);
             break;
         }
         case FsmEvent::BGP_OPEN_MSG_ERR:
         {
-            resetToIdle(true, BGP_NOTIFICATION_OPEN_UNSUPPORTED_PARAMETER);
+            resetToIdle(true, BGP_NOTIFICATION_OPEN_UNSUPPORTED_PARAMETER, event);
             break;
         }
         case FsmEvent::NOTIF_MSG_VER_ERR:
         case FsmEvent::NOTIF_MSG:
         {
-            resetToIdle(false);
+            resetToIdle(false, BGP_NOTIFICATION_CEASE_UNSPECIFIC, event);
             break;
         }
         case FsmEvent::KEEPALIVE_MSG:
@@ -446,17 +457,17 @@ void Fsm::handleOpenConfirm(FsmEvent event)
         }
         case FsmEvent::UPDATE_MSG:
         {
-            resetToIdle(true, BGP_NOTIFICATION_FSM_OPEN_CONFIRM);
+            resetToIdle(true, BGP_NOTIFICATION_FSM_OPEN_CONFIRM, event);
             break;
         }
         case FsmEvent::UPDATE_MSG_ERR:
         {
-            resetToIdle(true, BGP_NOTIFICATION_UPDATE_MALFORMED_ATTR_LIST);
+            resetToIdle(true, BGP_NOTIFICATION_UPDATE_MALFORMED_ATTR_LIST, event);
             break;
         }
         default:
         {
-            resetToIdle(true, BGP_NOTIFICATION_FSM_OPEN_CONFIRM);
+            resetToIdle(true, BGP_NOTIFICATION_FSM_OPEN_CONFIRM, event);
             break;
         }
     }
@@ -468,17 +479,17 @@ void Fsm::handleEstablished(FsmEvent event)
     {
         case FsmEvent::MANUAL_STOP:
         {
-            resetToIdle(true, BGP_NOTIFICATION_CEASE_ADMIN_SHUT);
+            resetToIdle(true, BGP_NOTIFICATION_CEASE_ADMIN_SHUT, event);
             break;
         }
         case FsmEvent::AUTOMATIC_STOP:
         {
-            resetToIdle(true, BGP_NOTIFICATION_CEASE_ADMIN_RESET);
+            resetToIdle(true, BGP_NOTIFICATION_CEASE_ADMIN_RESET, event);
             break;
         }
         case FsmEvent::HOLD_TIMER_EXPIRES:
         {
-            resetToIdle(true, BGP_NOTIFICATION_HOLD_TIMER_EXPIRED);
+            resetToIdle(true, BGP_NOTIFICATION_HOLD_TIMER_EXPIRED, event);
             break;
         }
         case FsmEvent::KEEPALIVE_TIMER_EXPIRES:
@@ -489,30 +500,30 @@ void Fsm::handleEstablished(FsmEvent event)
         }
         case FsmEvent::TCP_CONNECTION_FAILS:
         {
-            resetToIdle(false);
+            resetToIdle(false, BGP_NOTIFICATION_CEASE_UNSPECIFIC, event);
             break;
         }
         case FsmEvent::BGP_OPEN:
         {
             uint32_t peerRid = session.getPeerRid();
             if (!session.resolveCollision(peerRid))
-                resetToIdle(true, BGP_NOTIFICATION_CEASE_COLLISION_RESOLUTION);
+                resetToIdle(true, BGP_NOTIFICATION_CEASE_COLLISION_RESOLUTION, event);
             break;
         }
         case FsmEvent::BGP_HEADER_ERR:
         {
-            resetToIdle(true, BGP_NOTIFICATION_HEADER_BAD_MESSAGE_TYPE);
+            resetToIdle(true, BGP_NOTIFICATION_HEADER_BAD_MESSAGE_TYPE, event);
             break;
         }
         case FsmEvent::BGP_OPEN_MSG_ERR:
         {
-            resetToIdle(true, BGP_NOTIFICATION_FSM_ESTABLISH);
+            resetToIdle(true, BGP_NOTIFICATION_FSM_ESTABLISH, event);
             break;
         }
         case FsmEvent::NOTIF_MSG_VER_ERR:
         case FsmEvent::NOTIF_MSG:
         {
-            resetToIdle(false);
+            resetToIdle(false, BGP_NOTIFICATION_CEASE_UNSPECIFIC, event);
             break;
         }
         case FsmEvent::KEEPALIVE_MSG:
@@ -529,7 +540,7 @@ void Fsm::handleEstablished(FsmEvent event)
         }
         case FsmEvent::UPDATE_MSG_ERR:
         {
-            resetToIdle(true, BGP_NOTIFICATION_UPDATE_MALFORMED_ATTR_LIST);
+            resetToIdle(true, BGP_NOTIFICATION_UPDATE_MALFORMED_ATTR_LIST, event);
             break;
         }
         case FsmEvent::ROUTE_REFRESH:
@@ -539,7 +550,7 @@ void Fsm::handleEstablished(FsmEvent event)
         }
         case FsmEvent::BFD_DOWN:
         {
-            resetToIdle(true, BGP_NOTIFICATION_CEASE_BFD_DOWN);
+            resetToIdle(true, BGP_NOTIFICATION_CEASE_BFD_DOWN, event);
             break;
         }
         case FsmEvent::BFD_UP:
@@ -548,7 +559,7 @@ void Fsm::handleEstablished(FsmEvent event)
         }
         case FsmEvent::MAX_PREFIX_REACHED:
         {
-            resetToIdle(true, BGP_NOTIFICATION_CEASE_MAX_PREFIXES);
+            resetToIdle(true, BGP_NOTIFICATION_CEASE_MAX_PREFIXES, event);
             break;
         }
         default:

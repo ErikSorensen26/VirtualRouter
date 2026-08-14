@@ -18,15 +18,13 @@ void NeighborTable::syncNeighbors()
 {
     syncPeerGroups();
 
-    auto& configs = process.getConfigs();
-
     std::unordered_set<types::IPAddress> unseen;
 
     // Fill unseen with all current neighbors
     for (const auto& [addr, _] : neighbors)
         unseen.insert(addr);
 
-    auto& neighborList = configs.get<config::Bgp::NEIGHBOR>().get();
+    auto& neighborList = process.configs.get<config::Bgp::NEIGHBOR>().get();
     for (const auto& [ip, _] : neighborList)
     {
         if (unseen.contains(ip))
@@ -61,7 +59,7 @@ Neighbor* NeighborTable::createNeighbor(const types::IPAddress& ipAddress)
     if (neighbors.contains(ipAddress))
         return &neighbors.at(ipAddress);
 
-    auto [it, ok] = neighbors.try_emplace(ipAddress, ipAddress, process);
+    auto [it, ok] = neighbors.try_emplace(ipAddress, ipAddress, *this, process.scheduler);
     return ok ? &it->second : nullptr;
 }
 
@@ -80,7 +78,7 @@ Neighbor* NeighborTable::createDynamicNeighbor(const types::IPAddress& ipAddress
     if (auto it = neighbors.find(ipAddress); it != neighbors.end())
         return it->second.dynamic ? &it->second : nullptr;
 
-    auto [it, ok] = neighbors.try_emplace(ipAddress, ipAddress, process);
+    auto [it, ok] = neighbors.try_emplace(ipAddress, ipAddress, *this, process.scheduler);
     if (!ok)
         return nullptr;
 
@@ -88,7 +86,7 @@ Neighbor* NeighborTable::createDynamicNeighbor(const types::IPAddress& ipAddress
 
     // Attach the peer-group so REMOTE_AS, hold-time, etc. are inherited.
     if (PeerGroup* pg = lookupPeerGroup(peerGroupName))
-        it->second.getConfigs().setPeerGroup(pg);
+        it->second.configs.setPeerGroup(pg);
 
     // Do NOT start an active session — dynamic neighbors are inbound-only.
     return &it->second;
@@ -113,43 +111,38 @@ Neighbor* NeighborTable::lookup(const types::IPAddress& ipAddress)
     return (it != neighbors.end()) ? &it->second : nullptr;
 }
 
-const Neighbor* NeighborTable::lookup(const types::IPAddress& ipAddress) const
-{
-    auto it = neighbors.find(ipAddress);
-    return (it != neighbors.end()) ? &it->second : nullptr;
-}
-
 Neighbor* NeighborTable::lookup(uint32_t rid)
 {
     auto it = peers.find(rid);
     return (it != peers.end()) ? it->second : nullptr;
 }
 
-const Neighbor* NeighborTable::lookup(uint32_t rid) const
+NeighborAf* NeighborTable::lookup(const types::IPAddress& ipAddress, const AfiSafi& afi)
 {
-    auto it = peers.find(rid);
-    return (it != peers.end()) ? it->second : nullptr;
+    Neighbor* nbr = lookup(ipAddress);
+    return nbr ? nbr->findAfNeighbor(afi) : nullptr;
 }
 
-bool NeighborTable::activatePeer(const types::IPAddress& nbr, uint32_t rid)
+NeighborAf* NeighborTable::lookup(uint32_t rid, const AfiSafi& afi)
 {
-    auto it = neighbors.find(nbr);
-    if (it == neighbors.end())
-        return false;
+    Neighbor* nbr = lookup(rid);
+    return nbr ? nbr->findAfNeighbor(afi) : nullptr;
+}
 
-    peers[rid] = &it->second;
-    it->second.rid = rid;
+bool NeighborTable::activatePeer(uint32_t rid, Session& sess)
+{
+    peers[rid] = &sess.activatePeer(rid);
     return true;
 }
 
-bool NeighborTable::deactivatePeer(uint32_t rid)
+bool NeighborTable::deactivatePeer(Session& sess)
 {
-    auto it = peers.find(rid);
+    auto it = peers.find(sess.getPeerRid());
     if (it == peers.end())
         return false;
 
-    it->second->rid = 0;
     peers.erase(it);
+    sess.deactivatePeer();
     return true;
 }
 
@@ -166,7 +159,7 @@ void NeighborTable::runDccCheck()
 {
     for (auto& [_, nbr] : neighbors)
     {
-        if (nbr.getConfigs().get<config::BgpNeighborSession::DISABLE_CONNECTION_CHECK>().load())
+        if (nbr.configs.get<config::BgpNeighborSession::DISABLE_CONNECTION_CHECK>().load())
         {
             disableConnectionCheck = true;
             return;
@@ -175,34 +168,55 @@ void NeighborTable::runDccCheck()
     disableConnectionCheck = false;
 }
 
-PeerGroup& NeighborTable::createPeerGroup(const std::string& name)
+bool NeighborTable::isShutdown(const Neighbor& nbr) const
 {
-    return peerTemplates.createPeerGroup(name);
+    return nbr.configs.get<config::BgpNeighborSession::SHUTDOWN>().load();
 }
 
-void NeighborTable::removePeerGroup(const std::string& name)
+bool NeighborTable::isConnectionCheck(const Neighbor& nbr) const
 {
-    peerTemplates.removePeerGroup(name);
+    return nbr.isEbgp() &&
+        !nbr.configs.get<config::BgpNeighborSession::DISABLE_CONNECTION_CHECK>().load() &&
+        !nbr.configs.get<config::BgpNeighborSession::EBGP_MULTIHOP>().load();
 }
 
-PeerSessionTemplate& NeighborTable::createPeerSessionTemplate(const std::string& name)
+std::optional<bool> NeighborTable::isTcpConnectionMode(const Neighbor& nbr) const
 {
-    return peerTemplates.createPeerSessionTemplate(name);
+    auto field = nbr.configs.get<config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
+    if (field.hasValue())
+        return field.load();
+    return std::nullopt;
 }
 
-void NeighborTable::removePeerSessionTemplate(const std::string& name)
+void NeighborTable::shutdownNeighbor(Neighbor& neighbor)
 {
-    peerTemplates.removePeerSessionTemplate(name);
+    process.shutdownNeighbor(neighbor);
 }
 
-PeerPolicyTemplate& NeighborTable::createPeerPolicyTemplate(const std::string& name)
+void NeighborTable::unshutdownNeighbor(Neighbor& neighbor)
 {
-    return peerTemplates.createPeerPolicyTemplate(name);
+    process.unshutdownNeighbor(neighbor);
 }
 
-void NeighborTable::removePeerPolicyTemplate(const std::string& name)
+void NeighborTable::clear()
 {
-    peerTemplates.removePeerPolicyTemplate(name);
+    peers.clear();
+    neighbors.clear();
+}
+
+void NeighborTable::restartNeighbor(Neighbor& neighbor)
+{
+    // A session-reset config change bounces an existing session; it must not create one
+    // where none exists.
+    if (!process.findSession(neighbor.neighborAddress))
+        return;
+    process.shutdownNeighbor(neighbor);
+    process.unshutdownNeighbor(neighbor);
+}
+
+AddressFamilyVariant* NeighborTable::findAddressFamily(const AfiSafi& afi)
+{
+    return process.findAddressFamily(afi);
 }
 
 PeerGroup* NeighborTable::lookupPeerGroup(const std::string& name)
@@ -233,5 +247,26 @@ PeerPolicyTemplate* NeighborTable::lookupPeerPolicyTemplate(const std::string& n
 const PeerPolicyTemplate* NeighborTable::lookupPeerPolicyTemplate(const std::string& name) const
 {
     return peerTemplates.lookupPeerPolicyTemplate(name);
+}
+
+config::BgpNeighborSessionRegistry& NeighborTable::ensureNeighborConfigs(types::IPAddress addr)
+{
+    return process.configs.get<config::Bgp::NEIGHBOR>().emplaceBack(addr);
+}
+
+void NeighborTable::removeNeighborConfigs(types::IPAddress addr)
+{
+    process.configs.get<config::Bgp::NEIGHBOR>().erase(addr);
+}
+
+bool NeighborTable::isPeerConfed(uint32_t peerAs) const
+{
+    bool inConfed = false;
+    process.configs.get<config::Bgp::BGP_CONFEDERATION_PEERS>().withRead(
+        [&](const auto& peersList) {
+            for (uint32_t p : peersList)
+                    if (p == peerAs) { inConfed = true; return; }
+        });
+    return inConfed;
 }
 } // namespace routing

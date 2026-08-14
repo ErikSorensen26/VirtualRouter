@@ -25,15 +25,15 @@ namespace routing::eigrp
 {
 ReliableTransport::ReliableTransport(EigrpInterface& iface) : iface(iface)
 {
-    ntable = &iface.getNTable();
-    auto& base = iface.getBase();
-    af = base.getAF();
-    as = base.getAS();
+    ntable = &iface.ntable;
+    auto& base = iface.process;
+    af = base.addressFamily;
+    as = base.asNumber;
 }
 
 ReliableTransport::~ReliableTransport()
 {
-    auto& tmgr = iface.getTimers();
+    auto& tmgr = iface.tmgr;
     for (auto& [seq, pkt] : reliablePackets)
     {
         for (auto& [nbr, info] : pkt.neighbors)
@@ -106,7 +106,7 @@ bool ReliableTransport::setupMulticastReliable(packet::EigrpHeader& builder)
 
 void ReliableTransport::startMulticastReliable(MulticastReliablePacket& pkt, uint32_t seq)
 {
-    auto& timer = iface.getTimers();
+    auto& timer = iface.tmgr;
     for (auto& [nbr, info] : pkt.neighbors)
     {
         if (nbr->currentReliable.load(std::memory_order_relaxed) == seq)
@@ -122,13 +122,13 @@ void ReliableTransport::startUnicastReliable(Neighbor& neighbor, UnicastReliable
 {
     pkt.info.sendTime = std::chrono::steady_clock::now();
     pkt.info.retransmissionCount = 0;
-    iface.getTimers().startRetransmissionTimer(&neighbor, pkt, seq);
+    iface.tmgr.startRetransmissionTimer(&neighbor, pkt, seq);
 }
 
 void ReliableTransport::sendRetransmission(Neighbor& neighbor, packet::StaticHeader& header)
 {
     // Construct and send the retransmission packet
-    processing::PacketBuilder retransmissionPacket(iface.getIface());
+    processing::PacketBuilder retransmissionPacket(iface.currentInterface);
     af == types::AddressFamily::IPv4
         ? infrastructure::ippacket::reserveIpv4(retransmissionPacket)
         : infrastructure::ippacket::reserveIpv6(retransmissionPacket);
@@ -137,7 +137,7 @@ void ReliableTransport::sendRetransmission(Neighbor& neighbor, packet::StaticHea
     eigrp.setBuffer(hdr->buffer);
     eigrp.setFlagCondRecv(false);
 
-    auto* interface = iface.getIface();
+    auto* interface = iface.currentInterface;
     infrastructure::ippacket::BuildIP build = {
         .iface = interface,
         .packetInfo = retransmissionPacket,
@@ -161,14 +161,14 @@ void ReliableTransport::handleRetransmission(Neighbor* neighbor, MulticastReliab
     // Handle retransmission limit
     if (pktInfo.retransmissionCount >= MAX_RETRANSMISSIONS)
     {
-        iface.getTimers().cancelRetransmissionTimer(pktInfo);
+        iface.tmgr.cancelRetransmissionTimer(pktInfo);
         ntable->onDown(*neighbor);
         return;
     }
 
     if (!pkt.packet.buffer)
     {
-        iface.getTimers().cancelRetransmissionTimer(pktInfo);
+        iface.tmgr.cancelRetransmissionTimer(pktInfo);
         return;
     }
 
@@ -180,7 +180,7 @@ void ReliableTransport::handleRetransmission(Neighbor* neighbor, MulticastReliab
     neighbor->rto.store(std::clamp(newRto, 1.0, 60.0), std::memory_order_release);
     pktInfo.retransmissionCount++;
     pktInfo.sendTime = std::chrono::steady_clock::now();
-    iface.getTimers().startRetransmissionTimer(neighbor, pkt, info, seq);
+    iface.tmgr.startRetransmissionTimer(neighbor, pkt, info, seq);
 }
 
 void ReliableTransport::handleRetransmission(Neighbor* neighbor, UnicastReliablePacket& pkt, uint32_t seq)
@@ -188,14 +188,14 @@ void ReliableTransport::handleRetransmission(Neighbor* neighbor, UnicastReliable
     // Handle retransmission limit
     if (pkt.info.retransmissionCount >= MAX_RETRANSMISSIONS)
     {
-        iface.getTimers().cancelRetransmissionTimer(pkt.info);
+        iface.tmgr.cancelRetransmissionTimer(pkt.info);
         ntable->onDown(*neighbor);
         return;
     }
     
     if (!pkt.packet.buffer)
     {
-        iface.getTimers().cancelRetransmissionTimer(pkt.info);
+        iface.tmgr.cancelRetransmissionTimer(pkt.info);
         return;
     }
 
@@ -206,14 +206,14 @@ void ReliableTransport::handleRetransmission(Neighbor* neighbor, UnicastReliable
     neighbor->rto.store(std::min(neighbor->rto.load(std::memory_order_relaxed) * 2.0, 60.0), std::memory_order_release);
     pkt.info.retransmissionCount++;
     pkt.info.sendTime = std::chrono::steady_clock::now();
-    iface.getTimers().startRetransmissionTimer(neighbor, pkt, seq);
+    iface.tmgr.startRetransmissionTimer(neighbor, pkt, seq);
 }
 
 uint16_t ReliableTransport::getMtu()
 {
     return af == types::AddressFamily::IPv4
-        ? iface.getIface()->configs.ipv4.mtu.load(std::memory_order_relaxed)
-        : iface.getIface()->configs.ipv6.mtu.load(std::memory_order_relaxed);
+        ? iface.currentInterface->configs.ipv4.mtu.load(std::memory_order_relaxed)
+        : iface.currentInterface->configs.ipv6.mtu.load(std::memory_order_relaxed);
 }
 
 uint32_t ReliableTransport::incrementSequenceNumber() 

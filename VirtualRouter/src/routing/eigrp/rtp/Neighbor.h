@@ -249,6 +249,13 @@ public:
     std::unordered_map<uint32_t, bool> receivedConditions; ///< Tracks which conditional-receive sequence numbers this neighbor has responded to.
 
 private:
+    /**
+     * @brief Selects the TLV capability version to use with this neighbor,
+     *        based on the interface's address family and mode and the
+     *        version negotiated from the HELLO exchange.
+     */
+    static TLVType getTLVType(EigrpInterface& iface, Version v);
+
     std::atomic<State> state{State::DOWN};
 
     std::deque<uint32_t> ackQueue;         ///< Pending ACKs to be piggybacked; bounded to avoid unbounded growth.

@@ -138,7 +138,7 @@ bool VirtualRouter::removeEigrpNamed(const std::string& name)
             auto [v4, v6] = pair;
             if (v4)
             {
-                uint32_t as = v4->getAS();
+                uint32_t as = v4->asNumber;
                 if (eigrpList.find(as) != eigrpList.end())
                 {
                     delete eigrpList[as].ipv4;
@@ -149,7 +149,7 @@ bool VirtualRouter::removeEigrpNamed(const std::string& name)
             }
             if (v6)
             {
-                uint32_t as = v6->getAS();
+                uint32_t as = v6->asNumber;
                 if (eigrpList.find(as) != eigrpList.end())
                 {
                     delete eigrpList[as].ipv6;
@@ -169,7 +169,7 @@ routing::ospf::OspfProcess& VirtualRouter::addOspf(uint16_t id)
 {
     if (auto it = ospfList.find(id); it == ospfList.end())
     {
-        ospfList.try_emplace(id, false, id, types::AddressFamily::IPv4, this);
+        ospfList.try_emplace(id, false, id, types::AddressFamily::IPv4, *this);
     }
     return ospfList.at(id);
 }
@@ -200,7 +200,30 @@ routing::ospf::OspfProcess& VirtualRouter::addOspfv3(uint16_t id, types::Address
     return ospfv3List.at(id);
 }
 
-routing::ospf::OspfProcess* VirtualRouter::getOspfv3(uint16_t id)
+routing::ospf::OspfProcess& VirtualRouter::addOspfv3(uint16_t id, types::AddressFamily af)
+{
+    if (ospfv3List.find(id) == ospfv3List.end())
+    {
+        config::Ospfv3AddressFamilyRegistry& afConfigs = configs.get<config::Vrf::ROUTER_OSPFV3>().emplaceBack(id);
+        ospfv3List.emplace(id, afConfigs);
+    }
+    auto& ospf = ospfv3List.at(id);
+
+    if (af == types::AddressFamily::IPv4)
+    {
+        if (!ospf.ipv4)
+            ospf.ipv4 = new routing::ospf::OspfProcess(true, id, af, *this);
+        return *ospf.ipv4;
+    }
+    else
+    {
+        if (!ospf.ipv6)
+            ospf.ipv6 = new routing::ospf::OspfProcess(true, id, af, *this);
+        return *ospf.ipv6;
+    }
+}
+
+routing::ospf::OspfV3Instance* VirtualRouter::getOspfv3(uint16_t id)
 {
     if (auto it = ospfv3List.find(id); it != ospfv3List.end())
         return &it->second;
@@ -220,28 +243,28 @@ bool VirtualRouter::removeOspfv3(uint16_t id)
 void VirtualRouter::refreshEigrpV4()
 {
     for (auto& [id, as] : eigrpList)
-        if (as.ipv4) as.ipv4->getIfaceMgr().refreshInterfaceList();
+        if (as.ipv4) as.ipv4->enqueueRefreshInterfaceList();
     for (auto& [name, named] : namedEigrpList)
         for (auto& [subName, pair] : named.systems)
-            if (pair.first) pair.first->getIfaceMgr().refreshInterfaceList();
+            if (pair.first) pair.first->enqueueRefreshInterfaceList();
 }
 
 void VirtualRouter::refreshEigrpV6()
 {
     for (auto& [id, as] : eigrpList)
-        if (as.ipv6) as.ipv6->getIfaceMgr().refreshInterfaceList();
+        if (as.ipv6) as.ipv6->enqueueRefreshInterfaceList();
     for (auto& [name, named] : namedEigrpList)
         for (auto& [subName, pair] : named.systems)
-            if (pair.second) pair.second->getIfaceMgr().refreshInterfaceList();
+            if (pair.second) pair.second->enqueueRefreshInterfaceList();
 }
 
 void VirtualRouter::refreshEigrpV6Interfaces()
 {
     for (auto& [id, as] : eigrpList)
-        if (as.ipv6) as.ipv6->getIfaceMgr().refreshInterfaceList();
+        if (as.ipv6) as.ipv6->enqueueRefreshInterfaceList();
     for (auto& [name, named] : namedEigrpList)
         for (auto& [subName, pair] : named.systems)
-            if (pair.second) pair.second->getIfaceMgr().refreshInterfaceList();
+            if (pair.second) pair.second->enqueueRefreshInterfaceList();
 }
 
 config::VrfRegistry& VirtualRouter::getConfigs()

@@ -22,20 +22,21 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <unordered_set>
 
 #include <ControlScheduler.h>
 
 #include <ByteUtils.hpp>
 #include "GlobalAggregator.h"
-#include "EigrpConfig.h"
 #include "InterfaceManager.h"
 #include "interface/InterfaceManager.h"
 #include "Topology.h"
 #include "RouteManager.h"
+#include "configs/registry/router/EigrpRegistry.h"
 
 namespace core { class VirtualRouter; }
 namespace interface { enum class InterfaceType : uint8_t; }
-namespace config { void EigrpShutdown(void* e); }
+namespace config { class EigrpRegistry; }
 class Internal_EigrpTest;
 
 /**
@@ -109,7 +110,8 @@ struct EigrpInterfaceInstance
  * An `Eigrp` instance owns:
  * - @ref EigrpTopology — wraps the @ref DualEngine and @ref TopologyTable
  * - @ref InterfaceManager — tracks which interfaces participate in this process
- * - @ref EigrpConfig — process-level configuration (K-values, networks, stub, etc.)
+ * - A `config::EigrpRegistry&` — process-level configuration (K-values, networks, stub, etc.),
+ *   read directly via @ref getConfigs rather than through a separate facade object
  * - @ref GlobalAggregator — manages process-level summary routes
  * - @ref RouteManager — translates topology entries into RIB entries
  * - A `ProcessQueue` scheduler that serializes all protocol work
@@ -139,8 +141,10 @@ class Eigrp
 {
 public:
     using InterfaceKey = std::pair<interface::InterfaceType, float>;
-    friend class ::Internal_EigrpTest;
-    friend void ::config::EigrpShutdown(void* e);
+
+    const uint32_t asNumber;                  ///< Autonomous System number. Immutable after construction.
+    const types::AddressFamily addressFamily; ///< Address family (IPv4 or IPv6). Immutable after construction.
+    const bool namedMode = false;             ///< True when running in named mode. Immutable after construction.
 
     /**
      * @brief Constructs an EIGRP process for the given AS number and address family.
@@ -163,44 +167,114 @@ public:
      * Assumes @ref shutdown() has been called first. Destroying a running
      * process without calling shutdown first is undefined behavior.
      */
-    virtual ~Eigrp();
+    ~Eigrp();
 
     /**
-     * @brief Activates the process: subscribes to interface events and
-     *        populates the initial interface list.
+     * @brief Schedules an interface-list refresh on the process queue.
+     *
+     * Config-change entry point: re-evaluates which VRF interfaces should be
+     * running EIGRP. Safe to call from any thread.
      */
-    virtual void start();
+    void enqueueRefreshInterfaceList();
 
     /**
-     * @brief Gracefully shuts down the process.
+     * @brief Schedules a shutdown/restart on the process queue, based on the
+     *        current value of the `shutdown` config field.
      *
-     * Sends poison-reverse updates to all neighbors, cancels all timers,
-     * brings down all neighbors, and unsubscribes from interface events.
-     * Must be called before destruction.
-     *
-     * Posts the actual teardown onto this process's @ref ProcessQueue and
-     * blocks until it completes, so it is serialized against any in-flight
-     * or pending work posted via @ref getScheduler() (e.g.
-     * `refreshInterfaceList()` triggered by interface events). Safe to call
-     * from any thread that is not itself running on this process's queue.
+     * Config-change entry point. Safe to call from any thread.
      */
-    virtual void shutdown();
+    void enqueueShutdown();
 
     /**
-     * @brief Performs a full shutdown followed by a fresh start.
+     * @brief Schedules a full topology recalculation on the process queue.
      *
-     * Used to apply configuration changes that require process restart,
-     * such as K-value changes or AS number changes.
+     * Config-change entry point: called when K-values or variance change.
+     * Safe to call from any thread.
      */
-    void restart();
+    void enqueueSyncTopology();
 
     /**
-     * @brief Performs periodic housekeeping: prunes stale topology entries
-     *        and recomputes any routes whose validity window has expired.
+     * @brief Schedules a passive-interface resync across all interfaces on
+     *        the process queue.
      *
-     * Called on a slow-path maintenance timer; not on the forwarding path.
+     * Config-change entry point. Safe to call from any thread.
      */
-    void runMaintenance();
+    void enqueueSyncPassive();
+
+    /**
+     * @brief Schedules a Router ID resync on the process queue.
+     *
+     * Config-change entry point. Safe to call from any thread.
+     */
+    void enqueueSyncRouterId();
+
+private:
+    friend class ::Internal_EigrpTest;
+
+    // Direct children: subsystems owned outright by this process (as members
+    // of Eigrp or of its Private block).
+    friend class EigrpTopology;
+    friend class InterfaceManager;
+    friend class GlobalAggregator;
+    friend class RouteManager;
+
+    // Named exceptions: grandchildren tightly coupled to process state
+    // (packet-layer interface object, and the DUAL engine cluster: DuelEngine
+    // itself, its SIA timer manager, and the topology table it owns),
+    // matching how OspfProcess friends OspfInterfaceBase directly instead of
+    // routing every call through InterfaceManager.
+    friend class EigrpInterface;
+    friend class DuelEngine;
+    friend class TimerManager;
+    friend class TopologyTable;
+
+    /**
+     * @brief Read-only access to process-level EIGRP settings. Callers read
+     *        fields directly (`getConfigs().get<config::Eigrp::FIELD>().load()`)
+     *        rather than going through a configuration facade object.
+     */
+    const config::EigrpRegistry& getConfigs() const { return configs; }
+
+    /**
+     * @brief Returns the underlying scheduler queue, for subsystems that mint
+     *        their own `ProcessQueue` (e.g. per-interface timers).
+     */
+    core::ProcessQueue& getScheduler() { return scheduler; }
+
+    /**
+     * @brief Blocks until the underlying scheduler queue has drained all
+     *        pending and in-flight tasks.
+     *
+     * Intended for tests; see `core::ProcessQueue::waitIdle()`.
+     */
+    void waitIdle() const noexcept { scheduler.waitIdle(); }
+
+    /**
+     * @brief Router ID value and its configuration origin.
+     */
+    struct RouterID
+    {
+        uint32_t id = 0;          ///< 32-bit Router ID (stored as host-byte-order IPv4).
+        bool isStatic = false;    ///< True if set by the operator; false if auto-selected.
+    };
+
+    /**
+     * @brief Returns the current Router ID in host byte order.
+     */
+    uint32_t routerID() const { return priv.rid.id; }
+
+    inline uint16_t getVirtualRouterID() const { return priv.virtualRouterID; }
+
+    /**
+     * @brief Sets a static Router ID, suppressing automatic selection.
+     * @param id Host-byte-order 32-bit Router ID value.
+     */
+    void setRouterID(uint32_t id) { priv.rid.id = id; priv.rid.isStatic = true; }
+
+    /**
+     * @brief Clears the static Router ID and triggers automatic recalculation.
+     */
+    void clearRouterID() { priv.rid.isStatic = false; calculateRID(); }
 
     /**
      * @brief Selects a Router ID for this process from active interface addresses.
@@ -212,15 +286,6 @@ public:
      * @return True if a Router ID was found; false if no suitable address exists.
      */
     bool calculateRID();
-
-    /**
-     * @brief Checks whether a given IPv4 address falls within any configured
-     *        `network` statement range for this process.
-     *
-     * @param testIp Address to test.
-     * @return True if `testIp` is covered by at least one network range.
-     */
-    bool isInNetworkRange(types::IPv4Address testIp);
 
     /**
      * @brief Registers a neighbor in the process-wide neighbor map.
@@ -261,12 +326,6 @@ public:
      */
     void refreshInterfaceList();
 
-    EigrpConfig& getGlobalConfigMgr() { return configMgr; }
-    InterfaceManager& getIfaceMgr() { return ifaceMgr; }
-    GlobalAggregator& getAggregator() { return aggregator; }
-    EigrpTopology& getTopology() { return topology; }
-
-public:
     /**
      * @brief Router ID value and its configuration origin.
      */
@@ -299,56 +358,165 @@ public:
     core::ProcessQueue& getScheduler() { return scheduler; }
 
     /**
-     * @brief Blocks until the underlying scheduler queue has drained all
-     *        pending and in-flight tasks.
+     * @brief Performs a full shutdown followed by a fresh start.
      *
-     * Intended for tests; see `core::ProcessQueue::waitIdle()`.
+     * Used to apply configuration changes that require process restart,
+     * such as K-value changes or AS number changes.
      */
-    void waitIdle() const noexcept { scheduler.waitIdle(); }
-
-    bool isNamed() const { return namedMode; }
-    uint32_t getAS() const { return asNumber; }
-    types::AddressFamily getAF() const { return addressFamily; }
+    void restart();
 
     /**
-     * @brief Clears the static Router ID and triggers automatic recalculation.
+     * @brief Performs periodic housekeeping: prunes stale topology entries
+     *        and recomputes any routes whose validity window has expired.
+     *
+     * Called on a slow-path maintenance timer; not on the forwarding path.
      */
-    void clearRouterID() { rid.isStatic = false; calculateRID(); }
+    void runMaintenance();
 
-    core::VirtualRouter* routingInstance; ///< Owning VRF instance.
+    /**
+     * @brief Checks whether a given IPv4 address falls within any configured
+     *        `network` statement range for this process.
+     *
+     * @param testIp Address to test.
+     * @return True if `testIp` is covered by at least one network range.
+     */
+    bool isInNetworkRange(types::IPv4Address testIp) const;
 
-private:
-    const uint32_t asNumber;             ///< Autonomous System number.
-    const types::AddressFamily addressFamily; ///< Address family (IPv4 or IPv6).
+    /**
+     * @brief Returns true if the given interface key is configured as passive.
+     */
+    bool isPassive(interface::InterfaceKey key) const;
+
+    /**
+     * @brief Returns the set of unicast peer addresses configured on the
+     *        given interface key.
+     */
+    std::unordered_set<types::IPAddress> getUnicastNeighbors(interface::InterfaceKey key) const;
+
+    /**
+     * @brief Adds an IPv4 network range to this process.
+     *
+     * Any interface whose primary address falls within `newNetwork` will be
+     * activated for EIGRP. Triggers an interface list refresh.
+     *
+     * @param newNetwork The network prefix to add.
+     */
+    void addNetworkRange(const types::IPv4Prefix& newNetwork);
+
+    /**
+     * @brief Removes a previously configured IPv4 network range.
+     *
+     * Interfaces that no longer match any network range are deactivated.
+     *
+     * @param delNetwork The network prefix to remove.
+     */
+    void delNetworkRange(const types::IPv4Prefix& delNetwork);
+
+    /**
+     * @brief Removes all configured network ranges and deactivates all interfaces.
+     */
+    void clearNetworks();
+
+    /**
+     * @brief Configures or disables stub router mode for this process.
+     *
+     * @param isStub              True to enable stub mode.
+     * @param advertiseConnected  Advertise connected prefixes (default true).
+     * @param advertiseStatic     Advertise static redistributed routes (default true).
+     * @param advertiseSummary    Advertise summary routes (default true).
+     * @param advertiseRedistributed Advertise all redistributed routes (default true).
+     */
+    void enableStub(bool isStub, bool advertiseConnected = true, bool advertiseStatic = true, bool advertiseSummary = true, bool advertiseRedistributed = true);
+
+    /**
+     * @brief Marks or unmarks an interface as passive.
+     *
+     * @param key Interface key.
+     * @param add True to make passive, false to remove the passive flag.
+     */
+    void setPassiveInterface(interface::InterfaceKey key, bool add = true);
+
+    /**
+     * @brief Enables a unicast static neighbor relationship on an interface.
+     *
+     * @param neighborIp IP address of the peer.
+     * @param key        Interface key the peer is reachable through.
+     */
+    void enableUnicastPeer(const types::IPAddress& neighborIp, interface::InterfaceKey key);
+
+    /**
+     * @brief Removes a unicast static neighbor relationship.
+     *
+     * @param neighborIp IP address of the peer to remove.
+     * @param key        Interface key the peer was configured on.
+     */
+    void disableUnicastPeer(const types::IPAddress& neighborIp, interface::InterfaceKey key);
+
+    GlobalAggregator& getAggregator() { return priv.aggregator; }
+    EigrpTopology& getTopology() { return priv.topology; }
 
     core::ProcessQueue scheduler; ///< Serializes all EIGRP protocol work for this process.
 
-    EigrpTopology topology;     ///< Topology table + DUAL engine.
-    InterfaceManager ifaceMgr;  ///< Manages per-interface EIGRP state.
-    EigrpConfig configMgr;      ///< Process-level configuration facade.
-    GlobalAggregator aggregator; ///< Process-level route summarization.
+    config::EigrpRegistry& configs; ///< Live reference to this process's configuration registry.
 
-    bool namedMode = false;              ///< True when running in named mode.
-    RouterID rid;                        ///< Current Router ID and its origin.
-    uint16_t virtualRouterID = 0x0000;  ///< Virtual Router ID carried in EIGRP packets.
+protected:
+    // start()/shutdown() are genuine inheritance access: ClassicEigrp/
+    // NamedEigrp are the only subclasses of Eigrp and reach these through
+    // `this->`. routingInstance and getIfaceMgr() also need to be reachable
+    // by NamedEigrp::configureInterface() the same way; they happen to be
+    // used by friended collaborators too, which protected still permits.
 
     /**
-     * @brief Performs the actual shutdown teardown (deactivates all
-     *        interfaces).
-     *
-     * Must only be called from within a task already running on
-     * @ref scheduler's queue (i.e. posted via @ref selfRef), or after
-     * @ref selfRef has been released and no other queue work can be
-     * in-flight (e.g. from `~Eigrp()`). Calling this directly from an
-     * arbitrary thread races with `refreshInterfaceList()`.
+     * @brief Activates the process: subscribes to interface events and
+     *        populates the initial interface list.
      */
-    void shutdownInternal();
+    void start();
 
-    uint32_t ifUpId, ifDownId, ipReadyId, ipDelId; ///< Interface event subscription IDs.
-public:
+    /**
+     * @brief Gracefully shuts down the process.
+     *
+     * Posts the actual teardown onto this process's @ref ProcessQueue and
+     * blocks until it completes. Safe to call from any thread that is not
+     * itself running on this process's queue.
+     */
+    void shutdown();
+
+    core::VirtualRouter* const routingInstance; ///< Owning VRF instance; immutable after construction.
+
+    InterfaceManager& getIfaceMgr() { return priv.ifaceMgr; }
+
+private:
+    struct Private
+    {
+    private:
+        friend class Eigrp;
+
+        Private(Eigrp& eigrp);
+
+        EigrpTopology topology;     ///< Topology table + DUAL engine.
+        InterfaceManager ifaceMgr;  ///< Manages per-interface EIGRP state.
+        GlobalAggregator aggregator; ///< Process-level route summarization.
+
+        RouterID rid;                       ///< Current Router ID and its origin.
+        uint16_t virtualRouterID = 0x0000;  ///< Virtual Router ID carried in EIGRP packets.
+
+        /**
+         * @brief Performs the actual shutdown teardown (deactivates all
+         *        interfaces).
+         *
+         * Must only be called from within a task already running on
+         * @ref scheduler's queue (i.e. posted via @ref selfRef), or after
+         * @ref selfRef has been released and no other queue work can be
+         * in-flight (e.g. from `~Eigrp()`). Calling this directly from an
+         * arbitrary thread races with `refreshInterfaceList()`.
+         */
+        void shutdown();
+
+        uint32_t ifUpId, ifDownId, ipReadyId, ipDelId; ///< Interface event subscription IDs.
+    } priv;
+
     RouteManager routeManager; ///< Translates topology successors into RIB entries.
     std::unordered_map<types::IPAddress, Neighbor*> allNeighbors; ///< All UP neighbors across all interfaces.
-
 };
 
 /**

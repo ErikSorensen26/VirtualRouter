@@ -191,6 +191,15 @@ concept RequiresContext =
     requires { T::applier; };
 
 /**
+ * @brief Satisfied by field types that support masking (expose `setMask(const T*)`).
+ *
+ * @tparam T  Field type to test.
+ */
+template <typename T>
+concept IsMaskable =
+    requires(T& f, const T* p) { f.setMask(p); };
+
+/**
  * @brief Satisfied by required (non-optional) atomic config fields.
  *
  * Implies `IsFieldBase<T>`, derivation from `AtomicFieldFlag`, and *not*
@@ -395,6 +404,7 @@ public:
     using node = T;
     using type = T;
     void setMask(const AtomicField* p) noexcept { mask = p; }
+    void clearMask() noexcept { mask = nullptr; }
 private:
     template <typename, typename, ApplyFn, typename>
     friend class SubRegistry;
@@ -429,6 +439,7 @@ public:
     using node = T;
     using type = T;
     void setMask(const OptionalAtomicField* p) noexcept { mask = p; }
+    void clearMask() noexcept { mask = nullptr; }
 private:
     template <typename, typename, ApplyFn, typename>
     friend class SubRegistry;
@@ -469,6 +480,7 @@ public:
     using node = T;
     using type = config::StorageOf<T>;
     void setMask(const ValueField* p) noexcept { mask = p; }
+    void clearMask() noexcept { mask = nullptr; }
 
     ~ValueField() { delete value.load(std::memory_order_relaxed); }
 private:

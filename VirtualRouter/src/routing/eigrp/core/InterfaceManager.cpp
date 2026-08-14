@@ -11,7 +11,7 @@
 
 namespace routing::eigrp
 {
-InterfaceManager::InterfaceManager(Eigrp& base) : base(base) {}
+InterfaceManager::InterfaceManager(Eigrp& process) : process(process) {}
 
 InterfaceManager::~InterfaceManager() {}
 
@@ -24,7 +24,7 @@ EigrpInterface* InterfaceManager::getInterface(interface::InterfaceKey key)
 
 config::EigrpInterfaceRegistry& InterfaceManager::getRegistryByKey(interface::InterfaceKey key)
 {
-    auto configList = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::AF_INTERFACE>();
+    auto configList = process.getConfigs().get<config::Eigrp::AF_INTERFACE>();
     return configList.emplaceBack(key);
 }
 
@@ -32,7 +32,7 @@ config::EigrpInterfaceRegistry& InterfaceManager::getRegistry(interface::Interfa
 {
     interface::InterfaceKey key = iface.configs.key;
 
-    auto configList = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::AF_INTERFACE>();
+    auto configList = process.getConfigs().get<config::Eigrp::AF_INTERFACE>();
     return configList.emplaceBack(key);
 }
 
@@ -46,8 +46,8 @@ EigrpInterface* InterfaceManager::createInterface(interface::Interface* interfac
 
     {
         // Add the interface to eigrp even if its down
-        types::AddressFamily af = base.getAF();
-        uint32_t as = base.getAS();
+        types::AddressFamily af = process.addressFamily;
+        uint32_t as = process.asNumber;
         interface::InterfaceKey key = interface->configs.key;
 
         // Get or create registry entry for this interface
@@ -55,9 +55,9 @@ EigrpInterface* InterfaceManager::createInterface(interface::Interface* interfac
 
         if (af == types::AddressFamily::IPv4 || af == types::AddressFamily::IPv6)
         {
-            auto ifaceIt = eigrpInterfaceList.try_emplace(key, base, ifaceReg, *interface);
+            auto ifaceIt = eigrpInterfaceList.try_emplace(key, process, ifaceReg, *interface);
             EigrpInterface* eigrpIfacePtr = &ifaceIt.first->second;
-            base.getTopology().synchronizeConnected(*eigrpIfacePtr);
+            process.getTopology().synchronizeConnected(*eigrpIfacePtr);
             return eigrpIfacePtr;
         }
     }
@@ -68,8 +68,8 @@ void InterfaceManager::refreshInterfaceList()
 {
     std::vector<std::pair<bool, void*>> interfacesToProcess;
 
-    if (base.routerID() == 0)
-        if (!base.calculateRID()) return; // No valid RID
+    if (process.routerID() == 0)
+        if (!process.calculateRID()) return; // No valid RID
 
     {
         std::vector<std::unordered_map<interface::InterfaceKey, EigrpInterface>::node_type> interfacesToRemove; // Will clear when out of scope
@@ -77,7 +77,7 @@ void InterfaceManager::refreshInterfaceList()
         // Remove shutdown interfaces
         for (auto it = eigrpInterfaceList.begin(); it != eigrpInterfaceList.end();)
         {
-            if (!it->second.getIface() || it->second.getIface()->shutdownFlag.load(std::memory_order_relaxed))
+            if (!it->second.currentInterface || it->second.currentInterface->shutdownFlag.load(std::memory_order_relaxed))
             {
                 auto node = eigrpInterfaceList.extract(it++);
                 interfacesToRemove.push_back(std::move(node));
@@ -88,11 +88,10 @@ void InterfaceManager::refreshInterfaceList()
             }
         }
 
-        auto& config = base.getGlobalConfigMgr();
-        bool isNamed = base.isNamed();
-        uint32_t as = base.getAS();
+        bool isNamed = process.namedMode;
+        uint32_t as = process.asNumber;
 
-        for (const auto& [id, interface] : base.routingInstance->getInterfaceManager().snapshot())
+        for (const auto& [id, interface] : process.routingInstance->getInterfaceManager().snapshot())
         {
             if (!interface || interface->shutdownFlag.load(std::memory_order_relaxed))
                 continue;
@@ -103,14 +102,14 @@ void InterfaceManager::refreshInterfaceList()
 
             auto it = eigrpInterfaceList.find(id);
 
-            if (base.getAF() == types::AddressFamily::IPv4)
+            if (process.addressFamily == types::AddressFamily::IPv4)
             {
-                inRange = config.isInNetworkRange(ipInfo.ipv4.getPrimaryAddress());
+                inRange = process.isInNetworkRange(ipInfo.ipv4.getPrimaryAddress());
                 // Named mode: an explicitly configured af-interface entry also qualifies
                 // even without a matching network statement.
                 if (!inRange && isNamed)
                 {
-                    auto afIfaces = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::AF_INTERFACE>();
+                    auto afIfaces = process.getConfigs().get<config::Eigrp::AF_INTERFACE>();
                     auto regIt = afIfaces.find(ipInfo.key);
                     inRange = (regIt != afIfaces.end()) &&
                               !regIt->second->get<config::EigrpInterface::SHUTDOWN>().load();
@@ -124,7 +123,7 @@ void InterfaceManager::refreshInterfaceList()
                 bool ipv6Contained = false;
                 if (isNamed)
                 {
-                    auto afIfaces = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::AF_INTERFACE>();
+                    auto afIfaces = process.getConfigs().get<config::Eigrp::AF_INTERFACE>();
                     auto regIt = afIfaces.find(ipInfo.key);
                     ipv6Contained = (regIt != afIfaces.end()) && !regIt->second->get<config::EigrpInterface::SHUTDOWN>().load();
                 }
@@ -161,7 +160,7 @@ void InterfaceManager::refreshInterfaceList()
     for (auto& [exists, interface] : interfacesToProcess)
     {
         if (exists)
-            base.getTopology().synchronizeConnected(*(static_cast<EigrpInterface*>(interface)));
+            process.getTopology().synchronizeConnected(*(static_cast<EigrpInterface*>(interface)));
         else
             createInterface(static_cast<interface::Interface*>(interface));
     }

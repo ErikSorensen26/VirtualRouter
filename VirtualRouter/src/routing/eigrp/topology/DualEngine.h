@@ -297,7 +297,7 @@ public:
      */
     void recalculateAllRoutes();
 
-    Eigrp& base;               ///< Owning EIGRP process.
+    Eigrp& process;            ///< Owning EIGRP process.
     TopologyTable topologyTable; ///< Process-wide topology table owned by this engine.
 
 private:

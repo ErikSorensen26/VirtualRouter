@@ -66,6 +66,30 @@ void BgpRx::handleIncoming(Session& session, transport::tcp::RxConsumer& consume
             return;
         }
 
+        // RFC 4271 6.1: the length must also satisfy the per-type minimum.
+        {
+            uint16_t minLen = packet::BgpHeader::fixedSize;
+            switch (hdr.getType())
+            {
+                case BGP_TYPE_OPEN:         minLen = packet::BgpHeader::fixedSize + packet::BgpOpenHeader::fixedSize; break;
+                case BGP_TYPE_UPDATE:       minLen = packet::BgpHeader::fixedSize + 4; break;
+                case BGP_TYPE_NOTIFICATION: minLen = packet::BgpHeader::fixedSize + 2; break;
+                case BGP_TYPE_KEEPALIVE:    minLen = packet::BgpHeader::fixedSize; break;
+                case BGP_TYPE_ROUTE_REFRESH: minLen = packet::BgpHeader::fixedSize + 4; break;
+                default: break;
+            }
+            if (length < minLen)
+            {
+                Notification error;
+                error.code = BGP_NOTIFICATION_HEADER_BAD_MESSAGE_LENGTH;
+                error.data.resize(2);
+                utils::writeU16(error.data.data(), length);
+                session.sendNotification(error);
+                session.postEvent(FsmEvent::BGP_HEADER_ERR);
+                return;
+            }
+        }
+
         if (buf.size() < length) break; // Wait for more data.
 
         hdr.setTrailSize(static_cast<size_t>(length - packet::BgpHeader::fixedSize));
@@ -98,8 +122,9 @@ void BgpRx::handleIncoming(Session& session, transport::tcp::RxConsumer& consume
             }
             case BGP_TYPE_NOTIFICATION:
             {
-                ok = processNotification(session, payload, error);
-                break;
+                processNotification(session, payload, error);
+                consumer.commit(length);
+                return;
             }
             case BGP_TYPE_KEEPALIVE:
             {
@@ -211,7 +236,8 @@ bool BgpRx::processOpen(Session& session, uint64_t cid, std::span<uint8_t> paylo
 
     // Resolve multi session before parsing capabilities
     Session* curSession = &session; // Handles session swap.
-    if (auto* ms = session.getMultiSession(); ms && cid != session.getPrimaryConnection()->getId())
+    auto* primary = session.getPrimaryConnection();
+    if (auto* ms = session.getMultiSession(); ms && primary && cid != primary->getId())
     {
         auto msAfi = resolveMultiSessionAf(std::span<uint8_t>{params, paramLen});
         if (!msAfi)
@@ -263,7 +289,7 @@ bool BgpRx::processOpen(Session& session, uint64_t cid, std::span<uint8_t> paylo
         resolvedAs = kAsTrans;
 
     // Validate remote AS matches configuration.
-    auto& sessCfg = curSession->getNeighbor().getConfigs();
+    auto& sessCfg = curSession->getNeighborConfigs();
     auto remAsOpt = sessCfg.get<config::BgpNeighborSession::REMOTE_AS>();
     if (remAsOpt.hasValue())
     {
@@ -310,6 +336,7 @@ bool BgpRx::processUpdate(Session& session, std::span<uint8_t> payload, Notifica
     }
 
     IncomingUpdate update;
+    bool treatAsWithdraw = false;
 
     size_t offset = 0;
 
@@ -341,14 +368,13 @@ bool BgpRx::processUpdate(Session& session, std::span<uint8_t> payload, Notifica
         return false;
     }
 
-    // Path attributes
-    Attributes attrs;
-
     if (attrLen != 0)
     {
         if (!parsePathAttributes(session, {payload.data() + offset, attrLen}, update, error))
         {
-            return error.code == 0; // Do not invalide if there is no error
+            if (error.code != 0)
+                return false;
+            treatAsWithdraw = true;
         }
     }
     offset += attrLen;
@@ -357,7 +383,18 @@ bool BgpRx::processUpdate(Session& session, std::span<uint8_t> payload, Notifica
     if (update.afi.afi == BGP_AFI_IPV4 && update.afi.safi == BGP_SAFI_UNICAST)
         update.nlriData = std::span<uint8_t>(payload.data() + offset, payload.size() - offset);
 
-    AddressFamilyVariant* af = session.getNeighbor().getProcess().findAddressFamily(update.afi);
+    if (treatAsWithdraw)
+    {
+        update.attrs = {};
+        update.path  = {};
+        update.withdrawNlri = true;
+    }
+    else if (!checkMandatoryAttributes(update, error))
+    {
+        return false;
+    }
+
+    AddressFamilyVariant* af = session.process.findAddressFamily(update.afi);
     if (!af) // Af not enabled
     {
         error.code = BGP_NOTIFICATION_UPDATE_MALFORMED_ATTR_LIST;
@@ -393,10 +430,11 @@ AfiSafi findMpAfiSafi(std::span<const uint8_t> attrData)
 
         if (type == BGP_ATTR_MP_REACH_NLRI || type == BGP_ATTR_MP_UNREACH_NLRI)
         {
+            // MP_REACH/MP_UNREACH value begins AFI(2) + SAFI(1).
             if (ptr + 3 <= end)
             {
                 uint16_t afi = utils::read<uint16_t>(ptr);
-                uint8_t safi = ptr[3];
+                uint8_t safi = ptr[2];
                 return {afi, safi};
             }
         }
@@ -424,14 +462,16 @@ std::optional<AfiSafi> BgpRx::resolveMultiSessionAf(std::span<uint8_t> data)
 
         if (pType == BGP_PARAMETER_CAPABILITY)
         {
-            size_t idx = 0;
+            // Capability TLVs live inside this parameter only.
+            const size_t capEnd = pos + 2 + pLen;
+            size_t idx = pos + 2;
 
-            while (idx + 2 <= data.size())
+            while (idx + 2 <= capEnd)
             {
                 uint8_t type = data[idx];
                 uint8_t len = data[idx + 1];
 
-                if (idx + 2 + len > data.size())
+                if (idx + 2 + len > capEnd)
                     return std::nullopt;
 
                 const uint8_t* p = data.data() + idx + 2;
@@ -440,6 +480,7 @@ std::optional<AfiSafi> BgpRx::resolveMultiSessionAf(std::span<uint8_t> data)
                 {
                     case BGP_CAPABILITY_MULTIPROTOCOL:
                     {
+                        // AFI(2) + Reserved(1) + SAFI(1)
                         if (len == 4)
                         {
                             uint16_t afi = utils::read<uint16_t>(p);
@@ -452,13 +493,14 @@ std::optional<AfiSafi> BgpRx::resolveMultiSessionAf(std::span<uint8_t> data)
                     }
                     case BGP_CAPABILITY_MULTI_SESSION:
                     {
+                        // AFI(2) + SAFI(1) + flags(1)
                         for (size_t i = 0; i + 4 <= static_cast<size_t>(len); i += 4)
                         {
                             uint16_t afi = utils::read<uint16_t>(p + i);
                             uint8_t safi = p[i + 2];
                             if (multiSession.has_value())
                                 return std::nullopt;
-                            multiProtocol.emplace(afi, safi);
+                            multiSession.emplace(afi, safi);
                         }
                         break;
                     }
@@ -742,17 +784,18 @@ bool BgpRx::processRouteRefresh(Session& session, std::span<uint8_t> payload, No
 
     if (!orfEntries.empty())
     {
-        session.getNeighbor().getAfNeighbor(family).updateOrfFilter(orfEntries);
+        if (NeighborAf* afNbr = session.neighbor.findAfNeighbor(family))
+            afNbr->updateOrfFilter(orfEntries);
         if (subtype == BGP_ORF_WHEN_IMMEDIATE)
         {
-            AddressFamilyVariant* af = session.getNeighbor().getProcess().findAddressFamily(family);
+            AddressFamilyVariant* af = session.process.findAddressFamily(family);
             if (af)
                 std::visit([&](auto&& fam) { fam.refreshPeer(session); }, *af);
         }
     }
     else
     {
-        AddressFamilyVariant* af = session.getNeighbor().getProcess().findAddressFamily(family);
+        AddressFamilyVariant* af = session.process.findAddressFamily(family);
         if (af)
         {
             if (subtype == BGP_ROUTE_REFRESH_BORR)
@@ -832,7 +875,7 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
 
         {
             // NOTE: 1,2,3,4,8,14,15,16 not allowed 
-            auto& attrRanges = session.getNeighbor().getAttrRanges();
+            auto& attrRanges = session.neighbor.getAttrRanges();
             if (attrRanges.discard.test(type))
                 continue;
             if (attrRanges.withdraw.test(type))
@@ -881,7 +924,7 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
                     uint8_t segLen = val[ap + 1];
                     ap += 2;
 
-                    if (ap + segLen + asnBytes > attrLen)
+                    if (ap + static_cast<size_t>(segLen) * asnBytes > attrLen)
                     {
                         error.code = BGP_NOTIFICATION_UPDATE_MALFORMED_AS_PATH;
                         return false;
@@ -1103,7 +1146,7 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
                     uint8_t segType = val[ap];
                     uint8_t segLen = val[ap + 1];
                     ap += 2;
-                    if (ap + segLen * 4 > attrLen) break;
+                    if (ap + static_cast<size_t>(segLen) * 4 > attrLen) break;
                     AsPathSegment seg;
                     seg.segmentType = segType;
                     for (uint8_t i = 0; i < segLen; ++i)
@@ -1236,9 +1279,31 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
     else
         uinfo.afi = AfiSafi{ BGP_AFI_IPV4, BGP_SAFI_UNICAST };
 
-    (void)sawOrigin;
-    (void)sawAsPath;
-    (void)sawNextHop;
+    uinfo.sawOrigin  = sawOrigin;
+    uinfo.sawAsPath  = sawAsPath;
+    uinfo.sawNextHop = sawNextHop;
+
+    return true;
+}
+
+bool BgpRx::checkMandatoryAttributes(const IncomingUpdate& uinfo, Notification& error)
+{
+    if (uinfo.nlriData.empty())
+        return true;
+
+    auto missing = [&](uint8_t type) {
+        error.code = BGP_NOTIFICATION_UPDATE_MISSING_ATTR;
+        error.data.assign(1, type);
+        return false;
+    };
+
+    if (!uinfo.sawOrigin) return missing(BGP_ATTR_ORIGIN);
+    if (!uinfo.sawAsPath) return missing(BGP_ATTR_AS_PATH);
+
+    const bool legacyIpv4 = uinfo.afi.afi == BGP_AFI_IPV4 &&
+                            uinfo.afi.safi == BGP_SAFI_UNICAST;
+    if (legacyIpv4 && !uinfo.sawNextHop)
+        return missing(BGP_ATTR_NEXT_HOP);
 
     return true;
 }

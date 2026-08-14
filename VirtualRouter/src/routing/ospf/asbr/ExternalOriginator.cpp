@@ -174,7 +174,7 @@ void ExternalOriginator::addDefaultRoute(bool add)
 
     if (!always)
     {
-        auto& globalRib = process.routingInstance->getRib();
+        auto& globalRib = process.routingInstance.getRib();
         utils::RCU::Guard g;
         if (process.af == types::AddressFamily::IPv4)
         {
@@ -273,7 +273,7 @@ void ExternalOriginator::translateNssaToExternal(OriginatorContext& ctx, const L
         }();
 
         utils::RCU::Guard g;
-        if (!process.routingInstance->getRib().lookup(lookupAddr, g))
+        if (!process.routingInstance.getRib().lookup(lookupAddr, g))
             return;
     }
 

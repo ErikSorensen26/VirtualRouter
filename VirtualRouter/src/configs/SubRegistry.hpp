@@ -142,11 +142,17 @@ public:
         : ctxProvider(),
           fields(),
           parent(this),
-          parentType(typeid(*this)),
-          base(nullptr)
+          parentType(typeid(*this))
     {
         constructFields(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
         installDefaults(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
+    }
+
+    ~SubRegistry()
+    {
+        removeMask();
+        for (SubRegistry* sub : derived)
+            sub->removeMask();
     }
 
     template <ENUM F>
@@ -157,9 +163,18 @@ public:
     }
 
     /**
-     * @brief Gets the context provider for fields that require external data.
+     * @brief Gets this registry's own context provider (call `.set(this)` from the owner).
      *
-     * @return Reference to the context provider shared with parent (if masked).
+     * Every registry instance owns an independent `ContextProvider`; it is
+     * @b not shared with or inherited from a masked parent/base registry
+     * (the masking constructor only copies it once, at construction, as a
+     * convenience default) nor from an enclosing registry when this instance
+     * lives inside a `RegistryContainer` field. Whatever object logically
+     * owns this specific registry must call `context().set(this)` on it
+     * directly for its fields' appliers to fire. See the file-level comment
+     * above for the full masking-vs-context distinction.
+     *
+     * @return Reference to this registry's own context provider.
      */
     ContextProvider& context() const noexcept { return ctxProvider; }
 
@@ -193,7 +208,17 @@ public:
     decltype(auto) get() const noexcept;
 
     /**
-     * @brief Gets a inherited field by enum constant (mutable).
+     * @brief Gets the mask-time parent's copy of field `F` (mutable).
+     *
+     * @warning `base` reflects only the mask passed to the *constructor*.
+     * `setMask()` (called post-construction to re-point or clear masking,
+     * e.g. `NeighborConfigs::setPeerGroup`) updates each field's own `mask`
+     * pointer via `applyMask()` but does @b not update `base`. If `setMask()`
+     * has been called since construction, `base` may be stale/out of sync
+     * with what the fields actually mask against -- currently unused
+     * elsewhere in the codebase, so this has not surfaced as a live bug, but
+     * do not rely on it after a `setMask()` call without first reconciling
+     * the two.
      *
      * @tparam F Enum constant identifying the field
      * @return Const reference to the field value
@@ -201,13 +226,16 @@ public:
     template <ENUM F>
     FieldTypeAt<F>* getInherited() noexcept
     {
-        if (base)
-            return &base->getValue<F>();
+        if (inherited)
+            return &inherited->getValue<F>();
         return nullptr;
     }
 
     /**
-     * @brief Gets a inherited field by enum constant (const).
+     * @brief Gets the mask-time parent's copy of field `F` (const).
+     *
+     * @warning See the mutable overload above -- `base` can go stale relative
+     * to the per-field `mask` pointers after a post-construction `setMask()`.
      *
      * @tparam F Enum constant identifying the field
      * @return Const reference to the field value
@@ -215,8 +243,8 @@ public:
     template <ENUM F>
     const FieldTypeAt<F>* getInherited() const noexcept
     {
-        if (base)
-            return &base->getValue<F>();
+        if (inherited)
+            return &inherited->getValue<F>();
         return nullptr;
     }
 
@@ -247,26 +275,59 @@ public:
     }
 
     /**
-     * @brief Checks whether this registry is masked by a parent.
+     * @brief Checks whether this registry was constructed with a mask parent.
      *
-     * @return True if this registry has a parent and inherits its values.
+     * @warning Reflects `base`, which is set only by the constructors and is
+     * @b not updated by `setMask()`. See the `@warning` on `getInherited()`.
+     *
+     * @return True if this registry was constructed via the masking
+     * constructor (`SubRegistry(P&, SubRegistry&)`).
      */
     bool isMasked() const noexcept
     {
-        return base != nullptr;
+        return inherited != nullptr;
     }
 
     /**
-     * @brief Applies masking by a new parent (resets field inheritance).
+     * @brief (Re-)masks every maskable field against `mask`, or clears masking.
      *
-     * Used after construction to change or establish parent relationship.
-     * All maskable fields are reset to inherit from the new parent.
+     * For each field whose type exposes `setMask(const Field*)`, points that
+     * field's `mask` pointer at the corresponding field in `mask` (or clears
+     * it to `nullptr` when `mask == nullptr`, e.g. detaching a neighbor from
+     * its peer group). Subsequent `load()` calls on an `INHERIT`-state field
+     * walk this new pointer. Locally-overridden (`CANNED`) field values are
+     * untouched -- masking only affects fields currently deferring to a
+     * parent, it never resets an existing override back to inherited.
      *
-     * @param mask Registry to inherit from, or nullptr to remove masking.
+     * @note This only rewires per-field value inheritance. It does @b not
+     * touch `ctxProvider` (this registry keeps notifying whatever owner
+     * already called `context().set(...)` on it, regardless of which
+     * template it now masks against) and does @b not update `base` (see the
+     * `@warning` on `isMasked()`/`getInherited()`).
+     *
+     * @param mask Pointer to the new mask/parent SubRegistry, or `nullptr` to
+     * clear masking (all `INHERIT` fields fall back to their own defaults).
      */
     void setMask(SubRegistry* mask)
     {
+        if (inherited && inherited != mask)
+            inherited->unregisterDerived(this);
         applyMask(mask, std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
+        if (mask && mask != inherited)
+            mask->registerDerived(this);
+        inherited = mask;
+    }
+
+    /**
+     * TODO add doxy comment
+     */
+    void removeMask()
+    {
+        if (!inherited)
+            return;
+        removeMask(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
+        inherited->unregisterDerived(this);
+        inherited = nullptr;
     }
 
     template <typename P>
@@ -275,6 +336,29 @@ public:
         if (parentType != typeid(P))
             throw std::runtime_error("Parent type mismatch");
         return *static_cast<P*>(parent);
+    }
+
+    template <ENUM EF>
+    void runApplier(bool derivedCall = false)
+    {
+        using F = FieldTypeAt<EF>;
+        if (ctxProvider.hasCtx())
+        {
+            if constexpr (RequiresContext<F>)
+                F::applier(ctxProvider.get());
+            if (applier)
+                applier(ctxProvider.get());
+        }
+        for (SubRegistry* ctx : derived)
+        {
+            if constexpr (IsMaskable<F>)
+            {
+                F& derivedField = ctx->template getValue<EF>();
+                if (derivedCall && derivedField.state.load(std::memory_order_relaxed) != FieldState::INHERIT)
+                    continue;
+            }
+            ctx->template runApplier<EF>(true);
+        }
     }
 
     /**
@@ -303,6 +387,13 @@ public:
      * Called by @ref RegistryDatabase immediately after a new slot is constructed
      * so that each `RegistryContainer<U>` receives its own registry slot without
      * requiring a separate `emplace()` call at the use site.
+     *
+     * @note The nested `U` created here is a brand-new, independent
+     * `SubRegistry` with its own blank `ctxProvider` -- it is not related to
+     * this (enclosing) registry's masking or context in any way. If fields
+     * inside that nested registry need live notification, its owner must
+     * call `.context().set(owner)` on it directly; nothing here does that
+     * automatically.
      *
      * @tparam Entries  Pack of all entry types registered in the database.
      * @param  db       The owning database used to allocate child slots.
@@ -344,8 +435,7 @@ private:
         : ctxProvider(),
           fields(),
           parent(&p),
-          parentType(typeid(p)),
-          base(nullptr)
+          parentType(typeid(p))
     {
         constructFields(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
         installDefaults(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
@@ -357,6 +447,14 @@ private:
      * All fields are initialized and then masked with parent field values.
      * Child can override parent values on a per-field basis.
      *
+     * @note `ctxProvider(mask.ctxProvider)` copies the mask's context pointer
+     * as a one-time construction-time default only -- it is not a live link.
+     * In practice this copy is almost always immediately overwritten: the
+     * real owner of this new registry (e.g. a `Neighbor`) is expected to call
+     * `context().set(this)` right after construction, which is what actually
+     * makes appliers fire against the correct owner. See the file-level
+     * comment for why masking and context must not be conflated.
+     *
      * @param p Owner of this registry, retained for scope traversal.
      * @param mask Registry of the same type whose values are inherited.
      */
@@ -365,12 +463,11 @@ private:
         : ctxProvider(mask.ctxProvider),
           fields(),
           parent(&p),
-          parentType(typeid(p)),
-          base(&mask)
+          parentType(typeid(p))
     {
         constructFields(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
         installDefaults(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
-        applyMask(base, std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
+        applyMask(inherited, std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
     }
 
     template <typename... Entries, size_t... I>
@@ -446,20 +543,65 @@ private:
         }.template operator()<I>(), ...);
     }
 
-    /// Applies masking to all fields from a parent registry.
+    /**
+     * @brief Points each maskable field's `mask` pointer at `mask`'s field, or clears it.
+     *
+     * Only touches fields whose type exposes `setMask(const Field*)` (atomic /
+     * optional-atomic / value fields); other field kinds are left alone.
+     * `mask == nullptr` clears every such field's `mask` pointer to `nullptr`
+     * (the null check here must be on `mask`, the parameter -- not on this
+     * object's own `parent`, which is set at construction and effectively
+     * always non-null, so it can never signal "clear the mask").
+     */
     template <size_t... I>
     void applyMask(SubRegistry* mask, std::index_sequence<I...>) noexcept
     {
         ([&]<size_t Index>() {
             using Field = std::tuple_element_t<Index, FieldTuple>;
             auto& local = std::get<Index>(fields);
-            if constexpr (requires(Field& f, const Field* p) { f.setMask(p); })
+            if constexpr (IsMaskable<Field>)
             {
                 const Field* parentField =
-                    parent ? &std::get<Index>(mask->fields) : nullptr;
+                    mask ? &std::get<Index>(mask->fields) : nullptr;
                 local.setMask(parentField);
             }
         }.template operator()<I>(), ...);
+    }
+
+    /**
+     * TODO add doxy comment
+     */
+    template <size_t... I>
+    void removeMask(std::index_sequence<I...>) noexcept
+    {
+        ([&]<size_t Index>() {
+            using Field = std::tuple_element_t<Index, FieldTuple>;
+            auto& local = std::get<Index>(fields);
+            if constexpr (requires(Field& f) { f.clearMask(); })
+            {
+                local.clearMask();
+            }
+        }.template operator()<I>(), ...);
+    }
+
+    /**
+     * TODO add doxy comment
+     */
+    void registerDerived(SubRegistry* ctx)
+    {
+        derived.push_back(ctx);
+    }
+
+    /**
+     * TODO add doxy comment
+     */
+    void unregisterDerived(SubRegistry* ctx)
+    {
+        derived.erase(std::find(
+            derived.begin(),
+            derived.end(),
+            ctx
+        ));
     }
 
     /// Visit
@@ -486,7 +628,8 @@ private:
     const std::type_info& parentType;
     
     /// Pointer to parent registry for field inheritance (nullptr if root).
-    SubRegistry* base{nullptr};
+    SubRegistry* inherited{nullptr};
+    std::vector<SubRegistry*> derived;
 };
 }
 

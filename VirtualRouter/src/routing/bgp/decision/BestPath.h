@@ -21,9 +21,11 @@ class BgpProcess;
  */
 struct BestPathConfig
 {
+    bool compareMed        = false; ///< Compare MED as tiebreaker (bgp bestpath compare-med).
     bool compareRouterId   = false; ///< Compare router IDs as tiebreaker (bgp bestpath compare-routerid).
     bool medMissingAsWorst = false; ///< Treat missing MED as infinity (bgp bestpath med missing-as-worst).
     bool ignoreIgpMetric   = false; ///< Ignore IGP metric in next-hop cost (bgp bestpath igp-metric-ignore).
+    bool medConfed         = false; ///< Compare MED across confederation sub-ASes (bgp bestpath med confed).
 };
 
 /**
@@ -79,13 +81,28 @@ private:
      * @brief Compares MED attribute between two routes.
      *
      * Returns true if lhs MED is lower (better) than rhs MED, considering
-     * the medMissingAsWorst and ignoreIgpMetric configuration flags.
+     * the medMissingAsWorst configuration flag. Unless `always-compare-med` is
+     * configured, MED is only compared between routes from the same neighbouring
+     * AS (RFC 4271 9.1.2.2 (c)).
      *
      * @param lhsRoute Left-hand route.
      * @param rhsRoute Right-hand route.
      * @return True if lhs is better.
      */
     inline bool compareMed(const InboundRouteBase& lhsRoute, const InboundRouteBase& rhsRoute) const;
+
+    /**
+     * @brief Returns true when both routes were learned from the same neighbouring AS.
+     *
+     * Uses the leftmost AS of each AS_PATH, falling back to the session peer AS when
+     * the path carries no AS_SEQUENCE.
+     *
+     * @param medConfed When set, a leading AS_CONFED_SEQUENCE/SET supplies the
+     *                  neighbouring AS so MED is comparable across confederation
+     *                  sub-ASes (RFC 5065 5.3).
+     */
+    static bool sameNeighborAs(const InboundRouteBase& lhsRoute, const InboundRouteBase& rhsRoute,
+                               bool medConfed);
 
     BgpProcess& proc;           ///< Reference to owning BGP process.
     BestPathConfig config;      ///< Best path selection configuration.

@@ -47,6 +47,13 @@ struct IncomingUpdate
 
     std::span<uint8_t> withdrawnData; ///< Raw withdrawn-routes field (legacy IPv4) or MP_UNREACH NLRI bytes.
     std::span<uint8_t> nlriData;      ///< Raw NLRI field (legacy IPv4) or MP_REACH NLRI prefix bytes.
+
+    bool sawOrigin  = false; ///< ORIGIN was present; checked against RFC 4271 6.3 mandatory-attribute rules.
+    bool sawAsPath  = false; ///< AS_PATH was present.
+    bool sawNextHop = false; ///< NEXT_HOP or an MP_REACH next hop was present.
+
+    /// RFC 7606 treat-as-withdraw: decode the announced NLRI as withdrawals instead.
+    bool withdrawNlri = false;
 };
 
 /**
@@ -204,6 +211,19 @@ private:
     static bool parsePathAttributes(Session& session, std::span<uint8_t> data, IncomingUpdate& uinfo, Notification& error);
 
     /**
+     * @brief Verify the well-known mandatory attributes are present (RFC 4271 6.3).
+     *
+     * Only applies to UPDATEs that carry reachable NLRI; a withdraw-only UPDATE is
+     * required to carry none of them. Must be called after the legacy IPv4 NLRI span
+     * has been resolved, since that determines whether NLRI is present at all.
+     *
+     * @param uinfo Parsed update whose `saw*` flags were set by @ref parsePathAttributes.
+     * @param error Populated with MISSING_ATTR and the offending type code on failure.
+     * @return True if all mandatory attributes are present.
+     */
+    static bool checkMandatoryAttributes(const IncomingUpdate& uinfo, Notification& error);
+
+    /**
      * @brief Determine which address family an UPDATE targets by inspecting MP_REACH/MP_UNREACH.
      *
      * Used for multi-session deployments where each TCP session carries exactly
@@ -298,11 +318,16 @@ bool BgpRx::processUpdate(Session& session, IncomingUpdate& uinfo, ParsedUpdate<
             error.code = BGP_NOTIFICATION_UPDATE_MALFORMED_ATTR_LIST;
             return false;
         }
-        update.announcements.push_back({nlri, pathId});
+        if (uinfo.withdrawNlri)
+            update.withdrawn.push_back({nlri, pathId});
+        else
+            update.announcements.push_back({nlri, pathId});
         pos += consumed;
     }
 
-    update.attrs = PathAttribute{uinfo.attrs, uinfo.path};
+    if (!uinfo.withdrawNlri)
+        update.attrs = PathAttribute{uinfo.attrs, uinfo.path};
+
     return true;
 }
 } // namespace routing::bgp

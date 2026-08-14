@@ -95,15 +95,6 @@ public:
      * @param proc  The `BgpProcess` to query.
      */
     static core::ProcessQueue& getScheduler(BgpProcess& proc);
-
-    /**
-     * @brief Returns the underlying scheduler queue of `proc`, for minting
-     *        independent `ProcessQueue`s (e.g. for `Neighbor`, NHT/network
-     *        watch contexts).
-     *
-     * @param proc  The `BgpProcess` to query.
-     */
-    static core::ProcessQueue& getSchedulerQueue(BgpProcess& proc);
 };
 } // namespace routing
 

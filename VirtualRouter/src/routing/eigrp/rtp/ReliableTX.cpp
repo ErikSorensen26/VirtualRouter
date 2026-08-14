@@ -22,7 +22,7 @@ void ReliableTransport::transmit(processing::PacketBuilder& pkt, const types::IP
         target = types::IPAddress(EIGRP_MULTICAST_ADDRESS_V6, types::AddressFamily::IPv6);
     }
 
-    auto* interface = iface.getIface();
+    auto* interface = iface.currentInterface;
     infrastructure::ippacket::BuildIP build = {
         .iface = interface,
         .packetInfo = pkt,
@@ -62,7 +62,7 @@ void ReliableTransport::transmitReliable(processing::PacketBuilder& pkt, Neighbo
 
 void ReliableTransport::releaseFailedPacket(processing::PacketBuilder& builder)
 {
-    iface.getIface()->tx->release(builder.frame);
+    iface.currentInterface->tx->release(builder.frame);
 }
 
 void ReliableTransport::createPacket(processing::PacketBuilder& pkt)
@@ -76,7 +76,7 @@ void ReliableTransport::sendHello()
 {
     if (iface.configs.get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
 
-    processing::PacketBuilder pkt(iface.getIface());
+    processing::PacketBuilder pkt(iface.currentInterface);
     createPacket(pkt);
     if (!createHello(pkt).has_value())
         return releaseFailedPacket(pkt);
@@ -93,7 +93,7 @@ void ReliableTransport::sendConditionalHello(const std::vector<types::IPAddress>
 
     do
     {
-        processing::PacketBuilder pkt(iface.getIface());
+        processing::PacketBuilder pkt(iface.currentInterface);
         createPacket(pkt);
         if (auto eigrp = createConditionalHello(pkt, info, neighbors, seq); eigrp.has_value())
         {
@@ -109,7 +109,7 @@ void ReliableTransport::sendUnicastHello(const types::IPAddress& neighborIp)
 {
     if (iface.configs.get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
 
-    processing::PacketBuilder pkt(iface.getIface());
+    processing::PacketBuilder pkt(iface.currentInterface);
     createPacket(pkt);
     if (!createUnicastHello(pkt).has_value())
         return releaseFailedPacket(pkt);
@@ -133,7 +133,7 @@ void ReliableTransport::sendAck(Neighbor& neighbor, uint32_t seq)
     neighbor.removeAck(seq);
     neighbor.receivedConditions.erase(seq);
 
-    processing::PacketBuilder pkt(iface.getIface());
+    processing::PacketBuilder pkt(iface.currentInterface);
     createPacket(pkt);
 
     if (!createAck(pkt, seq).has_value())
@@ -146,7 +146,7 @@ void ReliableTransport::sendNullUpdate(Neighbor& neighbor)
 {
     if (iface.configs.get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
 
-    processing::PacketBuilder pkt(iface.getIface());
+    processing::PacketBuilder pkt(iface.currentInterface);
     createPacket(pkt);
     auto header = createNullUpdate(pkt);
     if (!header.has_value())
@@ -167,9 +167,9 @@ void ReliableTransport::sendFullTopology(Neighbor& neighbor, Resync resync)
     if (neighbor.fullSent.exchange(true, std::memory_order_acq_rel))
         return; // Full top already sent
 
-    auto* interface = iface.getIface();
+    auto* interface = iface.currentInterface;
 
-    auto& topology = iface.getTopController();
+    auto& topology = iface.topology;
     std::vector<const RouteInfo*> allRoutes = topology.getAdvertisableRoutes();
     if (allRoutes.empty())
         return;
@@ -215,11 +215,11 @@ void ReliableTransport::sendFullTopology(Neighbor& neighbor, Resync resync)
 
 void ReliableTransport::sendUpdate(Neighbor* neighbor, const std::vector<const RouteInfo*>& inputRoutes)
 {
-    if (iface.configs.get<config::EigrpInterface::PASSIVE_INTERFACE>().load() || iface.getNTable().size() == 0) return;
-    auto routes = iface.getTopController().filterAdvertisableRoutes(inputRoutes);
+    if (iface.configs.get<config::EigrpInterface::PASSIVE_INTERFACE>().load() || iface.ntable.size() == 0) return;
+    auto routes = iface.topology.filterAdvertisableRoutes(inputRoutes);
     if (routes.empty()) return;
 
-    auto* interface = iface.getIface();
+    auto* interface = iface.currentInterface;
 
     PktInfo info;
     info.bandwidthMetric = static_cast<uint32_t>(interface->configs.hwInfo.bandwidth / 1000);
@@ -257,9 +257,9 @@ void ReliableTransport::sendUpdate(Neighbor* neighbor, const std::vector<const R
 
 void ReliableTransport::sendPoisenedUpdate(Neighbor* neighbor, const std::vector<const RouteInfo*>& inputRoutes)
 {
-    if (iface.configs.get<config::EigrpInterface::PASSIVE_INTERFACE>().load() || iface.getNTable().size() == 0) return;
+    if (iface.configs.get<config::EigrpInterface::PASSIVE_INTERFACE>().load() || iface.ntable.size() == 0) return;
 
-    auto* interface = iface.getIface();
+    auto* interface = iface.currentInterface;
 
     PktInfo info;
     info.bandwidthMetric = static_cast<uint32_t>(interface->configs.hwInfo.bandwidth / 1000);
@@ -298,7 +298,7 @@ void ReliableTransport::sendPoisenedUpdate(Neighbor* neighbor, const std::vector
 void ReliableTransport::sendQuery(const std::vector<ActiveRoute*>& routes)
 {
     if (iface.configs.get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
-    auto* interface = iface.getIface();
+    auto* interface = iface.currentInterface;
 
     PktInfo info;
     info.bandwidthMetric = static_cast<uint32_t>(interface->configs.hwInfo.bandwidth / 1000);
@@ -329,7 +329,7 @@ void ReliableTransport::sendQuery(const std::vector<ActiveRoute*>& routes)
 void ReliableTransport::sendUnicastQuery(Neighbor& neighbor, const std::vector<OutgoingQuery*>& queries)
 {
     if (iface.configs.get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
-    auto* interface = iface.getIface();
+    auto* interface = iface.currentInterface;
 
     PktInfo info;
     info.bandwidthMetric = static_cast<uint32_t>(interface->configs.hwInfo.bandwidth / 1000);
@@ -357,7 +357,7 @@ void ReliableTransport::sendUnicastQuery(Neighbor& neighbor, const std::vector<O
 void ReliableTransport::sendReply(Neighbor& neighbor, const std::vector<const RouteInfo*>& replies)
 {
     if (iface.configs.get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
-    auto* interface = iface.getIface();
+    auto* interface = iface.currentInterface;
 
     PktInfo info;
     info.bandwidthMetric = static_cast<uint32_t>(interface->configs.hwInfo.bandwidth / 1000);
@@ -379,7 +379,7 @@ void ReliableTransport::sendReply(Neighbor& neighbor, const std::vector<const Ro
 void ReliableTransport::sendSIAQuery(Neighbor& neighbor, const std::vector<OutgoingQuery*>& queries)
 {
     if (iface.configs.get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
-    auto* interface = iface.getIface();
+    auto* interface = iface.currentInterface;
 
     PktInfo info;
     info.bandwidthMetric = static_cast<uint32_t>(interface->configs.hwInfo.bandwidth / 1000);
@@ -402,7 +402,7 @@ void ReliableTransport::sendSIAReply(Neighbor& neighbor)
 {
     if (iface.configs.get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
 
-    auto* interface = iface.getIface();
+    auto* interface = iface.currentInterface;
     processing::PacketBuilder eigrpPacket(interface);
     createPacket(eigrpPacket);
     if (auto eigrp = createSIAReply(eigrpPacket); eigrp.has_value())
@@ -416,7 +416,7 @@ std::optional<packet::EigrpHeader> ReliableTransport::createHello(processing::Pa
     auto eigrpHeader = EigrpPacketBuilder::buildHeader(builder,
         EIGRP_TYPE_HELLO,
         0, 0,
-        iface.getBase().getVirtualRouterID(),
+        iface.getVirtualRouterID(),
         as
     );
     if (!eigrpHeader) return std::nullopt;
@@ -424,7 +424,7 @@ std::optional<packet::EigrpHeader> ReliableTransport::createHello(processing::Pa
     packet::TLV16BufferManager opts(eigrpHeader->getTrail().data(), builder.getMaxHeaderSize(getMtu()));
     EigrpPacketBuilder::appendAuthTLV(opts, iface);
     EigrpPacketBuilder::appendParameterTLV(opts, iface);
-    EigrpPacketBuilder::appendStubTLV(opts, iface.getBase().getGlobalConfigMgr());
+    EigrpPacketBuilder::appendStubTLV(opts, iface.getConfigs());
     EigrpPacketBuilder::appendVersionTLV(opts);
     builder.addTLVSize(opts.size());
     return eigrpHeader;
@@ -435,7 +435,7 @@ std::optional<packet::EigrpHeader> ReliableTransport::createConditionalHello(pro
     auto eigrpHeader = EigrpPacketBuilder::buildHeader(builder,
         EIGRP_TYPE_HELLO,
         0, 0,
-        iface.getBase().getVirtualRouterID(),
+        iface.getVirtualRouterID(),
         as
     );
     if (!eigrpHeader) return std::nullopt;
@@ -445,7 +445,7 @@ std::optional<packet::EigrpHeader> ReliableTransport::createConditionalHello(pro
     packet::TLV16BufferManager opts(eigrpHeader->getTrail().data(), maxSize);
     EigrpPacketBuilder::appendAuthTLV(opts, iface);
     EigrpPacketBuilder::appendParameterTLV(opts, iface);
-    EigrpPacketBuilder::appendStubTLV(opts, iface.getBase().getGlobalConfigMgr());
+    EigrpPacketBuilder::appendStubTLV(opts, iface.getConfigs());
     EigrpPacketBuilder::appendVersionTLV(opts);
 
     const std::vector<types::IPAddress> availableNeighbors(neighbors.begin() + static_cast<int>(info.sent), neighbors.end());
@@ -461,7 +461,7 @@ std::optional<packet::EigrpHeader> ReliableTransport::createUnicastHello(process
     auto eigrpHeader = EigrpPacketBuilder::buildHeader(builder,
         EIGRP_TYPE_HELLO,
         0, 0,
-        iface.getBase().getVirtualRouterID(),
+        iface.getVirtualRouterID(),
         as
     );
     if (!eigrpHeader) return std::nullopt;
@@ -469,7 +469,7 @@ std::optional<packet::EigrpHeader> ReliableTransport::createUnicastHello(process
     packet::TLV16BufferManager opts(eigrpHeader->getTrail().data(), builder.getMaxHeaderSize(getMtu()));
     EigrpPacketBuilder::appendAuthTLV(opts, iface);
     EigrpPacketBuilder::appendParameterTLV(opts, iface);
-    EigrpPacketBuilder::appendStubTLV(opts, iface.getBase().getGlobalConfigMgr());
+    EigrpPacketBuilder::appendStubTLV(opts, iface.getConfigs());
     EigrpPacketBuilder::appendVersionTLV(opts);
     builder.addTLVSize(opts.size());
     return eigrpHeader;
@@ -480,7 +480,7 @@ std::optional<packet::EigrpHeader> ReliableTransport::createAck(processing::Pack
     auto eigrpHeader = EigrpPacketBuilder::buildHeader(builder,
         EIGRP_TYPE_HELLO,
         0, seq,
-        iface.getBase().getVirtualRouterID(),
+        iface.getVirtualRouterID(),
         as
     );
     if (!eigrpHeader) return std::nullopt;
@@ -490,13 +490,13 @@ std::optional<packet::EigrpHeader> ReliableTransport::createAck(processing::Pack
 
 std::optional<packet::EigrpHeader> ReliableTransport::createNullUpdate(processing::PacketBuilder& builder)
 {
-    auto& base = iface.getBase();
+    auto& base = iface.process;
     auto eigrpHeader = EigrpPacketBuilder::buildHeader(builder,
         EIGRP_TYPE_UPDATE,
         incrementSequenceNumber(),
         0,
-        base.getVirtualRouterID(),
-        base.getAS()
+        iface.getVirtualRouterID(),
+        base.asNumber
     );
     if (!eigrpHeader) return std::nullopt;
     eigrpHeader->setFlagInit(true);
@@ -504,7 +504,7 @@ std::optional<packet::EigrpHeader> ReliableTransport::createNullUpdate(processin
     uint16_t mtuSize = getMtu();
     packet::TLV16BufferManager opts(eigrpHeader->getTrail().data(), builder.getMaxHeaderSize(mtuSize));
     EigrpPacketBuilder::appendAuthTLV(opts, iface);
-    EigrpPacketBuilder::appendStubTLV(opts, iface.getBase().getGlobalConfigMgr());
+    EigrpPacketBuilder::appendStubTLV(opts, iface.getConfigs());
     // restart?
     builder.addTLVSize(opts.size());
     eigrpHeader.value().setTrailSize(opts.size());
@@ -513,9 +513,8 @@ std::optional<packet::EigrpHeader> ReliableTransport::createNullUpdate(processin
 
 std::optional<packet::EigrpHeader> ReliableTransport::createUpdate(processing::PacketBuilder& builder, PktInfo& info, Neighbor* neighbor, const std::vector<const RouteInfo*>& routes)
 {
-    auto& base = iface.getBase();
     uint32_t seqNum = incrementSequenceNumber();
-    std::optional<packet::EigrpHeader> eigrp = EigrpPacketBuilder::buildHeader(builder, EIGRP_TYPE_UPDATE, seqNum, 0, base.getVirtualRouterID(), as);
+    std::optional<packet::EigrpHeader> eigrp = EigrpPacketBuilder::buildHeader(builder, EIGRP_TYPE_UPDATE, seqNum, 0, iface.getVirtualRouterID(), as);
     if (!eigrp.has_value()) return std::nullopt;
 
     uint16_t maxSize = info.mtu - static_cast<uint16_t>(builder.bufferOffset + packet::EigrpHeader::fixedSize);
@@ -523,7 +522,7 @@ std::optional<packet::EigrpHeader> ReliableTransport::createUpdate(processing::P
     packet::TLV16BufferManager opts(eigrp->getTrail().data(), maxSize);
 
     EigrpPacketBuilder::appendAuthTLV(opts, iface);
-    EigrpPacketBuilder::appendStubTLV(opts, base.getGlobalConfigMgr());
+    EigrpPacketBuilder::appendStubTLV(opts, iface.getConfigs());
 
     const std::vector<const RouteInfo*> availableRoutes = std::vector<const RouteInfo*>(routes.begin() + static_cast<int>(info.sent), routes.end());
     info.sent += EigrpPacketBuilder::appendRoutes(iface, opts, availableRoutes, info.bandwidthMetric, info.delay, info.version);
@@ -535,10 +534,9 @@ std::optional<packet::EigrpHeader> ReliableTransport::createUpdate(processing::P
 
 std::optional<packet::EigrpHeader> ReliableTransport::createQuery(processing::PacketBuilder& builder, PktInfo& info, const std::vector<ActiveRoute*>& queries)
 {
-    auto& base = iface.getBase();
     uint32_t seqNum = incrementSequenceNumber();
     std::optional<packet::EigrpHeader> eigrp = EigrpPacketBuilder::buildHeader(
-        builder, EIGRP_TYPE_QUERY, seqNum, 0, base.getVirtualRouterID(), as);
+        builder, EIGRP_TYPE_QUERY, seqNum, 0, iface.getVirtualRouterID(), as);
     if (!eigrp.has_value()) return std::nullopt;
 
     uint16_t maxSize = info.mtu - static_cast<uint16_t>(builder.bufferOffset + packet::EigrpHeader::fixedSize);
@@ -546,7 +544,7 @@ std::optional<packet::EigrpHeader> ReliableTransport::createQuery(processing::Pa
     packet::TLV16BufferManager opts(eigrp->getTrail().data(), maxSize);
 
     EigrpPacketBuilder::appendAuthTLV(opts, iface);
-    EigrpPacketBuilder::appendStubTLV(opts, base.getGlobalConfigMgr());
+    EigrpPacketBuilder::appendStubTLV(opts, iface.getConfigs());
     
     size_t initSize = info.sent;
     std::vector<const RouteInfo*> availableQueries;
@@ -567,10 +565,9 @@ std::optional<packet::EigrpHeader> ReliableTransport::createQuery(processing::Pa
 
 std::optional<packet::EigrpHeader> ReliableTransport::createUnicastQuery(processing::PacketBuilder& builder, PktInfo& info, Neighbor& neighbor, const std::vector<OutgoingQuery*>& queries)
 {
-    auto& base = iface.getBase();
     uint32_t seqNum = incrementSequenceNumber();
     std::optional<packet::EigrpHeader> eigrp = EigrpPacketBuilder::buildHeader(
-        builder, EIGRP_TYPE_QUERY, seqNum, 0, base.getVirtualRouterID(), as);
+        builder, EIGRP_TYPE_QUERY, seqNum, 0, iface.getVirtualRouterID(), as);
     if (!eigrp.has_value()) return std::nullopt;
 
     uint16_t maxSize = info.mtu - static_cast<uint16_t>(builder.bufferOffset + packet::EigrpHeader::fixedSize);
@@ -578,7 +575,7 @@ std::optional<packet::EigrpHeader> ReliableTransport::createUnicastQuery(process
     packet::TLV16BufferManager opts(eigrp->getTrail().data(), maxSize);
 
     EigrpPacketBuilder::appendAuthTLV(opts, iface);
-    EigrpPacketBuilder::appendStubTLV(opts, base.getGlobalConfigMgr());
+    EigrpPacketBuilder::appendStubTLV(opts, iface.getConfigs());
     
     size_t initSize = info.sent;
     std::vector<const RouteInfo*> availableQueries;
@@ -597,17 +594,16 @@ std::optional<packet::EigrpHeader> ReliableTransport::createUnicastQuery(process
 
 std::optional<packet::EigrpHeader> ReliableTransport::createReply(processing::PacketBuilder& builder, PktInfo& info, Neighbor& neighbor, const std::vector<const RouteInfo*>& routes)
 {
-    auto& base = iface.getBase();
     uint32_t seqNum = incrementSequenceNumber();
     std::optional<packet::EigrpHeader> eigrp =  EigrpPacketBuilder::buildHeader(
-        builder, EIGRP_TYPE_REPLY, seqNum, 0, base.getVirtualRouterID(), as);
+        builder, EIGRP_TYPE_REPLY, seqNum, 0, iface.getVirtualRouterID(), as);
     if (!eigrp.has_value()) return std::nullopt;
 
     uint16_t maxSize = info.mtu - static_cast<uint16_t>(builder.bufferOffset + packet::EigrpHeader::fixedSize);
     packet::TLV16BufferManager opts(eigrp->getTrail().data(), maxSize);
 
     EigrpPacketBuilder::appendAuthTLV(opts, iface);
-    EigrpPacketBuilder::appendStubTLV(opts, base.getGlobalConfigMgr());
+    EigrpPacketBuilder::appendStubTLV(opts, iface.getConfigs());
 
     const std::vector<const RouteInfo*> availableRoutes = std::vector<const RouteInfo*>(routes.begin() + static_cast<int>(info.sent), routes.end());
     info.sent += EigrpPacketBuilder::appendRoutes(iface, opts, availableRoutes, info.bandwidthMetric, info.delay, neighbor.tlvType);
@@ -619,10 +615,9 @@ std::optional<packet::EigrpHeader> ReliableTransport::createReply(processing::Pa
 
 std::optional<packet::EigrpHeader> ReliableTransport::createSIAQuery(processing::PacketBuilder& builder, PktInfo& info, const std::vector<OutgoingQuery*>& routes)
 {
-    auto& base = iface.getBase();
     uint32_t seqNum = incrementSequenceNumber();
     std::optional<packet::EigrpHeader> eigrp =  EigrpPacketBuilder::buildHeader(
-        builder, EIGRP_TYPE_SIA_QUERY, seqNum, 0, base.getVirtualRouterID(), as);
+        builder, EIGRP_TYPE_SIA_QUERY, seqNum, 0, iface.getVirtualRouterID(), as);
     if (!eigrp.has_value()) return std::nullopt;
 
     uint16_t maxSize = info.mtu - static_cast<uint16_t>(builder.bufferOffset + packet::EigrpHeader::fixedSize);
@@ -630,7 +625,7 @@ std::optional<packet::EigrpHeader> ReliableTransport::createSIAQuery(processing:
     packet::TLV16BufferManager opts(eigrp->getTrail().data(), maxSize);
 
     EigrpPacketBuilder::appendAuthTLV(opts, iface);
-    EigrpPacketBuilder::appendStubTLV(opts, base.getGlobalConfigMgr());
+    EigrpPacketBuilder::appendStubTLV(opts, iface.getConfigs());
 
     size_t initSize = info.sent;
     std::vector<const RouteInfo*> availableQueries;
@@ -649,19 +644,18 @@ std::optional<packet::EigrpHeader> ReliableTransport::createSIAQuery(processing:
 
 std::optional<packet::EigrpHeader> ReliableTransport::createSIAReply(processing::PacketBuilder& builder)
 {
-    auto& base = iface.getBase();
 
     uint16_t mtu = getMtu();
     uint32_t seqNum = incrementSequenceNumber();
     std::optional<packet::EigrpHeader> eigrp =  EigrpPacketBuilder::buildHeader(
-        builder, EIGRP_TYPE_SIA_REPLY, seqNum, 0, base.getVirtualRouterID(), as);
+        builder, EIGRP_TYPE_SIA_REPLY, seqNum, 0, iface.getVirtualRouterID(), as);
     if (!eigrp.has_value()) return std::nullopt;
 
     uint16_t maxSize = static_cast<uint16_t>(builder.getMaxHeaderSize(mtu));
     packet::TLV16BufferManager opts(eigrp->getTrail().data(), maxSize);
 
     EigrpPacketBuilder::appendAuthTLV(opts, iface);
-    EigrpPacketBuilder::appendStubTLV(opts, base.getGlobalConfigMgr());
+    EigrpPacketBuilder::appendStubTLV(opts, iface.getConfigs());
 
     builder.addTLVSize(opts.size());
     eigrp.value().setTrailSize(opts.size());

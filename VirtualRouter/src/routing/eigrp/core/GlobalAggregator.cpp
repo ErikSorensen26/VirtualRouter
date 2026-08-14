@@ -9,13 +9,13 @@
 
 namespace routing::eigrp
 {
-GlobalAggregator::GlobalAggregator(Eigrp& base) : base(base) {}
+GlobalAggregator::GlobalAggregator(Eigrp& process) : process(process) {}
 
 void GlobalAggregator::addSummary(TopologyEntry& top)
 {
-    for (auto& [id, iface] : base.getIfaceMgr().eigrpInterfaceList)
+    for (auto& [id, iface] : process.getIfaceMgr().eigrpInterfaceList)
     {
-        if (auto* sum = iface.getAggregator().isSummarized(top.prefix); sum)
+        if (auto* sum = iface.aggregator.isSummarized(top.prefix); sum)
         {
             top.suppression[id.getId()].summaries.insert(sum);
             sum->summarizedRoutes.insert(top.prefix);
@@ -27,33 +27,32 @@ void GlobalAggregator::updateSummary(TopologyEntry& top)
 {
     if (top.suppression.empty()) return;
     if (top.successors.empty()) return;
-    auto& interfaces = base.getIfaceMgr().eigrpInterfaceList;
+    auto& interfaces = process.getIfaceMgr().eigrpInterfaceList;
     for (auto& [id, info] : top.suppression)
     {
         if (auto ifaceIt = interfaces.find(id); ifaceIt != interfaces.end())
             for (auto sum : info.summaries)
-                ifaceIt->second.getAggregator().updateSummaryRoute(*sum);
+                ifaceIt->second.aggregator.updateSummaryRoute(*sum);
     }
 }
 
 void GlobalAggregator::enableAutoSummary(bool enable)
 {
-    if (base.getAF() != types::AddressFamily::IPv4) return; // Only supported for IPv4
+    if (process.addressFamily != types::AddressFamily::IPv4) return; // Only supported for IPv4
 
-    auto& configs = base.getGlobalConfigMgr().getConfigs();
-    bool current = configs.get<config::Eigrp::AUTO_SUMMARIZATION>().load();
+    bool current = process.configs.get<config::Eigrp::AUTO_SUMMARIZATION>().load();
     if (enable == current) return; // No change
 
-    configs.get<config::Eigrp::AUTO_SUMMARIZATION>().set(enable);
+    process.configs.get<config::Eigrp::AUTO_SUMMARIZATION>().set(enable);
 
     // Lock interface for duration
-    auto& ifmgr = base.getIfaceMgr();
+    auto& ifmgr = process.getIfaceMgr();
 
     if (enable)
     {
         std::set<types::IPPrefix> classfulGroups;
 
-        for (auto& [prefix, top] : base.getTopology().entries())
+        for (auto& [prefix, top] : process.getTopology().entries())
         {
             if (top.successors.empty())
                 continue;
@@ -62,24 +61,24 @@ void GlobalAggregator::enableAutoSummary(bool enable)
 
         for (auto& [_, iface] : ifmgr.eigrpInterfaceList)
         {
-            iface.getAggregator().installSummaries(classfulGroups, true);
+            iface.aggregator.installSummaries(classfulGroups, true);
         }
     }
     else
     {
         for (auto& [_, iface] : ifmgr.eigrpInterfaceList)
         {
-            iface.getAggregator().clearAutoSummaries();
+            iface.aggregator.clearAutoSummaries();
         }
     }
 }
 
 void GlobalAggregator::recomputeAutoSummaries()
 {
-    auto& ifmgr = base.getIfaceMgr();
+    auto& ifmgr = process.getIfaceMgr();
     for (auto& [_, iface] : ifmgr.eigrpInterfaceList)
     {
-        iface.getAggregator().updateAllSummaryRoutes(true);
+        iface.aggregator.updateAllSummaryRoutes(true);
     }
 }
 } // namespace routing

@@ -136,7 +136,7 @@ public:
      * @param af    Address family this process services (IPv4 or IPv6).
      * @param vrf   Owning VirtualRouter; must outlive this process.
      */
-    OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, core::VirtualRouter* vrf);
+    OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, core::VirtualRouter& vrf);
 
     /**
      * @brief Destroys the OSPF process.
@@ -209,7 +209,7 @@ public:
     const bool afCapable = false;
     const uint16_t procId; ///< Process identifier; immutable after construction.
     const types::AddressFamily af; ///< Address family this process services.
-    core::VirtualRouter* const routingInstance = nullptr; ///< Owning VRF; used to query interface and RIB state.
+    core::VirtualRouter& routingInstance; ///< Owning VRF; used to query interface and RIB state.
 
 private:
     friend class Area;

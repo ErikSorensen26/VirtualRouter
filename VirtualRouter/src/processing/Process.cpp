@@ -152,24 +152,27 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, core::Vi
             }
             case packet::HeaderType::EIGRP:
             {
-                if (!ipStart) break;
-                GET_HEADER_EXTENDED(eigrp, packet::EigrpHeader)
-                uint32_t as = eigrp.getAutonomousSystem();
-                auto* it = vrf->getEigrpAutonomousSystem(as);
-                if (it)
-                {
-                    auto ifaceKey = interface->configs.key;
-                    if (addressFamily == types::AddressFamily::IPv4 && it->ipv4)
-                    {
-                        auto* eigrpIface = it->ipv4->getIfaceMgr().getInterface(ifaceKey);
-                        if (eigrpIface) eigrpIface->getRtp().handleIncoming(ipStart, eigrp, typedAddress, typedAddress.isMulticast());
-                    }
-                    else if (addressFamily == types::AddressFamily::IPv6 && it->ipv6)
-                    {
-                        auto* eigrpIface = it->ipv6->getIfaceMgr().getInterface(ifaceKey);
-                        if (eigrpIface) eigrpIface->getRtp().handleIncoming(ipStart, eigrp, typedAddress, typedAddress.isMulticast());
-                    }
-                }
+                // TODO: EIGRP packet-RX dispatch needs a proper enqueue-based
+                // entry point on Eigrp (this call site is outside the EIGRP
+                // subsystem tree and must not reach EigrpInterface directly).
+                // if (!ipStart) break;
+                // GET_HEADER_EXTENDED(eigrp, packet::EigrpHeader)
+                // uint32_t as = eigrp.getAutonomousSystem();
+                // auto* it = vrf->getEigrpAutonomousSystem(as);
+                // if (it)
+                // {
+                //     auto ifaceKey = interface->configs.key;
+                //     if (addressFamily == types::AddressFamily::IPv4 && it->ipv4)
+                //     {
+                //         auto* eigrpIface = it->ipv4->getInterface(ifaceKey);
+                //         if (eigrpIface) eigrpIface->getRtp().handleIncoming(ipStart, eigrp, typedAddress, typedAddress.isMulticast());
+                //     }
+                //     else if (addressFamily == types::AddressFamily::IPv6 && it->ipv6)
+                //     {
+                //         auto* eigrpIface = it->ipv6->getInterface(ifaceKey);
+                //         if (eigrpIface) eigrpIface->getRtp().handleIncoming(ipStart, eigrp, typedAddress, typedAddress.isMulticast());
+                //     }
+                // }
                 break;
             }
             case packet::HeaderType::DHCP:

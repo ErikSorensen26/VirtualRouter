@@ -8,10 +8,10 @@
 
 namespace routing::bgp
 {
-PeerGroup::PeerGroup(const std::string& groupName, BgpProcess& proc)
+PeerGroup::PeerGroup(const std::string& groupName, BgpProcess& proc, config::BgpNeighborSessionRegistry& cfgs)
     : name(groupName),
       process(proc),
-      sessionConfigs(proc.getConfigs().get<config::Bgp::PEER_GROUP>().emplaceBack(groupName))
+      sessionConfigs(cfgs)
 {}
 
 config::BgpNeighborRegistry* PeerGroup::getAfConfigs(const AfiSafi& afi)
@@ -34,14 +34,14 @@ const config::BgpNeighborRegistry* PeerGroup::getAfConfigs(const AfiSafi& afi) c
     return const_cast<PeerGroup*>(this)->getAfConfigs(afi);
 }
 
-PeerSessionTemplate::PeerSessionTemplate(const std::string& groupName, BgpProcess& proc)
+PeerSessionTemplate::PeerSessionTemplate(const std::string& groupName, config::BgpNeighborSessionRegistry& cfgs)
     : name(groupName),
-      configs(proc.getConfigs().get<config::Bgp::TEMPLATE_PEER_SESSION>().emplaceBack(groupName))
+      configs(cfgs)
 {}
 
-PeerPolicyTemplate::PeerPolicyTemplate(const std::string& groupName, BgpProcess& proc)
+PeerPolicyTemplate::PeerPolicyTemplate(const std::string& groupName, config::BgpNeighborRegistry& cfgs)
     : name(groupName),
-      configs(proc.getConfigs().get<config::Bgp::TEMPLATE_PEER_POLICY>().emplaceBack(groupName))
+      configs(cfgs)
 {}
 
 // ---------------------------------------------------------------------------
@@ -61,22 +61,22 @@ void PeerTemplateTable::sync()
 
 void PeerTemplateTable::syncPeerGroups()
 {
-    auto& ntable = process.getNtable();
+    auto& ntable = process.ntable;
     ntable.forEachNeighbor([&](Neighbor& nbr) {
-        auto pgField = nbr.getConfigs().getConfigs().get<config::BgpNeighborSession::PEER_GROUP>();
+        auto pgField = nbr.configs.get<config::BgpNeighborSession::PEER_GROUP>();
         if (pgField.hasValue())
         {
             auto* pg = lookupPeerGroup(pgField.load());
-            nbr.getConfigs().setPeerGroup(pg);
+            nbr.configs.setPeerGroup(pg);
             nbr.forEachAfNeighbor([&pg](NeighborAf& afNbr) {
-                afNbr.getConfigs().setPeerGroup(pg);
+                afNbr.configs.setPeerGroup(pg);
             });
         }
-        else if (nbr.getConfigs().getPeerGroup())
+        else if (nbr.configs.getPeerGroup())
         {
-            nbr.getConfigs().setPeerGroup(nullptr);
+            nbr.configs.setPeerGroup(nullptr);
             nbr.forEachAfNeighbor([](NeighborAf& afNbr) {
-                afNbr.getConfigs().setPeerGroup(nullptr);
+                afNbr.configs.setPeerGroup(nullptr);
             });
         }
     });
@@ -84,35 +84,35 @@ void PeerTemplateTable::syncPeerGroups()
 
 void PeerTemplateTable::syncPeerSessionTemplates()
 {
-    auto& ntable = process.getNtable();
+    auto& ntable = process.ntable;
     ntable.forEachNeighbor([&](Neighbor& nbr) {
-        auto f = nbr.getConfigs().getConfigs().get<config::BgpNeighborSession::INHERIT_PEER_SESSION>();
+        auto f = nbr.configs.getConfigs().get<config::BgpNeighborSession::INHERIT_PEER_SESSION>();
         if (f.hasValue())
         {
             auto* ps = lookupPeerSessionTemplate(f.load());
-            nbr.getConfigs().setPeerSessionTemplate(ps);
+            nbr.configs.setPeerSessionTemplate(ps);
         }
-        else if (nbr.getConfigs().getPeerSessionTemplate())
+        else if (nbr.configs.getPeerSessionTemplate())
         {
-            nbr.getConfigs().setPeerSessionTemplate(nullptr);
+            nbr.configs.setPeerSessionTemplate(nullptr);
         }
     });
 }
 
 void PeerTemplateTable::syncPeerPolicyTemplates()
 {
-    auto& ntable = process.getNtable();
+    auto& ntable = process.ntable;
     ntable.forEachNeighbor([&](Neighbor& nbr) {
         nbr.forEachAfNeighbor([this](NeighborAf& afNbr) {
-            auto f = afNbr.getConfigs().getConfigs().get<config::BgpNeighbor::INHERIT_PEER_POLICY>();
+            auto f = afNbr.configs.getConfigs().get<config::BgpNeighbor::INHERIT_PEER_POLICY>();
             if (f.hasValue())
             {
                 auto* pp = lookupPeerPolicyTemplate(f.load());
-                afNbr.getConfigs().setPeerPolicyTemplate(pp);
+                afNbr.configs.setPeerPolicyTemplate(pp);
             }
             else
             {
-                afNbr.getConfigs().setPeerPolicyTemplate(nullptr);
+                afNbr.configs.setPeerPolicyTemplate(nullptr);
             }
         });
     });
@@ -120,19 +120,22 @@ void PeerTemplateTable::syncPeerPolicyTemplates()
 
 PeerGroup& PeerTemplateTable::createPeerGroup(const std::string& name)
 {
-    auto [it, _] = peerGroups.try_emplace(name, name, process);
+    config::BgpNeighborSessionRegistry& configs = process.configs.get<config::Bgp::PEER_GROUP>().emplaceBack(name);
+    auto [it, _] = peerGroups.try_emplace(name, name, process, configs);
     return it->second;
 }
 
 PeerSessionTemplate& PeerTemplateTable::createPeerSessionTemplate(const std::string& name)
 {
-    auto [it, _] = peerSessionTemplates.try_emplace(name, name, process);
+    config::BgpNeighborSessionRegistry& configs = process.configs.get<config::Bgp::TEMPLATE_PEER_SESSION>().emplaceBack(name);
+    auto [it, _] = peerSessionTemplates.try_emplace(name, name, configs);
     return it->second;
 }
 
 PeerPolicyTemplate& PeerTemplateTable::createPeerPolicyTemplate(const std::string& name)
 {
-    auto [it, _] = peerPolicyTemplates.try_emplace(name, name, process);
+    config::BgpNeighborRegistry& configs = process.configs.get<config::Bgp::TEMPLATE_PEER_POLICY>().emplaceBack(name);
+    auto [it, _] = peerPolicyTemplates.try_emplace(name, name, configs);
     return it->second;
 }
 

@@ -5,6 +5,7 @@
 #include "TLVBuilder.h"
 #include "eigrp/interface/EigrpInterface.h"
 #include "eigrp/core/Eigrp.h"
+#include "eigrp/EigrpTypes.hpp"
 #include "interface/Interface.h"
 
 namespace routing::eigrp
@@ -36,7 +37,7 @@ void ReliableTransport::handleIncoming(const uint8_t* ipStart, const packet::Eig
     }
 
     size_t size = (eigrpPacket.buffer + packet::EigrpHeader::fixedSize + eigrpPacket.getTrail().size()) - ipStart;
-    if (!iface.getAuth().validateAuth(ipStart, size, authOpt))
+    if (!iface.auth.validateAuth(ipStart, size, authOpt))
         return;
 
     // Check for valid neighbor
@@ -153,7 +154,7 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
             }
 
             uint8_t parameters[6];
-            TLVBuilder::calculateParameters(parameters, iface.getBase().getGlobalConfigMgr().getKValues());
+            TLVBuilder::calculateParameters(parameters, getKValues(iface.getConfigs()));
 
             if (std::memcmp(parameters, opt.value, 6) != 0)
             {
@@ -180,10 +181,10 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
             const size_t listLen = opt.valueSize - 1;
 
             uint8_t ourAddr[16];
-            if (iface.getBase().getAF() == types::AddressFamily::IPv4)
-                iface.getIface()->configs.ipv4.getPrimaryAddress(ourAddr);
+            if (iface.process.addressFamily == types::AddressFamily::IPv4)
+                iface.currentInterface->configs.ipv4.getPrimaryAddress(ourAddr);
             else
-                utils::write<__uint128_t>(ourAddr, iface.getIface()->configs.ipv6.getLocalAddress().addr);
+                utils::write<__uint128_t>(ourAddr, iface.currentInterface->configs.ipv6.getLocalAddress().addr);
 
             for (size_t off = 0; off + addrLen <= listLen; off += addrLen)
             {
@@ -199,7 +200,7 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
     if (conditionalSeq != 0)
         info.neighbor->receivedConditions[conditionalSeq] = conditionExemption;
 
-    iface.getTimers().startHoldTimer(*nbr);
+    iface.tmgr.startHoldTimer(*nbr);
 
     // Safely extract the neighbor state
     if (parametersFound)
@@ -284,7 +285,7 @@ void ReliableTransport::processUpdate(RTPInfo& info)
     if (resync)
     {
         nbr.resyncInProgress.store(true, std::memory_order_release);
-        iface.getTopController().onNeighborDown(*info.neighbor);
+        iface.topology.onNeighborDown(*info.neighbor);
     }
 
     if (update.getFlagInit())
@@ -312,8 +313,8 @@ void ReliableTransport::processUpdate(RTPInfo& info)
         {
             if (iface.recordDampeningEvent())
             {
-                iface.getMetrics().addRouteMetrics(routeBuffer);
-                iface.getTopController().processReceivedRoutes(routeBuffer, nbr);
+                iface.metrics.addRouteMetrics(routeBuffer);
+                iface.topology.processReceivedRoutes(routeBuffer, nbr);
             }
         }
 
@@ -333,7 +334,7 @@ void ReliableTransport::processUpdate(RTPInfo& info)
 
 void ReliableTransport::processAck(Neighbor& neighbor, const uint32_t seq)
 {
-    auto& timers = iface.getTimers();
+    auto& timers = iface.tmgr;
 
     if (neighbor.currentReliable.load(std::memory_order_relaxed) == seq)
     {
@@ -371,7 +372,7 @@ void ReliableTransport::processAck(Neighbor& neighbor, const uint32_t seq)
                 info.retransmissionCount = 0;
                 neighbor.currentReliable.store(nseq, std::memory_order_release);
                 sendRetransmission(neighbor, it->second.packet);
-                iface.getTimers().startRetransmissionTimer(&neighbor, it->second, info, seq);
+                iface.tmgr.startRetransmissionTimer(&neighbor, it->second, info, seq);
             }
             else
             {
@@ -414,8 +415,8 @@ void ReliableTransport::processQuery(RTPInfo& info)
         }
     }
 
-    iface.getMetrics().addRouteMetrics(queriedRoutes);
-    iface.getTopController().processReceivedQueryRoutes(queriedRoutes, *info.neighbor, recvSeq);
+    iface.metrics.addRouteMetrics(queriedRoutes);
+    iface.topology.processReceivedQueryRoutes(queriedRoutes, *info.neighbor, recvSeq);
 
     attemptSendAck(*nbr, recvSeq);
 }
@@ -454,7 +455,7 @@ void ReliableTransport::processReply(RTPInfo& info)
     }
 
     if (!receivedRoutes.empty())
-        iface.getTopController().processReceivedActiveRoutes(receivedRoutes, *info.neighbor);
+        iface.topology.processReceivedActiveRoutes(receivedRoutes, *info.neighbor);
 
     attemptSendAck(*nbr, seq);
 }
@@ -468,7 +469,7 @@ void ReliableTransport::processSIAReply(RTPInfo& info)
         return;
 
     trackAck(*info.neighbor, seq);
-    iface.getTopController().processSIAReply(*info.neighbor, seq);
+    iface.topology.processSIAReply(*info.neighbor, seq);
     attemptSendAck(*info.neighbor, seq);
 }
 } // namespace routing

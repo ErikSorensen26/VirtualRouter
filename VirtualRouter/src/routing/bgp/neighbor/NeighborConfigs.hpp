@@ -36,19 +36,6 @@ struct NeighborConfigs
         : configs(cfgs) {}
 
     /**
-     * @brief Read a BgpNeighborSession config field, falling back to the peer-group when applicable.
-     * @tparam F Config field tag.
-     * @return Reference to the config field value.
-     */
-    template <config::BgpNeighborSession F>
-    decltype(auto) get()
-    {
-        if (peerGroup && peerOwnedTable.test(config::toIndex<F>))
-            return peerGroup->getSessionConfigs().get<F>();
-        return configs.get<F>();
-    }
-
-    /**
      * @brief Read a BgpNeighborSession config field (const overload).
      * @tparam F Config field tag.
      * @return Const reference to the config field value.

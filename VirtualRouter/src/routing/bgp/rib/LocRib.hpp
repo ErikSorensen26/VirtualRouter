@@ -165,10 +165,11 @@ class LocRib<N, LocRibType::HASH_MAP>
     /**
      * @brief Removes the entry for an NLRI.
      * @param nlri  Key to erase.
+     * @return True if an entry was found and removed.
      */
     bool erase(const N& nlri)
     {
-        locRib.erase(nlri);
+        return locRib.erase(nlri) != 0;
     }
 
     /**

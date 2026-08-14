@@ -52,9 +52,9 @@ public:
     /**
      * @brief Constructs the manager bound to the given EIGRP process.
      *
-     * @param base The @ref Eigrp process that owns this manager.
+     * @param process The @ref Eigrp process that owns this manager.
      */
-    InterfaceManager(Eigrp& base);
+    InterfaceManager(Eigrp& process);
 
     /**
      * @brief Destructs the manager.
@@ -122,7 +122,7 @@ public:
 
 private:
 
-    Eigrp& base; ///< Owning EIGRP process.
+    Eigrp& process; ///< Owning EIGRP process.
 };
 } // namespace routing::eigrp
 

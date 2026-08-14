@@ -11,10 +11,10 @@
 namespace routing::eigrp
 {
 RouteManager::RouteManager(Eigrp& process)
-    : base(process), rib(process.routingInstance->getRib())
+    : process(process), rib(process.routingInstance->getRib())
 {
-    af = base.getAF();
-    as = base.getAS();
+    af = process.addressFamily;
+    as = process.asNumber;
 }
 
 void RouteManager::withdrawRoute(const types::IPPrefix withdraw)
@@ -33,7 +33,7 @@ void RouteManager::withdrawRoute(const types::IPPrefix withdraw)
 
 void RouteManager::synchronizeRoutes(const std::vector<TopologyEntry*>& entries)
 {
-    uint8_t scale = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::RIB_SCALE>().load();
+    uint8_t scale = process.getConfigs().get<config::Eigrp::RIB_SCALE>().load();
 
     std::vector<const RouteInfo*> changedRoutes;
 
@@ -51,21 +51,21 @@ void RouteManager::synchronizeRoutes(const std::vector<TopologyEntry*>& entries)
     }
 
     if (!changedRoutes.empty())
-        base.broadcastRouteChanges(changedRoutes);
+        process.broadcastRouteChanges(changedRoutes);
 }
 
 void RouteManager::synchronizeRoute(const TopologyEntry& entry)
 {
-    uint8_t scale = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::RIB_SCALE>().load();
+    uint8_t scale = process.getConfigs().get<config::Eigrp::RIB_SCALE>().load();
     if (af == types::AddressFamily::IPv4)
     {
         if (auto r = syncRoute<uint32_t>(&entry, scale); r)
-            base.broadcastRouteChanges({r});
+            process.broadcastRouteChanges({r});
     }
     else
     {
         if (auto r = syncRoute<__uint128_t>(&entry, scale); r)
-            base.broadcastRouteChanges({r});
+            process.broadcastRouteChanges({r});
     }
 }
 } // namespace routing

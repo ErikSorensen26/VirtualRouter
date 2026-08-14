@@ -15,6 +15,7 @@
 #include <interface/configs/InterfaceType.hpp>
 
 #include "bgp/BgpProcess.h"
+#include "bgp/af/ProcessAccessor.h"
 #include "bgp/BgpTypes.hpp"
 #include "bgp/session/Session.h"
 #include "bgp/session/Fsm.h"
@@ -96,8 +97,8 @@ protected:
                                                       const Path& path,
                                                       NeighborAf* nbr = nullptr)
     {
-        uint32_t pid = proc->getAttrMgr().acquire(attrs, path);
-        InboundRoute<types::IPv4Prefix> route(proc->getAttrMgr(), pid, nlri, nbr);
+        uint32_t pid = ProcessAccessor::getAttrMgr(*proc).acquire(attrs, path);
+        InboundRoute<types::IPv4Prefix> route(ProcessAccessor::getAttrMgr(*proc), pid, nlri, nbr);
         return route;
     }
 
@@ -108,6 +109,37 @@ protected:
         p.nextHop = nextHop;
         return p;
     }
+
+    // Wrappers around private BgpProcess/Neighbor/NeighborAf members.
+    // (Friendship does not extend to TEST_F-generated subclasses, so tests
+    // must go through these fixture methods instead of touching privates directly.)
+
+    template <AfiSafi AF>
+    AddressFamily<AF>& enableAf()
+    {
+        return const_cast<AddressFamily<AF>&>(proc->enableAddressFamily<AF>());
+    }
+
+    void startPassive(Neighbor& nbr) { startPassiveOn(*proc, nbr); }
+    static void startPassiveOn(BgpProcess& p, Neighbor& nbr) { p.startPassiveSession(nbr); }
+
+    Session* findSession(const types::IPAddress& addr) { return findSessionOn(*proc, addr); }
+    static Session* findSessionOn(BgpProcess& p, const types::IPAddress& addr) { return p.findSession(addr); }
+
+    void addAfNeighbor(Neighbor& nbr, AfiSafi& afi)
+    {
+        // The process AF must exist before a per-neighbor AF can reference it.
+        if (afi == ExampleNlri::afi && !proc->findAddressFamily(afi))
+            proc->enableAddressFamily<ExampleNlri::afi>();
+        nbr.addAfNeighbor(afi);
+    }
+    void delAfNeighbor(Neighbor& nbr, AfiSafi& afi) { nbr.delAfNeighbor(afi); }
+    void buildAttributeRanges(Neighbor& nbr) { nbr.buildAttributeRanges(); }
+    static uint32_t getRid(const Neighbor& nbr) { return nbr.rid; }
+    static bool isDynamic(const Neighbor& nbr) { return nbr.dynamic; }
+    static NeighborAfConfigs& getAfConfigs(NeighborAf& nbrAf) { return nbrAf.configs; }
+    static PeerTemplateTable& getPeerTemplates(NeighborTable& ntable) { return ntable.peerTemplates; }
+    static NeighborConfigs& getMutableConfigs(Neighbor& nbr) { return nbr.configs; }
 };
 
 namespace
@@ -296,7 +328,7 @@ TEST_F(Internal_BgpTest, AttrMgr_Clear_ResetsPools)
 
 TEST_F(Internal_BgpTest, InboundRoute_CopyAndMove_RetainAndRelease)
 {
-    AttributeManager& mgr = proc->getAttrMgr();
+    AttributeManager& mgr = ProcessAccessor::getAttrMgr(*proc);
     Attributes attrs;
     attrs.origin = BGP_ORIGIN_IGP;
     Path path = makePath(mkV4(0x0A000001));
@@ -319,7 +351,7 @@ TEST_F(Internal_BgpTest, InboundRoute_CopyAndMove_RetainAndRelease)
 
 TEST_F(Internal_BgpTest, InboundRouteBase_LocallyOriginated)
 {
-    AttributeManager& mgr = proc->getAttrMgr();
+    AttributeManager& mgr = ProcessAccessor::getAttrMgr(*proc);
     Attributes attrs;
     Path path = makePath(mkV4(0x0A000001));
     uint32_t id = mgr.acquire(attrs, path);
@@ -429,7 +461,7 @@ TEST_F(Internal_BgpTest, FirstAs_EmptyPathReturnsZero)
 TEST_F(Internal_BgpTest, PerPeerInTable_InsertLookupRemove)
 {
     PerPeerInTable<types::IPv4Prefix> table;
-    AttributeManager& mgr = proc->getAttrMgr();
+    AttributeManager& mgr = ProcessAccessor::getAttrMgr(*proc);
 
     types::IPv4Prefix prefix = mkPrefix(0x0A000000, 24);
     NlriPath<types::IPv4Prefix> key{prefix, 0};
@@ -456,7 +488,7 @@ TEST_F(Internal_BgpTest, PerPeerInTable_InsertLookupRemove)
 
 TEST_F(Internal_BgpTest, PerPeerInTable_MultiplePeersSamePrefix)
 {
-    AttributeManager& mgr = proc->getAttrMgr();
+    AttributeManager& mgr = ProcessAccessor::getAttrMgr(*proc);
     types::IPv4Prefix prefix = mkPrefix(0xAC100000, 16);
 
     PerPeerInTable<types::IPv4Prefix> peerA, peerB;
@@ -545,8 +577,9 @@ TEST_F(Internal_BgpTest, BgpTx_BuildOpen_TwoByteAs_RoundTripFields)
     ASSERT_TRUE(pair.pumpUntilAccepted());
 
     types::IPAddress peerAddr = mkV4(0x0A000002);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peerAddr);
-    Session sess(*nbr);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peerAddr);
+    Session sess(*nbr, *proc);
+    sess.initialize();
 
     BgpTx::buildOpen(pair.connA, sess);
     flushAndPump(pair, pair.connA);
@@ -587,8 +620,9 @@ TEST_F(Internal_BgpTest, BgpTx_BuildOpen_FourByteAs_UsesAsTrans)
     ASSERT_TRUE(pair.pumpUntilAccepted());
 
     types::IPAddress peerAddr = mkV4(0x0A000003);
-    Neighbor* nbr = proc2.getNtable().createNeighbor(peerAddr);
-    Session sess(*nbr);
+    Neighbor* nbr = ProcessAccessor::getNtable(proc2).createNeighbor(peerAddr);
+    Session sess(*nbr, proc2);
+    sess.initialize();
 
     BgpTx::buildOpen(pair.connA, sess);
     flushAndPump(pair, pair.connA);
@@ -640,8 +674,9 @@ TEST_F(Internal_BgpTest, BgpTx_BuildOpen_CapabilitiesIncludeRouteRefreshAndExtMs
     ASSERT_TRUE(pair.pumpUntilAccepted());
 
     types::IPAddress peerAddr = mkV4(0x0A000004);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peerAddr);
-    Session sess(*nbr);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peerAddr);
+    Session sess(*nbr, *proc);
+    sess.initialize();
 
     BgpTx::buildOpen(pair.connA, sess);
     flushAndPump(pair, pair.connA);
@@ -682,16 +717,17 @@ TEST_F(Internal_BgpTest, BgpTx_BuildOpen_MultiprotocolCapability_AfterEnableAf)
     AfiSafi afiSafi{BGP_AFI_IPV4, BGP_SAFI_UNICAST};
 
     types::IPAddress peerAddr = mkV4(0x0A000005);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peerAddr);
-    nbr->addAfNeighbor(afiSafi);
-    proc->enableAddressFamily<ExampleNlri::afi>();
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peerAddr);
+    addAfNeighbor(*nbr, afiSafi);
+    enableAf<ExampleNlri::afi>();
 
     Tcp tcpA(*vrf);
     Tcp tcpB(*vrf);
     TcpLoopbackPair pair(*vrf, tcpA, tcpB, 17903);
     ASSERT_TRUE(pair.pumpUntilAccepted());
 
-    Session sess(*nbr);
+    Session sess(*nbr, *proc);
+    sess.initialize();
     BgpTx::buildOpen(pair.connA, sess);
     flushAndPump(pair, pair.connA);
 
@@ -814,8 +850,8 @@ TEST_F(Internal_BgpTest, BgpTx_BuildUpdate_WithdrawnOnly_LegacyIPv4)
     ASSERT_TRUE(pair.pumpUntilAccepted());
 
     types::IPAddress peerAddr = mkV4(0x0A000006);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peerAddr);
-    Session sess(*nbr);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peerAddr);
+    Session sess(*nbr, *proc);
 
     BuildUpdate<types::IPv4Prefix> upd;
     upd.withdrawn.push_back({mkPrefix(0xC0A80000, 24), 0}); // 192.168.0.0/24
@@ -850,8 +886,8 @@ TEST_F(Internal_BgpTest, BgpTx_BuildUpdate_FullAttributeSet_LegacyIPv4)
     ASSERT_TRUE(pair.pumpUntilAccepted());
 
     types::IPAddress peerAddr = mkV4(0x0A000007);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peerAddr);
-    Session sess(*nbr);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peerAddr);
+    Session sess(*nbr, *proc);
 
     BuildUpdate<types::IPv4Prefix> upd;
     BuildUpdate<types::IPv4Prefix>::Announcement ann;
@@ -945,8 +981,8 @@ TEST_F(Internal_BgpTest, BgpTx_BuildUpdate_AsSetAndConfedSegments)
     ASSERT_TRUE(pair.pumpUntilAccepted());
 
     types::IPAddress peerAddr = mkV4(0x0A000008);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peerAddr);
-    Session sess(*nbr);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peerAddr);
+    Session sess(*nbr, *proc);
 
     BuildUpdate<types::IPv4Prefix> upd;
     BuildUpdate<types::IPv4Prefix>::Announcement ann;
@@ -1004,8 +1040,8 @@ TEST_F(Internal_BgpTest, BgpTx_BuildUpdate_AggregatorTwoByteAs)
     ASSERT_TRUE(pair.pumpUntilAccepted());
 
     types::IPAddress peerAddr = mkV4(0x0A000009);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peerAddr);
-    Session sess(*nbr);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peerAddr);
+    Session sess(*nbr, *proc);
 
     BuildUpdate<types::IPv4Prefix> upd;
     BuildUpdate<types::IPv4Prefix>::Announcement ann;
@@ -1054,8 +1090,8 @@ TEST_F(Internal_BgpTest, BgpTx_BuildUpdate_AggregatorTwoByteAs)
 TEST_F(Internal_BgpTest, BgpRx_ProcessUpdate_DecodesWithdrawnAndAnnounced)
 {
     types::IPAddress peerAddr = mkV4(0x0A00000A);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peerAddr);
-    Session sess(*nbr);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peerAddr);
+    Session sess(*nbr, *proc);
 
     IncomingUpdate uinfo;
     uinfo.afi = {BGP_AFI_IPV4, BGP_SAFI_UNICAST};
@@ -1087,8 +1123,8 @@ TEST_F(Internal_BgpTest, BgpRx_ProcessUpdate_AddPathDecodesPathId)
     AfiSafi afiSafi{BGP_AFI_IPV4, BGP_SAFI_UNICAST};
 
     types::IPAddress peerAddr = mkV4(0x0A00000B);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peerAddr);
-    Session sess(*nbr);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peerAddr);
+    Session sess(*nbr, *proc);
 
     // Manually mark add-path as negotiated for this AFI/SAFI.
     sess.getNegotiated().addpath = true;
@@ -1115,8 +1151,8 @@ TEST_F(Internal_BgpTest, BgpRx_ProcessUpdate_AddPathDecodesPathId)
 TEST_F(Internal_BgpTest, BgpRx_ProcessUpdate_MalformedWithdrawnTruncated)
 {
     types::IPAddress peerAddr = mkV4(0x0A00000C);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peerAddr);
-    Session sess(*nbr);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peerAddr);
+    Session sess(*nbr, *proc);
 
     IncomingUpdate uinfo;
     uinfo.afi = {BGP_AFI_IPV4, BGP_SAFI_UNICAST};
@@ -1138,8 +1174,8 @@ TEST_F(Internal_BgpTest, BgpRx_ProcessUpdate_AddPathTruncatedPathId)
     AfiSafi afiSafi{BGP_AFI_IPV4, BGP_SAFI_UNICAST};
 
     types::IPAddress peerAddr = mkV4(0x0A00000D);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peerAddr);
-    Session sess(*nbr);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peerAddr);
+    Session sess(*nbr, *proc);
 
     sess.getNegotiated().addpath = true;
     sess.getNegotiated().addPathFamilies.push_back({afiSafi, BGP_ADD_PATH_BOTH});
@@ -1169,9 +1205,8 @@ TEST_F(Internal_BgpTest, BgpTx_BuildRouteRefresh_BasicNormal)
     ASSERT_TRUE(pair.pumpUntilAccepted());
 
     types::IPAddress peerAddr = mkV4(0x0A00000E);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peerAddr);
-    nbr->addAfNeighbor(afiSafi);
-    Session sess(*nbr);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peerAddr);
+    Session sess(*nbr, *proc);
 
     BgpTx::buildRouteRefresh(pair.connA, sess, afiSafi, RouteRefreshReason::Normal);
     flushAndPump(pair, pair.connA);
@@ -1196,9 +1231,9 @@ TEST_F(Internal_BgpTest, BgpTx_BuildRouteRefresh_BorrDowngradedWithoutEnhancedRR
     ASSERT_TRUE(pair.pumpUntilAccepted());
 
     types::IPAddress peerAddr = mkV4(0x0A00000F);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peerAddr);
-    nbr->addAfNeighbor(afiSafi);
-    Session sess(*nbr);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peerAddr);
+    addAfNeighbor(*nbr, afiSafi);
+    Session sess(*nbr, *proc);
 
     // enhancedRR not negotiated -> BORR/EORR must be downgraded to Normal.
     ASSERT_FALSE(sess.getNegotiated().enhancedRR);
@@ -1221,9 +1256,9 @@ TEST_F(Internal_BgpTest, BgpTx_BuildRouteRefresh_EorrWithEnhancedRR)
     ASSERT_TRUE(pair.pumpUntilAccepted());
 
     types::IPAddress peerAddr = mkV4(0x0A140001);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peerAddr);
-    nbr->addAfNeighbor(afiSafi);
-    Session sess(*nbr);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peerAddr);
+    addAfNeighbor(*nbr, afiSafi);
+    Session sess(*nbr, *proc);
 
     sess.getNegotiated().enhancedRR = true;
 
@@ -1334,8 +1369,8 @@ TEST_F(Internal_BgpTest, BestPath_Step3_LocallyOriginatedPreferred)
     types::IPAddress nbrB = mkV4(0x0A000002);
 
     AfiSafi afiSafi{BGP_AFI_IPV4, BGP_SAFI_UNICAST};
-    Neighbor* peer = proc->getNtable().createNeighbor(nbrB);
-    peer->addAfNeighbor(afiSafi);
+    Neighbor* peer = ProcessAccessor::getNtable(*proc).createNeighbor(nbrB);
+    addAfNeighbor(*peer, afiSafi);
 
     Attributes attrs;
     attrs.origin = BGP_ORIGIN_IGP;
@@ -1776,59 +1811,57 @@ TEST_F(Internal_BgpTest, NeighborTable_CreateNeighbor_LookupByAddress)
 {
     types::IPAddress nbrAddr = mkV4(0x0A000001);
 
-    Neighbor* created = proc->getNtable().createNeighbor(nbrAddr);
+    Neighbor* created = ProcessAccessor::getNtable(*proc).createNeighbor(nbrAddr);
     ASSERT_NE(created, nullptr);
 
-    Neighbor* found = proc->getNtable().lookup(nbrAddr);
+    Neighbor* found = ProcessAccessor::getNtable(*proc).lookup(nbrAddr);
     EXPECT_EQ(found, created);
 
     // Creating again returns the same instance.
-    Neighbor* again = proc->getNtable().createNeighbor(nbrAddr);
+    Neighbor* again = ProcessAccessor::getNtable(*proc).createNeighbor(nbrAddr);
     EXPECT_EQ(again, created);
 
     types::IPAddress other = mkV4(0x0A000002);
-    EXPECT_EQ(proc->getNtable().lookup(other), nullptr);
+    EXPECT_EQ(ProcessAccessor::getNtable(*proc).lookup(other), nullptr);
 }
 
 TEST_F(Internal_BgpTest, NeighborTable_ActivateDeactivatePeer_LookupByRouterId)
 {
     types::IPAddress nbrAddr = mkV4(0x0A000001);
-    Neighbor* nbr = proc->getNtable().createNeighbor(nbrAddr);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(nbrAddr);
     ASSERT_NE(nbr, nullptr);
 
     constexpr uint32_t kPeerRid = 0x0A000001;
+    Session sess(*nbr, *proc);
+    sess.setPeerRid(kPeerRid);
 
     // Before activation, lookup by router-ID fails.
-    EXPECT_EQ(proc->getNtable().lookup(kPeerRid), nullptr);
+    EXPECT_EQ(ProcessAccessor::getNtable(*proc).lookup(kPeerRid), nullptr);
 
-    EXPECT_TRUE(proc->getNtable().activatePeer(nbrAddr, kPeerRid));
-    EXPECT_EQ(nbr->rid, kPeerRid);
+    EXPECT_TRUE(ProcessAccessor::getNtable(*proc).activatePeer(kPeerRid, sess));
+    EXPECT_EQ(getRid(*nbr), kPeerRid);
 
-    Neighbor* byRid = proc->getNtable().lookup(kPeerRid);
+    Neighbor* byRid = ProcessAccessor::getNtable(*proc).lookup(kPeerRid);
     EXPECT_EQ(byRid, nbr);
 
     // Deactivating clears the router-ID index and resets nbr->rid.
-    EXPECT_TRUE(proc->getNtable().deactivatePeer(kPeerRid));
-    EXPECT_EQ(nbr->rid, 0u);
-    EXPECT_EQ(proc->getNtable().lookup(kPeerRid), nullptr);
+    EXPECT_TRUE(ProcessAccessor::getNtable(*proc).deactivatePeer(sess));
+    EXPECT_EQ(getRid(*nbr), 0u);
+    EXPECT_EQ(ProcessAccessor::getNtable(*proc).lookup(kPeerRid), nullptr);
 
-    // Deactivating an unknown router-ID fails.
-    EXPECT_FALSE(proc->getNtable().deactivatePeer(kPeerRid));
-
-    // Activating an unknown neighbor address fails.
-    types::IPAddress unknown = mkV4(0x0A0000FF);
-    EXPECT_FALSE(proc->getNtable().activatePeer(unknown, 0x0B000001));
+    // Deactivating a session with no active router-ID index entry fails.
+    EXPECT_FALSE(ProcessAccessor::getNtable(*proc).deactivatePeer(sess));
 }
 
 TEST_F(Internal_BgpTest, NeighborTable_CreateDynamicNeighbor_InheritsPeerGroupConfig)
 {
-    PeerGroup& pg = proc->getNtable().createPeerGroup("DYNPEERS");
+    PeerGroup& pg = getPeerTemplates(ProcessAccessor::getNtable(*proc)).createPeerGroup("DYNPEERS");
 
     // Configure REMOTE_AS on the peer-group's session registry.
     pg.getSessionConfigs().get<config::BgpNeighborSession::REMOTE_AS>().set(65099);
 
     types::IPAddress dynAddr = mkV4(0x0A000010);
-    Neighbor* dyn = proc->getNtable().createDynamicNeighbor(dynAddr, "DYNPEERS");
+    Neighbor* dyn = ProcessAccessor::getNtable(*proc).createDynamicNeighbor(dynAddr, "DYNPEERS");
     ASSERT_NE(dyn, nullptr);
     EXPECT_EQ(dyn->getConfigs().getPeerGroup(), &pg);
 
@@ -1837,24 +1870,24 @@ TEST_F(Internal_BgpTest, NeighborTable_CreateDynamicNeighbor_InheritsPeerGroupCo
     ASSERT_TRUE(remAs.hasValue());
     EXPECT_EQ(remAs.load(), 65099u);
 
-    Neighbor* again = proc->getNtable().createDynamicNeighbor(dynAddr, "DYNPEERS");
+    Neighbor* again = ProcessAccessor::getNtable(*proc).createDynamicNeighbor(dynAddr, "DYNPEERS");
     EXPECT_EQ(again, dyn);
 
     // A statically-configured neighbor at the same address cannot be re-created
     // as dynamic: createNeighbor() first makes it non-dynamic.
     types::IPAddress staticAddr = mkV4(0x0A000020);
-    Neighbor* stat = proc->getNtable().createNeighbor(staticAddr);
+    Neighbor* stat = ProcessAccessor::getNtable(*proc).createNeighbor(staticAddr);
     ASSERT_NE(stat, nullptr);
-    EXPECT_FALSE(stat->dynamic);
-    EXPECT_EQ(proc->getNtable().createDynamicNeighbor(staticAddr, "DYNPEERS"), nullptr);
+    EXPECT_FALSE(isDynamic(*stat));
+    EXPECT_EQ(ProcessAccessor::getNtable(*proc).createDynamicNeighbor(staticAddr, "DYNPEERS"), nullptr);
 }
 
 TEST_F(Internal_BgpTest, NeighborTable_PeerGroupNotFound_DynamicNeighborHasNoInheritance)
 {
     types::IPAddress dynAddr = mkV4(0x0A000011);
-    Neighbor* dyn = proc->getNtable().createDynamicNeighbor(dynAddr, "NOSUCHGROUP");
+    Neighbor* dyn = ProcessAccessor::getNtable(*proc).createDynamicNeighbor(dynAddr, "NOSUCHGROUP");
     ASSERT_NE(dyn, nullptr);
-    EXPECT_TRUE(dyn->dynamic);
+    EXPECT_TRUE(isDynamic(*dyn));
     EXPECT_EQ(dyn->getConfigs().getPeerGroup(), nullptr);
 
     // No peer group, so REMOTE_AS is unset.
@@ -1865,23 +1898,23 @@ TEST_F(Internal_BgpTest, NeighborTable_PeerGroupNotFound_DynamicNeighborHasNoInh
 TEST_F(Internal_BgpTest, Neighbor_AddDelGetAfNeighbor)
 {
     types::IPAddress nbrAddr = mkV4(0x0A000001);
-    Neighbor* nbr = proc->getNtable().createNeighbor(nbrAddr);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(nbrAddr);
     ASSERT_NE(nbr, nullptr);
 
     AfiSafi afiSafi{BGP_AFI_IPV4, BGP_SAFI_UNICAST};
 
-    nbr->addAfNeighbor(afiSafi);
+    addAfNeighbor(*nbr, afiSafi);
     NeighborAf& af = nbr->getAfNeighbor(afiSafi);
     EXPECT_EQ(af.family.afi, BGP_AFI_IPV4);
     EXPECT_EQ(af.family.safi, BGP_SAFI_UNICAST);
-    EXPECT_EQ(&af.globalNbr(), nbr);
+    EXPECT_EQ(&af.getParent(), nbr);
 
     // Re-adding the same AF is idempotent (try_emplace).
-    nbr->addAfNeighbor(afiSafi);
+    addAfNeighbor(*nbr, afiSafi);
     EXPECT_EQ(&nbr->getAfNeighbor(afiSafi), &af);
 
-    nbr->delAfNeighbor(afiSafi);
-    nbr->addAfNeighbor(afiSafi);
+    delAfNeighbor(*nbr, afiSafi);
+    addAfNeighbor(*nbr, afiSafi);
     NeighborAf& af2 = nbr->getAfNeighbor(afiSafi);
     EXPECT_NE(&af2, &af);
 }
@@ -1889,7 +1922,7 @@ TEST_F(Internal_BgpTest, Neighbor_AddDelGetAfNeighbor)
 TEST_F(Internal_BgpTest, Neighbor_IsEbgp_DifferentAsWithoutConfederation)
 {
     types::IPAddress nbrAddr = mkV4(0x0A000001);
-    Neighbor* nbr = proc->getNtable().createNeighbor(nbrAddr);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(nbrAddr);
     ASSERT_NE(nbr, nullptr);
 
     // No REMOTE_AS configured -> isEbgp()/isConfedEbgp() both false.
@@ -1898,11 +1931,13 @@ TEST_F(Internal_BgpTest, Neighbor_IsEbgp_DifferentAsWithoutConfederation)
 
     // REMOTE_AS == local AS -> iBGP, not eBGP.
     nbr->getConfigs().get<config::BgpNeighborSession::REMOTE_AS>().set(kLocalAs);
+    ProcessAccessor::getScheduler(*proc).waitIdle();
     EXPECT_FALSE(nbr->isEbgp());
     EXPECT_FALSE(nbr->isConfedEbgp());
 
     // REMOTE_AS != local AS, not in confederation peer list -> eBGP.
     nbr->getConfigs().get<config::BgpNeighborSession::REMOTE_AS>().set(65099);
+    ProcessAccessor::getScheduler(*proc).waitIdle();
     EXPECT_TRUE(nbr->isEbgp());
     EXPECT_FALSE(nbr->isConfedEbgp());
 }
@@ -1910,18 +1945,19 @@ TEST_F(Internal_BgpTest, Neighbor_IsEbgp_DifferentAsWithoutConfederation)
 TEST_F(Internal_BgpTest, Neighbor_IsConfedEbgp_RemoteAsInConfederationPeers)
 {
     types::IPAddress nbrAddr = mkV4(0x0A000002);
-    Neighbor* nbr = proc->getNtable().createNeighbor(nbrAddr);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(nbrAddr);
     ASSERT_NE(nbr, nullptr);
 
     constexpr uint32_t kConfedMemberAs = 65050;
     nbr->getConfigs().get<config::BgpNeighborSession::REMOTE_AS>().set(kConfedMemberAs);
 
     // Add kConfedMemberAs to BGP_CONFEDERATION_PEERS.
-    proc->getConfigs().get<config::Bgp::BGP_CONFEDERATION_PEERS>().withWrite(
+    ProcessAccessor::getConfigs(*proc).get<config::Bgp::BGP_CONFEDERATION_PEERS>().withWrite(
         [&](std::vector<uint32_t>& peers) {
             peers.push_back(kConfedMemberAs);
             return true;
         });
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     // REMOTE_AS is a confederation member (and != local AS) -> confed-eBGP, not plain eBGP.
     EXPECT_FALSE(nbr->isEbgp());
@@ -1931,7 +1967,7 @@ TEST_F(Internal_BgpTest, Neighbor_IsConfedEbgp_RemoteAsInConfederationPeers)
 TEST_F(Internal_BgpTest, Neighbor_BuildAttributeRanges_DiscardAndWithdraw)
 {
     types::IPAddress nbrAddr = mkV4(0x0A000003);
-    Neighbor* nbr = proc->getNtable().createNeighbor(nbrAddr);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(nbrAddr);
     ASSERT_NE(nbr, nullptr);
 
     nbr->getConfigs().get<config::BgpNeighborSession::PATH_ATTRIBUTE_DISCARD>().withWrite(
@@ -1944,9 +1980,9 @@ TEST_F(Internal_BgpTest, Neighbor_BuildAttributeRanges_DiscardAndWithdraw)
             ranges.push_back({200, 201}); // treat-as-withdraw
             return true;
         });
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
-    nbr->buildAttributeRanges();
+    buildAttributeRanges(*nbr);
     const auto& ranges = nbr->getAttrRanges();
 
     for (uint16_t i = 10; i <= 12; ++i)
@@ -1974,8 +2010,8 @@ TEST_F(Internal_BgpTest, Neighbor_BuildAttributeRanges_DiscardAndWithdraw)
             ranges.clear();
             return true;
         });
-    proc->getScheduler().waitIdle();
-    nbr->buildAttributeRanges();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
+    buildAttributeRanges(*nbr);
     const auto& cleared = nbr->getAttrRanges();
     for (uint16_t i = 10; i <= 12; ++i)
         EXPECT_FALSE(cleared.discard.test(i));
@@ -1985,14 +2021,14 @@ TEST_F(Internal_BgpTest, Neighbor_BuildAttributeRanges_DiscardAndWithdraw)
 
 TEST_F(Internal_BgpTest, PeerGroup_SessionConfigInheritance_NeighborOverridesGroup)
 {
-    PeerGroup& pg = proc->getNtable().createPeerGroup("GRP1");
+    PeerGroup& pg = getPeerTemplates(ProcessAccessor::getNtable(*proc)).createPeerGroup("GRP1");
     pg.getSessionConfigs().get<config::BgpNeighborSession::REMOTE_AS>().set(65111);
 
     types::IPAddress nbrAddr = mkV4(0x0A000004);
-    Neighbor* nbr = proc->getNtable().createNeighbor(nbrAddr);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(nbrAddr);
     ASSERT_NE(nbr, nullptr);
 
-    ASSERT_TRUE(nbr->getConfigs().setPeerGroup(&pg));
+    ASSERT_TRUE(getMutableConfigs(*nbr).setPeerGroup(&pg));
 
     // Without a per-neighbor override, REMOTE_AS falls through to the group's value.
     {
@@ -2017,7 +2053,7 @@ TEST_F(Internal_BgpTest, PeerGroup_SessionConfigInheritance_NeighborOverridesGro
 
 TEST_F(Internal_BgpTest, PeerGroup_AfConfig_PeerOwnedFieldsReadFromGroup)
 {
-    PeerGroup& pg = proc->getNtable().createPeerGroup("GRP2");
+    PeerGroup& pg = getPeerTemplates(ProcessAccessor::getNtable(*proc)).createPeerGroup("GRP2");
     AfiSafi afiSafi{BGP_AFI_IPV4, BGP_SAFI_UNICAST};
 
     // NEXT_HOP_SELF is in peerOwnedTable, so it is always sourced from the
@@ -2027,36 +2063,36 @@ TEST_F(Internal_BgpTest, PeerGroup_AfConfig_PeerOwnedFieldsReadFromGroup)
     groupAf->get<config::BgpNeighbor::NEXT_HOP_SELF>().set(true);
 
     types::IPAddress nbrAddr = mkV4(0x0A000005);
-    Neighbor* nbr = proc->getNtable().createNeighbor(nbrAddr);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(nbrAddr);
     ASSERT_NE(nbr, nullptr);
-    nbr->addAfNeighbor(afiSafi);
+    addAfNeighbor(*nbr, afiSafi);
 
     NeighborAf& af = nbr->getAfNeighbor(afiSafi);
-    ASSERT_TRUE(af.getConfigs().setPeerGroup(&pg));
+    ASSERT_TRUE(getAfConfigs(af).setPeerGroup(&pg));
 
-    EXPECT_TRUE(af.getConfigs().get<config::BgpNeighbor::NEXT_HOP_SELF>().load());
+    EXPECT_TRUE(getAfConfigs(af).get<config::BgpNeighbor::NEXT_HOP_SELF>().load());
 
     // Changing the group's value is reflected immediately for the peer-owned field.
     groupAf->get<config::BgpNeighbor::NEXT_HOP_SELF>().set(false);
-    EXPECT_FALSE(af.getConfigs().get<config::BgpNeighbor::NEXT_HOP_SELF>().load());
+    EXPECT_FALSE(getAfConfigs(af).get<config::BgpNeighbor::NEXT_HOP_SELF>().load());
 }
 
 TEST_F(Internal_BgpTest, PeerSessionTemplate_InheritancePrecedence_OverPeerGroup)
 {
-    PeerGroup& pg = proc->getNtable().createPeerGroup("GRP3");
+    PeerGroup& pg = getPeerTemplates(ProcessAccessor::getNtable(*proc)).createPeerGroup("GRP3");
     pg.getSessionConfigs().get<config::BgpNeighborSession::REMOTE_AS>().set(65300);
 
-    PeerSessionTemplate& tmpl = proc->getNtable().createPeerSessionTemplate("SESSTMPL");
+    PeerSessionTemplate& tmpl = getPeerTemplates(ProcessAccessor::getNtable(*proc)).createPeerSessionTemplate("SESSTMPL");
     tmpl.getConfigs().get<config::BgpNeighborSession::REMOTE_AS>().set(65400);
 
     types::IPAddress nbrAddr = mkV4(0x0A000006);
-    Neighbor* nbr = proc->getNtable().createNeighbor(nbrAddr);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(nbrAddr);
     ASSERT_NE(nbr, nullptr);
 
     // setPeerGroup then setPeerSessionTemplate should fail (mutually exclusive),
     // per NeighborConfigs::setPeerSessionTemplate's "peerGroup already set" guard.
-    ASSERT_TRUE(nbr->getConfigs().setPeerGroup(&pg));
-    EXPECT_FALSE(nbr->getConfigs().setPeerSessionTemplate(&tmpl));
+    ASSERT_TRUE(getMutableConfigs(*nbr).setPeerGroup(&pg));
+    EXPECT_FALSE(getMutableConfigs(*nbr).setPeerSessionTemplate(&tmpl));
 
     // Group value still wins since the template attach was rejected.
     auto remAs = nbr->getConfigs().get<config::BgpNeighborSession::REMOTE_AS>();
@@ -2112,13 +2148,13 @@ TEST_F(Internal_BgpTest, Collision_NotificationCode_IsCeaseCollisionResolution)
 TEST_F(Internal_BgpTest, Fsm_IdleToActive_OnManualStartPassiveTcp)
 {
     types::IPAddress peer = mkV4(0x0A000002); // 10.0.0.2
-    Neighbor* nbr = proc->getNtable().createNeighbor(peer);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peer);
     ASSERT_NE(nbr, nullptr);
 
-    proc->startPassiveSession(*nbr);
-    proc->getScheduler().waitIdle();
+    startPassive(*nbr);
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
-    Session* session = proc->findSession(peer);
+    Session* session = findSession(peer);
     ASSERT_NE(session, nullptr);
     EXPECT_EQ(session->getFsmState(), FsmState::ACTIVE);
     EXPECT_FALSE(session->established());
@@ -2127,19 +2163,19 @@ TEST_F(Internal_BgpTest, Fsm_IdleToActive_OnManualStartPassiveTcp)
 TEST_F(Internal_BgpTest, Fsm_ActiveToOpenSent_OnTcpCrAcked)
 {
     types::IPAddress peer = mkV4(0x0A000003);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peer);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peer);
     ASSERT_NE(nbr, nullptr);
 
-    proc->startPassiveSession(*nbr);
-    proc->getScheduler().waitIdle();
+    startPassive(*nbr);
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
-    Session* session = proc->findSession(peer);
+    Session* session = findSession(peer);
     ASSERT_NE(session, nullptr);
     ASSERT_EQ(session->getFsmState(), FsmState::ACTIVE);
 
     // TCP_CR_ACKED from ACTIVE -> sendOpen() (no-op, no primaryConn) -> OPEN_SENT.
     session->postEvent(FsmEvent::TCP_CR_ACKED);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     EXPECT_EQ(session->getFsmState(), FsmState::OPEN_SENT);
 }
@@ -2147,22 +2183,22 @@ TEST_F(Internal_BgpTest, Fsm_ActiveToOpenSent_OnTcpCrAcked)
 TEST_F(Internal_BgpTest, Fsm_OpenSentToOpenConfirm_NegotiatesHoldAndKeepaliveFromPeerOffer)
 {
     types::IPAddress peer = mkV4(0x0A000004);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peer);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peer);
     ASSERT_NE(nbr, nullptr);
 
-    proc->startPassiveSession(*nbr);
-    proc->getScheduler().waitIdle();
-    Session* session = proc->findSession(peer);
+    startPassive(*nbr);
+    ProcessAccessor::getScheduler(*proc).waitIdle();
+    Session* session = findSession(peer);
     ASSERT_NE(session, nullptr);
 
     session->postEvent(FsmEvent::TCP_CR_ACKED);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
     ASSERT_EQ(session->getFsmState(), FsmState::OPEN_SENT);
 
     session->holdTime = 90;
     session->setPeerRid(0x01020304);
     session->postEvent(FsmEvent::BGP_OPEN);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     EXPECT_EQ(session->getFsmState(), FsmState::OPEN_CONFIRMED);
     EXPECT_EQ(session->holdTime, 90);
@@ -2173,21 +2209,21 @@ TEST_F(Internal_BgpTest, Fsm_OpenSentToOpenConfirm_NegotiatesHoldAndKeepaliveFro
 TEST_F(Internal_BgpTest, Fsm_OpenSentToOpenConfirm_KeepaliveDerivedFromHoldThirdWhenSmaller)
 {
     types::IPAddress peer = mkV4(0x0A000005);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peer);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peer);
     ASSERT_NE(nbr, nullptr);
 
-    proc->startPassiveSession(*nbr);
-    proc->getScheduler().waitIdle();
-    Session* session = proc->findSession(peer);
+    startPassive(*nbr);
+    ProcessAccessor::getScheduler(*proc).waitIdle();
+    Session* session = findSession(peer);
     ASSERT_NE(session, nullptr);
 
     session->postEvent(FsmEvent::TCP_CR_ACKED);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
     ASSERT_EQ(session->getFsmState(), FsmState::OPEN_SENT);
 
     session->holdTime = 30;
     session->postEvent(FsmEvent::BGP_OPEN);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     EXPECT_EQ(session->getFsmState(), FsmState::OPEN_CONFIRMED);
     EXPECT_EQ(session->holdTime, 30);
@@ -2197,23 +2233,23 @@ TEST_F(Internal_BgpTest, Fsm_OpenSentToOpenConfirm_KeepaliveDerivedFromHoldThird
 TEST_F(Internal_BgpTest, Fsm_OpenSentToOpenConfirm_ZeroHoldTimeDisablesTimers)
 {
     types::IPAddress peer = mkV4(0x0A000006);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peer);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peer);
     ASSERT_NE(nbr, nullptr);
 
-    proc->startPassiveSession(*nbr);
-    proc->getScheduler().waitIdle();
-    Session* session = proc->findSession(peer);
+    startPassive(*nbr);
+    ProcessAccessor::getScheduler(*proc).waitIdle();
+    Session* session = findSession(peer);
     ASSERT_NE(session, nullptr);
 
     session->postEvent(FsmEvent::TCP_CR_ACKED);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
     ASSERT_EQ(session->getFsmState(), FsmState::OPEN_SENT);
 
     // Peer offers hold=0 (no timeout) -> negotiated min(0,180)=0 -> kaInterval=0,
     // hold/keepalive timers stopped rather than started.
     session->holdTime = 0;
     session->postEvent(FsmEvent::BGP_OPEN);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     EXPECT_EQ(session->getFsmState(), FsmState::OPEN_CONFIRMED);
     EXPECT_EQ(session->holdTime, 0);
@@ -2223,26 +2259,26 @@ TEST_F(Internal_BgpTest, Fsm_OpenSentToOpenConfirm_ZeroHoldTimeDisablesTimers)
 TEST_F(Internal_BgpTest, Fsm_OpenSent_PeerHoldBelowMinimumHoldtime_RejectsToIdle)
 {
     types::IPAddress peer = mkV4(0x0A000007);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peer);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peer);
     ASSERT_NE(nbr, nullptr);
 
     // Configure MINIMUM_HOLDTIME on this neighbor's base transport config.
     auto& baseCfg = nbr->getConfigs().get<config::BgpNeighborSession::BGP_BASE>().get();
     baseCfg.get<config::BgpTransportBase::MINIMUM_HOLDTIME>().set(60);
 
-    proc->startPassiveSession(*nbr);
-    proc->getScheduler().waitIdle();
-    Session* session = proc->findSession(peer);
+    startPassive(*nbr);
+    ProcessAccessor::getScheduler(*proc).waitIdle();
+    Session* session = findSession(peer);
     ASSERT_NE(session, nullptr);
 
     session->postEvent(FsmEvent::TCP_CR_ACKED);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
     ASSERT_EQ(session->getFsmState(), FsmState::OPEN_SENT);
 
     // Peer offers hold=30, below the configured MINIMUM_HOLDTIME=60 -> rejected.
     session->holdTime = 30;
     session->postEvent(FsmEvent::BGP_OPEN);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     EXPECT_EQ(session->getFsmState(), FsmState::IDLE);
 }
@@ -2250,24 +2286,24 @@ TEST_F(Internal_BgpTest, Fsm_OpenSent_PeerHoldBelowMinimumHoldtime_RejectsToIdle
 TEST_F(Internal_BgpTest, Fsm_OpenConfirmToEstablished_OnKeepaliveMsg)
 {
     types::IPAddress peer = mkV4(0x0A000008);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peer);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peer);
     ASSERT_NE(nbr, nullptr);
 
-    proc->startPassiveSession(*nbr);
-    proc->getScheduler().waitIdle();
-    Session* session = proc->findSession(peer);
+    startPassive(*nbr);
+    ProcessAccessor::getScheduler(*proc).waitIdle();
+    Session* session = findSession(peer);
     ASSERT_NE(session, nullptr);
 
     session->postEvent(FsmEvent::TCP_CR_ACKED);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     session->holdTime = 90;
     session->postEvent(FsmEvent::BGP_OPEN);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
     ASSERT_EQ(session->getFsmState(), FsmState::OPEN_CONFIRMED);
 
     session->postEvent(FsmEvent::KEEPALIVE_MSG);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     EXPECT_EQ(session->getFsmState(), FsmState::ESTABLISHED);
     EXPECT_TRUE(session->established());
@@ -2276,29 +2312,29 @@ TEST_F(Internal_BgpTest, Fsm_OpenConfirmToEstablished_OnKeepaliveMsg)
 TEST_F(Internal_BgpTest, Fsm_Established_HoldTimerExpiry_TearsDownToIdle)
 {
     types::IPAddress peer = mkV4(0x0A000009);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peer);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peer);
     ASSERT_NE(nbr, nullptr);
 
-    proc->startPassiveSession(*nbr);
-    proc->getScheduler().waitIdle();
-    Session* session = proc->findSession(peer);
+    startPassive(*nbr);
+    ProcessAccessor::getScheduler(*proc).waitIdle();
+    Session* session = findSession(peer);
     ASSERT_NE(session, nullptr);
 
     session->postEvent(FsmEvent::TCP_CR_ACKED);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     session->holdTime = 90;
     session->postEvent(FsmEvent::BGP_OPEN);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     session->postEvent(FsmEvent::KEEPALIVE_MSG);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
     ASSERT_EQ(session->getFsmState(), FsmState::ESTABLISHED);
 
     // HOLD_TIMER_EXPIRES -> resetToIdle(true, HOLD_TIMER_EXPIRED) -> sendNotification
     // (no-op without primaryConn), closeAllConnections (no-op), transitionTo(IDLE).
     session->postEvent(FsmEvent::HOLD_TIMER_EXPIRES);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     EXPECT_EQ(session->getFsmState(), FsmState::IDLE);
     EXPECT_FALSE(session->established());
@@ -2308,29 +2344,29 @@ TEST_F(Internal_BgpTest, Fsm_Established_HoldTimerExpiry_TearsDownToIdle)
 TEST_F(Internal_BgpTest, Fsm_Established_KeepaliveTimerExpiry_SendsKeepaliveAndRestarts)
 {
     types::IPAddress peer = mkV4(0x0A00000A);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peer);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peer);
     ASSERT_NE(nbr, nullptr);
 
-    proc->startPassiveSession(*nbr);
-    proc->getScheduler().waitIdle();
-    Session* session = proc->findSession(peer);
+    startPassive(*nbr);
+    ProcessAccessor::getScheduler(*proc).waitIdle();
+    Session* session = findSession(peer);
     ASSERT_NE(session, nullptr);
 
     session->postEvent(FsmEvent::TCP_CR_ACKED);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     session->holdTime = 90;
     session->postEvent(FsmEvent::BGP_OPEN);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     session->postEvent(FsmEvent::KEEPALIVE_MSG);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
     ASSERT_EQ(session->getFsmState(), FsmState::ESTABLISHED);
 
     // KEEPALIVE_TIMER_EXPIRES -> sendKeepalive() (no-op) + restartKeepaliveTimer();
     // stays ESTABLISHED.
     session->postEvent(FsmEvent::KEEPALIVE_TIMER_EXPIRES);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     EXPECT_EQ(session->getFsmState(), FsmState::ESTABLISHED);
 }
@@ -2338,59 +2374,59 @@ TEST_F(Internal_BgpTest, Fsm_Established_KeepaliveTimerExpiry_SendsKeepaliveAndR
 TEST_F(Internal_BgpTest, Fsm_Established_KeepaliveOrUpdateMsg_RestartsHoldTimerAndStaysUp)
 {
     types::IPAddress peer = mkV4(0x0A00000B);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peer);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peer);
     ASSERT_NE(nbr, nullptr);
 
-    proc->startPassiveSession(*nbr);
-    proc->getScheduler().waitIdle();
-    Session* session = proc->findSession(peer);
+    startPassive(*nbr);
+    ProcessAccessor::getScheduler(*proc).waitIdle();
+    Session* session = findSession(peer);
     ASSERT_NE(session, nullptr);
 
     session->postEvent(FsmEvent::TCP_CR_ACKED);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     session->holdTime = 90;
     session->postEvent(FsmEvent::BGP_OPEN);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     session->postEvent(FsmEvent::KEEPALIVE_MSG);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
     ASSERT_EQ(session->getFsmState(), FsmState::ESTABLISHED);
 
     session->postEvent(FsmEvent::UPDATE_MSG);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
     EXPECT_EQ(session->getFsmState(), FsmState::ESTABLISHED);
 
     session->postEvent(FsmEvent::KEEPALIVE_MSG);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
     EXPECT_EQ(session->getFsmState(), FsmState::ESTABLISHED);
 }
 
 TEST_F(Internal_BgpTest, Fsm_Established_MaxPrefixReached_TearsDownToIdle)
 {
     types::IPAddress peer = mkV4(0x0A00000C);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peer);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peer);
     ASSERT_NE(nbr, nullptr);
 
-    proc->startPassiveSession(*nbr);
-    proc->getScheduler().waitIdle();
-    Session* session = proc->findSession(peer);
+    startPassive(*nbr);
+    ProcessAccessor::getScheduler(*proc).waitIdle();
+    Session* session = findSession(peer);
     ASSERT_NE(session, nullptr);
 
     session->postEvent(FsmEvent::TCP_CR_ACKED);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     session->holdTime = 90;
     session->postEvent(FsmEvent::BGP_OPEN);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     session->postEvent(FsmEvent::KEEPALIVE_MSG);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
     ASSERT_EQ(session->getFsmState(), FsmState::ESTABLISHED);
 
     // MAX_PREFIX_REACHED -> resetToIdle(true, CEASE_MAX_PREFIXES) -> IDLE.
     session->postEvent(FsmEvent::MAX_PREFIX_REACHED);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     EXPECT_EQ(session->getFsmState(), FsmState::IDLE);
     EXPECT_FALSE(session->established());
@@ -2399,28 +2435,28 @@ TEST_F(Internal_BgpTest, Fsm_Established_MaxPrefixReached_TearsDownToIdle)
 TEST_F(Internal_BgpTest, Fsm_ManualStop_FromEstablished_ReturnsToIdle)
 {
     types::IPAddress peer = mkV4(0x0A00000D);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peer);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peer);
     ASSERT_NE(nbr, nullptr);
 
-    proc->startPassiveSession(*nbr);
-    proc->getScheduler().waitIdle();
-    Session* session = proc->findSession(peer);
+    startPassive(*nbr);
+    ProcessAccessor::getScheduler(*proc).waitIdle();
+    Session* session = findSession(peer);
     ASSERT_NE(session, nullptr);
 
     session->postEvent(FsmEvent::TCP_CR_ACKED);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     session->holdTime = 90;
     session->postEvent(FsmEvent::BGP_OPEN);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     session->postEvent(FsmEvent::KEEPALIVE_MSG);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
     ASSERT_EQ(session->getFsmState(), FsmState::ESTABLISHED);
 
     // MANUAL_STOP -> resetToIdle(true, CEASE_ADMIN_SHUT) -> IDLE.
     session->postEvent(FsmEvent::MANUAL_STOP);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     EXPECT_EQ(session->getFsmState(), FsmState::IDLE);
 }
@@ -2428,17 +2464,17 @@ TEST_F(Internal_BgpTest, Fsm_ManualStop_FromEstablished_ReturnsToIdle)
 TEST_F(Internal_BgpTest, Fsm_ManualStop_FromActive_ReturnsToIdleAndResetsRetryCount)
 {
     types::IPAddress peer = mkV4(0x0A00000E);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peer);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peer);
     ASSERT_NE(nbr, nullptr);
 
-    proc->startPassiveSession(*nbr);
-    proc->getScheduler().waitIdle();
-    Session* session = proc->findSession(peer);
+    startPassive(*nbr);
+    ProcessAccessor::getScheduler(*proc).waitIdle();
+    Session* session = findSession(peer);
     ASSERT_NE(session, nullptr);
     ASSERT_EQ(session->getFsmState(), FsmState::ACTIVE);
 
     session->postEvent(FsmEvent::MANUAL_STOP);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     EXPECT_EQ(session->getFsmState(), FsmState::IDLE);
     EXPECT_EQ(session->getTimers().connectionRetryCount, 0u);
@@ -2447,28 +2483,28 @@ TEST_F(Internal_BgpTest, Fsm_ManualStop_FromActive_ReturnsToIdleAndResetsRetryCo
 TEST_F(Internal_BgpTest, Session_ResolveCollision_OpenConfirm_LocalRidHigher_KeepsOutgoingSession)
 {
     types::IPAddress peer = mkV4(0x0A00000F);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peer);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peer);
     ASSERT_NE(nbr, nullptr);
 
-    proc->startPassiveSession(*nbr);
-    proc->getScheduler().waitIdle();
-    Session* session = proc->findSession(peer);
+    startPassive(*nbr);
+    ProcessAccessor::getScheduler(*proc).waitIdle();
+    Session* session = findSession(peer);
     ASSERT_NE(session, nullptr);
 
     session->postEvent(FsmEvent::TCP_CR_ACKED);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     session->holdTime = 90;
     session->setPeerRid(100); // < proc->getRouterId() == 65001
     session->postEvent(FsmEvent::BGP_OPEN);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
     ASSERT_EQ(session->getFsmState(), FsmState::OPEN_CONFIRMED);
 
     EXPECT_FALSE(session->isOutgoing());
     EXPECT_FALSE(CollisionDetector::shouldKeep(session->isOutgoing(), proc->getRouterId(), session->getPeerRid()));
 
     session->postEvent(FsmEvent::BGP_OPEN);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     EXPECT_EQ(session->getFsmState(), FsmState::IDLE);
 }
@@ -2476,28 +2512,28 @@ TEST_F(Internal_BgpTest, Session_ResolveCollision_OpenConfirm_LocalRidHigher_Kee
 TEST_F(Internal_BgpTest, Session_ResolveCollision_EqualRouterIds_AlwaysTearsDown)
 {
     types::IPAddress peer = mkV4(0x0A000010);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peer);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peer);
     ASSERT_NE(nbr, nullptr);
 
-    proc->startPassiveSession(*nbr);
-    proc->getScheduler().waitIdle();
-    Session* session = proc->findSession(peer);
+    startPassive(*nbr);
+    ProcessAccessor::getScheduler(*proc).waitIdle();
+    Session* session = findSession(peer);
     ASSERT_NE(session, nullptr);
 
     session->postEvent(FsmEvent::TCP_CR_ACKED);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     session->holdTime = 90;
     // Equal to the local router-id (AS 65001, no BGP_ROUTER_ID configured).
     session->setPeerRid(proc->getRouterId());
     session->postEvent(FsmEvent::BGP_OPEN);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
     ASSERT_EQ(session->getFsmState(), FsmState::OPEN_CONFIRMED);
 
     EXPECT_FALSE(CollisionDetector::shouldKeep(session->isOutgoing(), proc->getRouterId(), session->getPeerRid()));
 
     session->postEvent(FsmEvent::BGP_OPEN);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     EXPECT_EQ(session->getFsmState(), FsmState::IDLE);
 }
@@ -2505,29 +2541,29 @@ TEST_F(Internal_BgpTest, Session_ResolveCollision_EqualRouterIds_AlwaysTearsDown
 TEST_F(Internal_BgpTest, SessionTimers_HoldTimerExpiry_PostsHoldTimerExpiresEvent)
 {
     types::IPAddress peer = mkV4(0x0A000011);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peer);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peer);
     ASSERT_NE(nbr, nullptr);
 
-    proc->startPassiveSession(*nbr);
-    proc->getScheduler().waitIdle();
-    Session* session = proc->findSession(peer);
+    startPassive(*nbr);
+    ProcessAccessor::getScheduler(*proc).waitIdle();
+    Session* session = findSession(peer);
     ASSERT_NE(session, nullptr);
 
     session->postEvent(FsmEvent::TCP_CR_ACKED);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     session->holdTime = 90;
     session->postEvent(FsmEvent::BGP_OPEN);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     session->postEvent(FsmEvent::KEEPALIVE_MSG);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
     ASSERT_EQ(session->getFsmState(), FsmState::ESTABLISHED);
 
     session->getTimers().startHoldTimer(std::chrono::seconds(1));
 
     bool reachedIdle = waitForBgp([&]() {
-        proc->getScheduler().waitIdle();
+        ProcessAccessor::getScheduler(*proc).waitIdle();
         return session->getFsmState() == FsmState::IDLE;
     }, 3000ms);
 
@@ -2538,34 +2574,34 @@ TEST_F(Internal_BgpTest, SessionTimers_HoldTimerExpiry_PostsHoldTimerExpiresEven
 TEST_F(Internal_BgpTest, SessionTimers_CancelAll_PreventsHoldTimerFromFiring)
 {
     types::IPAddress peer = mkV4(0x0A000012);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peer);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peer);
     ASSERT_NE(nbr, nullptr);
 
-    proc->startPassiveSession(*nbr);
-    proc->getScheduler().waitIdle();
-    Session* session = proc->findSession(peer);
+    startPassive(*nbr);
+    ProcessAccessor::getScheduler(*proc).waitIdle();
+    Session* session = findSession(peer);
     ASSERT_NE(session, nullptr);
 
     session->postEvent(FsmEvent::TCP_CR_ACKED);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     session->holdTime = 90;
     session->postEvent(FsmEvent::BGP_OPEN);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     session->postEvent(FsmEvent::KEEPALIVE_MSG);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
     ASSERT_EQ(session->getFsmState(), FsmState::ESTABLISHED);
 
     // Start a longer hold timer, then immediately cancel everything. The
     // session should remain ESTABLISHED (no HOLD_TIMER_EXPIRES is posted).
     session->getTimers().startHoldTimer(std::chrono::seconds(0));
     session->getTimers().cancelAll();
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     // Give any (cancelled) timer callback a chance to fire and be dropped.
     std::this_thread::sleep_for(50ms);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     EXPECT_EQ(session->getFsmState(), FsmState::ESTABLISHED);
 }
@@ -2573,23 +2609,23 @@ TEST_F(Internal_BgpTest, SessionTimers_CancelAll_PreventsHoldTimerFromFiring)
 TEST_F(Internal_BgpTest, SessionTimers_KeepaliveTimerExpiry_KeepsSessionEstablished)
 {
     types::IPAddress peer = mkV4(0x0A000013);
-    Neighbor* nbr = proc->getNtable().createNeighbor(peer);
+    Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peer);
     ASSERT_NE(nbr, nullptr);
 
-    proc->startPassiveSession(*nbr);
-    proc->getScheduler().waitIdle();
-    Session* session = proc->findSession(peer);
+    startPassive(*nbr);
+    ProcessAccessor::getScheduler(*proc).waitIdle();
+    Session* session = findSession(peer);
     ASSERT_NE(session, nullptr);
 
     session->postEvent(FsmEvent::TCP_CR_ACKED);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     session->holdTime = 90;
     session->postEvent(FsmEvent::BGP_OPEN);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     session->postEvent(FsmEvent::KEEPALIVE_MSG);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
     ASSERT_EQ(session->getFsmState(), FsmState::ESTABLISHED);
 
     // Near-zero keepalive timer fires KEEPALIVE_TIMER_EXPIRES repeatedly via
@@ -2597,13 +2633,13 @@ TEST_F(Internal_BgpTest, SessionTimers_KeepaliveTimerExpiry_KeepsSessionEstablis
     session->getTimers().startKeepaliveTimer(std::chrono::seconds(0));
 
     std::this_thread::sleep_for(50ms);
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     EXPECT_EQ(session->getFsmState(), FsmState::ESTABLISHED);
 
     // Clean up so the self-restarting timer doesn't keep firing into teardown.
     session->getTimers().cancelAll();
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 }
 
 namespace
@@ -2695,18 +2731,18 @@ TEST_F(Internal_BgpTest, SessionEstablishment_RealLoopback_BothReachEstablishedW
     types::IPAddress addrA = mkV4(0x7F000001); // 127.0.0.1, used for both neighbor addrs
     types::IPAddress addrB = mkV4(0x7F000001);
 
-    Neighbor* nbrA = proc->getNtable().createNeighbor(addrB);
-    Neighbor* nbrB = procB.getNtable().createNeighbor(addrA);
+    Neighbor* nbrA = ProcessAccessor::getNtable(*proc).createNeighbor(addrB);
+    Neighbor* nbrB = ProcessAccessor::getNtable(procB).createNeighbor(addrA);
     ASSERT_NE(nbrA, nullptr);
     ASSERT_NE(nbrB, nullptr);
 
-    proc->startPassiveSession(*nbrA);
-    proc->getScheduler().waitIdle();
-    procB.startPassiveSession(*nbrB);
-    procB.getScheduler().waitIdle();
+    startPassive(*nbrA);
+    ProcessAccessor::getScheduler(*proc).waitIdle();
+    startPassiveOn(procB, *nbrB);
+    ProcessAccessor::getScheduler(procB).waitIdle();
 
-    Session* sessionA = proc->findSession(addrB);
-    Session* sessionB = procB.findSession(addrA);
+    Session* sessionA = findSession(addrB);
+    Session* sessionB = findSessionOn(procB, addrA);
     ASSERT_NE(sessionA, nullptr);
     ASSERT_NE(sessionB, nullptr);
     ASSERT_EQ(sessionA->getFsmState(), FsmState::ACTIVE);
@@ -2720,9 +2756,9 @@ TEST_F(Internal_BgpTest, SessionEstablishment_RealLoopback_BothReachEstablishedW
     // Hand each end to its session: ACTIVE + TCP_CONNECTION_CONFIRMED ->
     // sendOpen() (now a REAL write since primaryConn is set) -> OPEN_SENT.
     sessionA->acceptConnection(std::move(pair.connA));
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
     sessionB->acceptConnection(std::move(*pair.connB));
-    procB.getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(procB).waitIdle();
 
     EXPECT_EQ(sessionA->getFsmState(), FsmState::OPEN_SENT);
     EXPECT_EQ(sessionB->getFsmState(), FsmState::OPEN_SENT);
@@ -2732,11 +2768,11 @@ TEST_F(Internal_BgpTest, SessionEstablishment_RealLoopback_BothReachEstablishedW
     for (int i = 0; i < 30; ++i)
     {
         vrf->getTcp().pump(1);
-        proc->getScheduler().waitIdle();
-        procB.getScheduler().waitIdle();
+        ProcessAccessor::getScheduler(*proc).waitIdle();
+        ProcessAccessor::getScheduler(procB).waitIdle();
         vrfB->getTcp().pump(1);
-        proc->getScheduler().waitIdle();
-        procB.getScheduler().waitIdle();
+        ProcessAccessor::getScheduler(*proc).waitIdle();
+        ProcessAccessor::getScheduler(procB).waitIdle();
         if (sessionA->getFsmState() == FsmState::ESTABLISHED &&
             sessionB->getFsmState() == FsmState::ESTABLISHED)
             break;
@@ -2755,7 +2791,7 @@ TEST_F(Internal_BgpTest, SessionEstablishment_EbgpDetection_DifferentAsNumbers)
     BgpProcess procB(65002, vrfB);
 
     types::IPAddress addrB = mkV4(0x7F000001);
-    Neighbor* nbrA = proc->getNtable().createNeighbor(addrB);
+    Neighbor* nbrA = ProcessAccessor::getNtable(*proc).createNeighbor(addrB);
     ASSERT_NE(nbrA, nullptr);
 
     EXPECT_FALSE(nbrA->isConfedEbgp());
@@ -2853,13 +2889,13 @@ protected:
 
     PeerFixture makePeer(const types::IPAddress& peerAddr, uint32_t peerRid, uint32_t remoteAs)
     {
-        proc->enableAddressFamily<ExampleNlri::afi>();
+        enableAf<ExampleNlri::afi>();
 
-        Neighbor* nbr = proc->getNtable().createNeighbor(peerAddr);
-        nbr->addAfNeighbor(const_cast<AfiSafi&>(kAfiSafi));
+        Neighbor* nbr = ProcessAccessor::getNtable(*proc).createNeighbor(peerAddr);
+        addAfNeighbor(*nbr, const_cast<AfiSafi&>(kAfiSafi));
         nbr->getConfigs().get<config::BgpNeighborSession::REMOTE_AS>().set(remoteAs);
 
-        auto session = std::make_unique<Session>(*nbr);
+        auto session = std::make_unique<Session>(*nbr, *proc);
         session->getNegotiated().activeFamilies.insert(kAfiSafi);
         session->setPeerRid(peerRid);
 
@@ -2867,23 +2903,23 @@ protected:
         ownedSessions.push_back(std::move(session));
 
         sptr->postEvent(FsmEvent::MANUAL_START_PASSIVE_TCP);
-        proc->getScheduler().waitIdle(); // IDLE -> ACTIVE
+        ProcessAccessor::getScheduler(*proc).waitIdle(); // IDLE -> ACTIVE
 
         sptr->postEvent(FsmEvent::TCP_CR_ACKED);
-        proc->getScheduler().waitIdle(); // ACTIVE -> OPEN_SENT
+        ProcessAccessor::getScheduler(*proc).waitIdle(); // ACTIVE -> OPEN_SENT
 
         sptr->postEvent(FsmEvent::BGP_OPEN);
-        proc->getScheduler().waitIdle(); // OPEN_SENT -> OPEN_CONFIRMED
+        ProcessAccessor::getScheduler(*proc).waitIdle(); // OPEN_SENT -> OPEN_CONFIRMED
 
         sptr->postEvent(FsmEvent::KEEPALIVE_MSG);
-        proc->getScheduler().waitIdle(); // OPEN_CONFIRMED -> ESTABLISHED
+        ProcessAccessor::getScheduler(*proc).waitIdle(); // OPEN_CONFIRMED -> ESTABLISHED
                                                // (triggers onSessionEstablished:
                                                //  activatePeer, nbr->rid, nbr->session)
 
         return PeerFixture{nbr, sptr};
     }
 
-    std::recursive_mutex& getSchedulerLock() { return proc->getScheduler().getLock(); }
+    std::recursive_mutex& getSchedulerLock() { return ProcessAccessor::getScheduler(*proc).getLock(); }
 
     std::vector<std::unique_ptr<Session>> ownedSessions;
 
@@ -2898,7 +2934,7 @@ protected:
 
     config::BgpAddressFamilyRegistry& afConfigs()
     {
-        return proc->getConfigs().get<config::Bgp::ADDRESS_FAMILIES>().emplaceBack(kAfiSafi.flatten());
+        return ProcessAccessor::getConfigs(*proc).get<config::Bgp::ADDRESS_FAMILIES>().emplaceBack(kAfiSafi.flatten());
     }
 };
 
@@ -2921,7 +2957,7 @@ TEST_F(Internal_BgpPolicyTest, Ingress_AsPathLoop_OwnAsInPath_Rejected)
     UpdateBuilder ub;
     ub.addAnnouncement(mkPrefix(0xC0000100, 24));
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
     Notification err;
     { std::lock_guard lock(getSchedulerLock()); ASSERT_TRUE(af.onUpdateFromPeer(*peer.session, ub.finalize(attrs, path), err)); }
 
@@ -2947,7 +2983,7 @@ TEST_F(Internal_BgpPolicyTest, Ingress_AsPathNoLoop_Accepted)
     UpdateBuilder ub;
     ub.addAnnouncement(mkPrefix(0xC0000200, 24));
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
     Notification err;
     { std::lock_guard lock(getSchedulerLock()); ASSERT_TRUE(af.onUpdateFromPeer(*peer.session, ub.finalize(attrs, path), err)); }
 
@@ -2960,8 +2996,8 @@ TEST_F(Internal_BgpPolicyTest, Ingress_ConfedLoop_OwnAsInConfedSequence_Rejected
     installConnectedNextHop(0x0A000000, 24);
 
     constexpr uint32_t kConfedMemberAs = 65050;
-    proc->getConfigs().get<config::Bgp::BGP_CONFEDERATION_IDENTIFIER>().set(65000);
-    proc->getConfigs().get<config::Bgp::BGP_CONFEDERATION_PEERS>().withWrite(
+    ProcessAccessor::getConfigs(*proc).get<config::Bgp::BGP_CONFEDERATION_IDENTIFIER>().set(65000);
+    ProcessAccessor::getConfigs(*proc).get<config::Bgp::BGP_CONFEDERATION_PEERS>().withWrite(
         [&](std::vector<uint32_t>& peers) {
             peers.push_back(kConfedMemberAs);
             return true;
@@ -2982,7 +3018,7 @@ TEST_F(Internal_BgpPolicyTest, Ingress_ConfedLoop_OwnAsInConfedSequence_Rejected
     UpdateBuilder ub;
     ub.addAnnouncement(mkPrefix(0xC0000300, 24));
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
     Notification err;
     { std::lock_guard lock(getSchedulerLock()); ASSERT_TRUE(af.onUpdateFromPeer(*peer.session, ub.finalize(attrs, path), err)); }
 
@@ -3010,7 +3046,7 @@ TEST_F(Internal_BgpPolicyTest, Ingress_RrLoop_OwnOriginatorId_Rejected)
     UpdateBuilder ub;
     ub.addAnnouncement(mkPrefix(0xC0000400, 24));
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
     Notification err;
     { std::lock_guard lock(getSchedulerLock()); ASSERT_TRUE(af.onUpdateFromPeer(*peer.session, ub.finalize(attrs, path), err)); }
 
@@ -3023,7 +3059,7 @@ TEST_F(Internal_BgpPolicyTest, Ingress_RrLoop_OwnClusterIdInClusterList_Rejected
     installConnectedNextHop(0x0A000000, 24);
 
     constexpr uint32_t kClusterId = 0x0000C0DE;
-    proc->getConfigs().get<config::Bgp::BGP_CLUSTER_ID>().set(kClusterId);
+    ProcessAccessor::getConfigs(*proc).get<config::Bgp::BGP_CLUSTER_ID>().set(kClusterId);
 
     auto peer = makePeer(mkV4(0x0A000007), 0x01010105, kLocalAs); // iBGP
 
@@ -3040,7 +3076,7 @@ TEST_F(Internal_BgpPolicyTest, Ingress_RrLoop_OwnClusterIdInClusterList_Rejected
     UpdateBuilder ub;
     ub.addAnnouncement(mkPrefix(0xC0000500, 24));
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
     Notification err;
     { std::lock_guard lock(getSchedulerLock()); ASSERT_TRUE(af.onUpdateFromPeer(*peer.session, ub.finalize(attrs, path), err)); }
 
@@ -3066,7 +3102,7 @@ TEST_F(Internal_BgpPolicyTest, Ingress_RrLoopCheck_SkippedForEbgpPeer)
     UpdateBuilder ub;
     ub.addAnnouncement(mkPrefix(0xC0000600, 24));
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
     Notification err;
     { std::lock_guard lock(getSchedulerLock()); ASSERT_TRUE(af.onUpdateFromPeer(*peer.session, ub.finalize(attrs, path), err)); }
 
@@ -3079,7 +3115,7 @@ TEST_F(Internal_BgpPolicyTest, Ingress_EnforceFirstAs_Mismatch_Rejected)
 {
     installConnectedNextHop(0x0A000000, 24);
 
-    ASSERT_TRUE(proc->getConfigs().get<config::Bgp::BGP_ENFORCE_FIRST_AS>().load());
+    ASSERT_TRUE(ProcessAccessor::getConfigs(*proc).get<config::Bgp::BGP_ENFORCE_FIRST_AS>().load());
 
     auto peer = makePeer(mkV4(0x0A000009), 0x01010107, 65099); // eBGP, REMOTE_AS=65099
 
@@ -3095,7 +3131,7 @@ TEST_F(Internal_BgpPolicyTest, Ingress_EnforceFirstAs_Mismatch_Rejected)
     UpdateBuilder ub;
     ub.addAnnouncement(mkPrefix(0xC0000700, 24));
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
     Notification err;
     { std::lock_guard lock(getSchedulerLock()); ASSERT_TRUE(af.onUpdateFromPeer(*peer.session, ub.finalize(attrs, path), err)); }
 
@@ -3121,7 +3157,7 @@ TEST_F(Internal_BgpPolicyTest, Ingress_EnforceFirstAs_Match_Accepted)
     UpdateBuilder ub;
     ub.addAnnouncement(mkPrefix(0xC0000800, 24));
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
     Notification err;
     { std::lock_guard lock(getSchedulerLock()); ASSERT_TRUE(af.onUpdateFromPeer(*peer.session, ub.finalize(attrs, path), err)); }
 
@@ -3133,7 +3169,7 @@ TEST_F(Internal_BgpPolicyTest, Ingress_MaxAsLimit_Exceeded_Rejected)
 {
     installConnectedNextHop(0x0A000000, 24);
 
-    proc->getConfigs().get<config::Bgp::BGP_MAX_AS_LIMIT>().set(3);
+    ProcessAccessor::getConfigs(*proc).get<config::Bgp::BGP_MAX_AS_LIMIT>().set(3);
 
     auto peer = makePeer(mkV4(0x0A00000B), 0x01010109, 65099);
 
@@ -3149,7 +3185,7 @@ TEST_F(Internal_BgpPolicyTest, Ingress_MaxAsLimit_Exceeded_Rejected)
     UpdateBuilder ub;
     ub.addAnnouncement(mkPrefix(0xC0000900, 24));
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
     Notification err;
     { std::lock_guard lock(getSchedulerLock()); ASSERT_TRUE(af.onUpdateFromPeer(*peer.session, ub.finalize(attrs, path), err)); }
 
@@ -3161,7 +3197,7 @@ TEST_F(Internal_BgpPolicyTest, Ingress_MaxCommunityLimit_Exceeded_Rejected)
 {
     installConnectedNextHop(0x0A000000, 24);
 
-    proc->getConfigs().get<config::Bgp::BGP_MAX_COMMUNITY_LIMIT>().set(2);
+    ProcessAccessor::getConfigs(*proc).get<config::Bgp::BGP_MAX_COMMUNITY_LIMIT>().set(2);
 
     auto peer = makePeer(mkV4(0x0A00000C), 0x0101010A, 65099);
 
@@ -3178,7 +3214,7 @@ TEST_F(Internal_BgpPolicyTest, Ingress_MaxCommunityLimit_Exceeded_Rejected)
     UpdateBuilder ub;
     ub.addAnnouncement(mkPrefix(0xC0000A00, 24));
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
     Notification err;
     { std::lock_guard lock(getSchedulerLock()); ASSERT_TRUE(af.onUpdateFromPeer(*peer.session, ub.finalize(attrs, path), err)); }
 
@@ -3190,7 +3226,7 @@ TEST_F(Internal_BgpPolicyTest, Ingress_MaxExtCommunityLimit_Exceeded_Rejected)
 {
     installConnectedNextHop(0x0A000000, 24);
 
-    proc->getConfigs().get<config::Bgp::BGP_MAX_EXT_COMMUNITY_LIMIT>().set(1);
+    ProcessAccessor::getConfigs(*proc).get<config::Bgp::BGP_MAX_EXT_COMMUNITY_LIMIT>().set(1);
 
     auto peer = makePeer(mkV4(0x0A00000D), 0x0101010B, 65099);
 
@@ -3207,7 +3243,7 @@ TEST_F(Internal_BgpPolicyTest, Ingress_MaxExtCommunityLimit_Exceeded_Rejected)
     UpdateBuilder ub;
     ub.addAnnouncement(mkPrefix(0xC0000B00, 24));
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
     Notification err;
     { std::lock_guard lock(getSchedulerLock()); ASSERT_TRUE(af.onUpdateFromPeer(*peer.session, ub.finalize(attrs, path), err)); }
 
@@ -3219,7 +3255,7 @@ TEST_F(Internal_BgpPolicyTest, Ingress_AllowAsIn_OwnAsWithinOccurrences_Accepted
     installConnectedNextHop(0x0A000000, 24);
 
     auto peer = makePeer(mkV4(0x0A00000E), 0x0101010C, 65099);
-    peer.nbr->getAfNeighbor(kAfiSafi).getConfigs().get<config::BgpNeighbor::ALLOWAS_IN>().set(true);
+    getAfConfigs(peer.nbr->getAfNeighbor(kAfiSafi)).get<config::BgpNeighbor::ALLOWAS_IN>().set(true);
     // ALLOWAS_IN_OCCURANCES left unset -> defaults to 1 occurrence allowed.
 
     Attributes attrs;
@@ -3234,7 +3270,7 @@ TEST_F(Internal_BgpPolicyTest, Ingress_AllowAsIn_OwnAsWithinOccurrences_Accepted
     UpdateBuilder ub;
     ub.addAnnouncement(mkPrefix(0xC0000C00, 24));
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
     Notification err;
     { std::lock_guard lock(getSchedulerLock()); ASSERT_TRUE(af.onUpdateFromPeer(*peer.session, ub.finalize(attrs, path), err)); }
 
@@ -3246,7 +3282,7 @@ TEST_F(Internal_BgpPolicyTest, Ingress_AllowAsIn_OwnAsExceedsOccurrences_Rejecte
     installConnectedNextHop(0x0A000000, 24);
 
     auto peer = makePeer(mkV4(0x0A00000F), 0x0101010D, 65099);
-    auto& nbrAfCfg = peer.nbr->getAfNeighbor(kAfiSafi).getConfigs();
+    auto& nbrAfCfg = getAfConfigs(peer.nbr->getAfNeighbor(kAfiSafi));
     nbrAfCfg.get<config::BgpNeighbor::ALLOWAS_IN>().set(true);
     nbrAfCfg.get<config::BgpNeighbor::ALLOWAS_IN_OCCURANCES>().set(1);
 
@@ -3262,7 +3298,7 @@ TEST_F(Internal_BgpPolicyTest, Ingress_AllowAsIn_OwnAsExceedsOccurrences_Rejecte
     UpdateBuilder ub;
     ub.addAnnouncement(mkPrefix(0xC0000D00, 24));
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
     Notification err;
     { std::lock_guard lock(getSchedulerLock()); ASSERT_TRUE(af.onUpdateFromPeer(*peer.session, ub.finalize(attrs, path), err)); }
 
@@ -3289,7 +3325,7 @@ TEST_F(Internal_BgpPolicyTest, Ingress_AllowAsInNotSet_OwnAsOnce_Rejected)
     UpdateBuilder ub;
     ub.addAnnouncement(mkPrefix(0xC0000E00, 24));
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
     Notification err;
     { std::lock_guard lock(getSchedulerLock()); ASSERT_TRUE(af.onUpdateFromPeer(*peer.session, ub.finalize(attrs, path), err)); }
 
@@ -3322,7 +3358,7 @@ TEST_F(Internal_BgpPolicyTest, Ingress_LocalAsLoop_ConfiguredLocalAsInPath_Rejec
     UpdateBuilder ub;
     ub.addAnnouncement(mkPrefix(0xC0000F00, 24));
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
     Notification err;
     { std::lock_guard lock(getSchedulerLock()); ASSERT_TRUE(af.onUpdateFromPeer(*peer.session, ub.finalize(attrs, path), err)); }
 
@@ -3334,11 +3370,11 @@ TEST_F(Internal_BgpPolicyTest, Ingress_MaximumPrefix_LimitReached_PostsMaxPrefix
     installConnectedNextHop(0x0A000000, 24);
 
     auto peer = makePeer(mkV4(0x0A000012), 0x01010110, 65099);
-    auto& nbrAfCfg = peer.nbr->getAfNeighbor(kAfiSafi).getConfigs();
+    auto& nbrAfCfg = getAfConfigs(peer.nbr->getAfNeighbor(kAfiSafi));
     nbrAfCfg.get<config::BgpNeighbor::MAXIMUM_PREFIX>().set(2);
     nbrAfCfg.get<config::BgpNeighbor::MAXIMUM_PREFIX_WARNING_ONLY>().set(false);
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
     Attributes attrs;
     attrs.origin = BGP_ORIGIN_IGP;
     AsPathSegment seg;
@@ -3362,7 +3398,7 @@ TEST_F(Internal_BgpPolicyTest, Ingress_MaximumPrefix_LimitReached_PostsMaxPrefix
         Notification err;
         { std::lock_guard lock(getSchedulerLock()); ASSERT_TRUE(af.onUpdateFromPeer(*peer.session, ub.finalize(attrs, path), err)); }
     }
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     EXPECT_TRUE(waitForBgp([&] {
         return peer.session->getFsmState() == FsmState::IDLE;
@@ -3374,11 +3410,11 @@ TEST_F(Internal_BgpPolicyTest, Ingress_MaximumPrefix_WarningOnly_DoesNotTearDown
     installConnectedNextHop(0x0A000000, 24);
 
     auto peer = makePeer(mkV4(0x0A000013), 0x01010111, 65099);
-    auto& nbrAfCfg = peer.nbr->getAfNeighbor(kAfiSafi).getConfigs();
+    auto& nbrAfCfg = getAfConfigs(peer.nbr->getAfNeighbor(kAfiSafi));
     nbrAfCfg.get<config::BgpNeighbor::MAXIMUM_PREFIX>().set(1);
     nbrAfCfg.get<config::BgpNeighbor::MAXIMUM_PREFIX_WARNING_ONLY>().set(true);
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
     Attributes attrs;
     attrs.origin = BGP_ORIGIN_IGP;
     AsPathSegment seg;
@@ -3391,7 +3427,7 @@ TEST_F(Internal_BgpPolicyTest, Ingress_MaximumPrefix_WarningOnly_DoesNotTearDown
     ub.addAnnouncement(mkPrefix(0xC0030000, 24));
     Notification err;
     { std::lock_guard lock(getSchedulerLock()); ASSERT_TRUE(af.onUpdateFromPeer(*peer.session, ub.finalize(attrs, path), err)); }
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     EXPECT_TRUE(isInstalled(0xC0030000, 24));
     EXPECT_NE(peer.session->getFsmState(), FsmState::IDLE);
@@ -3414,7 +3450,7 @@ TEST_F(Internal_BgpPolicyTest, Update_SinglePrefixAnnouncement_InstalledWithEbgp
     UpdateBuilder ub;
     ub.addAnnouncement(mkPrefix(0xC0100000, 24));
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
     Notification err;
     { std::lock_guard lock(getSchedulerLock()); ASSERT_TRUE(af.onUpdateFromPeer(*peer.session, ub.finalize(attrs, path), err)); }
 
@@ -3443,7 +3479,7 @@ TEST_F(Internal_BgpPolicyTest, Update_IbgpPeer_InstalledWithInternalDistance)
     UpdateBuilder ub;
     ub.addAnnouncement(mkPrefix(0xC0110000, 24));
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
     Notification err;
     { std::lock_guard lock(getSchedulerLock()); ASSERT_TRUE(af.onUpdateFromPeer(*peer.session, ub.finalize(attrs, path), err)); }
 
@@ -3459,7 +3495,7 @@ TEST_F(Internal_BgpPolicyTest, Update_DistanceRange_OverridesDefaultDistance)
 {
     installConnectedNextHop(0x0A000000, 24);
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
 
     // Override admin distance to 50 for 192.18.0.0/24.
     afConfigs().get<config::BgpAddressFamily::DISTANCE_RANGE>().withWrite(
@@ -3508,7 +3544,7 @@ TEST_F(Internal_BgpPolicyTest, Update_Withdraw_RemovesRouteFromGlobalRib)
     attrs.asPath = {seg};
     Path path = makePath(mkV4(0x0A000005));
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
 
     {
         UpdateBuilder ub;
@@ -3553,7 +3589,7 @@ TEST_F(Internal_BgpPolicyTest, BestPath_TwoPeers_HigherLocalPrefWins)
     highAttrs.localPref = 200;
     Path highPath = makePath(mkV4(0x0A000041));
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
 
     {
         UpdateBuilder ub;
@@ -3602,7 +3638,7 @@ TEST_F(Internal_BgpPolicyTest, BestPath_WithdrawBestPath_PromotesRemainingPath)
     highAttrs.localPref = 200;
     Path highPath = makePath(mkV4(0x0A000043));
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
 
     {
         UpdateBuilder ub;
@@ -3655,7 +3691,7 @@ TEST_F(Internal_BgpPolicyTest, Update_Med_SetsRouteMetric)
     UpdateBuilder ub;
     ub.addAnnouncement(mkPrefix(0xC0160000, 24));
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
     Notification err;
     { std::lock_guard lock(getSchedulerLock()); ASSERT_TRUE(af.onUpdateFromPeer(*peer.session, ub.finalize(attrs, path), err)); }
 
@@ -3672,7 +3708,7 @@ TEST_F(Internal_BgpPolicyTest, RecursiveHost_DefaultEnabled_InstallsRouteOverHos
     // /32 connected "next hop" route.
     installConnectedNextHop(0x0A0000FE, 32);
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
     ASSERT_TRUE(afConfigs().get<config::BgpAddressFamily::BGP_RECURSIVE_HOST>().load());
 
     auto peer = makePeer(mkV4(0x0A000035), 0x02000015, 65099); // eBGP
@@ -3698,7 +3734,7 @@ TEST_F(Internal_BgpPolicyTest, RecursiveHost_Disabled_SkipsInstallOverHostNextHo
 {
     installConnectedNextHop(0x0A0000FE, 32);
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
     afConfigs().get<config::BgpAddressFamily::BGP_RECURSIVE_HOST>().set(false);
 
     auto peer = makePeer(mkV4(0x0A000036), 0x02000016, 65099); // eBGP
@@ -3737,7 +3773,7 @@ TEST_F(Internal_BgpPolicyTest, InvalidatePeer_RemovesRoutesFromGlobalRib)
     UpdateBuilder ub;
     ub.addAnnouncement(mkPrefix(0xC0190000, 24));
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
     Notification err;
     { std::lock_guard lock(getSchedulerLock()); ASSERT_TRUE(af.onUpdateFromPeer(*peer.session, ub.finalize(attrs, path), err)); }
     ASSERT_TRUE(isInstalled(0xC0190000, 24));
@@ -3752,12 +3788,12 @@ TEST_F(Internal_BgpPolicyTest, SoftReconfig_SoftClearInbound_ReappliesIngressPol
     installConnectedNextHop(0x0A000000, 24);
 
     auto peer = makePeer(mkV4(0x0A000038), 0x02000018, 65099); // eBGP
-    auto& nbrAfCfg = peer.nbr->getAfNeighbor(kAfiSafi).getConfigs();
+    auto& nbrAfCfg = getAfConfigs(peer.nbr->getAfNeighbor(kAfiSafi));
     nbrAfCfg.get<config::BgpNeighbor::SOFT_RECONFIGURATION>().set(true);
     nbrAfCfg.get<config::BgpNeighbor::ALLOWAS_IN>().set(true);
     nbrAfCfg.get<config::BgpNeighbor::ALLOWAS_IN_OCCURANCES>().set(0);
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
 
     Attributes attrs;
     attrs.origin = BGP_ORIGIN_IGP;
@@ -3802,7 +3838,7 @@ TEST_F(Internal_BgpPolicyTest, RecomputeNlri_BatchUpdate_BothIndependentPrefixes
     ub.addAnnouncement(mkPrefix(0xC01B0000, 24));
     ub.addAnnouncement(mkPrefix(0xC01C0000, 24));
 
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
     Notification err;
     { std::lock_guard lock(getSchedulerLock()); ASSERT_TRUE(af.onUpdateFromPeer(*peer.session, ub.finalize(attrs, path), err)); }
 
@@ -3812,7 +3848,7 @@ TEST_F(Internal_BgpPolicyTest, RecomputeNlri_BatchUpdate_BothIndependentPrefixes
 
 TEST_F(Internal_BgpPolicyTest, FINDING_NetworkCommand_PostConstructionConfigHasNoEffect)
 {
-    AddressFamily<ExampleNlri::afi>& af = proc->enableAddressFamily<ExampleNlri::afi>();
+    AddressFamily<ExampleNlri::afi>& af = enableAf<ExampleNlri::afi>();
 
     // Configure NETWORK for a prefix AFTER the AF instance already exists.
     afConfigs().get<config::BgpAddressFamily::NETWORK>().withWrite(
@@ -3822,7 +3858,7 @@ TEST_F(Internal_BgpPolicyTest, FINDING_NetworkCommand_PostConstructionConfigHasN
             return true;
         });
 
-    proc->getScheduler().waitIdle();
+    ProcessAccessor::getScheduler(*proc).waitIdle();
 
     EXPECT_FALSE(isInstalled(0xC01D0000, 24));
 }

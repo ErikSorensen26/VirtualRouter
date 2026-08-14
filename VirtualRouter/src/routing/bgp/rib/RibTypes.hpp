@@ -312,7 +312,7 @@ struct InboundRouteBase : RouteBase
 
     bool operator==(const InboundRouteBase& other) const noexcept
     {
-        return pathId == other.pathId && &sourceNeighbor == &other.sourceNeighbor;
+        return pathId == other.pathId && sourceNeighbor == other.sourceNeighbor;
     }
 };
 
@@ -348,7 +348,7 @@ struct InboundRoute : InboundRouteBase
     {
         return nlri == other.nlri &&
                pathId == other.pathId &&
-               &sourceNeighbor == &other.sourceNeighbor;
+               sourceNeighbor == other.sourceNeighbor;
     }
 };
 

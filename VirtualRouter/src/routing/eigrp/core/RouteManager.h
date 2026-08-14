@@ -11,7 +11,6 @@
 #include <IPAddress.h>
 
 #include "routing/RoutingTable.hpp"
-#include "eigrp/core/EigrpConfig.h"
 #include "eigrp/topology/TopologyTable.h"
 
 namespace routing::eigrp
@@ -87,7 +86,7 @@ public:
 
 private:
 
-    Eigrp& base;           ///< Owning EIGRP process.
+    Eigrp& process;         ///< Owning EIGRP process.
     core::RoutingTable& rib; ///< VRF routing table where RIB entries are installed.
     types::AddressFamily af; ///< Address family governing which RibEntry type to use.
     uint32_t as;           ///< AS number used as the RIB process identifier.

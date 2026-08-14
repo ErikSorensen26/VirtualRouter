@@ -11,27 +11,21 @@
 
 namespace routing::bgp
 {
-Session::Session(Neighbor& nbr) noexcept
-    : neighbor(nbr),
-      base(nbr.getConfigs().get<config::BgpNeighborSession::BGP_BASE>().get()),
+Session::Session(Neighbor& nbr, BgpProcess& proc) noexcept
+    : process(proc),
+      neighbor(nbr),
+      base(nbr.configs.get<config::BgpNeighborSession::BGP_BASE>().get()),
       fsm(*this),
-      timers(*this)
+      timers(*this, nbr.scheduler)
 {
-    neighbor.buildAttributeRanges();
-    holdTime = base.get<config::BgpTransportBase::HOLDTIME>().load();
-    uint16_t cfgKa = base.get<config::BgpTransportBase::KEEPALIVE_INTERVAL>().load();
-    keepaliveInterval = (cfgKa > 0 && cfgKa < holdTime) ? cfgKa : holdTime / 3;
-
-    buildLocalCapabilities();
-
     fsm.setTransitionCallback(
         [this](FsmState from, FsmState to, FsmEvent trigger) {
             this->onFsmTransition(from, to, trigger);
         });
 }
 
-Session::Session(Neighbor& nbr, const AfiSafi& family) noexcept
-    : Session(nbr)
+Session::Session(Neighbor& nbr, const AfiSafi& family, BgpProcess& proc) noexcept
+    : Session(nbr, proc)
 {
     multiSession = family;
     localCaps.multiSessionFamilies = {family};
@@ -43,6 +37,16 @@ Session::~Session()
         neighbor.session = nullptr;
     timers.cancelAll();
     closeAllConnections();
+}
+
+void Session::initialize()
+{
+    neighbor.buildAttributeRanges();
+    holdTime = base.get<config::BgpTransportBase::HOLDTIME>().load();
+    uint16_t cfgKa = base.get<config::BgpTransportBase::KEEPALIVE_INTERVAL>().load();
+    keepaliveInterval = (cfgKa > 0 && cfgKa < holdTime) ? cfgKa : holdTime / 3;
+
+    buildLocalCapabilities();
 }
 
 MultiSession* Session::getMultiSession()
@@ -65,7 +69,7 @@ void Session::startActiveMultiSession(const AfiSafi& family)
         !negotiated.multiSessionFamilies.contains(family))
         return;
 
-    auto [it, ok] = std::get<MultiSession>(multiSession).sessions.try_emplace(family, neighbor, family);
+    auto [it, ok] = std::get<MultiSession>(multiSession).sessions.try_emplace(family, neighbor, family, process);
     if (ok)
         it->second.postEvent(FsmEvent::MANUAL_START);
 }
@@ -76,14 +80,14 @@ void Session::startPassiveMultiSession(const AfiSafi& family)
         !negotiated.multiSessionFamilies.contains(family))
         return;
     
-    auto [it, ok] = std::get<MultiSession>(multiSession).sessions.try_emplace(family, neighbor, family);
+    auto [it, ok] = std::get<MultiSession>(multiSession).sessions.try_emplace(family, neighbor, family, process);
     if (ok)
         it->second.postEvent(FsmEvent::MANUAL_START_PASSIVE_TCP);
 }
 
 void Session::buildLocalCapabilities()
 {
-    auto& procCfg = neighbor.getProcess().getConfigs();
+    auto& procCfg = process.configs;
 
     {
         auto& cfgs = neighbor.getConfigs();
@@ -103,15 +107,18 @@ void Session::buildLocalCapabilities()
         localCaps.restartTime = procCfg.get<config::Bgp::BGP_GRACEFUL_RESTART_TIME>().load();
     }
 
-    localCaps.multiSess = neighbor.getConfigs().get<config::BgpNeighborSession::TRANSPORT_MULTI_SESSION>().load();
+    localCaps.multiSess = neighbor.configs.get<config::BgpNeighborSession::TRANSPORT_MULTI_SESSION>().load();
     localCaps.extendedMessage = true;
     localCaps.linkLocalNextHop = true;
 
     // ADD-PATH and ORF: advertise per-AF capabilities based on neighbor AF config.
-    neighbor.getProcess().forEachAf([&](const AfiSafi& afi) {
+    process.forEachAf([&](const AfiSafi& afi) {
         localCaps.mpFamilies.push_back(afi);
 
-        auto& afNbrCfgs = neighbor.getAfNeighbor(afi).getConfigs();
+        NeighborAf* afNbr = neighbor.findAfNeighbor(afi);
+        if (!afNbr)
+            return; // neighbor not activated for this AF; no per-AF caps to add
+        auto& afNbrCfgs = afNbr->configs;
 
         bool rx = afNbrCfgs.get<config::BgpAfBase::ADDITIONAL_PATHS_RECEIVE>().load();
         bool tx = afNbrCfgs.get<config::BgpAfBase::ADDITIONAL_PATHS_SEND>().load();
@@ -137,17 +144,45 @@ void Session::buildLocalCapabilities()
     });
 }
 
+Neighbor& Session::activatePeer(uint32_t rid)
+{
+    neighbor.rid = rid;
+    neighbor.session = this;
+    return neighbor;
+}
+
+Neighbor& Session::deactivatePeer()
+{
+    neighbor.rid = 0;
+    neighbor.session = nullptr;
+    return neighbor;
+}
+
+bool Session::isActivated() const
+{
+    return neighbor.rid != 0 && neighbor.session;
+}
+
 void Session::acceptConnection(transport::tcp::Connection&& conn)
 {
+    // A second inbound connection while one is already staged: keep the existing one
+    // and drop the newcomer, rather than leaking the connection we would overwrite.
+    if (passiveConn.has_value())
+    {
+        process.routingInstance.getTcp().close(conn.getId());
+        return;
+    }
+
     passiveConn.emplace(std::move(conn));
-    primaryConn = &passiveConn.value();
+    if (!primaryConn)
+        primaryConn = &passiveConn.value();
     postEvent(FsmEvent::TCP_CONNECTION_CONFIRMED);
 }
 
 void Session::initiateConnection()
 {
-    auto& proc = neighbor.getProcess();
-    auto& tcp = proc.routingInstance->getTcp();
+    auto& proc = process;
+    auto& tcp = proc.routingInstance.getTcp();
 
     transport::tcp::ConnectOptions opts;
     opts.policy.pathMtuDiscovery =
@@ -191,8 +226,7 @@ void Session::closeActiveConnection() noexcept
 {
     if (activeConn.has_value())
     {
-        auto& proc = neighbor.getProcess();
-        auto& tcp = proc.routingInstance->getTcp();
+        auto& tcp = process.routingInstance.getTcp();
         tcp.close(activeConn->getId());
         activeConn.reset();
     }
@@ -203,8 +237,7 @@ void Session::closePassiveConnection() noexcept
 {
     if (passiveConn.has_value())
     {
-        auto& proc = neighbor.getProcess();
-        auto& tcp = proc.routingInstance->getTcp();
+        auto& tcp = process.routingInstance.getTcp();
         tcp.close(passiveConn->getId());
         passiveConn.reset();
     }
@@ -213,8 +246,7 @@ void Session::closePassiveConnection() noexcept
 
 void Session::closeAllConnections() noexcept
 {
-    auto& proc = neighbor.getProcess();
-    auto& tcp = proc.routingInstance->getTcp();
+    auto& tcp = process.routingInstance.getTcp();
 
     if (activeConn.has_value())
     {
@@ -231,7 +263,7 @@ void Session::closeAllConnections() noexcept
 
 void Session::postEvent(FsmEvent event)
 {
-    neighbor.getScheduler().post([this, event]() {
+    neighbor.scheduler.post([this, event]() {
         fsm.processEvent(event);
     });
 }
@@ -243,7 +275,7 @@ void Session::handleIncoming(transport::tcp::RxConsumer& consumer)
 
 void Session::onFsmTransition(FsmState from, FsmState to, FsmEvent /*trigger*/)
 {
-    auto& proc = neighbor.getProcess();
+    auto& proc = process;
     const bool isChild = std::holds_alternative<AfiSafi>(multiSession);
 
     if (to == FsmState::ESTABLISHED)
@@ -358,14 +390,9 @@ void Session::onNotificationReceived(std::span<const uint8_t> data)
     }
 }
 
-bool Session::isEbgp() const noexcept
+const NeighborConfigs& Session::getNeighborConfigs() const noexcept
 {
-    return neighbor.isEbgp();
-}
-
-bool Session::isConfedEbgp() const noexcept
-{
-    return neighbor.isConfedEbgp();
+    return neighbor.configs;
 }
 
 bool Session::verifyConnection(uint64_t cid)
@@ -376,7 +403,7 @@ bool Session::verifyConnection(uint64_t cid)
 
 bool Session::resolveCollision(uint32_t incomingPeerRid)
 {
-    uint32_t localRid = neighbor.getProcess().getRouterId();
+    uint32_t localRid = process.getRouterId();
     bool outgoing = activeConn.has_value();
 
     bool keep = CollisionDetector::shouldKeep(outgoing, localRid, incomingPeerRid);

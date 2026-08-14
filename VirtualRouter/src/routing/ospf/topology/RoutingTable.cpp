@@ -85,7 +85,7 @@ static std::vector<OspfNextHop> mergeEcmpNextHops(const std::vector<OspfPath>& b
 }
 
 OspfRib::OspfRib(OspfProcess& p)
-    : process(p), rib(process.routingInstance->getRib()) {}
+    : process(p), rib(process.routingInstance.getRib()) {}
 
 const OspfRoute* OspfRib::lookup(const types::IPPrefix& prefix) const
 {

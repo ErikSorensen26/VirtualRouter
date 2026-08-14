@@ -56,10 +56,10 @@ public:
     /**
      * @brief Constructs a timer manager bound to the given process and scheduler.
      *
-     * @param base      The owning EIGRP process; used to read the configured SIA timeout.
+     * @param process   The owning EIGRP process; used to read the configured SIA timeout.
      * @param scheduler Process work queue to which timer callbacks are posted.
      */
-    TimerManager(Eigrp& base, core::ProcessQueue& scheduler);
+    TimerManager(Eigrp& process, core::ProcessQueue& scheduler);
 
     /**
      * @brief Arms the SIA watchdog timer for a pending query to a neighbor.
@@ -89,7 +89,7 @@ public:
 
 private:
 
-    Eigrp& base;                       ///< Owning process; provides SIA timeout configuration.
+    Eigrp& process;                    ///< Owning process; provides SIA timeout configuration.
     core::ProcessQueue scheduler;   ///< Lifetime-safe ref used for timer callback delivery.
 };
 } // namespace routing::eigrp

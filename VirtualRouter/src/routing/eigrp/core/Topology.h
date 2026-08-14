@@ -56,9 +56,9 @@ public:
      *
      * Initializes the @ref DualEngine and all dependent subsystems.
      *
-     * @param base The @ref Eigrp process that owns this topology.
+     * @param process The @ref Eigrp process that owns this topology.
      */
-    EigrpTopology(Eigrp& base);
+    EigrpTopology(Eigrp& process);
 
     /**
      * @brief Forces DUAL to recompute successors for every prefix in the
@@ -118,12 +118,10 @@ public:
      */
     std::unordered_map<types::IPPrefix, TopologyEntry>& entries();
 
-    Eigrp& getBase() { return base; }
-
 private:
 
     DualEngine dual; ///< DUAL algorithm engine; owns the TopologyTable and TimerManager.
-    Eigrp& base;     ///< Owning EIGRP process.
+    Eigrp& process;  ///< Owning EIGRP process.
 };
 } // namespace routing::eigrp
 

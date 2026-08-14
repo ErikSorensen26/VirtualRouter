@@ -381,7 +381,7 @@ public:
 private:
     std::unordered_map<types::IPPrefix, TopologyEntry> topologyEntries;
 
-    Eigrp& eigrpProcess; ///< Owning process; used to access config and trigger RIB updates.
+    Eigrp& process; ///< Owning process; used to access config and trigger RIB updates.
 };
 } // namespace routing::eigrp
 

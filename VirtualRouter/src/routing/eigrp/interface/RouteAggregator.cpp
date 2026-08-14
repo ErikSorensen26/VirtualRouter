@@ -54,7 +54,7 @@ void RouteAggregator::updateSummaryRoutes(std::vector<SummaryRoute*>& ss)
 
         if (changed)
         {
-            auto& entries = iface.getTopController().getTopologies();
+            auto& entries = iface.topology.getTopologies();
             if (!valid)
             {
                 for (auto& r : s->summarizedRoutes)
@@ -70,7 +70,7 @@ void RouteAggregator::updateSummaryRoutes(std::vector<SummaryRoute*>& ss)
             else
             {
                 types::IPPrefix prefix = s->summaryEntry->prefix;
-                for (auto& entry : iface.getTopController().getTopologies())
+                for (auto& entry : iface.topology.getTopologies())
                 {
                     if (entry.second.prefix.prefixLength >= prefix.prefixLength &&
                         prefix.contains(types::IPAddress(entry.second.prefix.addr, entry.second.prefix.prefixLength)))
@@ -85,7 +85,7 @@ void RouteAggregator::updateSummaryRoutes(std::vector<SummaryRoute*>& ss)
         }
     }
     if (!changedRoutes.empty())
-        iface.getTopController().refreshSuppression(changedRoutes);
+        iface.topology.refreshSuppression(changedRoutes);
 }
 
 void RouteAggregator::updateSummaryRoute(SummaryRoute& s)
@@ -95,10 +95,10 @@ void RouteAggregator::updateSummaryRoute(SummaryRoute& s)
 
     if (changed)
     {
-        auto& entries = iface.getTopController().getTopologies();
+        auto& entries = iface.topology.getTopologies();
         if (!valid)
         {
-            iface.getTopController().markRouteUnreachable(*s.summaryRoute, iface.ifaceAddress, *s.summaryEntry);
+            iface.topology.markRouteUnreachable(*s.summaryRoute, iface.ifaceAddress, *s.summaryEntry);
             for (auto& r : s.summarizedRoutes)
             {
                 if (auto eit = entries.find(r); eit != entries.end())
@@ -112,7 +112,7 @@ void RouteAggregator::updateSummaryRoute(SummaryRoute& s)
         else
         {
             types::IPPrefix prefix = s.summaryEntry->prefix;
-            for (auto& entry : iface.getTopController().getTopologies())
+            for (auto& entry : iface.topology.getTopologies())
             {
                 if (entry.second.prefix.prefixLength >= prefix.prefixLength &&
                     prefix.contains(types::IPAddress(entry.second.prefix.addr, entry.second.prefix.prefixLength)))
@@ -127,15 +127,14 @@ void RouteAggregator::updateSummaryRoute(SummaryRoute& s)
     }
 
     if (!changedRoutes.empty())
-        iface.getTopController().refreshSuppression(changedRoutes);
+        iface.topology.refreshSuppression(changedRoutes);
 }
 
 std::pair<bool, bool> RouteAggregator::calculateSummary(SummaryRoute& s)
 {
     ReceivedRoute& r = s.summaryRoute->routeInfo;
     uint64_t oldFD = r.feasibleDistance;
-    auto& base = iface.getBase();
-    auto& topology = iface.getTopController();
+    auto& topology = iface.topology;
     auto& entries = topology.getTopologies();
 
     const ReceivedRoute* bestRoute = nullptr;
@@ -162,9 +161,9 @@ std::pair<bool, bool> RouteAggregator::calculateSummary(SummaryRoute& s)
 
     s.summarizedRoutes = std::move(covered);
 
-    types::AddressFamily af = iface.getBase().getAF();
+    types::AddressFamily af = iface.process.addressFamily;
 
-    auto& ifCfg = iface.getIfaceCfg();
+    auto& ifCfg = *iface.currentInterfaceInfo;
     if (af == types::AddressFamily::IPv4)
     {
         r.nextHop.setV4(ifCfg.ipv4.getPrimaryAddress().addr);
@@ -178,14 +177,14 @@ std::pair<bool, bool> RouteAggregator::calculateSummary(SummaryRoute& s)
     r.reportedDistance = 0;
     r.hopCount = 0;
     r.tag = 0;
-    r.adminDistance = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::INTERNAL_ADMIN_DISTANCE>().load();
+    r.adminDistance = iface.getConfigs().get<config::Eigrp::INTERNAL_ADMIN_DISTANCE>().load();
     r.routeType = RouteType::SUMMARY;
     r.flags = 0;
-    
+
     r.wide.isWide = true;
     r.wide.topology = 0;
-    r.wide.afi = (base.getAF() == types::AddressFamily::IPv6) ? 2 : 1;
-    r.wide.rid = base.routerID();
+    r.wide.afi = (af == types::AddressFamily::IPv6) ? 2 : 1;
+    r.wide.rid = iface.routerID();
     r.wide.priority = 0;
 
     if (bestRoute)
@@ -234,7 +233,7 @@ void RouteAggregator::installSummaries(const std::set<types::IPPrefix>& prefixes
         ReceivedRoute r{};
         r.prefix = prefix;
 
-        auto& top = iface.getTopController().ensure(prefix);
+        auto& top = iface.topology.ensure(prefix);
         s.summaryEntry = &top;
         s.summaryRoute = createSumRoute(top, r);
 
@@ -254,7 +253,7 @@ void RouteAggregator::installSummary(const types::IPPrefix& prefix, bool isAuto)
     ReceivedRoute r{};
     r.prefix = prefix;
 
-    auto& top = iface.getTopController().ensure(prefix);
+    auto& top = iface.topology.ensure(prefix);
     auto createSumRoute = [&](TopologyEntry& top) -> RouteInfo* {
         auto it = top.routesBySource.emplace(iface.ifaceAddress, RouteInfo{r});
         return &it.first->second;
@@ -273,7 +272,7 @@ void RouteAggregator::withdrawSummary(const types::IPPrefix& prefix)
 
     SummaryRoute& s = it->second;
 
-    iface.getTopController().markRouteUnreachable(*s.summaryRoute, iface.ifaceAddress, *s.summaryEntry);
+    iface.topology.markRouteUnreachable(*s.summaryRoute, iface.ifaceAddress, *s.summaryEntry);
 
     updateSummaryRoute(s);
     summaryRoutes.erase(it);
