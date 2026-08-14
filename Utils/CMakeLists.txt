@@ -1,33 +1,96 @@
-# List the specific executables and their respective source files
-file(GLOB_RECURSE UTILS_EXECUTABLES
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/LogServer.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/CommandParser.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/CommandExtractor.cpp
+cmake_minimum_required(VERSION 3.16)
+project(VirtualRouterUtils LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+find_library(TELNET_LIBRARIES
+    NAMES telnet libtelnet
+    PATHS /usr/lib /usr/lib/x86_64-linux-gnu
+    REQUIRED
 )
 
-# Create executable files for utils
-foreach(exec_file ${UTILS_EXECUTABLES})
-    get_filename_component(exec_name ${exec_file} NAME_WE)
-    add_executable(${exec_name} ${exec_file})
+find_path(TELNET_INCLUDE_DIR
+    NAMES libtelnet.h
+    PATHS /usr/include
+    REQUIRED
+)
 
-    # Link VirtualRouter to all executables in utils
-    target_link_libraries(${exec_name} PRIVATE VirtualRouter)
-endforeach()
+# Repo root and router paths
+set(VR_ROOT ${CMAKE_CURRENT_LIST_DIR}/..)
+set(VR_DIR  ${VR_ROOT}/VirtualRouter)
 
-# Ensure utils can access the necessary header files
-file(GLOB_RECURSE UTILS_HEADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp)
+# ===============================
+# CommandExtractor
+# ===============================
+add_executable(CommandExtractor
+    ${CMAKE_CURRENT_LIST_DIR}/CommandExtractor/CommandExtractor.cpp
+)
 
-# Ensure unique header directories
-set(UTILS_HEADER_DIRS "")
-foreach(header ${UTILS_HEADER_FILES})
-    get_filename_component(HEADER_DIR ${header} DIRECTORY)
-    list(APPEND UTILS_HEADER_DIRS ${HEADER_DIR})
-endforeach()
+target_include_directories(CommandExtractor PRIVATE
+    ${TELNET_INCLUDE_DIR}
+    ${CMAKE_CURRENT_LIST_DIR}
+    ${VR_DIR}
+    ${VR_DIR}/common
+    ${VR_DIR}/types
+    ${VR_DIR}/external
+)
 
-list(REMOVE_DUPLICATES UTILS_HEADER_DIRS)
+target_link_libraries(CommandExtractor PRIVATE
+    ${TELNET_LIBRARIES}
+    #VirtualRouter
+    pthread
+)
 
-# Include headers for utils
-foreach(exec_file ${UTILS_EXECUTABLES})
-    get_filename_component(exec_name ${exec_file} NAME_WE)
-    target_include_directories(${exec_name} PRIVATE ${UTILS_HEADER_DIRS})
-endforeach()
+set_target_properties(CommandExtractor PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+
+# ===============================
+# CommandParser
+# ===============================
+#add_executable(CommandParser
+#    ${CMAKE_CURRENT_LIST_DIR}/CommandParser/CommandParser.cpp
+#)
+#
+#target_include_directories(CommandParser PRIVATE
+#    ${CMAKE_CURRENT_LIST_DIR}
+#    ${VR_DIR}
+#    ${VR_DIR}/common
+#    ${VR_DIR}/types
+#    ${VR_DIR}/external
+#)
+#
+#target_link_libraries(CommandParser PRIVATE
+#    VirtualRouter
+#    pthread
+#)
+#
+#set_target_properties(CommandParser PROPERTIES
+#    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+#)
+
+# ===============================
+# LogServer (disabled intentionally)
+# ===============================
+# add_executable(LogServer
+#     ${CMAKE_CURRENT_LIST_DIR}/LogServer/LogServer.cpp
+# )
+#
+# target_include_directories(LogServer PRIVATE
+#     ${CMAKE_CURRENT_LIST_DIR}
+#     ${VR_DIR}
+#     ${VR_DIR}/common
+#     ${VR_DIR}/types
+#     ${VR_DIR}/external
+# )
+#
+# target_link_libraries(LogServer PRIVATE
+#     VirtualRouter
+#     pthread
+# )
+#
+# set_target_properties(LogServer PROPERTIES
+#     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+# )
+
