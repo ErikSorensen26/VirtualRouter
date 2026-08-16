@@ -337,7 +337,7 @@ public:
     template <typename P>
     P* resolveParent()
     {
-        if (parent.type() != typeid(P))
+        if (parent.type() != typeid(P*))
             throw std::runtime_error("Parent type mismatch");
         return utils::Any::cast<P*>(parent);
     }

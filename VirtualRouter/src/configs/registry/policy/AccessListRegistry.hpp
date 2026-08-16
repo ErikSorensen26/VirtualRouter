@@ -17,7 +17,6 @@
 #include <EnumBitMap.hpp>
 #include <variant>
 
-#include "configs/RegistryTypes.hpp"
 #include "configs/RegistryBuilder.hpp"
 #include "configs/TupleSchema.hpp"
 

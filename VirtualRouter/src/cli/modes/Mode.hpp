@@ -60,8 +60,8 @@
     X(RouterOspfInterfaceV6,            "(config-router-af-interface)#", "ospf-ipv6") \
 /*Bgp*/ \
     X(RouterBgp,                        "(config-router)#", "bgp") \
-    X(RouterBgpAddressFamilyV4,         "(config-router)#", "bgp-ipv4") \
-    X(RouterBgpAddressFamilyV6,         "(config-router)#", "bgp-ipv6") \
+    X(RouterBgpAddressFamilyV4,         "(config-router-af)#", "bgp-ipv4") \
+    X(RouterBgpAddressFamilyV6,         "(config-router-af)#", "bgp-ipv6") \
 
 namespace cli
 {

@@ -30,6 +30,7 @@
 #define COMMAND_TREE "../VirtualRouter/commands"
 
 namespace interface { class Interface; enum class InterfaceType : uint8_t; }
+namespace config { class GlobalRegistry; }
 
 static std::string_view CARRIAGE_RETURN = "<cr>";
 static constexpr std::string_view DO_EXEC_KEYWORD = "do-exec";

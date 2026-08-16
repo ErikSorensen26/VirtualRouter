@@ -7,7 +7,6 @@
 #ifndef ARP_REGISTRY
 #define ARP_REGISTRY
 
-#include "configs/RegistryTypes.hpp"
 #include "configs/RegistryBuilder.hpp"
 
 namespace config

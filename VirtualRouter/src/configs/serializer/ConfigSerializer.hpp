@@ -66,10 +66,12 @@ inline constexpr bool isStdTupleV = false;
 template <typename... Ts>
 inline constexpr bool isStdTupleV<std::tuple<Ts...>> = true;
 
-/// @brief True when @p T needs TupleSchema/tuple handling this serializer does not yet do,
-/// covering both an AtomicField/OptionalAtomicField storing the schema type directly and a
-/// ValueField storing its StorageOf<T> unwrap -- and, as a safe fallback, any value @c
-/// formatValue has no overload for, e.g. the registry's own `nullptr_t` TODO placeholders.
+/**
+ * @brief True when @p T needs TupleSchema/tuple handling this serializer does not yet do,
+ * covering a field storing the schema type directly -- ValueField, ListField's element, or
+ * AtomicField/OptionalAtomicField -- and, as a safe fallback, any value @c formatValue has
+ * no overload for, e.g. the registry's own `nullptr_t` TODO placeholders.
+ */
 template <typename T>
 concept SerializableScalar = requires(const T& v) { formatValue(v); };
 

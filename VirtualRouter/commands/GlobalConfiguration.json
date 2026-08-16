@@ -96586,23 +96586,6 @@
                     "name": "router",
                     "subcommands": [
                         {
-                            "support": true,
-                            "description": "Enhanced Interior Gateway Routing Protocol (EIGRP)",
-                            "name": "eigrp",
-                            "subcommands": [
-                                {
-                                    "description": "Autonomous system number",
-                                    "name": "<1-65535>",
-                                    "subcommands": [
-                                        {
-                                            "description": "",
-                                            "name": "<cr>"
-                                        }
-                                    ]
-                                }
-                            ]
-                        },
-                        {
                             "description": "Open Shortest Path First (OSPF)",
                             "name": "ospf",
                             "subcommands": [
@@ -107075,13 +107058,11 @@
                 {
                     "description": "Border Gateway Protocol (BGP)",
                     "name": "bgp",
-                    "config": "Global::VRF_CONFIG",
-                    "deferred": "VRF",
                     "subcommands": [
                         {
                             "description": "Autonomous system number",
                             "name": "<1-4294967295>",
-                            "config": "Vrf::ROUTER_BGP",
+                            "config": "Global::ROUTER_BGP",
                             "mode": "(config-router)#/bgp",
                             "subcommands": [
                                 {
@@ -107093,7 +107074,7 @@
                         {
                             "description": "Autonomous system number",
                             "name": "<1.0-XX.YY>",
-                            "config": "Vrf::ROUTER_BGP",
+                            "config": "Global::ROUTER_BGP",
                             "mode": "(config-router)#/bgp",
                             "subcommands": [
                                 {
@@ -107114,7 +107095,7 @@
                             "description": "Autonomous System",
                             "name": "<1-65535>",
                             "config": "Global::ROUTER_EIGRP",
-                            "mode": "(config-router)#/eigrp_classic",
+                            "mode": "(config-router)#/eigrp_named",
                             "subcommands": [
                                 {
                                     "description": "",
@@ -107167,7 +107148,7 @@
                 {
                     "description": "Open Shortest Path First (OSPF)",
                     "name": "ospf",
-                    "config": "Global::VRF_CONFIG",
+                    "config": "Global::VRF_CONFIGS",
                     "deferred": "VRF",
                     "subcommands": [
                         {

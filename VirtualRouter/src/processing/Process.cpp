@@ -184,7 +184,7 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, core::Vi
                 }
                 else if (sourcePort == UDP_DHCP_CLIENT && destinationPort == UDP_DHCP_SERVER)
                 {
-                    interface->getVRF()->getGlobal().dhcpServer->handlePacket(dhcp, mac, *interface);
+                    interface->getVRF()->getGlobal().getDhcpServer()->handlePacket(dhcp, mac, *interface);
                 }
                 break;
             }

@@ -16,7 +16,6 @@ CliEngine::CliEngine(core::Global& global, const StartupFiles& stfs, FileSystem&
     commandTree.applyPortCounts(tree::CommandTree::readPortCounts(stfs.hwConfigFile));
 
     // Set debug mode based on the input parameter
-    global.addRoutingInstance(DEFAULT_VRF);
     if (!test) {
         initConfigs(stfs);
         recoverState(); //TODO

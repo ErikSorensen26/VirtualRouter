@@ -43,16 +43,13 @@ void Arp::refresh()
 
 void Arp::initiateArp()
 {
-    iface.getVRF()->getConfigs().get<config::Vrf::ARP_STATIC_ENTRY>().withRead(
-        [&](const auto& entries) {
-            interface::InterfaceKey localKey = iface.configs.key;
-            for (const auto& entry : entries)
-            {
-                const auto& key = config::StaticArpEntry::key(entry);
-                if (localKey == key.value_or(localKey))
-                    addStaticArpEntry(config::StaticArpEntry::address(entry),
-                                      config::StaticArpEntry::mac(entry));
-            }
+    interface::InterfaceKey localKey = iface.configs.key;
+    iface.getVRF()->getConfigs().get<config::Vrf::ARP_STATIC_ENTRY>().readEach(
+        [&](const config::StaticArpEntry& entry)
+        {
+            const auto& key = entry.key();
+            if (localKey == key.value_or(localKey))
+                addStaticArpEntry(entry.address(), entry.mac());
         }
     );
     running.store(true, std::memory_order_release);

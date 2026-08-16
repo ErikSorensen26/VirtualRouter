@@ -64,6 +64,7 @@
     X(BgpNeighbor) \
     X(BgpNeighborSession) \
     X(BgpAddressFamily) \
+    X(BgpAfVrf) \
     X(Bgp) \
     X(Interface) \
     X(OspfArea) \

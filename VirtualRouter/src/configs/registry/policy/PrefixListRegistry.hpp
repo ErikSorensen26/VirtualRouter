@@ -43,7 +43,8 @@ struct PrefixListFields : FieldTuple<
  * @tparam P  Prefix type — either `types::IPv4Prefix` or `types::IPv6Prefix`.
  */
 template <types::IsIPPrefix P>
-struct PrefixListRegistry : SubRegistry<PrefixListRegistry<P>, PrefixList, nullptr, PrefixListFields<P>> {};
+struct PrefixListRegistry : SubRegistry<PrefixListRegistry<P>, PrefixList, PrefixListFields<P>>
+{ using SubRegistry<PrefixListRegistry<P>, PrefixList, PrefixListFields<P>>::SubRegistry; };
 }
 
 #endif // PREFIX_LIST_REGISTRY_HPP
