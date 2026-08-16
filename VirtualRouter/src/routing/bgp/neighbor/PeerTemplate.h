@@ -16,6 +16,8 @@
 namespace routing::bgp
 {
 class BgpProcess;
+class Neighbor;
+class NeighborAf;
 
 /**
  * @brief Named peer group: shared session and per-AF policy configuration for a set of neighbors.
@@ -33,7 +35,7 @@ class BgpProcess;
  * ## Lifecycle & Ownership
  * Owned by @ref PeerTemplateTable inside @ref NeighborTable.  Non-copyable
  * and non-movable because the configuration @ref config::Reference objects
- * register callbacks back into the process and must not relocate in memory.
+ * register callbacks back into the scope and must not relocate in memory.
  *
  * @see PeerSessionTemplate, PeerPolicyTemplate, NeighborTable
  */
@@ -41,13 +43,13 @@ class PeerGroup
 {
 public:
     /**
-     * @brief Constructs a peer group with the given name and owning process.
+     * @brief Constructs a peer group with the given name and owning scope.
      *
-     * Allocates a session configuration registry under the process's config
+     * Allocates a session configuration registry under the scope's config
      * namespace.  Per-AF registries are deferred until first use.
      *
-     * @param groupName Unique name for this peer group within the process.
-     * @param proc      Owning BGP process; used for config registry allocation.
+     * @param groupName Unique name for this peer group within the scope.
+     * @param scope     Owning BGP scope; used for config registry allocation.
      */
     PeerGroup(const std::string& groupName, BgpProcess& proc, config::BgpNeighborSessionRegistry& configs);
     ~PeerGroup() = default;
@@ -57,7 +59,7 @@ public:
     PeerGroup(PeerGroup&&) = delete;
     PeerGroup& operator=(PeerGroup&&) = delete;
 
-    const std::string name; ///< Unique name of this peer group within the BGP process.
+    const std::string name; ///< Unique name of this peer group within the BGP scope.
 
     config::BgpNeighborSessionRegistry& getSessionConfigs()
     {
@@ -103,10 +105,10 @@ class PeerSessionTemplate
 {
 public:
     /**
-     * @brief Constructs a session template with the given name and owning process.
+     * @brief Constructs a session template with the given name and owning scope.
      *
-     * @param groupName Unique name for this template within the process.
-     * @param proc      Owning BGP process; used for config registry allocation.
+     * @param groupName Unique name for this template within the scope.
+     * @param scope     Owning BGP scope; used for config registry allocation.
      */
     PeerSessionTemplate(const std::string& groupName, config::BgpNeighborSessionRegistry& configs);
     ~PeerSessionTemplate() = default;
@@ -116,7 +118,7 @@ public:
     PeerSessionTemplate(PeerSessionTemplate&&) = delete;
     PeerSessionTemplate& operator=(PeerSessionTemplate&&) = delete;
 
-    const std::string name; ///< Unique name of this session template within the BGP process.
+    const std::string name; ///< Unique name of this session template within the BGP scope.
 
     config::BgpNeighborSessionRegistry& getConfigs()
     {
@@ -151,10 +153,10 @@ class PeerPolicyTemplate
 {
 public:
     /**
-     * @brief Constructs a policy template with the given name and owning process.
+     * @brief Constructs a policy template with the given name and owning scope.
      *
-     * @param groupName Unique name for this template within the process.
-     * @param proc      Owning BGP process; used for config registry allocation.
+     * @param groupName Unique name for this template within the scope.
+     * @param scope     Owning BGP scope; used for config registry allocation.
      */
     PeerPolicyTemplate(const std::string& groupName, config::BgpNeighborRegistry& configs);
     ~PeerPolicyTemplate() = default;
@@ -164,7 +166,7 @@ public:
     PeerPolicyTemplate(PeerPolicyTemplate&&) = delete;
     PeerPolicyTemplate& operator=(PeerPolicyTemplate&&) = delete;
 
-    const std::string name; ///< Unique name of this policy template within the BGP process.
+    const std::string name; ///< Unique name of this policy template within the BGP scope.
 
     config::BgpNeighborRegistry& getConfigs()
     {
@@ -181,10 +183,10 @@ private:
 };
 
 /**
- * @brief Container for all peer groups and reusable templates within one BGP process.
+ * @brief Container for all peer groups and reusable templates within one BGP scope.
  * @ingroup BGP_NEIGHBOR
  *
- * PeerTemplateTable owns the three template collections used by a BGP process:
+ * PeerTemplateTable owns the three template collections used by a BGP scope:
  * - **Peer groups** (@ref PeerGroup): combine session and per-AF policy config.
  * - **Session templates** (@ref PeerSessionTemplate): session-layer parameters only.
  * - **Policy templates** (@ref PeerPolicyTemplate): per-AF policy parameters only.
@@ -196,7 +198,7 @@ private:
  * resolve to the current template state.
  *
  * ## Lifecycle & Ownership
- * Owned by @ref NeighborTable, which in turn is owned by @ref BgpProcess.
+ * Owned by @ref NeighborTable, which in turn is owned by @ref BgpScope.
  * Template objects are stored by value in unordered maps; since they are
  * non-movable, emplacement must use in-place construction.
  *
@@ -213,39 +215,84 @@ public:
     explicit PeerTemplateTable(BgpProcess& proc);
 
     /**
-     * @brief Reconcile all template collections with the current configuration registry.
+     * @brief Re-resolves `nbr`'s peer group pointer from its own PEER_GROUP config.
      *
-     * Adds templates that appear in configuration but not yet in the live maps,
-     * removes those that have been deleted from configuration, and re-wires any
-     * neighbor pointers that reference updated template objects.
+     * Called when `nbr` itself is created or its PEER_GROUP field changes. A no-op
+     * for dynamically created neighbors — see @ref Neighbor::getDynamic. Looks the
+     * named group up via @ref lookupPeerGroup and stores the result on `nbr`'s
+     * NeighborConfigs, then propagates the same pointer to every child NeighborAf;
+     * a name with no matching group clears the pointer on both.
+     *
+     * @see syncPeerGroup for the inverse direction (group changes, fan out to neighbors).
      */
-    void sync();
+    void syncNeighborPeerGroup(Neighbor& nbr);
+
+    /** @overload Resolves the per-AF peer group for `afNbr` from its parent neighbor's PEER_GROUP config. */
+    void syncNeighborPeerGroup(NeighborAf& nbr);
+
+    /**
+     * @brief Re-resolves `nbr`'s session template pointer from its own INHERIT_PEER_SESSION config.
+     *
+     * Called when `nbr` itself is created or its INHERIT_PEER_SESSION field changes.
+     * A no-op for dynamically created neighbors.
+     *
+     * @see syncPeerSessionTemplate for the inverse direction.
+     */
+    void syncNeighborPeerSessionTemplate(Neighbor& nbr);
+
+    /**
+     * @brief Re-resolves `afNbr`'s policy template pointer from its own INHERIT_PEER_POLICY config.
+     *
+     * Called when `afNbr` itself is created or its INHERIT_PEER_POLICY field changes.
+     * A no-op when the parent neighbor is dynamically created.
+     *
+     * @see syncPeerPolicyTemplate for the inverse direction.
+     */
+    void syncNeighborPeerPolicyTemplate(NeighborAf& nbr);
+
+    /**
+     * @brief Re-resolves the peer group pointer on every neighbor, in every scope,
+     *        whose PEER_GROUP config names `group`.
+     *
+     * Called when peer group `group` itself is created, edited, or removed — the
+     * group's identity is what changed, not any individual neighbor's config, so
+     * every referencing neighbor must be walked to pick up the new pointer (or
+     * clear it, if `group` was removed). O(scopes × neighbors); expect this only
+     * on template config-apply, not on the neighbor hot path.
+     */
+    void syncPeerGroup(const std::string& group);
+
+    /** @overload Re-resolves the session template pointer on every neighbor naming `sess` via INHERIT_PEER_SESSION. */
+    void syncPeerSessionTemplate(const std::string& sess);
+
+    /** @overload Re-resolves the policy template pointer on every AF-neighbor naming `policy` via INHERIT_PEER_POLICY. */
+    void syncPeerPolicyTemplate(const std::string& policy);
 
     /**
      * @brief Create a new peer group with the given name.
      *
-     * @param name Unique peer group name within this process.
+     * @param name Unique peer group name within this scope.
      * @return Reference to the newly created PeerGroup.
      */
-    PeerGroup& createPeerGroup(const std::string& name);
+    PeerGroup& createPeerGroup(config::BgpNeighborSessionRegistry& reg, const std::string& name);
     void removePeerGroup(const std::string& name);
 
     /**
      * @brief Create a new session template with the given name.
      *
-     * @param name Unique session template name within this process.
+     * @param name Unique session template name within this scope.
      * @return Reference to the newly created PeerSessionTemplate.
      */
-    PeerSessionTemplate& createPeerSessionTemplate(const std::string& name);
+    PeerSessionTemplate& createPeerSessionTemplate(config::BgpNeighborSessionRegistry& reg, const std::string& name);
     void removePeerSessionTemplate(const std::string& name);
 
     /**
      * @brief Create a new policy template with the given name.
      *
-     * @param name Unique policy template name within this process.
+     * @param name Unique policy template name within this scope.
      * @return Reference to the newly created PeerPolicyTemplate.
      */
-    PeerPolicyTemplate& createPeerPolicyTemplate(const std::string& name);
+    PeerPolicyTemplate& createPeerPolicyTemplate(config::BgpNeighborRegistry& reg, const std::string& name);
     void removePeerPolicyTemplate(const std::string& name);
 
     PeerGroup* lookupPeerGroup(const std::string& name);
@@ -256,9 +303,8 @@ public:
     const PeerPolicyTemplate* lookupPeerPolicyTemplate(const std::string& name) const;
 
 private:
-    void syncPeerGroups();
-    void syncPeerSessionTemplates();
-    void syncPeerPolicyTemplates();
+
+    void purgeDynamicNeighbors(PeerGroup* group);
 
     BgpProcess& process;
     std::unordered_map<std::string, PeerGroup> peerGroups;                       ///< Active peer groups, keyed by name.

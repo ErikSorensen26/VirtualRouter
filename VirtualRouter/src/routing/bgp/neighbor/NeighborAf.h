@@ -6,6 +6,9 @@
 #ifndef BGP_NEIGHBOR_AF_H
 #define BGP_NEIGHBOR_AF_H
 
+#include <optional>
+#include <string>
+
 #include "bgp/BgpTypes.hpp"
 #include "bgp/rib/RibTypes.hpp"
 #include "NeighborAfConfigs.hpp"
@@ -17,7 +20,7 @@ class Internal_BgpTest;
 namespace routing::bgp
 {
 class Neighbor;
-class BgpProcess;
+class BgpScope;
 class PeerGroup;
 class PeerPolicyTemplate;
 class Session;
@@ -48,7 +51,7 @@ public:
      * @param family The address family this object tracks.
      * @param parent The Neighbor that owns this NeighborAf.
      */
-    NeighborAf(const AfiSafi& family, AddressFamilyVariant& af, Neighbor& parent);
+    NeighborAf(config::BgpNeighborRegistry& cfgs, const AfiSafi& family, AddressFamilyVariant& af, Neighbor& parent);
 
     /**
      * @brief Destructor. Cancels any pending maximum-prefix restart timer.
@@ -56,14 +59,19 @@ public:
     ~NeighborAf();
 
     void enqueueSyncAdditionalPaths();
-    void enqueueSyncDefaultOriginate();
+    void enqueueSyncDefaultOriginate(bool originate);
     void enqueueSyncSlowPeer();
-    void enqueueSyncActivate();
+    void enqueueSyncActivate(bool active);
     void enqueueSyncAdvertiseDiverse();
     void enqueueMarkAttr(OutAttr attr);
     void enqueueMarkAttrs(OutAttrMask attrs);
     void enqueueMarkInbound(InDirty category);
     void enqueueConnectionRestart();
+    void enqueueSyncPeerPolicyTemplate(std::optional<std::string> name);
+
+    // Synchronous peer-group set (caller already resolved the pointer and is on the
+    // scheduler thread) — used by Neighbor::enqueueSyncPeerGroup to fan out to every AF.
+    void setPeerGroupSync(PeerGroup* pg);
 
     // Synchronous mark (caller already on the BGP scheduler thread).
     void markAttr(OutAttr attr);
@@ -92,7 +100,8 @@ private:
     void updateOrfFilter(const std::vector<OrfPrefixEntry>& entries);
 
     /**
-     * TODO add doxy comment
+     * @brief Resets per-session AF state (ORF filter, max-prefix warning/restart
+     *        timer, slow-peer tracking) on session reset.
      */
     void invalidate();
 
@@ -108,22 +117,22 @@ private:
     void cancelPfxRestart();
 
     /**
-     * TODO add doxy comment
+     * @brief Returns the owning neighbor's active session, or `nullptr` if none.
      */
     Session* getSession() noexcept;
 
     /**
-     * TODO add doxy comment
+     * @brief Returns the configured `REMOTE_AS`, or `nullopt` if it isn't set.
      */
     std::optional<uint32_t> getRemoteAs() const noexcept;
 
     /**
-     * TODO add doxy comment
+     * @brief True if the owning neighbor is an eBGP peer; forwards to @ref Neighbor::isEbgp.
      */
     bool isEbgp() const noexcept;
 
     /**
-     * TODO add doxy comment
+     * @brief True if the owning neighbor is a confederation eBGP peer; forwards to @ref Neighbor::isConfedEbgp.
      */
     bool isConfedEbgp() const noexcept;
 

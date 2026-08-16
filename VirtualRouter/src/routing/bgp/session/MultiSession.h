@@ -16,7 +16,7 @@
 namespace routing::bgp
 {
 class Session;
-class BgpProcess;
+class BgpScope;
 
 /**
  * @brief Holds the per-AFI/SAFI sessions and pending connections for a multi-session-capable peer.

@@ -8,236 +8,540 @@
 
 namespace config
 {
-using routing::bgp::Neighbor;
-using routing::bgp::NeighborAf;
-using routing::bgp::AfInstanceBase;
-using routing::bgp::InDirty;
-using routing::bgp::OutAttr;
-using routing::bgp::AfDirty;
-
-void BgpBaseRestart(void* n)
+DEFINE_CONFIG_APPLIER(BgpTransportBase, KEEPALIVE_INTERVAL, ctx, keepalive)
 {
-    static_cast<Neighbor*>(n)->enqueueConnectionRestart();
+    if (routing::bgp::Neighbor* nbr = Context::cast<routing::bgp::Neighbor*>(ctx); nbr)
+        nbr->enqueueConnectionRestart();
 }
 
-void BgpAfBaseAdditionalPaths(void* n)
+DEFINE_CONFIG_APPLIER(BgpTransportBase, HOLDTIME, ctx, holdtime)
 {
-    static_cast<NeighborAf*>(n)->enqueueSyncAdditionalPaths();
+    if (routing::bgp::Neighbor* nbr = Context::cast<routing::bgp::Neighbor*>(ctx); nbr)
+        nbr->enqueueConnectionRestart();
 }
 
-void BgpAfBaseDefaultOriginate(void* n)
+DEFINE_CONFIG_APPLIER(BgpTransportBase, MINIMUM_HOLDTIME, ctx, minHoldtime)
 {
-    static_cast<NeighborAf*>(n)->enqueueSyncDefaultOriginate();
+    if (routing::bgp::Neighbor* nbr = Context::cast<routing::bgp::Neighbor*>(ctx); nbr)
+        nbr->enqueueConnectionRestart();
 }
 
-void BgpAfBaseSlowPeer(void* n)
+DEFINE_CONFIG_APPLIER(BgpTransportBase, TRANSPORT_PATH_MTU_DISCOVERY, ctx, pmtud)
 {
-    static_cast<NeighborAf*>(n)->enqueueSyncSlowPeer();
+    if (routing::bgp::Neighbor* nbr = Context::cast<routing::bgp::Neighbor*>(ctx); nbr)
+        nbr->enqueueConnectionRestart();
 }
 
-void BgpNeighborActivate(void* n)
+DEFINE_CONFIG_APPLIER(BgpAfBase, ADDITIONAL_PATHS_RECEIVE, ctx, val)
 {
-    static_cast<NeighborAf*>(n)->enqueueSyncActivate();
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueSyncAdditionalPaths();
+    else if (routing::bgp::AfInstanceBase* af = Context::cast<routing::bgp::AfInstanceBase*>(ctx); af)
+        af->enqueueMarkAfDirty(routing::bgp::AfDirty::ADD_PATH_SELECT);
 }
 
-void BgpNeighborAdvertiseDiverse(void* n)
+DEFINE_CONFIG_APPLIER(BgpAfBase, ADDITIONAL_PATHS_SEND, ctx, val)
 {
-    static_cast<NeighborAf*>(n)->enqueueSyncAdvertiseDiverse();
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueSyncAdditionalPaths();
+    else if (routing::bgp::AfInstanceBase* af = Context::cast<routing::bgp::AfInstanceBase*>(ctx); af)
+        af->enqueueMarkAfDirty(routing::bgp::AfDirty::ADD_PATH_SELECT);
 }
 
-static routing::bgp::OutAttrMask allEgressAttrs()
+DEFINE_CONFIG_APPLIER(BgpAfBase, ADDITIONAL_PATHS_SELECT_ALL, ctx, val)
 {
-    routing::bgp::OutAttrMask m;
-    m.set(static_cast<size_t>(OutAttr::NEXT_HOP));
-    m.set(static_cast<size_t>(OutAttr::AS_PATH));
-    m.set(static_cast<size_t>(OutAttr::COMMUNITIES));
-    m.set(static_cast<size_t>(OutAttr::EXT_COMMUNITIES));
-    m.set(static_cast<size_t>(OutAttr::LARGE_COMMUNITIES));
-    m.set(static_cast<size_t>(OutAttr::LOCAL_PREF));
-    return m;
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueSyncAdditionalPaths();
+    else if (routing::bgp::AfInstanceBase* af = Context::cast<routing::bgp::AfInstanceBase*>(ctx); af)
+        af->enqueueMarkAfDirty(routing::bgp::AfDirty::ADD_PATH_SELECT);
 }
 
-void BgpNeighborAdvertiseMap(void* n)
+DEFINE_CONFIG_APPLIER(BgpAfBase, ADDITIONAL_PATHS_SELECT_BACKUP, ctx, val)
 {
-    static_cast<NeighborAf*>(n)->enqueueMarkAttrs(allEgressAttrs());
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueSyncAdditionalPaths();
+    else if (routing::bgp::AfInstanceBase* af = Context::cast<routing::bgp::AfInstanceBase*>(ctx); af)
+        af->enqueueMarkAfDirty(routing::bgp::AfDirty::ADD_PATH_SELECT);
 }
 
-void BgpNeighborAdvertiseInterval(void* n)
+DEFINE_CONFIG_APPLIER(BgpAfBase, ADDITIONAL_PATHS_SELECT_BEST, ctx, val)
 {
-    static_cast<NeighborAf*>(n)->enqueueMarkAttr(OutAttr::NEXT_HOP);
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueSyncAdditionalPaths();
+    else if (routing::bgp::AfInstanceBase* af = Context::cast<routing::bgp::AfInstanceBase*>(ctx); af)
+        af->enqueueMarkAfDirty(routing::bgp::AfDirty::ADD_PATH_SELECT);
 }
 
-void BgpNeighborAllowasIn(void* n)
+DEFINE_CONFIG_APPLIER(BgpAfBase, ADDITIONAL_PATHS_SELECT_BEST_EXTERNAL, ctx, val)
 {
-    static_cast<NeighborAf*>(n)->enqueueMarkInbound(InDirty::ALLOWAS);
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueSyncAdditionalPaths();
+    else if (routing::bgp::AfInstanceBase* af = Context::cast<routing::bgp::AfInstanceBase*>(ctx); af)
+        af->enqueueMarkAfDirty(routing::bgp::AfDirty::ADD_PATH_SELECT);
 }
 
-void BgpNeighborAnnounceRpki(void* n)
+DEFINE_CONFIG_APPLIER(BgpAfBase, ADDITIONAL_PATHS_SELECT_GROUP_BEST, ctx, val)
 {
-    static_cast<NeighborAf*>(n)->enqueueMarkAttr(OutAttr::COMMUNITIES);
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueSyncAdditionalPaths();
+    else if (routing::bgp::AfInstanceBase* af = Context::cast<routing::bgp::AfInstanceBase*>(ctx); af)
+        af->enqueueMarkAfDirty(routing::bgp::AfDirty::ADD_PATH_SELECT);
 }
 
-void BgpNeighborInboundRefresh(void* n)
+DEFINE_CONFIG_APPLIER(BgpAfBase, DEFAULT_ORIGINATE, ctx, originate)
 {
-    static_cast<NeighborAf*>(n)->enqueueMarkInbound(InDirty::POLICY);
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueSyncDefaultOriginate(originate);
 }
 
-void BgpNeighborOutboundRefresh(void* n)
+DEFINE_CONFIG_APPLIER(BgpAfBase, SLOW_PEER_MODE, ctx, mode)
 {
-    static_cast<NeighborAf*>(n)->enqueueMarkAttrs(allEgressAttrs());
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueSyncSlowPeer();
 }
 
-void BgpNeighborDmzLinkBw(void* n)
+DEFINE_CONFIG_APPLIER(BgpAfBase, SLOW_PEER_DETECTION, ctx, val)
 {
-    static_cast<NeighborAf*>(n)->enqueueMarkAttr(OutAttr::EXT_COMMUNITIES);
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueSyncSlowPeer();
 }
 
-void BgpNeighborRestart(void* n)
+DEFINE_CONFIG_APPLIER(BgpAfBase, SLOW_PEER_DETECTION_THRESHOLD, ctx, val)
 {
-    static_cast<NeighborAf*>(n)->enqueueConnectionRestart();
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueSyncSlowPeer();
 }
 
-void BgpNeighborMaxPrefixRestart(void* n)
+DEFINE_CONFIG_APPLIER(BgpNeighbor, ACTIVATE, ctx, active)
 {
-    static_cast<NeighborAf*>(n)->enqueueMarkInbound(InDirty::MAX_PREFIX);
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueSyncActivate(active);
 }
 
-void BgpNeighborNextHop(void* n)
+DEFINE_CONFIG_APPLIER(BgpNeighbor, ADVERTISE_DIVERSE_PATH_BACKUP, ctx, val)
 {
-    static_cast<NeighborAf*>(n)->enqueueMarkAttr(OutAttr::NEXT_HOP);
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueSyncAdvertiseDiverse();
 }
 
-void BgpNeighborPrivateAs(void* n)
+DEFINE_CONFIG_APPLIER(BgpNeighbor, ADVERTISE_DIVERSE_PATH_MPATH, ctx, val)
 {
-    static_cast<NeighborAf*>(n)->enqueueMarkAttr(OutAttr::AS_PATH);
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueSyncAdvertiseDiverse();
 }
 
-void BgpNeighborReflector(void* n)
+DEFINE_CONFIG_APPLIER(BgpNeighbor, ADVERTISE_INTERVAL, ctx, val)
 {
-    static_cast<NeighborAf*>(n)->enqueueMarkAttr(OutAttr::REFLECTION);
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueMarkAttr(routing::bgp::OutAttr::NEXT_HOP);
 }
 
-void BgpNeighborSendCommunity(void* n)
+DEFINE_CONFIG_APPLIER(BgpNeighbor, ALLOWAS_IN, ctx, val)
 {
-    auto* nbr = static_cast<NeighborAf*>(n);
-    routing::bgp::OutAttrMask m;
-    m.set(static_cast<size_t>(OutAttr::COMMUNITIES));
-    m.set(static_cast<size_t>(OutAttr::EXT_COMMUNITIES));
-    m.set(static_cast<size_t>(OutAttr::LARGE_COMMUNITIES));
-    nbr->enqueueMarkAttrs(m);
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueMarkInbound(routing::bgp::InDirty::ALLOWAS);
 }
 
-void BgpNeighborSoftReconfig(void* n)
+DEFINE_CONFIG_APPLIER(BgpNeighbor, ALLOWAS_IN_OCCURANCES, ctx, val)
 {
-    static_cast<NeighborAf*>(n)->enqueueMarkInbound(InDirty::SOFT_RECONFIG);
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueMarkInbound(routing::bgp::InDirty::ALLOWAS);
 }
 
-void BgpNeighborTranslationUpdate(void* n)
+DEFINE_CONFIG_APPLIER(BgpNeighbor, ORF_BOTH, ctx, val)
 {
-    static_cast<NeighborAf*>(n)->enqueueMarkAttrs(allEgressAttrs());
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueConnectionRestart();
 }
 
-void BgpNeighborWeight(void* n)
+DEFINE_CONFIG_APPLIER(BgpNeighbor, ORF_RECEIVE, ctx, val)
 {
-    static_cast<NeighborAf*>(n)->enqueueMarkInbound(InDirty::POLICY);
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueConnectionRestart();
 }
 
-void BgpNeighborSessionShutdown(void* n)
+DEFINE_CONFIG_APPLIER(BgpNeighbor, ORF_SEND, ctx, val)
 {
-    static_cast<Neighbor*>(n)->enqueueSyncShutdown();
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueConnectionRestart();
 }
 
-void BgpNeighborSessionPathAttribute(void* n)
+DEFINE_CONFIG_APPLIER(BgpNeighbor, INHERIT_PEER_POLICY, ctx, name)
 {
-    static_cast<Neighbor*>(n)->enqueueBuildAttributeRanges();
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueSyncPeerPolicyTemplate(name ? std::optional{*name} : std::nullopt);
 }
 
-void BgpNeighborSessionRestart(void* n)
+DEFINE_CONFIG_APPLIER(BgpNeighbor, MAXIMUM_PREFIX, ctx, val)
 {
-    static_cast<Neighbor*>(n)->enqueueConnectionRestart();
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueMarkInbound(routing::bgp::InDirty::MAX_PREFIX);
 }
 
-void BgpNeighborSessionRemoteAs(void* n)
+DEFINE_CONFIG_APPLIER(BgpNeighbor, MAXIMUM_PREFIX_THRESHOLD, ctx, val)
 {
-    static_cast<Neighbor*>(n)->enqueueSyncRemoteAs();
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueMarkInbound(routing::bgp::InDirty::MAX_PREFIX);
 }
 
-void BgpNeighborSessionLocalAsPrepend(void* n)
+DEFINE_CONFIG_APPLIER(BgpNeighbor, MAXIMUM_PREFIX_RESTART, ctx, val)
 {
-    static_cast<Neighbor*>(n)->enqueueMarkAllOutbound(OutAttr::AS_PATH);
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueMarkInbound(routing::bgp::InDirty::MAX_PREFIX);
 }
 
-void BgpAfBestPath(void* a)
+DEFINE_CONFIG_APPLIER(BgpNeighbor, MAXIMUM_PREFIX_WARNING_ONLY, ctx, val)
 {
-    static_cast<AfInstanceBase*>(a)->enqueueMarkAfDirty(AfDirty::BEST_PATH);
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueMarkInbound(routing::bgp::InDirty::MAX_PREFIX);
 }
 
-void BgpAfMaxPaths(void* a)
+DEFINE_CONFIG_APPLIER(BgpNeighbor, NEXT_HOP_SELF, ctx, val)
 {
-    static_cast<AfInstanceBase*>(a)->enqueueMarkAfDirty(AfDirty::MAX_PATHS);
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueMarkAttr(routing::bgp::OutAttr::NEXT_HOP);
 }
 
-void BgpAfDistance(void* a)
+DEFINE_CONFIG_APPLIER(BgpNeighbor, NEXT_HOP_SELF_ALL, ctx, val)
 {
-    static_cast<AfInstanceBase*>(a)->enqueueMarkAfDirty(AfDirty::DISTANCE);
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueMarkAttr(routing::bgp::OutAttr::NEXT_HOP);
 }
 
-void BgpAfDampening(void* a)
+DEFINE_CONFIG_APPLIER(BgpNeighbor, NEXT_HOP_UNCHANGED, ctx, val)
 {
-    static_cast<AfInstanceBase*>(a)->enqueueMarkAfDirty(AfDirty::DAMPENING);
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueMarkAttr(routing::bgp::OutAttr::NEXT_HOP);
 }
 
-void BgpAfAggregate(void* a)
+DEFINE_CONFIG_APPLIER(BgpNeighbor, REMOVE_PRIVATE_AS, ctx, val)
 {
-    static_cast<AfInstanceBase*>(a)->enqueueMarkAfDirty(AfDirty::AGGREGATE);
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueMarkAttr(routing::bgp::OutAttr::AS_PATH);
 }
 
-void BgpAfNetwork(void* a)
+DEFINE_CONFIG_APPLIER(BgpNeighbor, ROUTE_REFLECTOR_CLIENT, ctx, val)
 {
-    static_cast<AfInstanceBase*>(a)->enqueueSyncNetwork();
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueMarkAttr(routing::bgp::OutAttr::REFLECTION);
 }
 
-void BgpAfAddPathSelect(void* a)
+DEFINE_CONFIG_APPLIER(BgpNeighbor, SEND_COMMUNITY, ctx, val)
 {
-    static_cast<AfInstanceBase*>(a)->enqueueMarkAfDirty(AfDirty::ADD_PATH_SELECT);
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+    {
+        routing::bgp::OutAttrMask m;
+        m.set(static_cast<size_t>(routing::bgp::OutAttr::COMMUNITIES));
+        m.set(static_cast<size_t>(routing::bgp::OutAttr::EXT_COMMUNITIES));
+        m.set(static_cast<size_t>(routing::bgp::OutAttr::LARGE_COMMUNITIES));
+        nbr->enqueueMarkAttrs(m);
+    }
+}
+
+DEFINE_CONFIG_APPLIER(BgpNeighbor, SEND_COMMUNITY_BOTH, ctx, val)
+{
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+    {
+        routing::bgp::OutAttrMask m;
+        m.set(static_cast<size_t>(routing::bgp::OutAttr::COMMUNITIES));
+        m.set(static_cast<size_t>(routing::bgp::OutAttr::EXT_COMMUNITIES));
+        m.set(static_cast<size_t>(routing::bgp::OutAttr::LARGE_COMMUNITIES));
+        nbr->enqueueMarkAttrs(m);
+    }
+}
+
+DEFINE_CONFIG_APPLIER(BgpNeighbor, SEND_COMMUNITY_EXTENDED, ctx, val)
+{
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+    {
+        routing::bgp::OutAttrMask m;
+        m.set(static_cast<size_t>(routing::bgp::OutAttr::COMMUNITIES));
+        m.set(static_cast<size_t>(routing::bgp::OutAttr::EXT_COMMUNITIES));
+        m.set(static_cast<size_t>(routing::bgp::OutAttr::LARGE_COMMUNITIES));
+        nbr->enqueueMarkAttrs(m);
+    }
+}
+
+DEFINE_CONFIG_APPLIER(BgpNeighbor, SEND_COMMUNITY_STANDARD, ctx, val)
+{
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+    {
+        routing::bgp::OutAttrMask m;
+        m.set(static_cast<size_t>(routing::bgp::OutAttr::COMMUNITIES));
+        m.set(static_cast<size_t>(routing::bgp::OutAttr::EXT_COMMUNITIES));
+        m.set(static_cast<size_t>(routing::bgp::OutAttr::LARGE_COMMUNITIES));
+        nbr->enqueueMarkAttrs(m);
+    }
+}
+
+DEFINE_CONFIG_APPLIER(BgpNeighbor, SEND_LABEL, ctx, val)
+{
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueConnectionRestart();
+}
+
+DEFINE_CONFIG_APPLIER(BgpNeighbor, SEND_LABEL_EXPLICIT_NULL, ctx, val)
+{
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueConnectionRestart();
+}
+
+DEFINE_CONFIG_APPLIER(BgpNeighbor, SOFT_RECONFIGURATION, ctx, val)
+{
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueMarkInbound(routing::bgp::InDirty::SOFT_RECONFIG);
+}
+
+DEFINE_CONFIG_APPLIER(BgpNeighbor, WEIGHT, ctx, val)
+{
+    if (routing::bgp::NeighborAf* nbr = Context::cast<routing::bgp::NeighborAf*>(ctx); nbr)
+        nbr->enqueueMarkInbound(routing::bgp::InDirty::POLICY);
+}
+
+DEFINE_CONFIG_APPLIER(BgpNeighborSession, SHUTDOWN, ctx, shutdown)
+{
+    if (routing::bgp::Neighbor* nbr = Context::cast<routing::bgp::Neighbor*>(ctx); nbr)
+        nbr->enqueueSyncShutdown(shutdown);
+}
+
+DEFINE_CONFIG_APPLIER(BgpNeighborSession, PATH_ATTRIBUTE_DISCARD, ctx, val, add)
+{
+    if (routing::bgp::Neighbor* nbr = Context::cast<routing::bgp::Neighbor*>(ctx); nbr)
+        nbr->enqueueBuildAttributeRanges();
+}
+
+DEFINE_CONFIG_APPLIER(BgpNeighborSession, PATH_ATTRIBUTE_TREAT_AS_WITHDRAW, ctx, val, add)
+{
+    if (routing::bgp::Neighbor* nbr = Context::cast<routing::bgp::Neighbor*>(ctx); nbr)
+        nbr->enqueueBuildAttributeRanges();
+}
+
+DEFINE_CONFIG_APPLIER(BgpNeighborSession, DISABLE_CONNECTION_CHECK, ctx, val)
+{
+    if (routing::bgp::Neighbor* nbr = Context::cast<routing::bgp::Neighbor*>(ctx); nbr)
+        nbr->enqueueConnectionRestart();
+}
+
+DEFINE_CONFIG_APPLIER(BgpNeighborSession, TRANSPORT_CONNECTION_MODE, ctx, val)
+{
+    if (routing::bgp::Neighbor* nbr = Context::cast<routing::bgp::Neighbor*>(ctx); nbr)
+        nbr->enqueueConnectionRestart();
+}
+
+DEFINE_CONFIG_APPLIER(BgpNeighborSession, TRANSPORT_MULTI_SESSION, ctx, val)
+{
+    if (routing::bgp::Neighbor* nbr = Context::cast<routing::bgp::Neighbor*>(ctx); nbr)
+        nbr->enqueueConnectionRestart();
+}
+
+DEFINE_CONFIG_APPLIER(BgpNeighborSession, UPDATE_SOURCE, ctx, val)
+{
+    if (routing::bgp::Neighbor* nbr = Context::cast<routing::bgp::Neighbor*>(ctx); nbr)
+        nbr->enqueueConnectionRestart();
+}
+
+DEFINE_CONFIG_APPLIER(BgpNeighborSession, REMOTE_AS, ctx, remoteAs)
+{
+    if (routing::bgp::Neighbor* nbr = Context::cast<routing::bgp::Neighbor*>(ctx); nbr)
+        nbr->enqueueSyncRemoteAs(remoteAs ? std::optional{*remoteAs} : std::nullopt);
+}
+
+DEFINE_CONFIG_APPLIER(BgpNeighborSession, LOCAL_AS, ctx, val)
+{
+    if (routing::bgp::Neighbor* nbr = Context::cast<routing::bgp::Neighbor*>(ctx); nbr)
+        nbr->enqueueMarkAllOutbound(routing::bgp::OutAttr::AS_PATH);
+}
+
+DEFINE_CONFIG_APPLIER(BgpNeighborSession, PEER_GROUP, ctx, name)
+{
+    if (routing::bgp::Neighbor* nbr = Context::cast<routing::bgp::Neighbor*>(ctx); nbr)
+        nbr->enqueueSyncPeerGroup(name ? std::optional{*name} : std::nullopt);
+}
+
+DEFINE_CONFIG_APPLIER(BgpNeighborSession, INHERIT_PEER_SESSION, ctx, name)
+{
+    if (routing::bgp::Neighbor* nbr = Context::cast<routing::bgp::Neighbor*>(ctx); nbr)
+        nbr->enqueueSyncPeerSessionTemplate(name ? std::optional{*name} : std::nullopt);
+}
+
+DEFINE_CONFIG_APPLIER(BgpAddressFamily, BGP_BEST_PATH_IGP_METRIC_IGNORE, ctx, val)
+{
+    if (routing::bgp::AfInstanceBase* af = Context::cast<routing::bgp::AfInstanceBase*>(ctx); af)
+        af->enqueueMarkAfDirty(routing::bgp::AfDirty::BEST_PATH);
+}
+
+DEFINE_CONFIG_APPLIER(BgpAddressFamily, MAXIMUM_PATHS_EBGP, ctx, val)
+{
+    if (routing::bgp::AfInstanceBase* af = Context::cast<routing::bgp::AfInstanceBase*>(ctx); af)
+        af->enqueueMarkAfDirty(routing::bgp::AfDirty::MAX_PATHS);
+}
+
+DEFINE_CONFIG_APPLIER(BgpAddressFamily, MAXIMUM_PATHS_IBGP, ctx, val)
+{
+    if (routing::bgp::AfInstanceBase* af = Context::cast<routing::bgp::AfInstanceBase*>(ctx); af)
+        af->enqueueMarkAfDirty(routing::bgp::AfDirty::MAX_PATHS);
+}
+
+DEFINE_CONFIG_APPLIER(BgpAddressFamily, DISTANCE_RANGE, ctx, val, add)
+{
+    if (routing::bgp::AfInstanceBase* af = Context::cast<routing::bgp::AfInstanceBase*>(ctx); af)
+        af->enqueueMarkAfDirty(routing::bgp::AfDirty::DISTANCE);
+}
+
+DEFINE_CONFIG_APPLIER(BgpAddressFamily, DISTANCE_BGP_EXTERNAL, ctx, val)
+{
+    if (routing::bgp::AfInstanceBase* af = Context::cast<routing::bgp::AfInstanceBase*>(ctx); af)
+        af->enqueueMarkAfDirty(routing::bgp::AfDirty::DISTANCE);
+}
+
+DEFINE_CONFIG_APPLIER(BgpAddressFamily, DISTANCE_BGP_INTERNAL, ctx, val)
+{
+    if (routing::bgp::AfInstanceBase* af = Context::cast<routing::bgp::AfInstanceBase*>(ctx); af)
+        af->enqueueMarkAfDirty(routing::bgp::AfDirty::DISTANCE);
+}
+
+DEFINE_CONFIG_APPLIER(BgpAddressFamily, DISTANCE_BGP_LOCAL, ctx, val)
+{
+    if (routing::bgp::AfInstanceBase* af = Context::cast<routing::bgp::AfInstanceBase*>(ctx); af)
+        af->enqueueMarkAfDirty(routing::bgp::AfDirty::DISTANCE);
+}
+
+DEFINE_CONFIG_APPLIER(BgpAddressFamily, DISTANCE_MBGP_EXTERNAL, ctx, val)
+{
+    if (routing::bgp::AfInstanceBase* af = Context::cast<routing::bgp::AfInstanceBase*>(ctx); af)
+        af->enqueueMarkAfDirty(routing::bgp::AfDirty::DISTANCE);
+}
+
+DEFINE_CONFIG_APPLIER(BgpAddressFamily, DISTANCE_MBGP_INTERNAL, ctx, val)
+{
+    if (routing::bgp::AfInstanceBase* af = Context::cast<routing::bgp::AfInstanceBase*>(ctx); af)
+        af->enqueueMarkAfDirty(routing::bgp::AfDirty::DISTANCE);
+}
+
+DEFINE_CONFIG_APPLIER(BgpAddressFamily, DISTANCE_MBGP_LOCAL, ctx, val)
+{
+    if (routing::bgp::AfInstanceBase* af = Context::cast<routing::bgp::AfInstanceBase*>(ctx); af)
+        af->enqueueMarkAfDirty(routing::bgp::AfDirty::DISTANCE);
+}
+
+DEFINE_CONFIG_APPLIER(BgpAddressFamily, AGGREGATE_ADDRESS, ctx, val, add)
+{
+    if (routing::bgp::AfInstanceBase* af = Context::cast<routing::bgp::AfInstanceBase*>(ctx); af)
+        af->enqueueMarkAfDirty(routing::bgp::AfDirty::AGGREGATE);
+}
+
+DEFINE_CONFIG_APPLIER(BgpAddressFamily, BGP_AGGREGATE_TIMER, ctx, val)
+{
+    if (routing::bgp::AfInstanceBase* af = Context::cast<routing::bgp::AfInstanceBase*>(ctx); af)
+        af->enqueueMarkAfDirty(routing::bgp::AfDirty::AGGREGATE);
+}
+
+DEFINE_CONFIG_APPLIER(BgpAddressFamily, NETWORK, ctx, val, add)
+{
+    if (routing::bgp::AfInstanceBase* af = Context::cast<routing::bgp::AfInstanceBase*>(ctx); af)
+        af->enqueueSyncNetwork();
 }
 
 // ---- Process-level (cast to BgpProcess) -------------------------------------------
 
 using routing::bgp::BgpProcess;
 
-void BgpProcNeighbors(void* p)
+DEFINE_CONFIG_APPLIER(Bgp, NEIGHBOR, ctx, reg, addr)
 {
-    static_cast<BgpProcess*>(p)->enqueueSyncNeighbors();
+    if (BgpProcess* p = Context::cast<routing::bgp::BgpProcess*>(ctx); p)
+        p->enqueueNeighbor(reg, addr);
 }
 
-void BgpProcAddressFamilies(void* p)
+DEFINE_CONFIG_APPLIER(Bgp, PEER_GROUP, ctx, reg, grp)
 {
-    static_cast<BgpProcess*>(p)->enqueueSyncAddressFamilies();
+    if (BgpProcess* p = Context::cast<BgpProcess*>(ctx); p)
+        p->enqueueSyncPeerGroup(reg, grp);
 }
 
-void BgpProcBestPath(void* p)
+DEFINE_CONFIG_APPLIER(Bgp, BGP_ALWAYS_COMPARE_MED, ctx, val)
 {
-    static_cast<BgpProcess*>(p)->enqueueMarkAllAfDirty(AfDirty::BEST_PATH);
+    if (BgpProcess* p = Context::cast<BgpProcess*>(ctx); p)
+        p->enqueueMarkAllAfDirty(routing::bgp::AfDirty::BEST_PATH);
 }
 
-void BgpProcInbound(void* p)
+DEFINE_CONFIG_APPLIER(Bgp, BGP_BEST_PATH_COMPARE_ROUTER_ID, ctx, val)
 {
-    static_cast<BgpProcess*>(p)->enqueueMarkAllInbound(InDirty::POLICY);
+    if (BgpProcess* p = Context::cast<BgpProcess*>(ctx); p)
+        p->enqueueMarkAllAfDirty(routing::bgp::AfDirty::BEST_PATH);
 }
 
-void BgpProcReflection(void* p)
+DEFINE_CONFIG_APPLIER(Bgp, BGP_BEST_PATH_MED_MISSING_AS_WORST, ctx, val)
 {
-    static_cast<BgpProcess*>(p)->enqueueMarkAllOutbound(OutAttr::REFLECTION);
+    if (BgpProcess* p = Context::cast<BgpProcess*>(ctx); p)
+        p->enqueueMarkAllAfDirty(routing::bgp::AfDirty::BEST_PATH);
 }
 
-void BgpProcRestart(void* p)
+DEFINE_CONFIG_APPLIER(Bgp, BGP_DETERMINISTIC_MED, ctx, val)
 {
-    static_cast<BgpProcess*>(p)->enqueueRestartAllSessions();
+    if (BgpProcess* p = Context::cast<BgpProcess*>(ctx); p)
+        p->enqueueMarkAllAfDirty(routing::bgp::AfDirty::BEST_PATH);
 }
 
-void BgpProcConfed(void* p)
+DEFINE_CONFIG_APPLIER(Bgp, BGP_ENFORCE_FIRST_AS, ctx, val)
 {
-    static_cast<BgpProcess*>(p)->enqueueSyncConfederation();
+    if (BgpProcess* p = Context::cast<BgpProcess*>(ctx); p)
+        p->enqueueMarkAllInbound(routing::bgp::InDirty::POLICY);
+}
+
+DEFINE_CONFIG_APPLIER(Bgp, BGP_SUPPRESS_INACTIVE, ctx, val)
+{
+    if (BgpProcess* p = Context::cast<BgpProcess*>(ctx); p)
+        p->enqueueMarkAllInbound(routing::bgp::InDirty::POLICY);
+}
+
+DEFINE_CONFIG_APPLIER(Bgp, BGP_CLIENT_TO_CLIENT_REFLECTION, ctx, val)
+{
+    if (BgpProcess* p = Context::cast<BgpProcess*>(ctx); p)
+        p->enqueueMarkAllOutbound(routing::bgp::OutAttr::REFLECTION);
+}
+
+DEFINE_CONFIG_APPLIER(Bgp, BGP_CLUSTER_ID, ctx, val)
+{
+    if (BgpProcess* p = Context::cast<BgpProcess*>(ctx); p)
+        p->enqueueMarkAllOutbound(routing::bgp::OutAttr::REFLECTION);
+}
+
+DEFINE_CONFIG_APPLIER(Bgp, BGP_ROUTER_ID, ctx, val)
+{
+    if (BgpProcess* p = Context::cast<BgpProcess*>(ctx); p)
+        p->enqueueRestartAllSessions();
+}
+
+DEFINE_CONFIG_APPLIER(Bgp, BGP_CONFEDERATION_IDENTIFIER, ctx, val)
+{
+    if (BgpProcess* p = Context::cast<BgpProcess*>(ctx); p)
+        p->enqueueSyncConfederation();
+}
+
+DEFINE_CONFIG_APPLIER(Bgp, BGP_CONFEDERATION_PEERS, ctx, val, add)
+{
+    if (BgpProcess* p = Context::cast<BgpProcess*>(ctx); p)
+        p->enqueueSyncConfederation();
+}
+
+DEFINE_CONFIG_APPLIER(Bgp, AF_VRF, ctx, reg, vrf)
+{
+    if (BgpProcess* p = Context::cast<BgpProcess*>(ctx); p)
+    {
+        reg->context().set(p);
+        reg->get<BgpAfVrf::VRF>().set(vrf);
+    }
+}
+
+DEFINE_CONFIG_APPLIER(BgpAfVrf, IPV4_UNICAST, ctx, reg)
+{
+    if (BgpProcess* p = Context::cast<BgpProcess*>(ctx); p)
+        p->enqueueAddressFamily({BGP_AFI_IPV4, BGP_SAFI_UNICAST}, reg, reg->resolveParent<config::BgpAfVrfRegistry>()->get<config::BgpAfVrf::VRF>().load());
+}
+
+DEFINE_CONFIG_APPLIER(BgpAfVrf, IPV6_UNICAST, ctx, reg)
+{
+    if (BgpProcess* p = Context::cast<BgpProcess*>(ctx); p)
+        p->enqueueAddressFamily({BGP_AFI_IPV6, BGP_SAFI_UNICAST}, reg, reg->resolveParent<config::BgpAfVrfRegistry>()->get<config::BgpAfVrf::VRF>().load());
 }
 }

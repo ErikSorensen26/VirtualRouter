@@ -33,7 +33,24 @@ struct NeighborConfigs
      * @param cfgs Owning reference to the BgpNeighborSessionRegistry for this neighbor.
      */
     NeighborConfigs(config::BgpNeighborSessionRegistry& cfgs)
-        : configs(cfgs) {}
+        : configs(cfgs)
+    {}
+
+    /**
+     * @brief Construct for a dynamically created neighbor, inheriting session config from `group`.
+     *
+     * Unlike the owned-registry constructor above, `configs` here aliases `group`'s
+     * own session registry rather than a per-neighbor one — there is no per-neighbor
+     * session config to own for a BGP_LISTEN_RANGE-spawned neighbor. `dynamicGroup`
+     * records the origin; see @ref Neighbor::getDynamic for how that gates template
+     * re-resolution.
+     *
+     * @param group Peer group this neighbor was spawned from via a BGP_LISTEN_RANGE match.
+     */
+    NeighborConfigs(PeerGroup& group)
+        : dynamicGroup(&group),
+          configs(group.getSessionConfigs())
+    {}
 
     /**
      * @brief Read a BgpNeighborSession config field (const overload).
@@ -98,12 +115,12 @@ struct NeighborConfigs
 
     config::BgpNeighborSessionRegistry& getConfigs() { return configs; }
     const config::BgpNeighborSessionRegistry& getConfigs() const { return configs; }
-    PeerGroup* getPeerGroup() { return peerGroup; }
+    const PeerGroup* getDynamicGroup() const { return dynamicGroup; }
     const PeerGroup* getPeerGroup() const { return peerGroup; }
-    PeerSessionTemplate* getPeerSessionTemplate() { return peerSession; }
     const PeerSessionTemplate* getPeerSessionTemplate() const { return peerSession; }
 
 private:
+    PeerGroup* dynamicGroup = nullptr;     ///< Non-owning; listener range created neighbor configs.
     PeerGroup* peerGroup = nullptr;        ///< Non-owning; set when this neighbor belongs to a peer-group.
     PeerSessionTemplate* peerSession = nullptr; ///< Non-owning; set when a session template is applied.
     config::BgpNeighborSessionRegistry& configs; ///< Per-neighbor session config registry (owned reference).

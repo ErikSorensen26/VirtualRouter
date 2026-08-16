@@ -6,7 +6,7 @@
 //all neighbor af sessions will already be up because they go up once the base session goes up
 //if session is already established, assume its a temp cid, get af, apply it to the session
 
-#include "bgp/BgpProcess.h"
+#include "bgp/BgpScope.h"
 #include "packet/headers/BgpHeader.hpp"
 #include "packet/headers/embedded/bgp/BgpOpenHeader.hpp"
 #include "bgp/session/Session.h"
@@ -83,7 +83,7 @@ void BgpRx::handleIncoming(Session& session, transport::tcp::RxConsumer& consume
                 Notification error;
                 error.code = BGP_NOTIFICATION_HEADER_BAD_MESSAGE_LENGTH;
                 error.data.resize(2);
-                utils::writeU16(error.data.data(), length);
+                utils::write<uint16_t>(error.data.data(), length);
                 session.sendNotification(error);
                 session.postEvent(FsmEvent::BGP_HEADER_ERR);
                 return;
@@ -394,7 +394,7 @@ bool BgpRx::processUpdate(Session& session, std::span<uint8_t> payload, Notifica
         return false;
     }
 
-    AddressFamilyVariant* af = session.process.findAddressFamily(update.afi);
+    AddressFamilyVariant* af = session.scope.findAddressFamily(update.afi);
     if (!af) // Af not enabled
     {
         error.code = BGP_NOTIFICATION_UPDATE_MALFORMED_ATTR_LIST;
@@ -788,14 +788,14 @@ bool BgpRx::processRouteRefresh(Session& session, std::span<uint8_t> payload, No
             afNbr->updateOrfFilter(orfEntries);
         if (subtype == BGP_ORF_WHEN_IMMEDIATE)
         {
-            AddressFamilyVariant* af = session.process.findAddressFamily(family);
+            AddressFamilyVariant* af = session.scope.findAddressFamily(family);
             if (af)
                 std::visit([&](auto&& fam) { fam.refreshPeer(session); }, *af);
         }
     }
     else
     {
-        AddressFamilyVariant* af = session.process.findAddressFamily(family);
+        AddressFamilyVariant* af = session.scope.findAddressFamily(family);
         if (af)
         {
             if (subtype == BGP_ROUTE_REFRESH_BORR)

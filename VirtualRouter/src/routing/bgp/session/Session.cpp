@@ -5,14 +5,15 @@
 #include "Session.h"
 #include "bgp/session/Collision.h"
 #include "bgp/neighbor/Neighbor.h"
-#include "bgp/BgpProcess.h"
+#include "bgp/BgpScope.h"
+#include "bgp/af/ScopeAccessor.h"
 #include "bgp/transport/BgpRx.h"
 #include "bgp/transport/BgpTx.h"
 
 namespace routing::bgp
 {
-Session::Session(Neighbor& nbr, BgpProcess& proc) noexcept
-    : process(proc),
+Session::Session(Neighbor& nbr, BgpScope& s) noexcept
+    : scope(s),
       neighbor(nbr),
       base(nbr.configs.get<config::BgpNeighborSession::BGP_BASE>().get()),
       fsm(*this),
@@ -24,8 +25,8 @@ Session::Session(Neighbor& nbr, BgpProcess& proc) noexcept
         });
 }
 
-Session::Session(Neighbor& nbr, const AfiSafi& family, BgpProcess& proc) noexcept
-    : Session(nbr, proc)
+Session::Session(Neighbor& nbr, const AfiSafi& family, BgpScope& s) noexcept
+    : Session(nbr, s)
 {
     multiSession = family;
     localCaps.multiSessionFamilies = {family};
@@ -69,7 +70,7 @@ void Session::startActiveMultiSession(const AfiSafi& family)
         !negotiated.multiSessionFamilies.contains(family))
         return;
 
-    auto [it, ok] = std::get<MultiSession>(multiSession).sessions.try_emplace(family, neighbor, family, process);
+    auto [it, ok] = std::get<MultiSession>(multiSession).sessions.try_emplace(family, neighbor, family, scope);
     if (ok)
         it->second.postEvent(FsmEvent::MANUAL_START);
 }
@@ -80,19 +81,19 @@ void Session::startPassiveMultiSession(const AfiSafi& family)
         !negotiated.multiSessionFamilies.contains(family))
         return;
     
-    auto [it, ok] = std::get<MultiSession>(multiSession).sessions.try_emplace(family, neighbor, family, process);
+    auto [it, ok] = std::get<MultiSession>(multiSession).sessions.try_emplace(family, neighbor, family, scope);
     if (ok)
         it->second.postEvent(FsmEvent::MANUAL_START_PASSIVE_TCP);
 }
 
 void Session::buildLocalCapabilities()
 {
-    auto& procCfg = process.configs;
+    auto& procCfg = scope.configs();
 
     {
         auto& cfgs = neighbor.getConfigs();
         auto localAsField = cfgs.get<config::BgpNeighborSession::LOCAL_AS>();
-        localCaps.asn = localAsField.hasValue() ? config::BgpLocalAs::as(localAsField.load()) : neighbor.getProcess().asNumber;
+        localCaps.asn = localAsField.hasValue() ? localAsField.load().as() : ScopeAccessor::getAsNum(scope);
     }
 
     localCaps.asn32bit = true;
@@ -112,7 +113,7 @@ void Session::buildLocalCapabilities()
     localCaps.linkLocalNextHop = true;
 
     // ADD-PATH and ORF: advertise per-AF capabilities based on neighbor AF config.
-    process.forEachAf([&](const AfiSafi& afi) {
+    scope.forEachAf([&](const AfiSafi& afi) {
         localCaps.mpFamilies.push_back(afi);
 
         NeighborAf* afNbr = neighbor.findAfNeighbor(afi);
@@ -169,7 +170,7 @@ void Session::acceptConnection(transport::tcp::Connection&& conn)
     // and drop the newcomer, rather than leaking the connection we would overwrite.
     if (passiveConn.has_value())
     {
-        process.routingInstance.getTcp().close(conn.getId());
+        scope.routingInstance.getTcp().close(conn.getId());
         return;
     }
 
@@ -181,8 +182,8 @@ void Session::acceptConnection(transport::tcp::Connection&& conn)
 
 void Session::initiateConnection()
 {
-    auto& proc = process;
-    auto& tcp = proc.routingInstance.getTcp();
+    auto& sc = scope;
+    auto& tcp = sc.routingInstance.getTcp();
 
     transport::tcp::ConnectOptions opts;
     opts.policy.pathMtuDiscovery =
@@ -198,11 +199,11 @@ void Session::initiateConnection()
     }
     else
     {
-        // Base session: callbacks route through BgpProcess by remote address
-        opts.callback = BgpProcess::onConnectCallback;
-        opts.callbackUser = &proc;
-        opts.recvCallback = BgpProcess::onReceiveCallback;
-        opts.recvUser = &proc;
+        // Base session: callbacks route through BgpScope by remote address
+        opts.callback = BgpScope::onConnectCallback;
+        opts.callbackUser = &sc;
+        opts.recvCallback = BgpScope::onReceiveCallback;
+        opts.recvUser = &sc;
     }
 
     activeConn.emplace(tcp.connect(
@@ -226,7 +227,7 @@ void Session::closeActiveConnection() noexcept
 {
     if (activeConn.has_value())
     {
-        auto& tcp = process.routingInstance.getTcp();
+        auto& tcp = scope.routingInstance.getTcp();
         tcp.close(activeConn->getId());
         activeConn.reset();
     }
@@ -237,7 +238,7 @@ void Session::closePassiveConnection() noexcept
 {
     if (passiveConn.has_value())
     {
-        auto& tcp = process.routingInstance.getTcp();
+        auto& tcp = scope.routingInstance.getTcp();
         tcp.close(passiveConn->getId());
         passiveConn.reset();
     }
@@ -246,7 +247,7 @@ void Session::closePassiveConnection() noexcept
 
 void Session::closeAllConnections() noexcept
 {
-    auto& tcp = process.routingInstance.getTcp();
+    auto& tcp = scope.routingInstance.getTcp();
 
     if (activeConn.has_value())
     {
@@ -275,14 +276,14 @@ void Session::handleIncoming(transport::tcp::RxConsumer& consumer)
 
 void Session::onFsmTransition(FsmState from, FsmState to, FsmEvent /*trigger*/)
 {
-    auto& proc = process;
+    auto& sc = scope;
     const bool isChild = std::holds_alternative<AfiSafi>(multiSession);
 
     if (to == FsmState::ESTABLISHED)
     {
         if (!isChild)
         {
-            proc.onSessionEstablished(*this);
+            sc.onSessionEstablished(*this);
 
             if (negotiated.multiSess)
             {
@@ -301,7 +302,7 @@ void Session::onFsmTransition(FsmState from, FsmState to, FsmEvent /*trigger*/)
     else if (from == FsmState::ESTABLISHED)
     {
         if (!isChild)
-            proc.onSessionDown(*this);
+            sc.onSessionDown(*this);
     }
 }
 
@@ -403,7 +404,7 @@ bool Session::verifyConnection(uint64_t cid)
 
 bool Session::resolveCollision(uint32_t incomingPeerRid)
 {
-    uint32_t localRid = process.getRouterId();
+    uint32_t localRid = ScopeAccessor::getRid(scope);
     bool outgoing = activeConn.has_value();
 
     bool keep = CollisionDetector::shouldKeep(outgoing, localRid, incomingPeerRid);

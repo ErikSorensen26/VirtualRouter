@@ -101,14 +101,24 @@ using AddressFamilyVariant = detail::AddressFamilyVariant<Nlri>::type;
  * @brief Resolves the `AfiSafi` compile-time constant `AF` to the matching
  *        `AddressFamilyInstance` specialisation.
  *
- * Usage: `AddressFamily<BGP_AFI_IPV4_UNICAST>` yields
+ * Usage: `AddressFamily<BGP_AFI_IPV4_UNICAST>::type` yields
  * `AddressFamilyInstance<ExampleNlri>` (or whichever policy registered that
  * AFI/SAFI).  A hard static_assert fires when `AF` is unregistered.
+ *
+ * This is a class template rather than an alias template because GCC 13 hits
+ * an internal compiler error (ICE in lvalue_kind) when an alias template with
+ * a class-type (structural) non-type template parameter is instantiated with
+ * an argument that comes from a dependent expression such as `T::afi` inside
+ * another template. See BgpScope.cpp's enableAddressFamily() for the call
+ * site that originally tripped this.
  *
  * @tparam AF  An `AfiSafi` constant (e.g. `{BGP_AFI_IPV4, BGP_SAFI_UNICAST}`).
  */
 template <AfiSafi AF>
-using AddressFamily = AddressFamilyInstance<typename detail::AddressFamily<AF, Nlri>::type>;
+struct AddressFamily
+{
+    using type = AddressFamilyInstance<typename detail::AddressFamily<AF, Nlri>::type>;
+};
 
 /**
  * @brief Compile-time predicate: `true` when `AF` names a registered address family.

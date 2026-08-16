@@ -8,7 +8,8 @@
 #include "BgpTx.h"
 #include "tcp/Connection.h"
 #include "bgp/neighbor/Neighbor.h"
-#include "bgp/BgpProcess.h"
+#include "bgp/BgpScope.h"
+#include "bgp/af/ScopeAccessor.h"
 
 namespace routing::bgp
 {
@@ -651,9 +652,9 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, t
 void BgpTx::buildOpen(transport::tcp::Connection& connection, Session& session)
 {
     const auto& caps = session.getLocalCaps();
-    const auto& proc = session.process;
-    const uint32_t localAs = caps.asn != 0 ? caps.asn : proc.asNumber;
-    const uint32_t rid = proc.getRouterId();
+    auto& scope = session.scope;
+    const uint32_t localAs = caps.asn != 0 ? caps.asn : ScopeAccessor::getAsNum(scope);
+    const uint32_t rid = ScopeAccessor::getRid(scope);
 
     uint16_t openSize = packet::BgpHeader::fixedSize + packet::BgpOpenHeader::fixedSize;
     std::span<uint8_t> buf = connection.reserveSpan(openSize);

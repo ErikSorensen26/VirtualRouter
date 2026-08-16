@@ -11,7 +11,7 @@
 #include <LpcTrie.hpp>
 #include <VirtualRouter.h>
 
-#include "ProcessAccessor.h"
+#include "ScopeAccessor.h"
 #include "NlriPolicy.hpp"
 #include "bgp/BgpTypes.hpp"
 #include "bgp/rib/RibTypes.hpp"
@@ -38,14 +38,14 @@ using ExampleNlriType = bgp::NlriPolicy<types::IPv4Prefix, bgp::LocRibType::LPC_
  *
  * ## Architectural Role
  * ExampleNlri is the glue between the AFI-agnostic AddressFamilyInstance and the
- * VRF's RoutingTable. It is constructed once per BGP process and VRF pair.
+ * VRF's RoutingTable. It is constructed once per BGP scope and VRF pair.
  * AddressFamilyInstance calls `installRoute`/`withdrawRoute` on the policy object;
  * ExampleNlri translates those calls into RoutingTable operations.
  *
  * ## Lifecycle & Ownership
  * Owned by AddressFamilyInstance<ExampleNlri> as data member `policy`. The `rib`
  * reference must remain valid for the lifetime of the policy, which is guaranteed
- * because the VRF outlives the BGP process.
+ * because the VRF outlives the BGP scope.
  *
  * @see NlriPolicy, AddressFamilyInstance
  */
@@ -53,13 +53,13 @@ class ExampleNlri : public ExampleNlriType
 {
 public:
     /**
-     * @brief Constructs the NLRI policy bound to a VRF and BGP process.
+     * @brief Constructs the NLRI policy bound to a VRF and BGP scope.
      * @ingroup BGP_AF
      *
-     * @param vrf   VRF whose routing table receives installed routes.
-     * @param proc  BGP process; used by the NlriPolicy base to access AS number and config.
+     * @param vrf    VRF whose routing table receives installed routes.
+     * @param scope  BGP scope; used by the NlriPolicy base to access AS number and config.
      */
-    ExampleNlri(core::VirtualRouter& vrf, bgp::BgpProcess& proc) : ExampleNlriType(vrf, proc),
+    ExampleNlri(core::VirtualRouter& vrf, bgp::BgpScope& scope) : ExampleNlriType(vrf, scope),
         rib(vrf.getRib()) {}
 
     /**
@@ -109,7 +109,7 @@ public:
      */
     void withdrawRoute(const types::IPv4Prefix& nlri) override
     {
-        rib.removeRoute(nlri.addr, nlri.prefixLength, core::RouteSource::BGP, bgp::ProcessAccessor::getAsNum(process));
+        rib.removeRoute(nlri.addr, nlri.prefixLength, core::RouteSource::BGP, bgp::ScopeAccessor::getAsNum(scope));
     }
 
     /**
@@ -118,7 +118,7 @@ public:
      */
     void withdrawRoutes(const std::vector<Nlri>& nlri) override
     {
-        rib.removeRoutes(nlri, core::RouteSource::BGP, bgp::ProcessAccessor::getAsNum(process));
+        rib.removeRoutes(nlri, core::RouteSource::BGP, bgp::ScopeAccessor::getAsNum(scope));
     }
 
     /**
@@ -186,7 +186,7 @@ private:
         entry->prefix        = install.route.route.nlri.addr;
         entry->length        = install.route.route.nlri.prefixLength;
         entry->source        = core::RouteSource::BGP;
-        entry->processId     = bgp::ProcessAccessor::getAsNum(process);
+        entry->processId     = bgp::ScopeAccessor::getAsNum(scope);
         entry->adminDistance = install.distance;
         entry->metric        = install.metric;
 

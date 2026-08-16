@@ -10,7 +10,7 @@
 
 namespace routing::bgp
 {
-class BgpProcess;
+class BgpScope;
 
 /**
  * @brief BGP best path selection configuration options.
@@ -43,21 +43,21 @@ struct BestPathConfig
  * 7. Oldest route (lowest router ID or peer IP)
  *
  * ## Concurrency Model
- * Thread-safe if BgpProcess is not modified concurrently. Intended for use
- * from BgpProcess scheduler thread only.
+ * Thread-safe if BgpScope is not modified concurrently. Intended for use
+ * from BgpScope scheduler thread only.
  *
- * @see BgpProcess, DecisionEngine
+ * @see BgpScope, DecisionEngine
  */
 class BestPathComparator
 {
 public:
     /**
-     * @brief Constructs a best path comparator for the given BGP process.
+     * @brief Constructs a best path comparator for the given BGP scope.
      *
-     * @param p BGP process that owns this comparator.
+     * @param s BGP scope that owns this comparator.
      * @param cfg Configuration for best path tie-breaking (optional).
      */
-    explicit BestPathComparator(BgpProcess& p, BestPathConfig cfg = {});
+    explicit BestPathComparator(BgpScope& s, BestPathConfig cfg = {});
 
     /**
      * @brief Compares two routes and returns true if lhs is better than rhs.
@@ -104,7 +104,7 @@ private:
     static bool sameNeighborAs(const InboundRouteBase& lhsRoute, const InboundRouteBase& rhsRoute,
                                bool medConfed);
 
-    BgpProcess& proc;           ///< Reference to owning BGP process.
+    BgpScope& scope;          ///< Reference to owning BGP scope.
     BestPathConfig config;      ///< Best path selection configuration.
 };
 } // namespace routing::bgp

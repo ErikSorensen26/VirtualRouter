@@ -11,31 +11,21 @@
 
 namespace routing::bgp
 {
-NeighborAf::NeighborAf(const AfiSafi& fam, AddressFamilyVariant& af, Neighbor& p)
+NeighborAf::NeighborAf(config::BgpNeighborRegistry& cfgs, const AfiSafi& fam, AddressFamilyVariant& af, Neighbor& p)
     : family(fam),
       mpNegotiated(false),
       parent(p),
-      configs(fam, [&p, &fam]() -> config::BgpNeighborRegistry& {
-          auto& afEntry = p.process.getConfigs().get<config::Bgp::ADDRESS_FAMILIES>().get().at(fam.flatten());
-          return afEntry->get<config::BgpAddressFamily::NEIGHBOR>().emplaceBack(p.neighborAddress);
-      }()),
+      configs(fam, cfgs),
       af(af)
 {
     configs.getConfigs().context().set(this);
+    configs.getConfigs().get<config::BgpNeighbor::AF_BASE>().get().context().set(this);
 
     // Resolve peer group
-    {
-        auto pgField = parent.configs.get<config::BgpNeighborSession::PEER_GROUP>();
-        if (pgField.hasValue())
-            configs.setPeerGroup(parent.ntable.lookupPeerGroup(pgField.load()));
-    }
+    parent.ntable.syncPeerGroup(*this);
 
     // Resolve session-level peer template from INHERIT_PEER_SESSION.
-    {
-        auto inhPolField = configs.get<config::BgpNeighbor::INHERIT_PEER_POLICY>();
-        if (inhPolField.hasValue())
-            configs.setPeerPolicyTemplate(parent.ntable.lookupPeerPolicyTemplate(inhPolField.load()));
-    }
+    parent.ntable.syncPeerPolicyTemplate(*this);
 }
 
 void NeighborAf::enqueueSyncAdditionalPaths()
@@ -43,14 +33,14 @@ void NeighborAf::enqueueSyncAdditionalPaths()
     enqueueMarkAttr(OutAttr::ADD_PATH);
 }
 
-void NeighborAf::enqueueSyncDefaultOriginate()
+void NeighborAf::enqueueSyncDefaultOriginate(bool originate)
 {
     // Sent/withdrawn explicitly (not Loc-RIB derived), so applied immediately.
-    parent.scheduler.post([this]() {
+    parent.scheduler.post([this, originate]() {
         if (!parent.session || !parent.session->established())
             return;
-        std::visit([this](auto& fam){
-            if (configs.get<config::BgpAfBase::DEFAULT_ORIGINATE>().load())
+        std::visit([this, originate](auto& fam){
+            if (originate)
                 fam.sendDefaultOriginate(*parent.session);
             else
                 fam.withdrawDefaultOriginate(*parent.session);
@@ -63,11 +53,11 @@ void NeighborAf::enqueueSyncSlowPeer()
     enqueueMarkAttr(OutAttr::NEXT_HOP);
 }
 
-void NeighborAf::enqueueSyncActivate()
+void NeighborAf::enqueueSyncActivate(bool active)
 {
-    parent.scheduler.post([this]() {
-        std::visit([this](auto& fam) {
-            if (configs.get<config::BgpNeighbor::ACTIVATE>().load())
+    parent.scheduler.post([this, active]() {
+        std::visit([this, active](auto& fam) {
+            if (active)
             {
                 // Dumping the Loc-RIB only makes sense once the session can carry it.
                 if (parent.session && parent.session->established())
@@ -121,6 +111,18 @@ void NeighborAf::enqueueMarkInbound(InDirty category)
 void NeighborAf::enqueueConnectionRestart()
 {
     parent.enqueueConnectionRestart();
+}
+
+void NeighborAf::enqueueSyncPeerPolicyTemplate(std::optional<std::string> name)
+{
+    parent.scheduler.post([this, name = std::move(name)]() {
+        parent.ntable.syncPeerPolicyTemplate(*this);
+    });
+}
+
+void NeighborAf::setPeerGroupSync(PeerGroup* pg)
+{
+    configs.setPeerGroup(pg);
 }
 
 void NeighborAf::updateOrfFilter(const std::vector<OrfPrefixEntry>& entries)

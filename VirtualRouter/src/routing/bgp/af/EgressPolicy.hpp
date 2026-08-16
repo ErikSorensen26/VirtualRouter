@@ -8,9 +8,9 @@
  * address-family instance and the debounced config-apply path share one implementation
  * of group/member egress policy, aggregate egress policy, and ORF filtering.
  *
- * The transforms are pure with respect to instance RIB state: they read process config
+ * The transforms are pure with respect to instance RIB state: they read scope config
  * and the target @ref Session, and produce/modify a @ref PathAttribute. They depend only
- * on the owning process and the AFI/SAFI this policy serves.
+ * on the owning scope and the AFI/SAFI this policy serves.
  */
 
 #ifndef BGP_EGRESS_POLICY_HPP
@@ -21,7 +21,7 @@
 #include <vector>
 #include <IPAddress.h>
 
-#include "ProcessAccessor.h"
+#include "ScopeAccessor.h"
 #include "configs/registry/router/BgpRegistry.h"
 #include "bgp/BgpTypes.hpp"
 #include "bgp/rib/RibTypes.hpp"
@@ -71,7 +71,7 @@ inline AsPathSegment& getConfedAsSegment(Attributes& attrs)
  * @brief Per-address-family egress path-attribute policy.
  * @ingroup BGP_AF
  *
- * Bound to the owning @ref BgpProcess and the AFI/SAFI it serves. All methods are const:
+ * Bound to the owning @ref BgpScope and the AFI/SAFI it serves. All methods are const:
  * they never mutate instance state, only the @ref PathAttribute passed to them (or the
  * copy they return), so a single instance can be shared by the AFI and its config-apply
  * flush.
@@ -87,7 +87,7 @@ public:
     /// Default LOCAL_PREF stamped on iBGP updates that carry none (RFC 4271 5.1.5).
     static constexpr uint32_t kDefaultLocalPref = 100;
 
-    EgressPolicy(BgpProcess& proc, AfiSafi fam) : process(proc), family(fam) {}
+    EgressPolicy(BgpScope& s, AfiSafi fam) : scope(s), family(fam) {}
 
     /**
      * @brief Prepends the appropriate local AS to the leading AS_SEQUENCE for an eBGP peer.
@@ -101,34 +101,36 @@ public:
     void prependLocalAs(Attributes& attrs, const NeighborConfigs& sesCfgs) const
     {
         const uint32_t confedId = getConfedId();
-        auto localAs = sesCfgs.get<config::BgpNeighborSession::LOCAL_AS_AS>();
-        const bool localAsEnabled = sesCfgs.get<config::BgpNeighborSession::LOCAL_AS>().load();
+        auto localAsField = sesCfgs.get<config::BgpNeighborSession::LOCAL_AS>();
+        const bool localAsEnabled = localAsField.hasValue();
+        const auto localAsTuple = localAsField.load();
+        const uint32_t localAs = localAsTuple.as();
+        const auto& localAsProps = localAsTuple.props();
 
-        if (localAsEnabled && localAs.hasValue() &&
-            sesCfgs.get<config::BgpNeighborSession::LOCAL_AS_NO_PREPEND>().load())
+        if (localAsEnabled && localAsProps.test(config::bgp::BgpLocalAsProps::NO_PREPEND))
             return; // no-prepend: advertise the AS-PATH unchanged
 
         AsPathSegment& seg = getAsSegment(attrs);
-        if (!localAsEnabled || !localAs.hasValue())
+        if (!localAsEnabled)
             seg.asns.insert(seg.asns.begin(), confedId);
-        else if (sesCfgs.get<config::BgpNeighborSession::LOCAL_AS_REPLACE_AS>().load())
-            seg.asns.insert(seg.asns.begin(), localAs.load());
+        else if (localAsProps.test(config::bgp::BgpLocalAsProps::REPLACE_AS))
+            seg.asns.insert(seg.asns.begin(), localAs);
         else
         {
             seg.asns.insert(seg.asns.begin(), confedId);
-            seg.asns.insert(seg.asns.begin(), localAs.load());
+            seg.asns.insert(seg.asns.begin(), localAs);
         }
     }
 
     /**
      * @brief Returns the configured cluster ID, falling back to the BGP router ID.
      *
-     * @return Configured BGP_CLUSTER_ID, or the process router ID if not set.
+     * @return Configured BGP_CLUSTER_ID, or the scope's router ID if not set.
      */
     uint32_t getClusterId() const
     {
-        auto cidField = ProcessAccessor::getConfigs(process).get<config::Bgp::BGP_CLUSTER_ID>();
-        return cidField.hasValue() ? cidField.load() : ProcessAccessor::getRid(process);
+        auto cidField = ScopeAccessor::getConfigs(scope).get<config::Bgp::BGP_CLUSTER_ID>();
+        return cidField.hasValue() ? cidField.load() : ScopeAccessor::getRid(scope);
     }
 
     /**
@@ -138,8 +140,8 @@ public:
      */
     uint32_t getConfedId() const
     {
-        auto cidField = ProcessAccessor::getConfigs(process).get<config::Bgp::BGP_CONFEDERATION_IDENTIFIER>();
-        return cidField.hasValue() ? cidField.load() : ProcessAccessor::getAsNum(process);
+        auto cidField = ScopeAccessor::getConfigs(scope).get<config::Bgp::BGP_CONFEDERATION_IDENTIFIER>();
+        return cidField.hasValue() ? cidField.load() : ScopeAccessor::getAsNum(scope);
     }
 
     /**
@@ -181,7 +183,7 @@ public:
         {
             // RR attributes; prepend local member AS as a new AS_CONFED_SEQUENCE entry.
             AsPathSegment& seg = getConfedAsSegment(pa.attrs);
-            const uint32_t routerAs = ProcessAccessor::getAsNum(process);
+            const uint32_t routerAs = ScopeAccessor::getAsNum(scope);
             seg.asns.insert(seg.asns.begin(), routerAs);
         }
         else
@@ -235,7 +237,7 @@ public:
         {
             if ((cfgs.get<config::BgpNeighbor::NEXT_HOP_SELF>().load() &&
                  route.sourceNeighbor &&
-                 route.sourceNeighbor->getParent().getRouterId() != ProcessAccessor::getRid(process)) ||
+                 route.sourceNeighbor->getParent().getRouterId() != ScopeAccessor::getRid(scope)) ||
                 cfgs.get<config::BgpNeighbor::NEXT_HOP_SELF_ALL>().load())
                 pa.path.nextHop = localAddress(session, pa.path.nextHop);
         }
@@ -260,7 +262,13 @@ public:
     }
 
     /**
-     * TODO add doxy comment
+     * @brief Sets @p pa's NEXT_HOP, rewriting it to our own address when eBGP or
+     *        `NEXT_HOP_SELF`/`NEXT_HOP_SELF_ALL` require it.
+     *
+     * For eBGP peers the next hop is always ours unless `NEXT_HOP_UNCHANGED` is
+     * set (and `NEXT_HOP_SELF_ALL` doesn't override it). For iBGP peers the
+     * source's next hop is kept unless `NEXT_HOP_SELF` applies to a route we
+     * didn't originate ourselves, or `NEXT_HOP_SELF_ALL` is set.
      */
     void deriveNextHop(PathAttribute& pa, const PathAttribute& src,
                        const InboundRoute<NlriT>& route, const NeighborAf& afNbr,
@@ -279,7 +287,7 @@ public:
         {
             if ((cfgs.get<config::BgpNeighbor::NEXT_HOP_SELF>().load() &&
                  route.sourceNeighbor &&
-                 route.sourceNeighbor->getParent().getRouterId() != ProcessAccessor::getRid(process)) ||
+                 route.sourceNeighbor->getParent().getRouterId() != ScopeAccessor::getRid(scope)) ||
                 cfgs.get<config::BgpNeighbor::NEXT_HOP_SELF_ALL>().load())
                 pa.path.nextHop = localAddress(session, pa.path.nextHop);
         }
@@ -301,7 +309,14 @@ public:
     }
 
     /**
-     * TODO add doxy comment
+     * @brief Sets @p pa's AS_PATH, applying confederation stripping, AS prepend,
+     *        and private-AS removal as configured.
+     *
+     * For eBGP peers, confederation segments are stripped, our own AS is
+     * prepended (per `LOCAL_AS`/`REMOVE_PRIVATE_AS`), and private ASNs are
+     * removed if configured. For confederation eBGP peers, a confederation
+     * segment carrying our AS is prepended instead. iBGP peers get the
+     * source's AS_PATH unchanged.
      */
     void deriveAsPath(PathAttribute& pa, const PathAttribute& src,
                       const NeighborAf& afNbr, const Session& session) const
@@ -327,12 +342,13 @@ public:
         else if (session.neighbor.isConfedEbgp())
         {
             AsPathSegment& seg = getConfedAsSegment(pa.attrs);
-            seg.asns.insert(seg.asns.begin(), ProcessAccessor::getAsNum(process));
+            seg.asns.insert(seg.asns.begin(), ScopeAccessor::getAsNum(scope));
         }
     }
 
     /**
-     * TODO add doxy comment
+     * @brief Sets @p pa's standard COMMUNITIES, clearing them for eBGP peers
+     *        unless @ref sendStd allows sending them.
      */
     void deriveCommunities(PathAttribute& pa, const PathAttribute& src, const NeighborAf& afNbr,
                            const Session& session) const
@@ -343,7 +359,8 @@ public:
     }
 
     /**
-     * TODO add doxy comment
+     * @brief Sets @p pa's EXTENDED_COMMUNITIES, clearing them for eBGP peers
+     *        unless @ref sendExt allows sending them.
      */
     void deriveExtCommunities(PathAttribute& pa, const PathAttribute& src, const NeighborAf& afNbr,
                               const Session& session) const
@@ -354,7 +371,8 @@ public:
     }
 
     /**
-     * TODO add doxy comment
+     * @brief Sets @p pa's LARGE_COMMUNITIES, clearing them for eBGP peers unless
+     *        @ref sendStd or @ref sendExt allows sending them.
      */
     void deriveLargeCommunities(PathAttribute& pa, const PathAttribute& src, const NeighborAf& afNbr,
                                 const Session& session) const
@@ -365,7 +383,8 @@ public:
     }
 
     /**
-     * TODO add doxy comment
+     * @brief Sets @p pa's LOCAL_PREF, cleared entirely for eBGP peers (RFC 4271:
+     *        LOCAL_PREF is only exchanged between iBGP peers).
      */
     void deriveLocalPref(PathAttribute& pa, const PathAttribute& src, const Session& session) const
     {
@@ -373,7 +392,8 @@ public:
     }
 
     /**
-     * TODO add doxy comment
+     * @brief True if standard COMMUNITIES should be sent to @p afNbr
+     *        (`SEND_COMMUNITY`, `SEND_COMMUNITY_BOTH`, or `SEND_COMMUNITY_STANDARD`).
      */
     bool sendStd(const NeighborAf& afNbr) const
     {
@@ -384,7 +404,8 @@ public:
     }
 
     /**
-     * TODO add doxy comment
+     * @brief True if extended COMMUNITIES should be sent to @p afNbr
+     *        (`SEND_COMMUNITY_EXTENDED` or `SEND_COMMUNITY_BOTH`).
      */
     bool sendExt(const NeighborAf& afNbr) const
     {
@@ -411,10 +432,11 @@ public:
     void stripPrivateAsIfConfigured(std::vector<AsPathSegment>& asPath, const NeighborAf& afNbr) const
     {
         const auto& cfgs = afNbr.configs;
-        const bool removeAll     = cfgs.get<config::BgpNeighbor::REMOVE_PRIVATE_AS_ALL>().load();
-        const bool removePrivate = cfgs.get<config::BgpNeighbor::REMOVE_PRIVATE_AS>().load();
+        auto removePrivateAsField = cfgs.get<config::BgpNeighbor::REMOVE_PRIVATE_AS>();
+        const bool removePrivate = removePrivateAsField.hasValue();
+        const bool removeAll = removePrivate && removePrivateAsField.load().all();
 
-        if (!removeAll && !removePrivate)
+        if (!removePrivate)
             return;
 
         if (!removeAll)
@@ -474,7 +496,7 @@ public:
         {
             // Prepend member AS as AS_CONFED_SEQUENCE; keep LOCAL_PREF.
             AsPathSegment& seg = getConfedAsSegment(pa.attrs);
-            seg.asns.insert(seg.asns.begin(), ProcessAccessor::getAsNum(process));
+            seg.asns.insert(seg.asns.begin(), ScopeAccessor::getAsNum(scope));
             pa.attrs.localPref = 100;
         }
         else
@@ -526,7 +548,7 @@ public:
     }
 
 private:
-    BgpProcess& process; ///< Owning process; provides config/AS/RID accessors.
+    BgpScope& scope; ///< Owning scope; provides config/AS/RID accessors.
     AfiSafi     family;  ///< AFI/SAFI this egress policy serves.
 };
 

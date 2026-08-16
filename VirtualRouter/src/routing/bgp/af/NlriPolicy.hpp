@@ -15,7 +15,7 @@ namespace routing::bgp
 enum class LocRibType;
 template <typename N, LocRibType T>
 class LocRib;
-class BgpProcess;
+class BgpScope;
 
 /**
  * @brief Abstract CRTP-style base that a concrete NLRI policy must inherit from.
@@ -34,10 +34,10 @@ class BgpProcess;
  *
  * ## Lifecycle & Ownership
  * Owned (by value) inside `AddressFamilyInstance<N>`.  Constructed once when the
- * address family is enabled on the `BgpProcess`.  Not copyable or movable.
+ * address family is enabled on the `BgpScope`.  Not copyable or movable.
  *
  * ## Concurrency Model
- * All calls arrive on the BGP process scheduler thread.  Implementations must not
+ * All calls arrive on the BGP scope's scheduler thread.  Implementations must not
  * block or spawn threads.
  *
  * @tparam N   The NLRI prefix type (e.g. `types::IPv4Prefix`).
@@ -52,13 +52,13 @@ class NlriPolicy
 {
 public:
     /**
-     * @brief Constructs the policy with references to the owning VRF and BGP process.
+     * @brief Constructs the policy with references to the owning VRF and BGP scope.
      * @ingroup BGP_AF
-     * @param v    The VRF / platform router that provides the global RIB.
-     * @param proc The `BgpProcess` that owns this address-family instance.
+     * @param v The VRF / platform router that provides the global RIB.
+     * @param s The `BgpScope` that owns this address-family instance.
      */
-    NlriPolicy(core::VirtualRouter& v, BgpProcess& proc)
-        : vrf(v), process(proc) {}
+    NlriPolicy(core::VirtualRouter& v, BgpScope& s)
+        : vrf(v), scope(s) {}
 
     using LocRib = LocRib<N, LR>; ///< Loc-RIB type selected by the `LR` template parameter.
     using Nlri   = N;              ///< The NLRI prefix type for this address family.
@@ -105,7 +105,7 @@ public:
 
 protected:
     core::VirtualRouter& vrf;     ///< The VRF / platform router (provides RIB access).
-    BgpProcess&          process; ///< The owning BGP process (provides AS number, etc.).
+    BgpScope&          scope;   ///< The owning BGP scope (provides AS number, etc.).
 };
 } // namespace routing
 

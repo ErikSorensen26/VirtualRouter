@@ -37,7 +37,7 @@ class Session;
  * ## Architectural Role
  * `SessionTimers` is owned by @ref Session and is the only object that posts
  * timer-expiry FSM events.  The timers themselves run on the scheduler and
- * post back to the `BgpProcess` queue, so all timer callbacks are serialised
+ * post back to the `BgpScope` queue, so all timer callbacks are serialised
  * with other FSM events.
  *
  * ## Lifecycle & Ownership

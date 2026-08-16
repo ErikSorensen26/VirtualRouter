@@ -31,7 +31,7 @@ namespace routing::bgp
 {
 class Neighbor;
 struct NeighborConfigs;
-class BgpProcess;
+class BgpScope;
 class MultiSession;
 
 /**
@@ -56,19 +56,19 @@ class MultiSession;
  * ## Architectural Role
  * `Session` is the boundary between the transport layer (TCP) and the BGP
  * protocol layer (FSM, RIB, policy).  It does not touch the RIB directly —
- * all RIB operations are dispatched through `BgpProcess` after `handleIncoming`
+ * all RIB operations are dispatched through `BgpScope` after `handleIncoming`
  * demultiplexes the wire bytes into typed events.
  *
  * ## Lifecycle & Ownership
- * Sessions are created by `BgpProcess` in response to `onAcceptCallback`
- * (passive) or operator configuration (active) and stored in the process's
+ * Sessions are created by `BgpScope` in response to `onAcceptCallback`
+ * (passive) or operator configuration (active) and stored in the scope's
  * session map keyed by `ConnId`.  Construction establishes the FSM in IDLE
  * and populates local capabilities.  The destructor closes any open TCP
  * connections; callers must ensure the FSM is not mid-transition.
  *
  * ## Concurrency Model
  * All public methods except the static TCP callbacks must be called from the
- * `BgpProcess` scheduler thread.  The static callbacks (`onConnectCallback`,
+ * `BgpScope` scheduler thread.  The static callbacks (`onConnectCallback`,
  * `onReceiveCallback`) are invoked by the TCP subsystem on its own thread and
  * post events back to the scheduler queue before touching any session state.
  *
@@ -77,7 +77,7 @@ class MultiSession;
  *
  * @see Fsm
  * @see SessionTimers
- * @see BgpProcess
+ * @see BgpScope
  * @see Neighbor
  */
 class Session
@@ -91,7 +91,7 @@ public:
      *
      * @param nbr Neighbor configuration object; must outlive this session.
      */
-    Session(Neighbor& nbr, BgpProcess& proc) noexcept;
+    Session(Neighbor& nbr, BgpScope& scope) noexcept;
 
     /**
      * @brief Constructs a multi-session instance bound to a specific AFI/SAFI.
@@ -102,7 +102,7 @@ public:
      * @param nbr Neighbor configuration object; must outlive this session.
      * @param afi The specific address family this session is responsible for.
      */
-    Session(Neighbor& nbr, const AfiSafi& afi, BgpProcess& proc) noexcept;
+    Session(Neighbor& nbr, const AfiSafi& afi, BgpScope& scope) noexcept;
 
     Session(const Session&) = delete;
     Session& operator=(const Session&) = delete;
@@ -123,17 +123,23 @@ public:
     // NEIGHBOR
 
     /**
-     * TODO add doxy comment
+     * @brief Binds this session to its neighbor as the active session, recording
+     *        the peer's router ID from OPEN.
+     * @param rid 32-bit BGP router ID received in the peer's OPEN message.
+     * @return Reference to the bound neighbor.
      */
     Neighbor& activatePeer(uint32_t rid);
 
     /**
-     * TODO add doxy comment
+     * @brief Unbinds this session from its neighbor, clearing the recorded
+     *        router ID and the neighbor's session pointer.
+     * @return Reference to the unbound neighbor.
      */
     Neighbor& deactivatePeer();
 
     /**
-     * TODO add doxy comment
+     * @brief True if this session has been activated (a nonzero router ID and
+     *        an active session pointer are set on the neighbor).
      */
     bool isActivated() const;
 
@@ -225,7 +231,7 @@ public:
      * @brief Posts an FSM event to the scheduler queue for serialised processing.
      *
      * Safe to call from any thread; the event is enqueued and processed by
-     * the scheduler on the BgpProcess thread.
+     * the scheduler on the BgpScope thread.
      *
      * @param event FSM event to enqueue.
      */
@@ -235,7 +241,7 @@ public:
      * @brief Called by the FSM after every state transition to execute side-effects.
      *
      * Handles transitions that require action at the Session level, such as
-     * notifying `BgpProcess` of ESTABLISHED / session-down events, sending the
+     * notifying `BgpScope` of ESTABLISHED / session-down events, sending the
      * initial KEEPALIVE on entering OPEN_CONFIRMED, and resetting capabilities
      * when dropping back to IDLE.
      *
@@ -363,7 +369,7 @@ public:
     /**
      * @brief Confirms that the given connection ID belongs to this session.
      *
-     * Used by `BgpProcess` to route incoming receive callbacks to the correct
+     * Used by `BgpScope` to route incoming receive callbacks to the correct
      * session when multiple connections exist.
      *
      * @param cid TCP connection identifier to check.
@@ -414,11 +420,11 @@ public:
      */
     static void onReceiveCallback(transport::tcp::RecvCallbackCtx& ctx) noexcept;
 
-    BgpProcess& process;
+    BgpScope& scope;
     Neighbor& neighbor;             ///< Owning neighbor; provides configuration and AF-instance access.
 private:
     /**
-     * @brief Populates `localCaps` from the neighbor and process configuration.
+     * @brief Populates `localCaps` from the neighbor and scope configuration.
      *
      * Called once at construction.  Reads enabled AFI/SAFIs, 4-byte ASN support,
      * graceful restart parameters, and other optional capabilities.
@@ -426,7 +432,6 @@ private:
     void buildLocalCapabilities();
 
     // REFERENCES
-    Neighbor& neighbor;             ///< Owning neighbor; provides configuration and AF-instance access.
     config::BgpTransportBaseRegistry& base;  ///< Base BGP session configuration (timers, AS, router-id, etc.).
 
     // PROTOCOL STATE

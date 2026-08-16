@@ -102,6 +102,14 @@ struct Notification
     std::vector<uint8_t> data = {}; ///< Optional diagnostic data appended after the error codes.
 };
 
+/** @brief Packs an AFI/SAFI pair into a single 32-bit key (AFI low 16 bits, SAFI next 8 bits). */
+constexpr uint32_t flattenAfiSafi(const uint16_t afi, const uint8_t safi)
+{
+    uint32_t flat = afi;
+    flat |= uint32_t(safi) << 16;
+    return flat;
+}
+
 /**
  * @brief Combined Address Family Indicator and Subsequent AFI key.
  * @ingroup BGP
@@ -126,9 +134,7 @@ struct AfiSafi
      */
     uint32_t flatten() const
     {
-        uint32_t flat = afi;
-        flat |= uint32_t(safi) << 16;
-        return flat;
+        return flattenAfiSafi(afi, safi);
     }
 
     constexpr bool operator==(const AfiSafi& other) const noexcept

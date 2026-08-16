@@ -24,7 +24,7 @@ namespace transport::tcp { class RxConsumer; class Connection; }
 namespace routing::bgp
 {
 class Session;
-class BgpProcess;
+class BgpScope;
 struct Capabilities;
 
 /**
@@ -140,7 +140,7 @@ private:
      * @brief Parse a BGP UPDATE message and dispatch per-AFI route processing.
      *
      * Decodes path attributes and NLRI fields, resolves the address family, and
-     * invokes the per-AF handler on the owning BgpProcess.
+     * invokes the per-AF handler on the owning BgpScope.
      *
      * @param c            Session context.
      * @param data         Payload bytes (excluding the fixed BGP header).

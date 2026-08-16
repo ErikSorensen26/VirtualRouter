@@ -6,7 +6,7 @@
         {
             "description": "Enter Address Family command mode",
             "name": "address-family",
-            "config": "Bgp::ADDRESS_FAMILY",
+            "config": "Bgp::AF_VRF",
             "deferred": "VRF",
             "subcommands": [
                 {

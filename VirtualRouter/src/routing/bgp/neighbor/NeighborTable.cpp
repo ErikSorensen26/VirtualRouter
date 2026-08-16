@@ -1,101 +1,75 @@
-// OspfNeighborTable.cpp
+// NeighborTable.cpp
 
-#include <unordered_set>
 #include <IPAddress.h>
 
 #include "Neighbor.h"
 #include "NeighborTable.h"
-#include "bgp/BgpProcess.h"
+#include "bgp/BgpScope.h"
 
 namespace routing::bgp
 {
-NeighborTable::NeighborTable(BgpProcess& proc)
-    : process(proc),
-      peerTemplates(proc)
+NeighborTable::NeighborTable(BgpScope& scope, PeerTemplateTable& table)
+    : scope(scope),
+      peerTemplates(table)
 {}
 
-void NeighborTable::syncNeighbors()
-{
-    syncPeerGroups();
-
-    std::unordered_set<types::IPAddress> unseen;
-
-    // Fill unseen with all current neighbors
-    for (const auto& [addr, _] : neighbors)
-        unseen.insert(addr);
-
-    auto& neighborList = process.configs.get<config::Bgp::NEIGHBOR>().get();
-    for (const auto& [ip, _] : neighborList)
-    {
-        if (unseen.contains(ip))
-        {
-            unseen.erase(ip);
-        }
-        else
-        {
-            Neighbor* nbr = createNeighbor(ip);
-            if (nbr)
-                startConfiguredSession(*nbr);
-        }
-    }
-
-    for (const auto& nbr : unseen)
-    {
-        // Dynamic neighbors are not owned by the static config; skip them here.
-        auto it = neighbors.find(nbr);
-        if (it != neighbors.end() && it->second.dynamic)
-            continue;
-        deleteNeighbor(nbr);
-    }
-}
-
-void NeighborTable::syncPeerGroups()
-{
-    peerTemplates.sync();
-}
-
-Neighbor* NeighborTable::createNeighbor(const types::IPAddress& ipAddress)
+Neighbor* NeighborTable::createNeighbor(config::BgpNeighborSessionRegistry& cfgs, const types::IPAddress& ipAddress)
 {
     if (neighbors.contains(ipAddress))
         return &neighbors.at(ipAddress);
 
-    auto [it, ok] = neighbors.try_emplace(ipAddress, ipAddress, *this, process.scheduler);
-    return ok ? &it->second : nullptr;
+    auto [it, ok] = neighbors.try_emplace(ipAddress, cfgs, ipAddress, *this, scope.scheduler);
+    if (!ok)
+        return nullptr;
+
+    startConfiguredSession(it->second);
+    return &it->second;
 }
 
 void NeighborTable::startConfiguredSession(Neighbor& nbr)
 {
     auto connectionMode = nbr.getConfigs().get<config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
     if (connectionMode.hasValue() && connectionMode.load() == config::bgp::BgpConnectionMode::PASSIVE)
-        process.startPassiveSession(nbr);
+        scope.startPassiveSession(nbr);
     else
-        process.startActiveSession(nbr);
+        scope.startActiveSession(nbr);
 }
 
 Neighbor* NeighborTable::createDynamicNeighbor(const types::IPAddress& ipAddress, const std::string& peerGroupName)
 {
     // Re-use an existing dynamic entry for the same address (reconnect case).
     if (auto it = neighbors.find(ipAddress); it != neighbors.end())
-        return it->second.dynamic ? &it->second : nullptr;
+        return it->second.getDynamic() ? &it->second : nullptr;
 
-    auto [it, ok] = neighbors.try_emplace(ipAddress, ipAddress, *this, process.scheduler);
-    if (!ok)
-        return nullptr;
+    PeerGroup* pg = lookupPeerGroup(peerGroupName);
+    if (!pg) return nullptr;
 
-    it->second.dynamic = true;
-
-    // Attach the peer-group so REMOTE_AS, hold-time, etc. are inherited.
-    if (PeerGroup* pg = lookupPeerGroup(peerGroupName))
-        it->second.configs.setPeerGroup(pg);
+    auto [it, ok] = neighbors.try_emplace(ipAddress, pg->getSessionConfigs(), ipAddress, *this, scope.scheduler);
+    if (!ok) return nullptr;
 
     // Do NOT start an active session — dynamic neighbors are inbound-only.
     return &it->second;
+}
+
+void NeighborTable::purgeDynamicNeighbors(PeerGroup* group)
+{
+    for (auto it = neighbors.begin(); it != neighbors.end();)
+    {
+        if (const PeerGroup* dyn = it->second.getDynamic(); dyn && group == dyn)
+            it = neighbors.erase(it);
+        else
+            ++it;
+    }
 }
 
 void NeighborTable::deleteNeighbor(const types::IPAddress& ipAddress)
 {
     auto it = neighbors.find(ipAddress);
     if (it == neighbors.end())
+        return;
+
+    // Dynamic neighbors are not owned by the static config; leave them alone.
+    if (it->second.getDynamic())
         return;
 
     const uint32_t rid = it->second.rid;
@@ -184,18 +158,18 @@ std::optional<bool> NeighborTable::isTcpConnectionMode(const Neighbor& nbr) cons
 {
     auto field = nbr.configs.get<config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
     if (field.hasValue())
-        return field.load();
+        return field.load() == config::bgp::BgpConnectionMode::ACTIVE;
     return std::nullopt;
 }
 
 void NeighborTable::shutdownNeighbor(Neighbor& neighbor)
 {
-    process.shutdownNeighbor(neighbor);
+    scope.shutdownNeighbor(neighbor);
 }
 
 void NeighborTable::unshutdownNeighbor(Neighbor& neighbor)
 {
-    process.unshutdownNeighbor(neighbor);
+    scope.unshutdownNeighbor(neighbor);
 }
 
 void NeighborTable::clear()
@@ -208,15 +182,35 @@ void NeighborTable::restartNeighbor(Neighbor& neighbor)
 {
     // A session-reset config change bounces an existing session; it must not create one
     // where none exists.
-    if (!process.findSession(neighbor.neighborAddress))
+    if (!scope.findSession(neighbor.neighborAddress))
         return;
-    process.shutdownNeighbor(neighbor);
-    process.unshutdownNeighbor(neighbor);
+    scope.shutdownNeighbor(neighbor);
+    scope.unshutdownNeighbor(neighbor);
 }
 
 AddressFamilyVariant* NeighborTable::findAddressFamily(const AfiSafi& afi)
 {
-    return process.findAddressFamily(afi);
+    return scope.findAddressFamily(afi);
+}
+
+void NeighborTable::syncPeerGroup(Neighbor& nbr)
+{
+    peerTemplates.syncNeighborPeerGroup(nbr);
+}
+
+void NeighborTable::syncPeerGroup(NeighborAf& nbr)
+{
+    peerTemplates.syncNeighborPeerGroup(nbr);
+}
+
+void NeighborTable::syncPeerSessionTemplate(Neighbor& nbr)
+{
+    peerTemplates.syncNeighborPeerSessionTemplate(nbr);
+}
+
+void NeighborTable::syncPeerPolicyTemplate(NeighborAf& nbr)
+{
+    peerTemplates.syncNeighborPeerPolicyTemplate(nbr);
 }
 
 PeerGroup* NeighborTable::lookupPeerGroup(const std::string& name)
@@ -224,49 +218,21 @@ PeerGroup* NeighborTable::lookupPeerGroup(const std::string& name)
     return peerTemplates.lookupPeerGroup(name);
 }
 
-const PeerGroup* NeighborTable::lookupPeerGroup(const std::string& name) const
-{
-    return peerTemplates.lookupPeerGroup(name);
-}
-
-PeerSessionTemplate* NeighborTable::lookupPeerSessionTemplate(const std::string& name)
-{
-    return peerTemplates.lookupPeerSessionTemplate(name);
-}
-
-const PeerSessionTemplate* NeighborTable::lookupPeerSessionTemplate(const std::string& name) const
-{
-    return peerTemplates.lookupPeerSessionTemplate(name);
-}
-
-PeerPolicyTemplate* NeighborTable::lookupPeerPolicyTemplate(const std::string& name)
-{
-    return peerTemplates.lookupPeerPolicyTemplate(name);
-}
-
-const PeerPolicyTemplate* NeighborTable::lookupPeerPolicyTemplate(const std::string& name) const
-{
-    return peerTemplates.lookupPeerPolicyTemplate(name);
-}
-
-config::BgpNeighborSessionRegistry& NeighborTable::ensureNeighborConfigs(types::IPAddress addr)
-{
-    return process.configs.get<config::Bgp::NEIGHBOR>().emplaceBack(addr);
-}
-
-void NeighborTable::removeNeighborConfigs(types::IPAddress addr)
-{
-    process.configs.get<config::Bgp::NEIGHBOR>().erase(addr);
-}
-
 bool NeighborTable::isPeerConfed(uint32_t peerAs) const
 {
     bool inConfed = false;
-    process.configs.get<config::Bgp::BGP_CONFEDERATION_PEERS>().withRead(
-        [&](const auto& peersList) {
-            for (uint32_t p : peersList)
-                    if (p == peerAs) { inConfed = true; return; }
-        });
+    scope.configs().get<config::Bgp::BGP_CONFEDERATION_PEERS>().readEach(
+        [&](const uint32_t peer)
+        {
+            if (peer == peerAs) { inConfed = true; return true; }
+            return false;
+        }
+    );
     return inConfed;
+}
+
+const config::BgpRegistry& NeighborTable::getConfigs() const
+{
+    return scope.configs();
 }
 } // namespace routing

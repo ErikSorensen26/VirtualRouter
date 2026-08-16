@@ -6,7 +6,7 @@
 #include "Fsm.h"
 #include "bgp/session/Session.h"
 #include "bgp/session/SessionTimers.h"
-#include "bgp/BgpProcess.h"
+#include "bgp/BgpScope.h"
 
 namespace routing::bgp
 {

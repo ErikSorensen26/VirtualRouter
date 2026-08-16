@@ -35,7 +35,7 @@ class Session;
  * explicit teardown; destruction of the owning `Session` is sufficient.
  *
  * ## Concurrency Model
- * `processEvent()` must be called from the `BgpProcess` scheduler thread.
+ * `processEvent()` must be called from the `BgpScope` scheduler thread.
  * The transition callback (@ref setTransitionCallback) fires synchronously
  * within `processEvent()`, also on the scheduler thread.
  *

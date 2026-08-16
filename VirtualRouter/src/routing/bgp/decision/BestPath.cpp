@@ -3,7 +3,8 @@
 #include <limits>
 
 #include "BestPath.h"
-#include "bgp/BgpProcess.h"
+#include "bgp/BgpScope.h"
+#include "bgp/af/ScopeAccessor.h"
 
 namespace routing::bgp
 {
@@ -24,8 +25,8 @@ uint8_t originRank(const PathAttribute& a)
     return static_cast<uint8_t>(a.attrs.origin.value_or(BGP_ORIGIN_INCOMPLETE));
 }
 
-BestPathComparator::BestPathComparator(BgpProcess& p, BestPathConfig cfg)
-    : proc(p), config(cfg) {}
+BestPathComparator::BestPathComparator(BgpScope& s, BestPathConfig cfg)
+    : scope(s), config(cfg) {}
 
 inline bool BestPathComparator::compareMed(const InboundRouteBase& lhs, const InboundRouteBase& rhs) const
 {
@@ -112,8 +113,8 @@ bool BestPathComparator::better(const InboundRouteBase& lhs, const types::IPAddr
     else
     {
         // With compare-routerid: prefer lowest router-ID (deterministic, skip oldest-route step).
-        uint32_t lhsRid = lhs.sourceNeighbor ? lhs.sourceNeighbor->getParent().getRouterId() : proc.getRouterId();
-        uint32_t rhsRid = rhs.sourceNeighbor ? rhs.sourceNeighbor->getParent().getRouterId() : proc.getRouterId();
+        uint32_t lhsRid = lhs.sourceNeighbor ? lhs.sourceNeighbor->getParent().getRouterId() : ScopeAccessor::getRid(scope);
+        uint32_t rhsRid = rhs.sourceNeighbor ? rhs.sourceNeighbor->getParent().getRouterId() : ScopeAccessor::getRid(scope);
         if (lhsRid != rhsRid)
             return lhsRid < rhsRid;
     }

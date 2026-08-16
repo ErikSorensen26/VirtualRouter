@@ -17,7 +17,7 @@ namespace transport::tcp { class RxConsumer; class Connection; }
 
 namespace routing::bgp
 {
-class BgpProcess;
+class BgpScope;
 
 /**
  * @brief Stateless BGP message encoder: builds and writes outbound BGP messages.

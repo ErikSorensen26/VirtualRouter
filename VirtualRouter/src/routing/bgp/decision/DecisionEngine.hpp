@@ -18,10 +18,10 @@
 
 namespace routing::bgp
 {
-class BgpProcess;
+class BgpScope;
 
 /**
- * @brief Best path selection and route installation for one BGP process.
+ * @brief Best path selection and route installation for one BGP scope.
  * @ingroup BGP_DECISION
  *
  * Implements the decision process (RFC 4271 § 9.1): takes candidate routes
@@ -29,11 +29,11 @@ class BgpProcess;
  * multipaths, and installs results to Loc-RIB and routing table.
  *
  * ## Lifecycle
- * Owned by BgpProcess. Created during process initialization and destroyed
- * with the process.
+ * Owned by BgpScope. Created during scope initialization and destroyed
+ * with the scope.
  *
  * ## Concurrency Model
- * Thread-safe if BgpProcess is single-threaded (scheduler pattern).
+ * Thread-safe if BgpScope is single-threaded (scheduler pattern).
  *
  * @tparam N NLRI type (IPv4Prefix, IPv6Prefix, etc.)
  * @see BestPathComparator, AddressFamilyInstance
@@ -41,7 +41,7 @@ class BgpProcess;
 class DecisionEngine
 {
 public:
-    explicit DecisionEngine(BgpProcess& p, BestPathConfig cfg = {})
+    explicit DecisionEngine(BgpScope& p, BestPathConfig cfg = {})
         : comparator(p, cfg) {}
 
     template <typename N>

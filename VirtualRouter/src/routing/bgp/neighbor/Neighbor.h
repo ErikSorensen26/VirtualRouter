@@ -13,6 +13,8 @@
 #define BGP_NEIGHBOR_H
 
 #include <bitset>
+#include <optional>
+#include <string>
 #include <ControlScheduler.h>
 
 #include "bgp/BgpTypes.hpp"
@@ -23,7 +25,7 @@ class Internal_BgpTest;
 
 namespace routing::bgp
 {
-class BgpProcess;
+class BgpScope;
 class Session;
 class NeighborAf;
 
@@ -45,12 +47,20 @@ class Neighbor
 {
 public:
     /**
-     * @brief Construct a neighbor for the given IP address within the given process.
+     * @brief Construct a neighbor for the given IP address within the given scope.
      * @ingroup BGP_NEIGHBOR
      * @param ipAddress The peer IP address.
-     * @param proc      The BgpProcess that owns this neighbor.
+     * @param scope     The BgpScope that owns this neighbor.
      */
-    Neighbor(const types::IPAddress& ipAddress, NeighborTable& ntable, core::ProcessQueue& schdlr);
+    Neighbor(config::BgpNeighborSessionRegistry& cfgs, const types::IPAddress& ipAddress, NeighborTable& ntable, core::ProcessQueue& schdlr);
+
+    /**
+     * @brief Construct a dynamic neighbor for the given IP address within the given scope.
+     * @ingroup BGP_NEIGHBOR
+     * @param ipAddress The peer IP address.
+     * @param scope     The BgpScope that owns this neighbor.
+     */
+    Neighbor(PeerGroup& dynCfgs, const types::IPAddress& ipAddress, NeighborTable& ntable, core::ProcessQueue& schdlr);
 
     /**
      * @brief Destructor. Cleans up all per-AF state.
@@ -58,11 +68,13 @@ public:
     ~Neighbor();
 
     void enqueueConnectionRestart();
-    void enqueueSyncShutdown();
+    void enqueueSyncShutdown(bool shutdown);
     void enqueueBuildAttributeRanges();
-    void enqueueSyncRemoteAs();
+    void enqueueSyncRemoteAs(std::optional<uint32_t> remoteAs);
     void syncClassification() { syncEbgp(); }
     void enqueueMarkAllOutbound(OutAttr attr);
+    void enqueueSyncPeerGroup(std::optional<std::string> name);
+    void enqueueSyncPeerSessionTemplate(std::optional<std::string> name);
 
     const types::IPAddress neighborAddress; ///< IP address of this BGP peer.
 
@@ -70,12 +82,20 @@ public:
 
     const NeighborConfigs& getConfigs() const noexcept { return configs; }
 
+    BgpScope& getScope() const noexcept;
+
     /**
      * @brief Retrieve the NeighborAf for the given AFI/SAFI (const overload).
      * @param afi The address family to look up.
      * @return Const reference to the NeighborAf.
      */
     NeighborAf& getAfNeighbor(const AfiSafi& afi);
+
+    /**
+     * @brief Retrieve the NeighborAf for the given AFI/SAFI, if activated.
+     * @param afi The address family to look up.
+     * @return Pointer to the NeighborAf, or `nullptr` if not activated for this neighbor.
+     */
     NeighborAf* findAfNeighbor(const AfiSafi& afi);
 
     /**
@@ -105,6 +125,20 @@ public:
     bool isConfedEbgp() const noexcept;
 
     /**
+     * @brief Returns the dynamic peer group this neighbor was created from, if any.
+     *
+     * Non-null only for neighbors spawned by @ref NeighborTable::createDynamicNeighbor
+     * from a BGP_LISTEN_RANGE match. Such neighbors already inherit their session and
+     * policy config from the matched group at creation, so @ref PeerTemplateTable's
+     * sync methods skip re-resolving PEER_GROUP / INHERIT_PEER_SESSION /
+     * INHERIT_PEER_POLICY for them — those fields are not configurable per-neighbor
+     * on a dynamic neighbor.
+     *
+     * @return Pointer to the owning `PeerGroup`, or `nullptr` for a statically configured neighbor.
+     */
+    const PeerGroup* getDynamic() const noexcept;
+
+    /**
      * @brief Returns the cached discard/withdraw attribute-type bitmasks.
      */
     const auto& getAttrRanges() const noexcept { return attrRanges; }
@@ -120,8 +154,6 @@ private:
 
     Session* session = nullptr; ///< Non-owning pointer to the active Session; null when not established.
 
-    bool dynamic = false; ///< True when this neighbor was created by a "bgp listen range" match.
-
     // SYNC
 
     /**
@@ -130,9 +162,19 @@ private:
      * A peer is eBGP when its remote AS differs from ours and it is not a configured
      * confederation peer. Must run whenever REMOTE_AS, the local AS, or the
      * confederation peer list changes — driven by `enqueueSyncRemoteAs` and
-     * `BgpProcess::enqueueSyncConfederation`.
+     * `BgpScope::enqueueSyncConfederation`.
      */
     void syncEbgp();
+
+    /**
+     * @brief Same as `syncEbgp()`, using an already-known REMOTE_AS value.
+     *
+     * Lets the REMOTE_AS config-change entry point avoid re-reading the field
+     * it was just handed.
+     *
+     * @param remoteAs The new `REMOTE_AS` value.
+     */
+    void syncEbgp(std::optional<uint32_t> remoteAs);
 
     // HELPERS
 
@@ -140,7 +182,7 @@ private:
      * @brief Activate the given address family for this neighbor, creating a NeighborAf entry.
      * @param afi The AFI/SAFI to activate.
      */
-    void addAfNeighbor(AfiSafi& afi);
+    void addAfNeighbor(const AfiSafi& afi);
 
     /**
      * @brief Deactivate the given address family, removing the NeighborAf entry.
@@ -156,9 +198,22 @@ private:
     void buildAttributeRanges();
 
     /**
-     * TODO add doxy comment
+     * @brief Clears the SHUTDOWN state and lets the neighbor table re-establish this session.
      */
     void unshutdown();
+
+    /**
+     * @brief Finishes constructing this neighbor: binds config context, activates
+     *        configured address families, and resolves inherited templates.
+     *
+     * Must be called once, immediately after construction, before the neighbor is
+     * usable. Performs, in order:
+     *  - Binds this neighbor as the context for its session config and BGP_BASE,
+     *    so registry appliers can reach it through the Neighbor pointer.
+     *  - Activates the address families enabled for this neighbor's VRF via AF_VRF.
+     *  - Resolves the session-level peer template from INHERIT_PEER_SESSION.
+     */
+    void initialize();
 
     struct AttributeRanges
     {

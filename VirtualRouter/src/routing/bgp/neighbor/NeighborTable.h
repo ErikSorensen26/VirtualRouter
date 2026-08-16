@@ -13,16 +13,17 @@
 #include "bgp/neighbor/PeerTemplate.h"
 
 namespace types { struct IPAddress; }
+namespace config { struct BgpRegistry; }
 
 class Internal_BgpTest;
 
 namespace routing::bgp
 {
-class BgpProcess;
+class BgpScope;
 class Neighbor;
 
 /**
- * @brief Manages the set of BGP neighbors and peer templates for one BGP process.
+ * @brief Manages the set of BGP neighbors and peer templates for one BGP scope.
  * @ingroup BGP_NEIGHBOR
  *
  * NeighborTable is the authoritative registry of configured BGP peers.  It maps
@@ -36,13 +37,13 @@ class Neighbor;
  * the named peer group at creation time.
  *
  * ## Architectural Role
- * Owned exclusively by @ref BgpProcess.  No other subsystem holds a pointer to
- * this table; callers reach individual neighbors through the process object.
+ * Owned exclusively by @ref BgpScope.  No other subsystem holds a pointer to
+ * this table; callers reach individual neighbors through the owning scope.
  * Template and neighbor lifecycle is driven by configuration sync events
  * dispatched on the BGP scheduler thread.
  *
  * ## Lifecycle & Ownership
- * Constructed with a reference to the owning @ref BgpProcess.  Neighbors are
+ * Constructed with a reference to the owning @ref BgpScope.  Neighbors are
  * inserted by @ref createNeighbor or @ref createDynamicNeighbor and removed by
  * @ref deleteNeighbor.  The secondary router-ID index is maintained by
  * @ref activatePeer and @ref deactivatePeer, which are called by the session
@@ -55,37 +56,19 @@ class Neighbor;
  * synchronize access to that field externally if they need a consistent view
  * from outside the scheduler.
  *
- * @see Neighbor, PeerTemplateTable, BgpProcess
+ * @see Neighbor, PeerTemplateTable, BgpScope
  */
 class NeighborTable
 {
 public:
     /**
-     * @brief Constructs an empty neighbor table bound to @p proc.
+     * @brief Constructs an empty neighbor table bound to @p scope.
      *
-     * @param proc Owning BGP process; used when creating new Neighbor objects
-     *             and when constructing peer templates that need a process reference.
+     * @param scope Owning BGP scope; used when creating new Neighbor objects
+     *              and when constructing peer templates that need a scope reference.
+     * @param table Peer template table for managing config inheritance.
      */
-    NeighborTable(BgpProcess& proc);
-
-    /**
-     * @brief Synchronize the neighbor set with the current configuration registry.
-     *
-     * Compares configured neighbor entries against the live @p neighbors map,
-     * creating missing neighbors and removing those that no longer appear in
-     * configuration.  Called after any configuration change that may have added
-     * or removed peer addresses.
-     */
-    void syncNeighbors();
-
-    /**
-     * @brief Synchronize peer groups and templates with the current configuration registry.
-     *
-     * Delegates to @ref PeerTemplateTable::sync to add/remove peer groups,
-     * session templates, and policy templates, then re-wires any neighbor
-     * pointers that reference updated template objects.
-     */
-    void syncPeerGroups();
+    NeighborTable(BgpScope& scope, PeerTemplateTable& table);
 
     /**
      * @brief Start a session for @p nbr according to its configured
@@ -97,21 +80,26 @@ public:
     void startConfiguredSession(Neighbor& nbr);
 
     /**
-     * @brief Create a statically configured BGP neighbor for @p ipAddress.
+     * @brief Create a statically configured BGP neighbor for @p ipAddress and
+     *        start its configured session.
      *
-     * Inserts a new @ref Neighbor into the table.  If a neighbor already exists
-     * at that address, returns a pointer to the existing entry without modifying it.
+     * Inserts a new @ref Neighbor into the table and starts a session for it
+     * per its configured TRANSPORT_CONNECTION_MODE.  If a neighbor already
+     * exists at that address, returns a pointer to the existing entry without
+     * modifying it or touching its session.
      *
      * @param ipAddress Peer IP address; used as the primary key.
      * @return Pointer to the new or existing Neighbor entry.
      */
-    Neighbor* createNeighbor(const types::IPAddress& ipAddress);
+    Neighbor* createNeighbor(config::BgpNeighborSessionRegistry& cfgs, const types::IPAddress& ipAddress);
 
     /**
-     * @brief Remove and destroy the neighbor at @p ipAddress.
+     * @brief Remove and destroy the statically configured neighbor at @p ipAddress.
      *
-     * If the neighbor has an active session it must be torn down before calling
-     * this method.  Also removes the router-ID index entry if one was registered.
+     * A no-op if no neighbor exists at that address, or if it is a dynamic
+     * neighbor (not owned by the static config). If the neighbor has an
+     * active session it must be torn down before calling this method. Also
+     * removes the router-ID index entry if one was registered.
      *
      * @param ipAddress Peer IP address to remove.
      *
@@ -134,6 +122,18 @@ public:
      *         does not exist.
      */
     Neighbor* createDynamicNeighbor(const types::IPAddress& ipAddress, const std::string& peerGroupName);
+    
+    /**
+     * @brief Removes every dynamically created neighbor spawned from `group`.
+     *
+     * Called by @ref PeerTemplateTable::removePeerGroup before the group itself is
+     * erased. A dynamic neighbor's NeighborConfigs aliases its origin group's session
+     * registry rather than owning one (see @ref NeighborConfigs(PeerGroup&)), so it
+     * cannot outlive the group.
+     *
+     * @param group The dynamic peer group whose spawned neighbors should be erased.
+     */
+    void purgeDynamicNeighbors(PeerGroup* group);
 
     /**
      * @brief Look up a neighbor by peer IP address.
@@ -156,12 +156,22 @@ public:
     Neighbor* lookup(uint32_t rid);
 
     /**
-     * TODO add doxy comment
+     * @brief Look up a neighbor's per-AF state by peer IP address and AFI/SAFI.
+     *
+     * @param ipAddress Peer IP address to search for.
+     * @param afi       Address family to look up on the found neighbor.
+     * @return Pointer to the NeighborAf if both the neighbor and the activated
+     *         address family exist, nullptr otherwise.
      */
     NeighborAf* lookup(const types::IPAddress& ipAddress, const AfiSafi& afi);
 
     /**
-     * TODO add doxy comment
+     * @brief Look up a neighbor's per-AF state by the peer's BGP router ID and AFI/SAFI.
+     *
+     * @param rid 32-bit BGP router ID received in the peer's OPEN message.
+     * @param afi Address family to look up on the found neighbor.
+     * @return Pointer to the NeighborAf if both the neighbor and the activated
+     *         address family exist, nullptr otherwise.
      */
     NeighborAf* lookup(uint32_t rid, const AfiSafi& afi);
 
@@ -189,7 +199,7 @@ public:
     /**
      * @brief Cancel the hold timer on every configured neighbor.
      *
-     * Used during process shutdown to stop all pending timers before tearing
+     * Used during scope shutdown to stop all pending timers before tearing
      * down sessions in an orderly fashion.
      */
     void cancelAllHoldTimers();
@@ -203,37 +213,33 @@ public:
      */
     void runDccCheck();
 
-    /**
-     * @brief Whether any configured neighbor has DISABLE_CONNECTION_CHECK enabled.
-     *
-     * Read by the TCP accept path; see Concurrency Model in the class doc.
-     */
-    bool disableConnectionCheck = false;
-
     // UTILS
 
     /**
-     * TODO add doxy comment
+     * @brief Returns whether @p nbr is configured with SHUTDOWN.
      */
     bool isShutdown(const Neighbor& nbr) const;
 
     /**
-     * TODO add doxy comment
+     * @brief Returns whether @p nbr should have its TCP connection validated
+     *        (eBGP, DISABLE_CONNECTION_CHECK not set, and not EBGP_MULTIHOP).
      */
     bool isConnectionCheck(const Neighbor& nbr) const;
 
     /**
-     * TODO add doxy comment
+     * @brief Returns @p nbr's configured TRANSPORT_CONNECTION_MODE as a bool
+     *        (true = active), or nullopt if not configured.
      */
     std::optional<bool> isTcpConnectionMode(const Neighbor& nbr) const;
 
     /**
-     * TODO add doxy comment
+     * @brief Shuts down @p neighbor's session; delegates to @ref BgpScope::shutdownNeighbor.
      */
     void shutdownNeighbor(Neighbor& neighbor);
 
     /**
-     * TODO add doxy comment
+     * @brief Clears SHUTDOWN and lets @p neighbor re-establish; delegates to
+     *        @ref BgpScope::unshutdownNeighbor.
      */
     void unshutdownNeighbor(Neighbor& neighbor);
 
@@ -248,18 +254,19 @@ public:
     void clear();
 
     /**
-     * TODO add doxy comment
+     * @brief Looks up the scope-wide AddressFamilyVariant for @p afi;
+     *        delegates to @ref BgpScope::findAddressFamily.
      */
     AddressFamilyVariant* findAddressFamily(const AfiSafi& afi);
 
     bool disableConnectionCheck = false; ///< Whether any configured neighbor has DISABLE_CONNECTION_CHECK enabled.
 
     PeerGroup* lookupPeerGroup(const std::string& name);
-    const PeerGroup* lookupPeerGroup(const std::string& name) const;
-    PeerSessionTemplate* lookupPeerSessionTemplate(const std::string& name);
-    const PeerSessionTemplate* lookupPeerSessionTemplate(const std::string& name) const;
-    PeerPolicyTemplate* lookupPeerPolicyTemplate(const std::string& name);
-    const PeerPolicyTemplate* lookupPeerPolicyTemplate(const std::string& name) const;
+
+    void syncPeerGroup(Neighbor& nbr);
+    void syncPeerGroup(NeighborAf& nbr);
+    void syncPeerSessionTemplate(Neighbor& nbr);
+    void syncPeerPolicyTemplate(NeighborAf& nbr);
 
     /**
      * @brief Invoke @p fn for every neighbor in the table.
@@ -288,18 +295,18 @@ public:
 
 private:
     friend class Neighbor;
+    friend class BgpScope;
     friend class ::Internal_BgpTest;
-
-    config::BgpNeighborSessionRegistry& ensureNeighborConfigs(types::IPAddress addr);
-    void removeNeighborConfigs(types::IPAddress addr);
 
     bool isPeerConfed(uint32_t peerAs) const;
 
+    const config::BgpRegistry& getConfigs() const;
+
+    BgpScope& scope;                 ///< Owning scope; passed to each new Neighbor on creation.
+    PeerTemplateTable& peerTemplates; ///< Peer groups and session/policy templates for this scope.
+
     std::unordered_map<types::IPAddress, Neighbor> neighbors; ///< Primary neighbor store, keyed by peer IP.
     std::unordered_map<uint32_t, Neighbor*> peers;            ///< Secondary index by router ID; populated on ESTABLISHED.
-
-    BgpProcess& process;           ///< Owning process; passed to each new Neighbor on creation.
-    PeerTemplateTable peerTemplates; ///< Peer groups and session/policy templates for this process.
 };
 
 template <typename F>
