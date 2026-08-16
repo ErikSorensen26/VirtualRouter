@@ -45,7 +45,7 @@ void EigrpPacketBuilder::appendAuthTLV(packet::TLV16BufferManager& tlv, EigrpInt
 bool EigrpPacketBuilder::appendStubTLV(packet::TLV16BufferManager& tlv, const config::EigrpRegistry& configs)
 {
     auto stub = configs.get<config::Eigrp::STUB>();
-    if (!stub.hasValue() || !stub.load()) return false;
+    if (!stub.hasValue() || stub.load().none()) return false;
     TLVBuilder::encodeStubOption(tlv.getNextValBuf(), getStubConfig(configs));
     tlv.append(EIGRP_OPTION_STUB, 6, nullptr, 2);
     return true;

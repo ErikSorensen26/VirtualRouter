@@ -83,17 +83,19 @@ public:
      *
      * Config-change entry point: called when this interface's
      * `passive-interface` setting is written. Safe to call from any thread.
+     *
+     * @params passive whether or not this interface should be set passive
      */
-    void enqueueSyncPassive();
+    void enqueueSetPassive(bool passive);
 
     /**
-     * @brief Schedules an interface-list refresh on the owning process's
-     *        queue.
+     * @brief Schedules a shutdown/no-shutdown of this interface on the process queue.
      *
-     * Config-change entry point: called when this interface's `shutdown`
-     * setting is written. Safe to call from any thread.
+     * Config-change entry point. Safe to call from any thread.
+     *
+     * @param shut True to shut down the interface, false to bring it back up.
      */
-    void enqueueRefreshInterfaceList();
+    void enqueueSetShutdown(bool shut);
 
     /**
      * @brief Schedules a `summary-address` configuration sync on the process
@@ -102,7 +104,7 @@ public:
      * Config-change entry point: re-reads this interface's configured
      * summary addresses and installs them on the scheduler thread.
      */
-    void enqueueSyncSummary();
+    void enqueueSetSummary(types::IPPrefix prefix, std::optional<std::string> leakMap, bool add);
 
 private:
     friend class ::Internal_EigrpTest;
@@ -111,7 +113,7 @@ private:
     friend class InterfaceManager;
     friend class GlobalAggregator;
     friend class EigrpTopology;
-    friend class DuelEngine;
+    friend class DualEngine;
     friend class NeighborTable;
     friend class Neighbor;
     friend class RouteAggregator;
@@ -142,8 +144,23 @@ private:
      *
      * In passive mode the interface stops sending Hellos and will not form
      * new neighbors, but its connected prefix is still advertised.
+     *
+     * @param passive bool representing the passive mode.
      */
-    void syncPassive();
+    void setPassive(bool passive);
+
+    /**
+     * @brief Puts the interface into or out of EIGRP shutdown.
+     *
+     * On shutdown, tears down all multicast-discovered neighbors, stops
+     * sending Hellos, and withdraws this interface's connected route from
+     * the topology. On resume, re-announces the connected route and
+     * restarts Hellos. Mirrors @ref setPassive but additionally withdraws
+     * the connected route, since a shut-down interface advertises nothing.
+     *
+     * @param shut @c true to shut the interface down.
+     */
+    void setShutdown(bool shut);
 
     /**
      * @brief Enables or disables EIGRP multicast transmission on this interface.

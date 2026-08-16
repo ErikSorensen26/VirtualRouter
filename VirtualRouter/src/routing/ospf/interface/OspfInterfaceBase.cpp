@@ -73,20 +73,20 @@ void OspfInterfaceBase::enqueueSyncDigestKey()
 
 void OspfInterfaceBase::syncDigestKey()
 {
-    globalConfigsBase.get<config::OspfGlobalInterfaceBase::MESSAGE_DIGEST_KEYS>().withRead([this](const auto& keys)
+    std::optional<config::OspfMessageDigestKey> digest = globalConfigsBase.get<config::OspfGlobalInterfaceBase::MESSAGE_DIGEST_KEYS>().back();
+    if (digest.has_value())
     {
-        if (!keys.empty())
-        {
-            const auto& last = keys.back();
-            priv.authKey = utils::read<__uint128_t>(reinterpret_cast<const uint8_t*>(std::get<1>(last).value.data()));
-            priv.authKeyId = std::get<0>(last);
-        }
-        else
-        {
-            priv.authKey.reset();
-            priv.authKeyId.reset();
-        }
-    });
+        priv.authKey = utils::read<__uint128_t>(
+            reinterpret_cast<const uint8_t*>(digest.value().digest().value.data()),
+            digest.value().digest().value.size()
+        );
+        priv.authKeyId = digest.value().keyId();
+    }
+    else
+    {
+        priv.authKey.reset();
+        priv.authKeyId.reset();
+    }
 }
 
 void OspfInterfaceBase::syncConfigs()

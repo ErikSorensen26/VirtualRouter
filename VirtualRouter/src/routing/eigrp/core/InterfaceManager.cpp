@@ -22,148 +22,40 @@ EigrpInterface* InterfaceManager::getInterface(interface::InterfaceKey key)
     return nullptr;
 }
 
-config::EigrpInterfaceRegistry& InterfaceManager::getRegistryByKey(interface::InterfaceKey key)
+void InterfaceManager::tryCreateInterface(interface::Interface& interface)
 {
-    auto configList = process.getConfigs().get<config::Eigrp::AF_INTERFACE>();
-    return configList.emplaceBack(key);
+    interface::InterfaceKey key = interface.configs.key;
+    if (eigrpInterfaceList.find(key) != eigrpInterfaceList.end())
+        return;
+    auto ifaces = process.getConfigs().get<config::Eigrp::AF_INTERFACE>();
+    auto reg = ifaces.find(interface.configs.key);
+    if (reg != ifaces.end()) createInterface(interface.configs.key, *reg->second);
 }
 
-config::EigrpInterfaceRegistry& InterfaceManager::getRegistry(interface::Interface& iface)
+EigrpInterface* InterfaceManager::createInterface(interface::InterfaceKey key, config::EigrpInterfaceRegistry& cfg)
 {
-    interface::InterfaceKey key = iface.configs.key;
-
-    auto configList = process.getConfigs().get<config::Eigrp::AF_INTERFACE>();
-    return configList.emplaceBack(key);
-}
-
-EigrpInterface* InterfaceManager::createInterface(interface::Interface* interface)
-{
-    if (!interface)
+    if (eigrpInterfaceList.find(key) != eigrpInterfaceList.end())
         return nullptr;
 
-    if (auto it = eigrpInterfaceList.find(interface->configs.key); it != eigrpInterfaceList.end())
-        return &it->second;
+    interface::Interface* iface = process.routingInstance->getInterfaceManager().get(key);
+    if (!iface)
+        return nullptr;
 
-    {
-        // Add the interface to eigrp even if its down
-        types::AddressFamily af = process.addressFamily;
-        uint32_t as = process.asNumber;
-        interface::InterfaceKey key = interface->configs.key;
+    types::AddressFamily af = process.addressFamily;
+    if (af != types::AddressFamily::IPv4 && af != types::AddressFamily::IPv6)
+        return nullptr;
 
-        // Get or create registry entry for this interface
-        config::EigrpInterfaceRegistry& ifaceReg = getRegistry(*interface);
-
-        if (af == types::AddressFamily::IPv4 || af == types::AddressFamily::IPv6)
-        {
-            auto ifaceIt = eigrpInterfaceList.try_emplace(key, process, ifaceReg, *interface);
-            EigrpInterface* eigrpIfacePtr = &ifaceIt.first->second;
-            process.getTopology().synchronizeConnected(*eigrpIfacePtr);
-            return eigrpIfacePtr;
-        }
-    }
-    return nullptr;
+    auto [it, ok] = eigrpInterfaceList.try_emplace(key, process, cfg, *iface);
+    if (!ok)
+        return nullptr;
+    EigrpInterface* eigrpIfacePtr = &it->second;
+    process.getTopology().synchronizeConnected(*eigrpIfacePtr);
+    return eigrpIfacePtr;
 }
 
-void InterfaceManager::refreshInterfaceList()
+bool InterfaceManager::destroyInterface(interface::InterfaceKey key)
 {
-    std::vector<std::pair<bool, void*>> interfacesToProcess;
-
-    if (process.routerID() == 0)
-        if (!process.calculateRID()) return; // No valid RID
-
-    {
-        std::vector<std::unordered_map<interface::InterfaceKey, EigrpInterface>::node_type> interfacesToRemove; // Will clear when out of scope
-
-        // Remove shutdown interfaces
-        for (auto it = eigrpInterfaceList.begin(); it != eigrpInterfaceList.end();)
-        {
-            if (!it->second.currentInterface || it->second.currentInterface->shutdownFlag.load(std::memory_order_relaxed))
-            {
-                auto node = eigrpInterfaceList.extract(it++);
-                interfacesToRemove.push_back(std::move(node));
-            }
-            else
-            {
-                ++it;
-            }
-        }
-
-        bool isNamed = process.namedMode;
-        uint32_t as = process.asNumber;
-
-        for (const auto& [id, interface] : process.routingInstance->getInterfaceManager().snapshot())
-        {
-            if (!interface || interface->shutdownFlag.load(std::memory_order_relaxed))
-                continue;
-
-            auto& ipInfo = interface->configs;
-            bool inRange = false;
-            bool remake = false;
-
-            auto it = eigrpInterfaceList.find(id);
-
-            if (process.addressFamily == types::AddressFamily::IPv4)
-            {
-                inRange = process.isInNetworkRange(ipInfo.ipv4.getPrimaryAddress());
-                // Named mode: an explicitly configured af-interface entry also qualifies
-                // even without a matching network statement.
-                if (!inRange && isNamed)
-                {
-                    auto afIfaces = process.getConfigs().get<config::Eigrp::AF_INTERFACE>();
-                    auto regIt = afIfaces.find(ipInfo.key);
-                    inRange = (regIt != afIfaces.end()) &&
-                              !regIt->second->get<config::EigrpInterface::SHUTDOWN>().load();
-                }
-                // Compare known addresses
-                if (it != eigrpInterfaceList.end())
-                    remake = inRange && !ipInfo.ipv4.comparePrimaryAddress(types::IPv4Address(it->second.ifaceAddress.v4()));
-            }
-            else
-            {
-                bool ipv6Contained = false;
-                if (isNamed)
-                {
-                    auto afIfaces = process.getConfigs().get<config::Eigrp::AF_INTERFACE>();
-                    auto regIt = afIfaces.find(ipInfo.key);
-                    ipv6Contained = (regIt != afIfaces.end()) && !regIt->second->get<config::EigrpInterface::SHUTDOWN>().load();
-                }
-                (void)as;
-                inRange = ipv6Contained;
-                // Compare known addresses
-                if (it != eigrpInterfaceList.end())
-                    remake = inRange && ipInfo.ipv6.getLocalAddress().addr != it->second.ifaceAddress.v6();
-            }
-
-            if (remake)
-            {
-                auto node = eigrpInterfaceList.extract(it);
-                interfacesToRemove.push_back(std::move(node));
-                it = eigrpInterfaceList.find(id);
-            }
-
-            bool exists = eigrpInterfaceList.contains(id);
-            if (inRange)
-            {
-                if (exists)
-                    interfacesToProcess.push_back({true, &it->second});
-                else
-                    interfacesToProcess.push_back({false, interface});
-            }
-            else if (exists)
-            {
-                auto node = eigrpInterfaceList.extract(it);
-                interfacesToRemove.push_back(std::move(node));
-            }
-        }
-    }
-
-    for (auto& [exists, interface] : interfacesToProcess)
-    {
-        if (exists)
-            process.getTopology().synchronizeConnected(*(static_cast<EigrpInterface*>(interface)));
-        else
-            createInterface(static_cast<interface::Interface*>(interface));
-    }
+    return eigrpInterfaceList.erase(key) != 0;
 }
 
 void InterfaceManager::deactivateAll()

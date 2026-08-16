@@ -21,6 +21,8 @@
 #include "interface/configs/InterfaceType.hpp"
 #include "EigrpInterfaceRegistry.h"
 
+namespace routing::eigrp { class Eigrp; }
+
 namespace config
 {
 namespace eigrp
@@ -62,15 +64,6 @@ DEFINE_CONFIG_ENUM_NS(eigrp, RerouteTieBreak, EIGRP_REROUTE_TIE_BREAK);
 DEFINE_CONFIG_ENUM_NS(eigrp, Stub, EIGRP_STUB_FLAGS);
 } // namespace config::eigrp
 
-void EigrpSyncNetworks(void* e);
-void EigrpShutdown(void* e);
-void EigrpSyncVariance(void* e);
-void EigrpSyncKValues(void* e);
-void EigrpSyncNeighbors(void* e);
-void EigrpSyncPassive(void* e);
-void EigrpSyncRouterId(void* e);
-void EigrpSyncAfInterface(void* e);
-
 #define EIGRP_OFFSET_LIST_FIELDS(X) \
     X(std::string,             list) \
     X(uint32_t,                offset) \
@@ -95,12 +88,6 @@ DEFINE_TUPLE_SCHEMA(EigrpDefaultMetrics, EIGRP_DEFAULT_METRICS_FIELDS);
 
 DEFINE_TUPLE_SCHEMA(EigrpAdminDistanceRange, EIGRP_ADMIN_DISTANCE_RANGE_FIELDS);
 
-#define EIGRP_NETWORK_FIELDS(X) \
-    X(types::IPAddress,  address) \
-    X(IGNOR(uint8_t),    prefixLength)
-
-DEFINE_TUPLE_SCHEMA(EigrpNetwork, EIGRP_NETWORK_FIELDS);
-
 #define EIGRP_SUMMARY_METRIC_FIELDS(X) \
     X(types::IPPrefix,  prefix) \
     X(IGNOR(uint32_t),  bandwidth) \
@@ -112,14 +99,18 @@ DEFINE_TUPLE_SCHEMA(EigrpNetwork, EIGRP_NETWORK_FIELDS);
 
 DEFINE_TUPLE_SCHEMA(EigrpSummaryMetric, EIGRP_SUMMARY_METRIC_FIELDS);
 
-#define EIGRP_NEIGHBOR_DESCRIPTION(X) \
-    X(types::IPAddress,   neighbor) \
-    X(IGNOR(std::string), description)
+#define EIGRP_WEIGHT_FIELDS(X) \
+    X(uint8_t, w1) \
+    X(uint8_t, w2) \
+    X(uint8_t, w3) \
+    X(uint8_t, w4) \
+    X(uint8_t, w5) \
+    X(uint8_t, w6)
 
-DEFINE_TUPLE_SCHEMA(EigrpNeighborDescription, EIGRP_NEIGHBOR_DESCRIPTION);
+DEFINE_TUPLE_SCHEMA(EigrpWeight, EIGRP_WEIGHT_FIELDS);
 
 #define EIGRP_NEIGHBOR_FIELDS(X, Y) \
-    LIST_FIELD(X, Y, INTERFACE, interface::InterfaceKey) \
+    OPTIONAL_ATOMIC_FIELD_CB(X, Y, INTERFACE, interface::InterfaceKey) \
     ATOMIC_FIELD(X, Y, MAXIMUM_PREFIX, uint32_t, 0) \
     ATOMIC_FIELD(X, Y, MAXIMUM_PREFIX_THRESHOLD, uint8_t, 75) \
     ATOMIC_FIELD(X, Y, MAXIMUM_PREFIX_WARNINGS, bool, false) \
@@ -127,13 +118,14 @@ DEFINE_TUPLE_SCHEMA(EigrpNeighborDescription, EIGRP_NEIGHBOR_DESCRIPTION);
 
 DEFINE_CONFIG_GROUP(EigrpNeighbor, EIGRP_NEIGHBOR_FIELDS)
 
+
 /**
  * @brief EIGRP process-level configuration fields.
  * @ingroup EIGRP
  */
 #define EIGRP_FIELD_LIST(X, Y) \
-    ATOMIC_FIELD(X, Y, AUTO_SUMMARIZATION, bool, false) \
-    OWNED_LIST_FIELD(X, Y, AF_INTERFACE, config::EigrpInterfaceRegistry, interface::InterfaceKey) \
+    ATOMIC_FIELD_CB(X, Y, AUTO_SUMMARIZATION, bool, false) \
+    OWNED_LIST_FIELD_CB(X, Y, AF_INTERFACE, config::EigrpInterfaceRegistry, interface::InterfaceKey) \
     REGISTRY_CONTAINER(X, Y, AF_INTERFACE_DEFAULT, config::EigrpInterfaceRegistry) \
     ATOMIC_FIELD(X, Y, BFD_ALL_INTERFACE, bool, false) \
     OPTIONAL_ATOMIC_FIELD(X, Y, BFD_INTERFACE, interface::InterfaceKey) \
@@ -150,7 +142,7 @@ DEFINE_CONFIG_GROUP(EigrpNeighbor, EIGRP_NEIGHBOR_FIELDS)
     ATOMIC_FIELD(X, Y, LOG_NEIGHBOR_CHANGES, bool, true) \
     ATOMIC_FIELD(X, Y, LOG_NEIGHBOR_WARNINGS, bool, false) \
     ATOMIC_FIELD(X, Y, LOG_NEIGHBOR_WARNINGS_INTERVAL, uint16_t, 10) \
-    OPTIONAL_ATOMIC_FIELD_CB(X, Y, ROUTER_ID, uint32_t, EigrpSyncRouterId) \
+    OPTIONAL_ATOMIC_FIELD_CB(X, Y, ROUTER_ID, uint32_t) \
     OPTIONAL_ATOMIC_FIELD(X, Y, STUB, types::EnumBitMap<eigrp::Stub>) \
     VALUE_FIELD(X, Y, STUB_LEAK_MAP, std::string) \
     OPTIONAL_ATOMIC_FIELD(X, Y, STUB_SITE, uint64_t) TODO \
@@ -163,18 +155,12 @@ DEFINE_CONFIG_GROUP(EigrpNeighbor, EIGRP_NEIGHBOR_FIELDS)
     OPTIONAL_ATOMIC_FIELD(X, Y, FAST_REROUTE_TIE_BREAK_SRLG_DISJOINT, uint8_t) \
     ATOMIC_FIELD(X, Y, MAX_PATHS, uint8_t, 4) \
     ATOMIC_FIELD(X, Y, MAX_HOPS, uint8_t, 100) \
-    ATOMIC_FIELD_CB(X, Y, WEIGHT_K1, uint8_t, 1, EigrpSyncKValues) \
-    ATOMIC_FIELD_CB(X, Y, WEIGHT_K2, uint8_t, 0, EigrpSyncKValues) \
-    ATOMIC_FIELD_CB(X, Y, WEIGHT_K3, uint8_t, 1, EigrpSyncKValues) \
-    ATOMIC_FIELD_CB(X, Y, WEIGHT_K4, uint8_t, 0, EigrpSyncKValues) \
-    ATOMIC_FIELD_CB(X, Y, WEIGHT_K5, uint8_t, 0, EigrpSyncKValues) \
-    ATOMIC_FIELD_CB(X, Y, WEIGHT_K6, uint8_t, 0, EigrpSyncKValues) \
-    OWNED_LIST_FIELD_CB(X, Y, NEIGHBOR, EigrpNeighborRegistry, types::IPAddress, EigrpSyncNeighbors) \
-    LIST_FIELD_CB(X, Y, NETWORK, EigrpNetwork, EigrpSyncNetworks) \
+    VALUE_FIELD_CB(X, Y, WEIGHTS, EigrpWeight) \
+    OWNED_LIST_FIELD_CB(X, Y, NEIGHBOR, EigrpNeighborRegistry, types::IPAddress) \
     VALUE_FIELD(X, Y, OFFSET_LIST_IN, EigrpOffsetList) \
     VALUE_FIELD(X, Y, OFFSET_LIST_OUT, EigrpOffsetList) \
-    LIST_FIELD_CB(X, Y, PASSIVE_INTERFACES, interface::InterfaceKey, EigrpSyncPassive) \
-    ATOMIC_FIELD_CB(X, Y, SHUTDOWN, bool, false, EigrpShutdown) \
+    LIST_FIELD_CB(X, Y, PASSIVE_INTERFACES, interface::InterfaceKey) \
+    ATOMIC_FIELD_CB(X, Y, SHUTDOWN, bool, false) \
     LIST_FIELD(X, Y, SUMMARY_METRIC, EigrpSummaryMetric) \
     OPTIONAL_ATOMIC_FIELD(X, Y, ACTIVE_TIME, uint16_t) /* add a callback */ \
     ATOMIC_FIELD(X, Y, ACTIVE_DISABLED, bool, false) \
@@ -198,15 +184,19 @@ DEFINE_CONFIG_GROUP(EigrpNeighbor, EIGRP_NEIGHBOR_FIELDS)
     ATOMIC_FIELD(X, Y, NEIGHBOR_MAXIMUM_PREFIX_RESTART_COUNT, uint16_t, 1) \
     ATOMIC_FIELD(X, Y, SOFT_SIA, bool, false) TODO \
     ATOMIC_FIELD(X, Y, TRAFFIC_SHARE, eigrp::TrafficShareMode, eigrp::TrafficShareMode::BALENCED) \
-    ATOMIC_FIELD_CB(X, Y, VARIANCE, uint8_t, 1, EigrpSyncVariance)
+    ATOMIC_FIELD_CB(X, Y, VARIANCE, uint8_t, 1)
 
 DEFINE_CONFIG_GROUP(Eigrp, EIGRP_FIELD_LIST)
 
+void eigrpNamedV4(config::Context&, EigrpRegistry*, std::string&);
+bool eigrpNamedV4Validation(config::Context&, std::string&);
+void eigrpNamedV6(config::Context&, EigrpRegistry*, std::string&);
+bool eigrpNamedV6Validation(config::Context&, std::string&);
+
 #define EIGRP_NAMED_FIELD_LIST(X, Y) \
-    OPTIONAL_ATOMIC_FIELD(X, Y, V4_AS, uint16_t) \
-    OPTIONAL_ATOMIC_FIELD(X, Y, V6_AS, uint16_t) \
-    OWNED_LIST_FIELD(X, Y, V4_INSTANCES, EigrpRegistry, std::string) \
-    OWNED_LIST_FIELD(X, Y, V6_INSTANCES, EigrpRegistry, std::string) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, AS, uint16_t) \
+    OWNED_LIST_FIELD_CB_VA(X, Y, V4_INSTANCES, EigrpRegistry, std::string) \
+    OWNED_LIST_FIELD_CB_VA(X, Y, V6_INSTANCES, EigrpRegistry, std::string) \
     ATOMIC_FIELD(X, Y, SHUTDOWN, bool, false)
 
 /**

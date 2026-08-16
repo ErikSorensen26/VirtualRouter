@@ -2,49 +2,24 @@
 
 #include "EigrpInterfaceRegistry.h"
 #include "eigrp/interface/EigrpInterface.h"
-#include "eigrp/core/Eigrp.h"
-#include "interface/configs/InterfaceType.hpp"
 
 namespace config
 {
-void EigrpIfacePassive(void* i)
+DEFINE_CONFIG_APPLIER(EigrpInterface, PASSIVE_INTERFACE, ctx, p)
 {
-    routing::eigrp::EigrpInterface& iface = *static_cast<routing::eigrp::EigrpInterface*>(i);
-    routing::eigrp::Eigrp& eigrp = iface.getBase();
-    interface::InterfaceKey key = iface.interfaceKey;
-    eigrp.getScheduler().post([&eigrp, key] {
-        auto* eigrpIface = eigrp.getIfaceMgr().getInterface(key);
-        if (!eigrpIface) return;
-        bool passive = eigrpIface->configs.get<config::EigrpInterface::PASSIVE_INTERFACE>().load();
-        eigrpIface->setPassiveMode(passive);
-    });
+    if (routing::eigrp::EigrpInterface* iface = Context::cast<routing::eigrp::EigrpInterface*>(ctx); iface)
+        iface->enqueueSetPassive(p);
 }
 
-void EigrpIfaceShutdown(void* i)
+DEFINE_CONFIG_APPLIER(EigrpInterface, SHUTDOWN, ctx, shut)
 {
-    routing::eigrp::EigrpInterface& iface = *static_cast<routing::eigrp::EigrpInterface*>(i);
-    routing::eigrp::Eigrp& eigrp = iface.getBase();
-    eigrp.getScheduler().post([&eigrp] {
-        eigrp.refreshInterfaceList();
-    });
+    if (routing::eigrp::EigrpInterface* iface = Context::cast<routing::eigrp::EigrpInterface*>(ctx); iface)
+        iface->enqueueSetShutdown(shut);
 }
 
-void EigrpIfaceSummary(void* i)
+DEFINE_CONFIG_APPLIER(EigrpInterface, SUMMARY_ADDRESS, ctx, sum, add)
 {
-    routing::eigrp::EigrpInterface& iface = *static_cast<routing::eigrp::EigrpInterface*>(i);
-    routing::eigrp::Eigrp& eigrp = iface.getBase();
-    interface::InterfaceKey key = iface.interfaceKey;
-    eigrp.getScheduler().post([&eigrp, key] {
-        auto* eigrpIface = eigrp.getIfaceMgr().getInterface(key);
-        if (!eigrpIface) return;
-
-        std::set<types::IPPrefix> summaries;
-        eigrpIface->configs.get<config::EigrpInterface::SUMMARY_ADDRESS>().withRead(
-            [&](const std::vector<config::EigrpSummaryAddress::Tuple>& v) {
-                for (const config::EigrpSummaryAddress::Tuple& row : v)
-                    summaries.emplace(config::EigrpSummaryAddress::prefix(row));
-            });
-        eigrpIface->getAggregator().installSummaries(summaries);
-    });
+    if (routing::eigrp::EigrpInterface* iface = Context::cast<routing::eigrp::EigrpInterface*>(ctx); iface)
+        iface->enqueueSetSummary(sum.prefix(), sum.leakMap(), add);
 }
 }

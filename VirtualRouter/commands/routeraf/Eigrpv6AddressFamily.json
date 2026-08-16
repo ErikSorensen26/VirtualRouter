@@ -746,32 +746,32 @@
                         {
                             "description": "K1",
                             "name": "<0-255>",
-                            "config": "Eigrp::WEIGHT_K1",
+                            "config": "Eigrp::WEIGHTS::w1",
                             "subcommands": [
                                 {
                                     "description": "K2",
                                     "name": "<0-255>",
-                                    "config": "Eigrp::WEIGHT_K2",
+                                    "config": "Eigrp::WEIGHTS::w2",
                                     "subcommands": [
                                         {
                                             "description": "K3",
                                             "name": "<0-255>",
-                                            "config": "Eigrp::WEIGHT_K3",
+                                            "config": "Eigrp::WEIGHTS::w3",
                                             "subcommands": [
                                                 {
                                                     "description": "K4",
                                                     "name": "<0-255>",
-                                                    "config": "Eigrp::WEIGHT_K4",
+                                                    "config": "Eigrp::WEIGHTS::w4",
                                                     "subcommands": [
                                                         {
                                                             "description": "K5",
                                                             "name": "<0-255>",
-                                                            "config": "Eigrp::WEIGHT_K5",
+                                                            "config": "Eigrp::WEIGHTS::w5",
                                                             "subcommands": [
                                                                 {
                                                                     "description": "K6",
                                                                     "name": "<0-255>",
-                                                                    "config": "Eigrp::WEIGHT_K6",
+                                                                    "config": "Eigrp::WEIGHTS::w6",
                                                                     "subcommands": [
                                                                         {
                                                                             "description": "",

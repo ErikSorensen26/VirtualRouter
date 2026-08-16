@@ -22,16 +22,15 @@ class Eigrp;
 class EigrpInterface;
 
 /**
- * @brief Tracks and creates @ref EigrpInterface objects for all interfaces
- *        that match the process's `network` statements.
+ * @brief Tracks and creates @ref EigrpInterface objects for a single EIGRP process.
  * @ingroup EIGRP_CORE
  *
  * `InterfaceManager` is the bridge between the system-level
  * @ref interface::Interface objects and the EIGRP-level @ref EigrpInterface
- * objects.  When the owning @ref Eigrp process calls `refreshInterfaceList()`,
- * this class queries the VRF for all live interfaces, checks each against the
- * configured network ranges, and creates or destroys `EigrpInterface` entries
- * accordingly.
+ * objects. The owning @ref Eigrp process subscribes to `IF_READY`/`IF_DOWN`
+ * events on the per-VRF @ref interface::InterfaceManager; each event is
+ * handled as a single, targeted create or destroy for the interface that
+ * fired it -- there is no bulk sweep or reconciliation pass.
  *
  * ## Architectural Role
  * Owned by `Eigrp`. Does not perform packet I/O; that is the responsibility
@@ -65,25 +64,46 @@ public:
     ~InterfaceManager();
 
     /**
-     * @brief Creates an @ref EigrpInterface for the given physical interface
-     *        and inserts it into `eigrpInterfaceList`.
+     * @brief Creates the AF_INTERFACE registry slot for a physical interface.
      *
-     * If an entry for `interface` already exists, the existing pointer is
-     * returned without creating a duplicate.
+     * Called when the owning @ref Eigrp process observes `IF_READY` for
+     * `interface`. Firing `emplaceBack()` synchronously invokes the
+     * AF_INTERFACE applier (EigrpRegistry.cpp), which calls back into
+     * `createInterface(key, registry&)` to construct the @ref EigrpInterface.
+     *
+     * No-op if an entry for this interface already exists.
      *
      * @param interface Physical interface to enable EIGRP on; must not be null.
-     * @return Pointer to the (possibly newly created) @ref EigrpInterface.
      */
-    EigrpInterface* createInterface(interface::Interface* interface);
+    void tryCreateInterface(interface::Interface& interface);
 
     /**
-     * @brief Synchronizes `eigrpInterfaceList` against the current VRF
-     *        interface set and configured network ranges.
+     * @brief Constructs the @ref EigrpInterface for an already-created
+     *        AF_INTERFACE registry slot and inserts it into `eigrpInterfaceList`.
      *
-     * Adds `EigrpInterface` entries for newly matching interfaces and removes
-     * entries for interfaces that no longer match.
+     * Called by the AF_INTERFACE applier once the registry slot exists; not
+     * for use as a general entry point -- `addInterface()` is that entry point.
+     *
+     * @param key    Interface lookup key.
+     * @param cfg    Registry slot to bind the new EigrpInterface to.
+     * @return Pointer to the newly-constructed EigrpInterface, or nullptr if
+     *         the physical interface can no longer be found or the entry
+     *         already exists.
      */
-    void refreshInterfaceList();
+    EigrpInterface* createInterface(interface::InterfaceKey key, config::EigrpInterfaceRegistry& cfg);
+
+    /**
+     * @brief Erases the EigrpInterface for an AF_INTERFACE key already
+     *        removed from the registry.
+     *
+     * Called by the AF_INTERFACE applier once the registry slot is gone;
+     * not for use as a general entry point -- `removeInterface()` is that
+     * entry point.
+     *
+     * @param key Lookup key for the interface.
+     * @return True if an EigrpInterface was erased, false if not found.
+     */
+    bool destroyInterface(interface::InterfaceKey key);
 
     /**
      * @brief Brings down all active EIGRP interfaces, sending goodbye hellos
@@ -100,22 +120,6 @@ public:
      * @return Pointer to the matching interface, or nullptr if not found.
      */
     EigrpInterface* getInterface(interface::InterfaceKey key);
-
-    /**
-     * @brief Returns a registry reference for the per-interface EIGRP
-     *        configuration of the given physical interface.
-     *
-     * @param iface Physical interface whose registry is needed.
-     */
-    config::EigrpInterfaceRegistry& getRegistry(interface::Interface& iface);
-
-    /**
-     * @brief Returns a registry reference for the per-interface EIGRP
-     *        configuration identified by key.
-     *
-     * @param key System interface identifier.
-     */
-    config::EigrpInterfaceRegistry& getRegistryByKey(interface::InterfaceKey key);
 
     // INTERFACE LIST
     std::unordered_map<interface::InterfaceKey, EigrpInterface> eigrpInterfaceList; ///< Active EIGRP interfaces keyed by interface identifier.

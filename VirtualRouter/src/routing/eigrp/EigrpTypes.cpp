@@ -10,12 +10,10 @@ namespace routing::eigrp
 {
 KValue getKValues(const config::EigrpRegistry& configs)
 {
+    auto weights = configs.get<config::Eigrp::WEIGHTS>().load();
     return KValue(
-        configs.get<config::Eigrp::WEIGHT_K1>().load(),
-        configs.get<config::Eigrp::WEIGHT_K2>().load(),
-        configs.get<config::Eigrp::WEIGHT_K3>().load(),
-        configs.get<config::Eigrp::WEIGHT_K4>().load(),
-        configs.get<config::Eigrp::WEIGHT_K5>().load()
+        std::get<0>(weights), std::get<1>(weights), std::get<2>(weights),
+        std::get<3>(weights), std::get<4>(weights), std::get<5>(weights)
     );
 }
 

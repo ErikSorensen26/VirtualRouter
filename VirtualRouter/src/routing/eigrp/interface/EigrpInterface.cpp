@@ -49,11 +49,15 @@ EigrpInterface::EigrpInterface(Eigrp& eigrpSystem, config::EigrpInterfaceRegistr
     uint8_t load        = 1;
 
     // Check if this interface is passive
-    if (process.isPassive(interfaceKey))
-        syncPassive();
+    setPassive(process.isPassive(interfaceKey));
 
     localMetric = metrics.calculateCompositeMetric(
         load, reliability, delay * 1'000'000, bandwidth);
+
+    std::set<types::IPPrefix> summaries;
+    configs.get<config::EigrpInterface::SUMMARY_ADDRESS>().readEach(
+        [&](const config::EigrpSummaryAddress& sum) { summaries.emplace(sum.prefix()); });
+    aggregator.installSummaries(summaries);
 
     // Handle unicast neighbors
     std::unordered_set<types::IPAddress> unicastNeighbors = process.getUnicastNeighbors(interfaceKey);
@@ -98,37 +102,27 @@ uint16_t EigrpInterface::getVirtualRouterID() const
     return process.getVirtualRouterID();
 }
 
-void EigrpInterface::enqueueSyncPassive()
+void EigrpInterface::enqueueSetPassive(bool passive)
 {
-    Eigrp& eigrp = process;
-    interface::InterfaceKey key = interfaceKey;
-    eigrp.getScheduler().post([&eigrp, key]() {
-        auto* eigrpIface = eigrp.getIfaceMgr().getInterface(key);
-        if (!eigrpIface) return;
-        eigrpIface->syncPassive();
+    process.getScheduler().post([this, passive]() {
+        setPassive(passive);
     });
 }
 
-void EigrpInterface::enqueueRefreshInterfaceList()
+void EigrpInterface::enqueueSetShutdown(bool shut)
 {
-    process.enqueueRefreshInterfaceList();
+    process.getScheduler().post([this, shut]() {
+        setShutdown(shut);
+    });
 }
 
-void EigrpInterface::enqueueSyncSummary()
+void EigrpInterface::enqueueSetSummary(types::IPPrefix prefix, std::optional<std::string> leakMap, bool add)
 {
-    Eigrp& eigrp = process;
-    interface::InterfaceKey key = interfaceKey;
-    eigrp.getScheduler().post([&eigrp, key] {
-        auto* eigrpIface = eigrp.getIfaceMgr().getInterface(key);
-        if (!eigrpIface) return;
-
-        std::set<types::IPPrefix> summaries;
-        eigrpIface->configs.get<config::EigrpInterface::SUMMARY_ADDRESS>().withRead(
-            [&](const std::vector<std::tuple<types::IPPrefix, std::optional<std::string>>>& v) {
-                for (const auto& [prefix, name] : v)
-                    summaries.emplace(prefix);
-            });
-        eigrpIface->aggregator.installSummaries(summaries);
+    process.getScheduler().post([this, prefix, leakMap, add]() {
+        if (add)
+            aggregator.installSummary(prefix);
+        else
+            aggregator.withdrawSummary(prefix);
     });
 }
 
@@ -151,9 +145,8 @@ void EigrpInterface::notifyRoutingChange(const std::vector<const RouteInfo*>& ch
     }
 }
 
-void EigrpInterface::syncPassive()
+void EigrpInterface::setPassive(bool passive)
 {
-    bool passive = configs.get<config::EigrpInterface::PASSIVE_INTERFACE>().load();
     if (passive)
     {
         for (auto it = ntable.neighbors.begin(); it != ntable.neighbors.end();)
@@ -168,6 +161,28 @@ void EigrpInterface::syncPassive()
     }
     else
     {
+        tmgr.startHello();
+    }
+}
+
+void EigrpInterface::setShutdown(bool shut)
+{
+    if (shut)
+    {
+        for (auto it = ntable.neighbors.begin(); it != ntable.neighbors.end();)
+        {
+            tmgr.cancelHoldTimer(it->second);
+            auto next = std::next(it);
+            Neighbor& nbr = it->second;
+            ntable.onDown(nbr);
+            it = next;
+        }
+        tmgr.stopHello();
+        process.getTopology().clearConnected(*this);
+    }
+    else
+    {
+        process.getTopology().synchronizeConnected(*this);
         tmgr.startHello();
     }
 }
