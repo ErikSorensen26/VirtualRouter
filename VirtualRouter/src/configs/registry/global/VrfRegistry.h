@@ -18,10 +18,8 @@
 #include "interface/configs/InterfaceType.hpp"
 
 namespace config {
-struct BgpRegistry;
-struct EigrpRegistry;
 struct OspfRegistry;
-struct Ospfv3AddressFamilyRegistry;
+struct BgpRegistry;
 }
 
 #undef IP_PIM
@@ -29,7 +27,8 @@ struct Ospfv3AddressFamilyRegistry;
 struct Incomplete {};
 enum class Empty { COUNT };
 class EmptyFields : public config::FieldTuple<> {};
-class EmptyRegistry : public config::SubRegistry<EmptyRegistry, Empty, nullptr, EmptyFields> {};
+class EmptyRegistry : public config::SubRegistry<EmptyRegistry, Empty, EmptyFields>
+{ using config::SubRegistry<EmptyRegistry, Empty, EmptyFields>::SubRegistry; };
 
 namespace config
 {
@@ -104,13 +103,9 @@ DEFINE_TUPLE_SCHEMA(IPv6MldSsmMapStatic, IPV6_MLD_SSM_MAP_STATIC_FIELDS);
 
 DEFINE_TUPLE_SCHEMA(IPv6RouteStaticBfd, IPV6_ROUTE_STATIC_BFD_FIELDS);
 
-void VrfRouterEigrpV4(void*);
-void VrfRouterEigrpV6(void*);
-
 #define VRF_FIELD_LIST(X, Y) \
     LIST_FIELD(X, Y, ARP_STATIC_ENTRY, StaticArpEntry) \
-    OPTIONAL_REGISTRY_CONTAINER(X, Y,       ROUTER_BGP, BgpRegistry) TODO \
-    OWNED_LIST_FIELD(X, Y,                  ROUTER_OSPF, OspfRegistry, uint16_t) TODO \
+    OWNED_LIST_FIELD_CB(X, Y,               ROUTER_OSPF, OspfRegistry, uint16_t) \
     OPTIONAL_ATOMIC_FIELD(X, Y,             IP_DOMAIN_LIST, Incomplete) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y,             IP_DOMAIN_LOOKUP_SOURCE_INTERFACE, interface::InterfaceKey) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y,             IP_DOMAIN_NAME, Incomplete) TODO \
@@ -144,7 +139,6 @@ void VrfRouterEigrpV6(void*);
     ATOMIC_FIELD(X, Y,                      IPV6_ROUTE_STATIC_RESOLVE, bool, false) TODO \
 
 DEFINE_CONFIG_GROUP(Vrf, VRF_FIELD_LIST)
-
 }
 
 #endif // VRF_REGISTRY_HPP

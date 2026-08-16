@@ -11,18 +11,16 @@
 namespace core
 {
 
-VirtualRouter::VirtualRouter(Global& g, const std::string& name)
+VirtualRouter::VirtualRouter(Global& g, const std::string& name, config::VrfRegistry& cfg)
     : defaulted(name == DEFAULT_VRF),
-      configs([&g, &name]() -> config::VrfRegistry& {
-          auto vrfs = g.getConfigs().get<config::Global::VRF_CONFIGS>();
-          return vrfs.emplaceBack(name);
-      }()),
+      configs(cfg),
       tcpManager(*this),
       routingTable(g.scheduler),
       global(g)
 {
     instanceName = name;
     enabledAddressFamilies.insert(types::AddressFamily::IPv4);
+    configs.context().set(this);
 
     // TODO initiate routing protocols
 }
@@ -32,7 +30,7 @@ VirtualRouter::~VirtualRouter()
 {
     //assert(empty());
     // Eigrp Autonomous Systems
-    for (auto it : eigrpList)
+    for (auto& it : eigrpList)
     {
         if (it.second.ipv4)
         {
@@ -44,15 +42,12 @@ VirtualRouter::~VirtualRouter()
         }
     }
     eigrpList.clear();
-
-    namedEigrpList.clear();
 }
 
 bool VirtualRouter::empty()
 {
     return ifaceMgr.empty() &&
            eigrpList.empty() &&
-           namedEigrpList.empty() &&
            ospfList.empty() &&
            ospfv3List.empty();
 }
@@ -91,86 +86,69 @@ bool VirtualRouter::calculateRID(uint32_t& rid)
 }
 
 // Eigrp Autonomous Systems
-routing::eigrp::EigrpAutonomousSystem* VirtualRouter::addEigrpAutonomousSystem(uint16_t id)
+routing::eigrp::Eigrp& VirtualRouter::addEigrpAutonomousSystem(config::EigrpRegistry& reg, uint16_t id, types::AddressFamily af)
 {
-    if (eigrpList.contains(id))
-        return nullptr;
-    return &eigrpList[id];
+    if (af != types::AddressFamily::IPv4 && af != types::AddressFamily::IPv6)
+        throw std::runtime_error("Eigrp only supports address families ipv4 and ipv6");
+    routing::eigrp::EigrpAutonomousSystem& as = eigrpList[id];
+    if (af == types::AddressFamily::IPv4)
+    {
+        if (!as.ipv4) as.ipv4 = new routing::eigrp::Eigrp(reg, id, af, this);
+        return *as.ipv4;
+    }
+    else
+    {
+        if (!as.ipv6) as.ipv6 = new routing::eigrp::Eigrp(reg, id, af, this);
+        return *as.ipv6;
+    }
 }
 
-routing::eigrp::EigrpAutonomousSystem* VirtualRouter::getEigrpAutonomousSystem(uint16_t id)
+routing::eigrp::Eigrp* VirtualRouter::getEigrpAutonomousSystem(uint16_t id, types::AddressFamily af)
 {
     if (auto it = eigrpList.find(id); it != eigrpList.end())
-        return &it->second;
-    return nullptr;
-}
-
-bool VirtualRouter::removeEigrpAutonomousSystem(uint16_t id)
-{
-    if (eigrpList.find(id) != eigrpList.end())
     {
-        eigrpList.erase(id);
-        return true;
-    }
-    return false;
-}
-
-// Eigrp Named Systems
-routing::eigrp::EigrpNamed& VirtualRouter::addEigrpNamed(const std::string& name)
-{
-    return namedEigrpList[name];
-}
-
-routing::eigrp::EigrpNamed* VirtualRouter::getEigrpNamed(const std::string& name)
-{
-    if (auto it = namedEigrpList.find(name); it != namedEigrpList.end())
-        return &it->second;
-    return nullptr;
-}
-
-bool VirtualRouter::removeEigrpNamed(const std::string& name)
-{
-    if (namedEigrpList.find(name) != namedEigrpList.end())
-    {
-        auto& eigrp = namedEigrpList[name];
-        for (auto& [subName, pair] : eigrp.systems)
+        if (af == types::AddressFamily::IPv4)
         {
-            auto [v4, v6] = pair;
-            if (v4)
-            {
-                uint32_t as = v4->asNumber;
-                if (eigrpList.find(as) != eigrpList.end())
-                {
-                    delete eigrpList[as].ipv4;
-                    eigrpList[as].ipv4 = nullptr;
-                    if (!eigrpList[as].ipv6)
-                        removeEigrpAutonomousSystem(as);
-                }
-            }
-            if (v6)
-            {
-                uint32_t as = v6->asNumber;
-                if (eigrpList.find(as) != eigrpList.end())
-                {
-                    delete eigrpList[as].ipv6;
-                    eigrpList[as].ipv6 = nullptr;
-                    if (!eigrpList[as].ipv4)
-                        removeEigrpAutonomousSystem(as);
-                }
-            }
+            if (it->second.ipv4)
+                return it->second.ipv4;
         }
-        namedEigrpList.erase(name);
-        return true;
+        else if (af == types::AddressFamily::IPv6)
+        {
+            if (it->second.ipv6)
+                return it->second.ipv6;
+        }
+    }
+    return nullptr;
+}
+
+bool VirtualRouter::removeEigrpAutonomousSystem(uint16_t id, types::AddressFamily af)
+{
+    if (auto it = eigrpList.find(id); it != eigrpList.end())
+    {
+        if (af == types::AddressFamily::IPv4)
+        {
+            if (it->second.ipv4)
+                delete it->second.ipv4;
+            if (!it->second.ipv4 && it->second.ipv6)
+                eigrpList.erase(id);
+            return true;
+        }
+        else if (af == types::AddressFamily::IPv6)
+        {
+            if (it->second.ipv6)
+                delete it->second.ipv6;
+            if (!it->second.ipv4 && it->second.ipv6)
+                eigrpList.erase(id);
+            return true;
+        }
     }
     return false;
 }
 
-routing::ospf::OspfProcess& VirtualRouter::addOspf(uint16_t id)
+routing::ospf::OspfProcess& VirtualRouter::addOspf(config::OspfRegistry& reg, uint16_t id)
 {
     if (auto it = ospfList.find(id); it == ospfList.end())
-    {
-        ospfList.try_emplace(id, false, id, types::AddressFamily::IPv4, *this);
-    }
+        ospfList.try_emplace(id, reg, false, id, types::AddressFamily::IPv4, this);
     return ospfList.at(id);
 }
 
@@ -191,80 +169,63 @@ bool VirtualRouter::removeOspf(uint16_t id)
     return false;
 }
 
-routing::ospf::OspfProcess& VirtualRouter::addOspfv3(uint16_t id, types::AddressFamily af)
+routing::ospf::OspfProcess& VirtualRouter::addOspfv3(config::OspfRegistry& reg, uint16_t id, types::AddressFamily af)
 {
-    if (auto it = ospfv3List.find(id); it == ospfv3List.end())
-    {
-        ospfv3List.try_emplace(id, true, id, af, this);
-    }
-    return ospfv3List.at(id);
-}
-
-routing::ospf::OspfProcess& VirtualRouter::addOspfv3(uint16_t id, types::AddressFamily af)
-{
-    if (ospfv3List.find(id) == ospfv3List.end())
-    {
-        config::Ospfv3AddressFamilyRegistry& afConfigs = configs.get<config::Vrf::ROUTER_OSPFV3>().emplaceBack(id);
-        ospfv3List.emplace(id, afConfigs);
-    }
-    auto& ospf = ospfv3List.at(id);
-
+    if (af != types::AddressFamily::IPv4 && af != types::AddressFamily::IPv6)
+        throw std::runtime_error("Eigrp only supports address families ipv4 and ipv6");
+    routing::ospf::Ospfv3Instance& proc = ospfv3List[id];
     if (af == types::AddressFamily::IPv4)
     {
-        if (!ospf.ipv4)
-            ospf.ipv4 = new routing::ospf::OspfProcess(true, id, af, *this);
-        return *ospf.ipv4;
+        if (!proc.ipv4) proc.ipv4 = new routing::ospf::OspfProcess(reg, true, id, af, this);
+        return *proc.ipv4;
     }
     else
     {
-        if (!ospf.ipv6)
-            ospf.ipv6 = new routing::ospf::OspfProcess(true, id, af, *this);
-        return *ospf.ipv6;
+        if (!proc.ipv6) proc.ipv6 = new routing::ospf::OspfProcess(reg, true, id, af, this);
+        return *proc.ipv6;
     }
 }
 
-routing::ospf::OspfV3Instance* VirtualRouter::getOspfv3(uint16_t id)
-{
-    if (auto it = ospfv3List.find(id); it != ospfv3List.end())
-        return &it->second;
-    return nullptr;
-}
-
-bool VirtualRouter::removeOspfv3(uint16_t id)
+routing::ospf::OspfProcess* VirtualRouter::getOspfv3(uint16_t id, types::AddressFamily af)
 {
     if (auto it = ospfv3List.find(id); it != ospfv3List.end())
     {
-        ospfv3List.erase(it);
-        return true;
+        if (af == types::AddressFamily::IPv4)
+        {
+            if (it->second.ipv4)
+                return it->second.ipv4;
+        }
+        else if (af == types::AddressFamily::IPv6)
+        {
+            if (it->second.ipv6)
+                return it->second.ipv6;
+        }
+    }
+    return nullptr;
+}
+
+bool VirtualRouter::removeOspfv3(uint16_t id, types::AddressFamily af)
+{
+    if (auto it = ospfv3List.find(id); it != ospfv3List.end())
+    {
+        if (af == types::AddressFamily::IPv4)
+        {
+            if (it->second.ipv4)
+                delete it->second.ipv4;
+            if (!it->second.ipv4 && it->second.ipv6)
+                ospfv3List.erase(id);
+            return true;
+        }
+        else if (af == types::AddressFamily::IPv6)
+        {
+            if (it->second.ipv6)
+                delete it->second.ipv6;
+            if (!it->second.ipv4 && it->second.ipv6)
+                ospfv3List.erase(id);
+            return true;
+        }
     }
     return false;
-}
-
-void VirtualRouter::refreshEigrpV4()
-{
-    for (auto& [id, as] : eigrpList)
-        if (as.ipv4) as.ipv4->enqueueRefreshInterfaceList();
-    for (auto& [name, named] : namedEigrpList)
-        for (auto& [subName, pair] : named.systems)
-            if (pair.first) pair.first->enqueueRefreshInterfaceList();
-}
-
-void VirtualRouter::refreshEigrpV6()
-{
-    for (auto& [id, as] : eigrpList)
-        if (as.ipv6) as.ipv6->enqueueRefreshInterfaceList();
-    for (auto& [name, named] : namedEigrpList)
-        for (auto& [subName, pair] : named.systems)
-            if (pair.second) pair.second->enqueueRefreshInterfaceList();
-}
-
-void VirtualRouter::refreshEigrpV6Interfaces()
-{
-    for (auto& [id, as] : eigrpList)
-        if (as.ipv6) as.ipv6->enqueueRefreshInterfaceList();
-    for (auto& [name, named] : namedEigrpList)
-        for (auto& [subName, pair] : named.systems)
-            if (pair.second) pair.second->enqueueRefreshInterfaceList();
 }
 
 config::VrfRegistry& VirtualRouter::getConfigs()

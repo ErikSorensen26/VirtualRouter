@@ -31,7 +31,8 @@
 #define DEFAULT_HOSTNAME "router"
 #define DEFAULT_VRF ""
 
-namespace config { struct GlobalRegistry; }
+namespace config { struct GlobalRegistry; struct VrfRegistry; struct InterfaceRegistry; struct BgpRegistry; }
+namespace routing::bgp { class BgpProcess; }
 
 namespace interface { class Interface; }
 namespace hardware { struct HwIfaceInfo; }
@@ -158,6 +159,11 @@ public:
      */
     ~Global();
 
+    /**
+     * TODO apply configs
+     */
+    void initConfigs();
+
     // Hostname Management
 
     /**
@@ -211,33 +217,19 @@ public:
     bool isAAA() {return aaaEnabled.load(std::memory_order_relaxed); }
 
     // INTERFACE MANAGEMENT
-    
-    /**
-     * @brief Reconciles the live interface list with the current configuration registry.
-     *
-     * Called after any change to the interface configuration table. Creates
-     * interfaces that appear in the registry but not in the live list, and
-     * removes interfaces present in the live list but absent from the registry.
-     * Each new interface is initialized with hardware metadata and assigned to
-     * the default VRF.
-     */
-    void interfaceRefresh();
 
     /**
-     * @brief Create a new logical or physical interface and assign it to the default VRF.
+     * @brief Constructs the Interface for an already-created INTERFACE
+     *        registry slot and inserts it into `interfaceList`.
      *
-     * Interfaces represent IO endpoints (AF_PACKET, dummy, tunnel, VLAN interfaces, etc.)
-     * and contain protocol stacks, ARP/NDP tables, hardware state, and configuration.
+     * Called by the INTERFACE applier once the Executor (or startup-config
+     * load) has created the registry slot;
      *
-     * @param interfaceKey   Type of interface (Ethernet, Loopback, Tunnel, etc.)
-     * @param hwInfo         Low-level hardware metadata (ifindex, MAC, driver type)
-     * @param debug          Enables verbose hardware-layer logging for this interface.
-     *
-     * @return Pointer to created interface::Interface on success, or nullptr if key already exists.
-     *
-     * @thread_safety Protected internally by interfaceMutex.
+     * @param key Interface lookup key; must not already have a live instance.
+     * @param cfg Registry slot to bind the new Interface to.
+     * @return Pointer to the newly-constructed Interface, or nullptr on failure.
      */
-    interface::Interface* addInterface(interface::InterfaceKey interfaceKey, const hardware::HwIfaceInfo& hwInfo, bool debug = false);
+    interface::Interface* addInterface(interface::InterfaceKey key, config::InterfaceRegistry& cfg);
 
     /**
      * @brief Retrieve an interface by its computed key.
@@ -250,39 +242,30 @@ public:
     interface::Interface* getInterface(interface::InterfaceKey key);
 
     /**
-     * @brief Remove and destroy an interface.
+     * @brief Erases the Interface for an INTERFACE key already removed
+     *        from the registry.
      *
-     * All protocol sessions on the interface should already be shut down externally.
+     * Called by the INTERFACE applier once the registry slot is gone.
      *
      * @param key Lookup key for the interface.
-     * @return True if interface was removed, false if not found.
+     * @return True if an interface was erased, false if not found.
      */
     bool removeInterface(interface::InterfaceKey key);
 
     // ROUTING INSTANCES (VRFs)
 
     /**
-     * @brief Reconciles the live VRF list with the current configuration registry.
+     * @brief Constructs the VirtualRouter for an already-created VRF_CONFIGS
+     *        registry slot and inserts it into `routingInstances`.
      *
-     * Called after any change to the VRF configuration table. Creates VRF
-     * instances that appear in the registry but not in the live routing instance
-     * map, and removes VRFs that are no longer configured. Newly created VRFs
-     * are initialized with their configured address families.
+     * Called by the VRF_CONFIGS applier once the Executor (or startup-config
+     * load) has created the registry slot.
+     *
+     * @param name Unique VRF name; must not already have a live instance.
+     * @param cfg  Registry slot to bind the new VirtualRouter to.
+     * @return Pointer to the newly-constructed VirtualRouter.
      */
-    void routingInstanceRefresh();
-
-    /**
-     * @brief Create a new routing instance (VRF).
-     *
-     * A routing instance contains:
-     * - Its own RIB/FIB
-     * - Per-VRF routing protocols
-     * - Independent address family enablement
-     *
-     * @param name Name of the VRF (must be unique).
-     * @return Pointer to new VirtualRouter or nullptr if already exists.
-     */
-    VirtualRouter* addRoutingInstance(const std::string& name = DEFAULT_VRF);
+    VirtualRouter* addRoutingInstance(const std::string& name, config::VrfRegistry& cfg);
 
     /**
      * @brief Retrieve a routing instance by name and optionally by address family.
@@ -294,23 +277,61 @@ public:
     VirtualRouter* getRoutingInstance(const std::string& name = DEFAULT_VRF, types::AddressFamily ad = types::AddressFamily::NONE);
 
     /**
-     * @brief Remove a routing instance.
+     * @brief Erases the VirtualRouter for a VRF_CONFIGS key already removed
+     *        from the registry.
      *
-     * The default routing instance cannot be deleted.
+     * Called by the VRF_CONFIGS applier once the registry slot is gone.
      *
-     * @param name VRF name to delete.
-     * @return True on successful removal, false on failure.
+     * @param name VRF name whose runtime instance should be torn down.
+     * @return True if an instance was found and erased.
      */
     bool removeRoutingInstance(const std::string& name);
+
+    // BGP PROCESSES
+
+    /**
+     * @brief Creates and registers a BGP process for autonomous system @p as.
+     *
+     * A BGP process is per-AS and spans every VRF -- it owns the AS-wide
+     * AttributeManager flyweight store and peer-template table, and lazily
+     * creates a per-VRF BgpScope the first time that VRF gets an address
+     * family configured under this process.
+     *
+     * @param reg Registry to bind the new process to.
+     * @param as  BGP autonomous system number.
+     * @return Reference to the newly created process.
+     */
+    routing::bgp::BgpProcess* addBgp(config::BgpRegistry& reg, uint32_t as);
+
+    /**
+     * @brief Looks up an existing BGP process.
+     * @param as BGP autonomous system number.
+     * @return Pointer to the process, or `nullptr` if none is registered.
+     */
+    routing::bgp::BgpProcess* getBgp();
+
+    /**
+     * @brief Tears down and unregisters a BGP process.
+     * @param as BGP autonomous system number.
+     * @return `true` if a matching process was found and removed.
+     */
+    bool removeBgp(uint32_t as);
+
+    // DHCP
+
+    /**
+     * TODO add doxy comment
+     */
+    services::dhcp::DhcpServer* getDhcpServer();
+
+    /**
+     * TODO add doxy comment
+     */
+    services::dhcp::Dhcpv6Server* getDhcpv6Server();
 
     core::ThreadPool threadPool;       ///< Global thread pool for off-loading.
     core::TimeManager timeManager;     ///< Global time manager for time keeping.
     ControlScheduler scheduler;  ///< Global control plane execution engine.
-
-    // DHCP SERVERS
-    
-    services::dhcp::DhcpServer* dhcpServer = nullptr;     ///< Global IPv4 DHCP Server.
-    services::dhcp::Dhcpv6Server* dhcpv6Server = nullptr; ///< Global IPv6 DHCP Server.
 
     // AUTHENTICATION
 
@@ -337,8 +358,6 @@ private:
 
     Global& operator=(const Global&) = delete;
 
-    std::unique_ptr<config::GlobalRegistry> pConfigs; ///< Heap-allocated global config registry (decouples Global.h from GlobalRegistry.h).
-
     std::string hostname = DEFAULT_HOSTNAME;    ///< System hostname.
     std::shared_mutex hostnameMutex;            ///< Mutex protecting the hostname.
 
@@ -352,7 +371,16 @@ private:
     // Routing Instances
     std::mutex routingInstanceMutex; ///< Guards routingInstances for all CRUD operations.
     std::unordered_map<std::string, VirtualRouter> routingInstances; ///< All VRF instances. Owned by Global.
-    
+
+    // BGP Processes
+    routing::bgp::BgpProcess* bgpProcess = nullptr; ///< BGP process instances. Keyed by AS number. Owned by Global.
+
+    // DHCP SERVERS
+    services::dhcp::DhcpServer* dhcpServer = nullptr;     ///< Global IPv4 DHCP Server.
+    services::dhcp::Dhcpv6Server* dhcpv6Server = nullptr; ///< Global IPv6 DHCP Server.
+
+    config::GlobalRegistry* configs = nullptr; ///< Heap-allocated global config registry (decouples Global.h from GlobalRegistry.h).
+
 public:
     // PUBLIC SYSTEM COMPONENTS
 
@@ -360,7 +388,6 @@ public:
     bool testingMode = false;    ///< Testing mode flag.
 
     config::GlobalRegistry& getConfigs(); ///< Returns the global configuration registry.
-    config::GlobalRegistry& configs;     ///< Alias for getConfigs() — kept for call-site compatibility.
 
     cli::CliEngine engine;            ///< Global CLI engine for user interface.
 

@@ -14,9 +14,7 @@
 #define GLOBAL_REGISTRY_HPP
 
 #include <IPAddress.h>
-#include "configs/RegistryTypes.hpp"
 #include "configs/RegistryBuilder.hpp"
-#include "configs/RegistryReference.hpp"
 #include "VrfRegistry.h"
 #include "configs/TupleSchema.hpp"
 #include "interface/configs/InterfaceType.hpp"
@@ -29,6 +27,7 @@ namespace config {
 struct InterfaceRegistry;
 struct NdpBaseRegistry;
 struct EigrpNamedRegistry;
+struct BgpRegistry;
 struct OspfRegistry;
 }
 
@@ -134,8 +133,6 @@ enum class IPOption : uint8_t
 };
 }
 
-void globalInterface(void*);
-
 #define IP_EXTENDED_ACL_FIELDS(X) \
     X(uint32_t,    sequence) \
     X(bool,        permit) \
@@ -194,7 +191,7 @@ using GlobalLineRange = std::pair<uint16_t, uint16_t>;
     OWNED_LIST_FIELD(X, Y, FLOW_RECORD, EmptyRegistry, std::string) TODO \
     OWNED_LIST_FIELD(X, Y, FLOW_SAMPLER_MAP, EmptyRegistry, std::string) TODO \
     VALUE_FIELD(X, Y, HOSTNAME, std::string) TODO \
-    OWNED_LIST_FIELD_CB(X, Y, INTERFACE, InterfaceRegistry, interface::InterfaceKey, globalInterface) \
+    OWNED_LIST_FIELD_CB(X, Y, INTERFACE, InterfaceRegistry, interface::InterfaceKey) \
     OWNED_LIST_FIELD(X, Y, IP_ACCESS_LIST_EXTENDED, ExtendedACLRegistry, std::string) \
     ATOMIC_FIELD(X, Y, IP_ACCESS_LIST_HELPER_EGRESS_CHECK, bool, false) TODO \
     ATOMIC_FIELD(X, Y, IP_ACCESS_LIST_LOG_UPDATE_THRESHOLD, uint32_t, 0) TODO \
@@ -377,9 +374,9 @@ using GlobalLineRange = std::pair<uint16_t, uint16_t>;
     OWNED_LIST_FIELD(X, Y, ROUTE_MAP, RouteMapRegistry, std::string) \
     OWNED_LIST_FIELD(X, Y, ROUTE_TAG_LIST, EmptyRegistry, std::string) TODO \
     ATOMIC_FIELD(X, Y, ROUTE_TAG_NOTATION_DOTTED_DECIMAL, bool, false) TODO \
-    OWNED_LIST_FIELD(X, Y, ROUTER_EIGRP, EigrpNamedRegistry, uint32_t) \
-    OWNED_LIST_FIELD(X, Y, ROUTER_OSPF, OspfRegistry, uint16_t) \
-    OWNED_LIST_FIELD(X, Y, ROUTER_OSPFV3, OspfRegistry, uint16_t) \
+    OWNED_LIST_FIELD_CB_VA(X, Y, ROUTER_BGP, BgpRegistry, uint32_t) \
+    OWNED_LIST_FIELD_CB(X, Y, ROUTER_EIGRP, EigrpNamedRegistry, uint16_t) \
+    OWNED_LIST_FIELD_CB(X, Y, ROUTER_OSPFV3, OspfRegistry, uint16_t) \
     OWNED_LIST_FIELD(X, Y, SAMPLER, EmptyRegistry, std::string) TODO \
     OWNED_LIST_FIELD(X, Y, SASL_PROFILE, EmptyRegistry, std::string) TODO \
     LIST_FIELD(X, Y, SCRIPTING_TCL_ENCDIR, Incomplete) TODO \
@@ -405,7 +402,7 @@ using GlobalLineRange = std::pair<uint16_t, uint16_t>;
     ATOMIC_FIELD(X, Y, TRACK_RESOLUTION_IP_ROUTE_OSPF, uint32_t, 0) TODO \
     ATOMIC_FIELD(X, Y, TRACK_RESOLUTION_IP_ROUTE_STATIC, uint32_t, 0) TODO \
     LIST_FIELD(X, Y, USERNAME, Incomplete) TODO \
-    OWNED_LIST_FIELD(X, Y, VRF_CONFIGS, VrfRegistry, std::string) \
+    OWNED_LIST_FIELD_CB(X, Y, VRF_CONFIGS, VrfRegistry, std::string) \
     OWNED_LIST_FIELD(X, Y, VRF_LIST, EmptyRegistry, std::string) TODO \
     LIST_FIELD(X, Y, VRF_SELECTION, Incomplete) TODO \
     ATOMIC_FIELD(X, Y, WARM_REBOOT, bool, false) TODO \
@@ -415,7 +412,6 @@ using GlobalLineRange = std::pair<uint16_t, uint16_t>;
     ATOMIC_FIELD(X, Y, XCONNECT_LOGGING_REDUNDANCY, bool, false) TODO
 
 DEFINE_CONFIG_GROUP(Global, GLOBAL_FIELD_LIST)
-
 }
 
 #endif // GLOBAL_REGISTRY_HPP

@@ -1,19 +1,19 @@
 // VrfRegistry.cpp
 
 #include <VirtualRouter.h>
+#include <Global.h>
 #include "VrfRegistry.h"
 
 namespace config
 {
-void VrfRouterEigrpV4(void* v)
+DEFINE_CONFIG_APPLIER(Vrf, ROUTER_OSPF, v, o, id)
 {
-    core::VirtualRouter& vrf = *static_cast<core::VirtualRouter*>(v);
-    vrf.refreshEigrpV4();
-}
-
-void VrfRouterEigrpV6(void* v)
-{
-    core::VirtualRouter& vrf = *static_cast<core::VirtualRouter*>(v);
-    vrf.refreshEigrpV6();
+    if (core::VirtualRouter* vrf = Context::cast<core::VirtualRouter*>(v); vrf)
+    {
+        if (o)
+            vrf->addOspf(*o, id);
+        else
+            vrf->removeOspf(id);
+    }
 }
 }

@@ -17,11 +17,9 @@
 #include <Mac.hpp>
 
 #include "configs/RegistryTypes.hpp"
-#include "configs/RegistryReference.hpp"
 #include "configs/RegistryBuilder.hpp"
 #include "configs/TupleSchema.hpp"
 #include "configs/registry/router/OspfInterfaceRegistry.h"
-#include "configs/registry/router/EigrpInterfaceRegistry.h"
 #include "interface/configs/InterfaceType.hpp"
 
 #include "ArpRegistry.h"
@@ -33,7 +31,8 @@
 struct IncompleteIf {};
 enum class EmptyIf { COUNT };
 struct EmptyIfFields : config::FieldTuple<> {};
-struct EmptyRegistryIf : public config::SubRegistry<EmptyRegistryIf, EmptyIf, nullptr, EmptyIfFields> {};
+struct EmptyRegistryIf : public config::SubRegistry<EmptyRegistryIf, EmptyIf, EmptyIfFields>
+{ using config::SubRegistry<EmptyRegistryIf, EmptyIf, EmptyIfFields>::SubRegistry; };
 
 namespace interface { struct InterfaceKey; }
 
@@ -74,15 +73,6 @@ DEFINE_TUPLE_SCHEMA(InterfaceHelperAddress, INTERFACE_HELPER_ADDRESS_FIELDS);
 
 DEFINE_TUPLE_SCHEMA(InterfaceIPv6Address, INTERFACE_IPV6_ADDRESS_FIELDS);
 
-/**
- * @brief Configuration fields for a single network interface.
- * @ingroup CONFIG_INTERFACE
- *
- * Covers all Cisco IOS-style interface sub-commands: IP addressing, BFD, ARP, NDP,
- * EIGRP/OSPF per-interface parameters, QoS service policies, keepalive, MTU, and
- * shutdown state. Fields marked `// TODO` are schema placeholders not yet fully
- * implemented.
- */
 #define INTERFACE_FIELD_LIST(X, Y) \
     VALUE_FIELD(X, Y, AAA_CONNECTION_INFO, std::string) TODO \
     REGISTRY_CONTAINER(X, Y, ARP, ArpRegistry) \
@@ -112,13 +102,12 @@ DEFINE_TUPLE_SCHEMA(InterfaceIPv6Address, INTERFACE_IPV6_ADDRESS_FIELDS);
     OPTIONAL_ATOMIC_FIELD(X, Y, HISTORY_PPS, IncompleteIf) TODO \
     ATOMIC_FIELD(X, Y, HOLD_QUEUE_LENGTH, uint32_t, 40) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y, IP_ACCESS_GROUP, IncompleteIf) \
-    OPTIONAL_ATOMIC_FIELD_CB(X, Y, IP_ADDRESS, types::IPv4Prefix, interfaceIPAddress) TODO \
-    LIST_FIELD_CB(X, Y, IP_ADDRESS_SECONDARY, InterfaceSecondaryAddress::Tuple, interfaceIPAddressSecondary) TODO \
-    ATOMIC_FIELD_CB(X, Y, IP_ADDRESS_DHCP, bool, false, interfaceIPAddress) TODO \
+    OPTIONAL_ATOMIC_FIELD_CB(X, Y, IP_ADDRESS, types::IPv4Prefix) TODO \
+    LIST_FIELD_CB(X, Y, IP_ADDRESS_SECONDARY, InterfaceSecondaryAddress::Tuple) TODO \
+    ATOMIC_FIELD_CB(X, Y, IP_ADDRESS_DHCP, bool, false) TODO \
     ATOMIC_FIELD(X, Y, IP_BFD_FAST_EXTERNAL_FALLOVER, bool, false) TODO \
     ATOMIC_FIELD(X, Y, IP_CEF_ACCOUNTING_NON_RECURSIVE, bool, false) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y, IP_DHCP, IncompleteIf) TODO \
-    OWNED_LIST_FIELD(X, Y, IP_EIGRP, EigrpInterfaceRegistry, uint16_t) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y, IP_DIRECT_BROADCAST, IncompleteIf) TODO \
     ATOMIC_FIELD(X, Y, IP_FLOW_INGRESS, bool, false) TODO \
     ATOMIC_FIELD(X, Y, IP_FLOW_EGRESS, bool, false) TODO \
@@ -170,8 +159,6 @@ DEFINE_TUPLE_SCHEMA(InterfaceIPv6Address, INTERFACE_IPV6_ADDRESS_FIELDS);
     OPTIONAL_ATOMIC_FIELD(X, Y, IPV6_ADDRESS_DHCP, IncompleteIf) TODO \
     ATOMIC_FIELD(X, Y, IPV6_CEF, bool, true) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y, IPV6_DHCP, IncompleteIf) TODO \
-    OWNED_LIST_FIELD(X, Y, IPV6_EIGRP, EigrpInterfaceRegistry, uint16_t) TODO \
-    LIST_FIELD_CB(X, Y, IPV6_EIGRP_ENABLED, uint16_t, interfaceIPv6Eigrp) \
     ATOMIC_FIELD(X, Y, IPV6_FLOW_MONITOR, bool, false) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y, IPV6_LIST_SOURCE_LOCATOR, interface::InterfaceKey) TODO \
     ATOMIC_FIELD(X, Y, IPV6_MFIB_CEF_INPUT, bool, true) TODO \
@@ -204,14 +191,14 @@ DEFINE_TUPLE_SCHEMA(InterfaceIPv6Address, INTERFACE_IPV6_ADDRESS_FIELDS);
     ATOMIC_FIELD(X, Y, NEGOTIATION_AUTO, bool, true) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y, NTP, IncompleteIf) TODO \
     REGISTRY_CONTAINER(X, Y, OSPFV3_DEFAULT, OspfGlobalInterfaceRegistry) TODO \
-    OWNED_LIST_FIELD(X, Y, OSPFV3, OspfInterfaceAfRegistry, uint16_t) TODO \
+    OWNED_LIST_FIELD_CB(X, Y, OSPFV3, OspfInterfaceAfRegistry, uint16_t) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y, RATE_LIMIT, IncompleteIf) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y, RMON, IncompleteIf) TODO \
     VALUE_FIELD(X, Y, SERVICE_POLICY_INPUT, std::string) TODO \
     VALUE_FIELD(X, Y, SERVICE_POLICY_OUTPUT, std::string) TODO \
     VALUE_FIELD(X, Y, SERVICE_POLICY_CONTROL, std::string) TODO \
     ATOMIC_FIELD(X, Y, SERVICE_POLICY_CONTROL_DEFAULT, bool, false) TODO \
-    ATOMIC_FIELD_CB(X, Y, SHUTDOWN, bool, true, interfaceShutdown) TODO \
+    ATOMIC_FIELD_CB(X, Y, SHUTDOWN, bool, true) TODO \
     ATOMIC_FIELD(X, Y, SNMP_IFINDEX_PERSIST, bool, false) TODO \
     ATOMIC_FIELD(X, Y, SNMP_TRAP_IP_VERIFY_DROP_RATE, bool, false) TODO \
     ATOMIC_FIELD(X, Y, SNMP_TRAP_LINK_STATUS, bool, true) TODO \

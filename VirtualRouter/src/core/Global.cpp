@@ -12,24 +12,28 @@
 #include "interface/Interface.h"
 #include "hardware/HardwareManager.h"
 #include "configs/FieldAccessor.hpp"
+#include "bgp/BgpProcess.h"
 
 namespace core
 {
 
 config::GlobalRegistry& Global::getConfigs()
 {
-    return *pConfigs;
+    return *configs;
 }
 
 Global::Global(cli::FileSystem& fs, const cli::StartupFiles& stfs, bool enableRouting, bool test)
-    : routingEnabled(enableRouting),
-      pConfigs(std::make_unique<config::GlobalRegistry>()),
-      configs(*pConfigs),
-      threadPool(/*std::thread::hardware_concurrency()*/5),
+    : threadPool(/*std::thread::hardware_concurrency()*/5),
       timeManager(threadPool),
       scheduler(threadPool, timeManager),
+      configs(new config::GlobalRegistry()),
+      routingEnabled(enableRouting),
       engine(*this, stfs, fs, test)
 {
+    initConfigs();
+    configs->context().set(this);
+    configs->get<config::Global::HOSTNAME>().set(DEFAULT_HOSTNAME);
+
     txMgr.setCorePool({0, 1, 2, 3});
     txMgr.setCpuPolicy(qos::egress::CpuPolicy::EqualShare);
     txMgr.setTxCoreBias(1.0);
@@ -37,12 +41,7 @@ Global::Global(cli::FileSystem& fs, const cli::StartupFiles& stfs, bool enableRo
     rxMgr.setCorePool({4, 5, 6, 7});
     rxMgr.setCpuPolicy(qos::ingress::RxQueueManager::CpuPolicy::EqualShare);
 
-    setHostname(DEFAULT_HOSTNAME);
-
-    // Load VRFs out of global configs
-    routingInstanceRefresh();
-    // Load Interfaces out of global scope and assign correct VRFs
-    interfaceRefresh();
+    configs->get<config::Global::VRF_CONFIGS>().emplaceBack(DEFAULT_VRF);
 }
 
 Global::~Global()
@@ -51,7 +50,16 @@ Global::~Global()
         delete dhcpServer;
     if (dhcpv6Server)
         delete dhcpv6Server;
+    if (bgpProcess)
+        delete bgpProcess;
     routingInstances.clear();
+}
+
+void Global::initConfigs()
+{
+    if (configs) return;
+    // TODO apply configs here
+    configs = new config::GlobalRegistry();
 }
 
 void Global::setHostname(const std::string& name)
@@ -66,53 +74,25 @@ std::string Global::getHostname()
 
 void Global::reset()
 {
+    if (configs) delete configs;
+    initConfigs();
     setHostname(DEFAULT_HOSTNAME);
     setIPv6UnicastRouting(false);
     setAAA(false);
-    addRoutingInstance();
+    configs->get<config::Global::VRF_CONFIGS>().emplaceBack(DEFAULT_VRF);
 }
       
 // Interfaces
-void Global::interfaceRefresh()
+
+interface::Interface* Global::addInterface(interface::InterfaceKey key, config::InterfaceRegistry& cfg)
 {
-    {
-        std::lock_guard<std::mutex> lock(interfaceMutex);
-        auto interfaceCfgs = getConfigs().get<config::Global::INTERFACE>();
-        
-        // Erase
-        for (auto it = interfaceList.begin(); it != interfaceList.end();)
-        {
-            if (interfaceCfgs.find(it->first) == interfaceCfgs.end())
-                it = interfaceList.erase(it);
-            else
-                ++it;
-        }
-
-        for (auto& [id, cfg] : interfaceCfgs)
-        {
-            if (!interfaceList.contains(id))
-            {
-                auto [type, key] = id.decode();
-                const hardware::HwIfaceInfo* info = engine.hwManager.getHwInfo(id);
-                if (!info) continue;
-
-                std::string ifaceVrf = cfg->get<config::Interface::VRF_FORWARDING>().load();
-
-                interface::InterfaceCreation iface = {type, key, *getRoutingInstance(ifaceVrf), *info};
-                interfaceList.emplace(id, iface);
-            }
-        }
-    }
-}
-
-interface::Interface* Global::addInterface(interface::InterfaceKey key, const hardware::HwIfaceInfo& hwInfo, bool debug)
-{
-    if (interfaceList.find(key) != interfaceList.end())
+    const hardware::HwIfaceInfo* info = engine.hwManager.getHwInfo(key);
+    if (!info)
         return nullptr;
     auto [type, id] = key.decode();
-    interface::InterfaceCreation iface = {type, id, *getRoutingInstance(DEFAULT_VRF), hwInfo, debug};
-    interfaceList.emplace(key, iface);
-    return &interfaceList.at(key);
+    interface::InterfaceCreation iface = {type, id, *getRoutingInstance(DEFAULT_VRF), *info, cfg};
+    auto [it, ok] = interfaceList.try_emplace(key, iface);
+    return ok ? &it->second : nullptr;
 }
 
 interface::Interface* Global::getInterface(interface::InterfaceKey key)
@@ -125,45 +105,13 @@ interface::Interface* Global::getInterface(interface::InterfaceKey key)
 
 bool Global::removeInterface(interface::InterfaceKey key)
 {
-    std::lock_guard<std::mutex> lock(interfaceMutex);
-    if (auto it = interfaceList.find(key); it != interfaceList.end())
-    {
-        interfaceList.erase(key);
-        return true;
-    }
-    return false;
+    return interfaceList.erase(key) != 0;
 }
 
-void Global::routingInstanceRefresh()
+VirtualRouter* Global::addRoutingInstance(const std::string& name, config::VrfRegistry& cfg)
 {
-    {
-        std::lock_guard<std::mutex> lock(routingInstanceMutex);
-        auto vrfConfigs = getConfigs().get<config::Global::VRF_CONFIGS>();
-
-        // Erase
-        for (auto it = routingInstances.begin(); it != routingInstances.end();)
-        {
-            if (vrfConfigs.find(it->first) == vrfConfigs.end())
-                it = routingInstances.erase(it);
-            else
-                ++it;
-        }
-
-        for (const auto& [name, _] : vrfConfigs)
-        {
-            if (!routingInstances.contains(name))
-                routingInstances.try_emplace(name, *this, name);
-        }
-    }
-}
-
-VirtualRouter* Global::addRoutingInstance(const std::string& name)
-{
-    std::lock_guard<std::mutex> lock(routingInstanceMutex);
-    if (routingInstances.find(name) != routingInstances.end())
-        return nullptr;
-    routingInstances.try_emplace(name, *this, name);
-    return &routingInstances.at(name);
+    auto [it, ok] = routingInstances.try_emplace(name, *this, name, cfg);
+    return ok ? &it->second : nullptr;
 }
 
 VirtualRouter* Global::getRoutingInstance(const std::string& name, types::AddressFamily ad)
@@ -181,14 +129,40 @@ VirtualRouter* Global::getRoutingInstance(const std::string& name, types::Addres
 
 bool Global::removeRoutingInstance(const std::string& name)
 {
-    if (name == DEFAULT_VRF) return false; // Can't delete the default instance
-    std::lock_guard<std::mutex> lock(routingInstanceMutex);
-    if (routingInstances.find(name) != routingInstances.end())
+    if (name == DEFAULT_VRF) return false;
+    return routingInstances.erase(name) != 0;
+}
+
+routing::bgp::BgpProcess* Global::addBgp(config::BgpRegistry& reg, uint32_t as)
+{
+    if (auto bgp = bgpProcess; bgp)
+        return nullptr;
+    bgpProcess = new routing::bgp::BgpProcess(reg, as, *this);
+    return bgpProcess;
+}
+
+routing::bgp::BgpProcess* Global::getBgp()
+{
+    return bgpProcess;
+}
+
+services::dhcp::DhcpServer* Global::getDhcpServer()
+{
+    return dhcpServer;
+}
+
+services::dhcp::Dhcpv6Server* Global::getDhcpv6Server()
+{
+    return dhcpv6Server;
+}
+
+bool Global::removeBgp(uint32_t as)
+{
+    if (bgpProcess && bgpProcess->asNumber == as)
     {
-        routingInstances.erase(name);
+        delete bgpProcess;
         return true;
     }
     return false;
 }
-
 } // namespace core

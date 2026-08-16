@@ -87,14 +87,17 @@ public:
      * Initializes address storage, computes the @ref key from @p type and @p id,
      * and stores a reference to the hardware interface descriptor. The IPv6 state
      * object is initialized with the owning interface's timer service so it can
-     * schedule DAD and address-lifetime timers.
+     * schedule DAD and address-lifetime timers. Binds to a pre-built
+     * @ref config::InterfaceRegistry (created by the INTERFACE applier via
+     * Global::createInterface) rather than creating one via `emplaceBack`.
      *
      * @param iface        Interface that owns this configuration state.
      * @param type         Logical interface type (Ethernet, Loopback, etc.).
      * @param id           Interface number; may include a fractional sub-interface component.
      * @param info         Hardware descriptor; must outlive this object.
+     * @param cfg          Registry slot already created for this interface.
      */
-    InterfaceConfigs(interface::Interface& iface, InterfaceType type, float id, const hardware::HwIfaceInfo& info);
+    InterfaceConfigs(interface::Interface& iface, InterfaceType type, float id, const hardware::HwIfaceInfo& info, config::InterfaceRegistry& cfg);
 
     /**
      * @brief Destroys the interface configuration, cancelling any pending address timers.

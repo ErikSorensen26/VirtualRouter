@@ -26,6 +26,7 @@
 #include "utils/Mock.hpp"
 
 namespace core { class VirtualRouter; }
+namespace config { struct InterfaceRegistry; }
 namespace processing { class PacketBuilder; }
 namespace qos::egress { class TxDistributor; }
 namespace hardware { struct HwIfaceInfo; }
@@ -45,15 +46,13 @@ enum class IPv6Event : uint8_t;
 
 /**
  * @struct InterfaceCreation
- * @brief Construction parameters for Interface objects.
+ * @brief Construction parameters for Interface objects binding to an
+ *        already-created INTERFACE registry slot.
  *
- * Contains initialization data that determines:
- * - Interface type (Ethernet, loopback, virtual, etc.)
- * - Interface ID and VRF assignment
- * - Low-level hardware metadata
- * - Whether debugging output is enabled
- *
- * This is a pure data structure; ownership remains with the caller.
+ * Used by Global::createInterface(), which is called by the INTERFACE
+ * applier once the Executor has created the registry slot; the Interface
+ * (and InterfaceConfigs) bind to that pre-built registry rather than
+ * creating their own.
  */
 struct InterfaceCreation
 {
@@ -61,6 +60,7 @@ struct InterfaceCreation
     float interfaceId;              ///< ID of interface (user input).
     core::VirtualRouter& vrf;             ///< VRF that the interface will be initialized in.
     const hardware::HwIfaceInfo& info;        ///< Hardware information of the NIC.
+    config::InterfaceRegistry& cfg;       ///< Registry slot already created for this interface.
     bool debug = false;             ///< Debug mode for testing.
 };
 
@@ -275,11 +275,6 @@ public:
      * @param shut True = shutdown, False = enable.
      */
     MOCK void shutdown(bool shut);
-
-    /**
-     * @brief Syncs and executes full administrative shutdown or bring-up of the interface.
-     */
-    MOCK void syncShutdown();
 
     /**
      * @brief Resets infrastructure protocols and IPs

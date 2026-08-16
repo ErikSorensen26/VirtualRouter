@@ -29,13 +29,12 @@ namespace interface
 Interface::Interface(const InterfaceCreation& cfgs)
   : routingInstance(&cfgs.vrf),
     scheduler(cfgs.vrf.getControlScheduler().create()),
-    configs(*this, cfgs.interfaceType, cfgs.interfaceId, cfgs.info),
+    configs(*this, cfgs.interfaceType, cfgs.interfaceId, cfgs.info, cfgs.cfg),
     arp(*this),
     ndp(*this),
     debug(cfgs.debug),
     threadsRunning(false)
 {
-    // TODO add configs
     if (!debug)
     {
         cfgs.vrf.getGlobal().txMgr.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
@@ -418,12 +417,6 @@ void Interface::shutdown(bool shut)
         applyAllConnectedRoutes();
         getVRF()->getInterfaceManager().notify(StateChange::IF_READY, *this);
     }
-}
-
-void Interface::syncShutdown()
-{
-    bool shut = configs.configs.get<config::Interface::SHUTDOWN>().load();
-    shutdown(shut);
 }
 
 void Interface::reset()

@@ -17,20 +17,16 @@ namespace interface
 
 //ADD LOCK FREE VECTOR
 
-InterfaceConfigs::InterfaceConfigs(interface::Interface& iface, InterfaceType type, float id, const hardware::HwIfaceInfo& info)
+InterfaceConfigs::InterfaceConfigs(interface::Interface& iface, InterfaceType type, float id, const hardware::HwIfaceInfo& info, config::InterfaceRegistry& cfg)
   : id(id),
     interfaceType(type),
     key(type, id),
     hwInfo(info),
     ipv6(iface.getVRF()->getGlobal().timeManager),
-    configs([&iface, type, id]() -> config::InterfaceRegistry& {
-        interface::InterfaceKey key(type, id);
-        auto* vrf = iface.getVRF();
-        auto interfaceList = vrf->getGlobalConfigs().get<config::Global::INTERFACE>();
-        return interfaceList.emplaceBack(key);
-    }()),
+    configs(cfg),
     macAddress(hwInfo.mac)
 {
+    configs.context().set(&iface);
     syncMac();
     syncPrimaryIP();
     syncSecondaryIP();

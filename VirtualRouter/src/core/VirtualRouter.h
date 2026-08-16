@@ -19,19 +19,18 @@
 #include "routing/RoutingTable.hpp"
 #include "interface/InterfaceManager.h"
 
-namespace config { struct VrfRegistry; struct GlobalRegistry; }
+namespace config { struct VrfRegistry; struct GlobalRegistry; struct EigrpRegistry; struct OspfRegistry; struct BgpRegistry; }
 
 namespace interface { class Interface; enum class InterfaceType : uint8_t; }
 
 namespace routing::eigrp {
+    struct Eigrp;
     struct EigrpAutonomousSystem;
-    struct EigrpNamed;
 }
 namespace routing::ospf {
     class OspfProcess;
-    class OspfV3Instance;
+    class Ospfv3Instance;
 }
-
 namespace core
 {
 
@@ -111,8 +110,11 @@ public:
      *
      * @param global Reference to the Global controller that owns this VRF.
      * @param name   Unique VRF name (e.g., "default").
+     * @param cfg    Registry slot already created (by the Executor, via
+     *               `emplaceBack`) for this VRF; VirtualRouter binds to it
+     *               rather than creating its own.
      */
-    VirtualRouter(Global& global, const std::string& name);
+    VirtualRouter(Global& global, const std::string& name, config::VrfRegistry& cfg);
 
     /**
      * @brief Destructor for the VirtualRouter.
@@ -164,181 +166,83 @@ public:
      */
     std::set<types::AddressFamily> enabledAddressFamilies;
 
-    // EIGRP AUTONOMOUS SYSTEMS
+    // EIGRP AUTONOMOUS SYSTEM
 
     /**
-     * @brief Synchronizes all classic and named EIGRP IPv4 instances with the current interface state.
-     *
-     * Called whenever the interface list or EIGRP configuration changes. Re-evaluates
-     * which interfaces should be participating in EIGRP IPv4 based on configured
-     * network statements and enabled address families, then updates each running
-     * instance accordingly.
+     * @brief Creates and registers an EIGRP classic autonomous system for address family @p af.
+     * @param reg Registry to bind the new process to.
+     * @param id  Autonomous system number.
+     * @param af  Address family (IPv4 or IPv6) this instance serves.
+     * @return Reference to the newly created process.
      */
-    void refreshEigrpV4();
+    routing::eigrp::Eigrp& addEigrpAutonomousSystem(config::EigrpRegistry& reg, uint16_t id, types::AddressFamily af);
 
     /**
-     * @brief Synchronizes all classic and named EIGRP IPv6 instances with the current interface state.
-     *
-     * Equivalent to @ref refreshEigrpV4 for the IPv6 data plane. Re-evaluates
-     * interface participation for all EIGRP IPv6 processes and updates
-     * neighbor relationships and topology entries as needed.
+     * @brief Looks up an existing EIGRP classic autonomous system.
+     * @param id Autonomous system number.
+     * @param af Address family (IPv4 or IPv6) of the instance to find.
+     * @return Pointer to the process, or `nullptr` if none is registered.
      */
-    void refreshEigrpV6();
+    routing::eigrp::Eigrp* getEigrpAutonomousSystem(uint16_t id, types::AddressFamily af);
 
     /**
-     * @brief Pushes current interface metrics and state into all EIGRP IPv6 interface managers.
-     *
-     * Called after interface configuration changes (MTU, bandwidth, delay) to
-     * ensure EIGRP IPv6 recomputes its composite metric and redistributes
-     * updated routes if anything changed.
+     * @brief Tears down and unregisters an EIGRP classic autonomous system.
+     * @param id Autonomous system number.
+     * @param af Address family (IPv4 or IPv6) of the instance to remove.
+     * @return `true` if a matching process was found and removed.
      */
-    void refreshEigrpV6Interfaces();
-
-    // EIGRP CLASSIC SYSTEMS
-
-    /**
-     * @brief Create a classic-mode EIGRP Autonomous System instance.
-     *
-     * @param id Numeric AS number.
-     * @return Pointer to new EIGRP AS instance, or nullptr if AS already exists.
-     *
-     * The AS object contains:
-     * - IPv4 EIGRP instance (optional)
-     * - IPv6 EIGRP instance (optional)
-     * - Metrics, K-values, timers, bandwidth/delay policies
-     */
-    routing::eigrp::EigrpAutonomousSystem* addEigrpAutonomousSystem(uint16_t id);
-
-    /**
-     * @brief Look up an existing EIGRP Autonomous System by number.
-     *
-     * @param id AS number.
-     * @return Pointer to AS instance or nullptr if not found.
-     */
-    routing::eigrp::EigrpAutonomousSystem* getEigrpAutonomousSystem(uint16_t id);
-
-    /**
-     * @brief Remove and delete an EIGRP Autonomous System.
-     *
-     * Any attached EIGRP IPv4 or IPv6 instances inside the AS are deleted as part
-     * of the cleanup.
-     *
-     * @param id AS number to remove.
-     * @return True if removed, false if missing.
-     */
-    bool removeEigrpAutonomousSystem(uint16_t id);
-
-    // EIGRP NAMED SYSTEMS
-
-    /**
-     * @brief Create a Named-mode EIGRP configuration group.
-     *
-     * Named EIGRP (new Cisco-style configuration model) allows IPv4 and IPv6
-     * processes under a single hierarchical name.
-     *
-     * @param name The EIGRP instance name.
-     * @return Pointer to the newly created named instance, or nullptr if name exists.
-     */
-    routing::eigrp::EigrpNamed& addEigrpNamed(const std::string& name);
-
-    /**
-     * @brief Retrieve a named EIGRP instance.
-     *
-     * @param name The named EIGRP configuration identifier.
-     * @return Pointer to instance or nullptr if missing.
-     */
-    routing::eigrp::EigrpNamed* getEigrpNamed(const std::string& name);
-
-    /**
-     * @brief Remove a named EIGRP configuration.
-     *
-     * This operation may also:
-     * - Remove IPv4 or IPv6 EIGRP instances associated with the name
-     * - Remove the underlying Autonomous System if both AFs are now empty
-     *
-     * Ensures consistency between:
-     * - Named EIGRP trees
-     * - Legacy EIGRP AS structures
-     *
-     * @param name EIGRP name to delete.
-     * @return True if removed, false otherwise.
-     */
-    bool removeEigrpNamed(const std::string& name);
+    bool removeEigrpAutonomousSystem(uint16_t id, types::AddressFamily af);
 
     // OSPF PROCESS
-    
-    /**
-     * @brief Synchronizes all OSPF (v2 and v3) processes with the current interface state.
-     *
-     * Called when interfaces are added, removed, or reconfigured. Re-evaluates
-     * which interfaces are eligible for OSPF participation based on configured
-     * areas and address families, then updates DR/BDR elections and adjacencies
-     * as needed.
-     */
-    void refreshOspf();
 
     /**
-     * @brief Creates a OSPFv2 instance.
-     *
-     * OSPFv2 allows a IPv4 process under a single process ID.
-     *
-     * @param id Process ID.
-     * @return Reference to the newly created OSPFv2 instance.
+     * @brief Creates and registers an OSPFv2 process.
+     * @param reg Registry to bind the new process to.
+     * @param id  OSPF process ID.
+     * @return Reference to the newly created process.
      */
-    routing::ospf::OspfProcess& addOspf(uint16_t id);
+    routing::ospf::OspfProcess& addOspf(config::OspfRegistry& reg, uint16_t id);
 
     /**
-     * @brief retreives an ospfv2 instance.
-     *
-     * @param id process id.
-     * @return pointer to instance or nullptr if missing.
+     * @brief Looks up an existing OSPFv2 process.
+     * @param id OSPF process ID.
+     * @return Pointer to the process, or `nullptr` if none is registered.
      */
     routing::ospf::OspfProcess* getOspf(uint16_t id);
 
     /**
-     * @brief Remove and delete an OSPFv2 process.
-     *
-     * @param id Process ID to remove.
-     * @return True if removed, false if missing.
+     * @brief Tears down and unregisters an OSPFv2 process.
+     * @param id OSPF process ID.
+     * @return `true` if a matching process was found and removed.
      */
     bool removeOspf(uint16_t id);
 
     // OSPFv3 PROCESS
 
     /**
-     * @brief Synchronizes all OSPFv3 processes with the current interface state.
-     *
-     * Called when interfaces are added, removed, or reconfigured. Re-evaluates
-     * which interfaces are eligible for OSPFv3 participation based on configured
-     * areas and address families (IPv4 and IPv6 under a single process ID), then
-     * updates DR/BDR elections and adjacencies as needed.
+     * @brief Creates and registers an OSPFv3 process for address family @p af.
+     * @param reg Registry to bind the new process to.
+     * @param id  OSPF process ID.
+     * @param af  Address family (IPv4 or IPv6) this instance serves.
+     * @return Reference to the newly created process.
      */
-    void refreshOspfv3();
+    routing::ospf::OspfProcess& addOspfv3(config::OspfRegistry& reg, uint16_t id, types::AddressFamily af);
 
     /**
-     * @brief Creates an OSPFv3 process.
-     *
-     * @param id Process ID.
-     * @param af Address family this process services.
-     * @return Reference to the newly created OSPFv3 process.
+     * @brief Looks up an existing OSPFv3 process.
+     * @param id OSPF process ID.
+     * @param af Address family (IPv4 or IPv6) of the instance to find.
+     * @return Pointer to the process, or `nullptr` if none is registered.
      */
-    routing::ospf::OspfProcess& addOspfv3(uint16_t id, types::AddressFamily af);
+    routing::ospf::OspfProcess* getOspfv3(uint16_t id, types::AddressFamily af);
 
     /**
-     * @brief Retreives an OSPFv3 process.
-     *
-     * @param id Process ID.
-     * @return Pointer to the process or nullptr if missing.
+     * @brief Tears down and unregisters an OSPFv3 process.
+     * @param id OSPF process ID.
+     * @param af Address family (IPv4 or IPv6) of the instance to remove.
+     * @return `true` if a matching process was found and removed.
      */
-    routing::ospf::OspfProcess* getOspfv3(uint16_t id);
-
-    /**
-     * @brief Remove and delete an OSPFv3 process.
-     *
-     * @param id Process ID to remove.
-     * @return True if removed, false if missing.
-     */
-    bool removeOspfv3(uint16_t id);
+    bool removeOspfv3(uint16_t id, types::AddressFamily af);
 
     // GLOBAL HELPERS
 
@@ -408,10 +312,9 @@ private:
     transport::tcp::Tcp tcpManager; ///< Per-VRF TCP stack for BGP and other transport protocols.
 
     std::unordered_map<uint32_t, routing::eigrp::EigrpAutonomousSystem> eigrpList; ///< Classic-mode EIGRP AS containers. Keyed by AS number.
-    std::unordered_map<std::string, routing::eigrp::EigrpNamed> namedEigrpList; ///< Named-mode EIGRP groups. Keyed by instance name.
 
     std::unordered_map<uint32_t, routing::ospf::OspfProcess> ospfList; ///< OSPFv2 process instances. Keyed by process ID.
-    std::unordered_map<uint32_t, routing::ospf::OspfProcess> ospfv3List; ///< OSPFv3 instances. Keyed by process ID.
+    std::unordered_map<uint32_t, routing::ospf::Ospfv3Instance> ospfv3List; ///< OSPFv3 instances. Keyed by process ID.
 
     std::string instanceName; ///< Human-readable VRF identifier.
 
