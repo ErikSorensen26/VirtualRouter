@@ -140,6 +140,32 @@ OspfInterfaceBase& InterfaceManager::createInterface(interface::Interface& inter
     return ospfIface;
 }
 
+OspfInterfaceBase& InterfaceManager::createInterface(interface::Interface& interface, const OspfInterfaceId& key, const config::OspfGlobalInterfaceRegistry& cfg)
+{
+    if (auto it = ospfInterfaceList.find(key); it != ospfInterfaceList.end())
+        return it->second;
+
+    auto ifaceIt = ospfInterfaceList.try_emplace(key, process, interface, key, cfg);
+    OspfInterface& ospfIface = ifaceIt.first->second;
+    ospfIface.updateOriginations();
+    return ospfIface;
+}
+
+void InterfaceManager::addInterface(interface::Interface& interface)
+{
+    // OSPFv3 only: interfaces are enabled directly, no NETWORKS-range match.
+    // The OSPFV3 applier (InterfaceRegistry.cpp) creates the OspfInterface(s)
+    // and inserts them into ospfInterfaceList once the registry slot exists.
+    interface.configs.getConfigs().get<config::Interface::OSPFV3>().emplaceBack(process.procId);
+}
+
+void InterfaceManager::removeInterface(interface::Interface& interface)
+{
+    // The OSPFV3 applier (InterfaceRegistry.cpp) tears down the OspfInterface(s)
+    // via removeInterface(id) once the registry slot is gone.
+    interface.configs.getConfigs().get<config::Interface::OSPFV3>().erase(process.procId);
+}
+
 void InterfaceManager::removeInterface(const OspfInterfaceId& id)
 {
     auto it = ospfInterfaceList.find(id);
@@ -196,17 +222,13 @@ void InterfaceManager::refreshInterfaceList()
         {
             // Use first area defined that matches.
             std::optional<uint32_t> area{std::nullopt};
-            process.configs.get<config::Ospf::NETWORKS>().withRead([&](const auto& networksList) {
-                for (const auto& networks : networksList)
+            process.configs.get<config::Ospf::NETWORKS>().readEach(
+                [&](const config::OspfNetwork& network)
                 {
-                    const auto& [prefix, a] = networks;
-                    if (prefix.contains(ip))
-                    {
-                        area = a;
-                        break;
-                    }
+                    if (network.prefix().contains(ip)) { area = network.area(); return true; }
+                    return false;
                 }
-            });
+            );
             return area;
         };
 

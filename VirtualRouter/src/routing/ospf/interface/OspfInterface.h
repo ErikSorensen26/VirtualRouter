@@ -119,6 +119,27 @@ public:
                   const OspfInterfaceId& id);
 
     /**
+     * @brief Constructs an OSPF interface bound to an already-resolved
+     *        config registry slot.
+     *
+     * Used by @c InterfaceManager for the OSPFv3 address-family path, where
+     * the registry slot is created by the OSPFV3 applier before this
+     * constructor runs; the version-agnostic delegating constructor above
+     * resolves the slot itself instead. Public (rather than friended to
+     * just `InterfaceManager`) because it must be directly callable from
+     * `std::unordered_map::try_emplace`, whose piecewise-construction
+     * machinery constructs this object on the map's behalf, not the
+     * caller's -- a friend grant to `InterfaceManager` does not extend to it.
+     *
+     * @param proc  The OSPF process that owns this interface.
+     * @param iface The underlying hardware/logical interface.
+     * @param id    Composite key (hardware index + area) for this interface.
+     * @param cfgs  Already-resolved version-agnostic config registry slot.
+     */
+    OspfInterface(OspfProcess& proc, interface::Interface& iface,
+                  const OspfInterfaceId& id, const config::OspfGlobalInterfaceRegistry& cfgs);
+
+    /**
      * @brief Schedules `syncNetworkType()` on the process queue.
      *
      * Config-change entry point, called when the `network` type
@@ -126,8 +147,11 @@ public:
      * reconfigured.  The transition may trigger or suppress a DR/BDR
      * election and switch between multicast and unicast packet delivery,
      * all performed on the scheduler thread.
+     *
+     * @param ntype The new `NETWORK` value, passed straight through so the
+     *              scheduler-thread work doesn't need to re-read config.
      */
-    void enqueueSyncNetworkType();
+    void enqueueSyncNetworkType(config::ospf::NetworkType ntype);
 
     /**
      * @brief Schedules a reconciliation of statically configured neighbors on the process queue.
@@ -156,8 +180,11 @@ public:
      * neighbors and stops the Hello timer when the interface becomes
      * passive, or restarts Hello when it becomes active, all on the
      * scheduler thread.
+     *
+     * @param passive The new `PASSIVE` value, passed straight through so
+     *                the scheduler-thread work doesn't need to re-read config.
      */
-    void enqueueSyncPassive();
+    void enqueueSyncPassive(bool passive);
 
     /**
      * @brief Schedules an LSA re-origination for this interface on the process queue.
@@ -235,19 +262,23 @@ private:
 
     /**
      * @brief Reconciles the interface network type (broadcast, P2P, NBMA,
-     *        P2MP) with the current configuration.
+     *        P2MP) with the given value.
      *
      * May trigger a DR/BDR election or skip it depending on the new type.
+     *
+     * @param ntype The new `NETWORK` value.
      */
-    void syncNetworkType();
+    void syncNetworkType(config::ospf::NetworkType ntype);
 
     /**
-     * @brief Loads the passive state for the interface.
+     * @brief Applies the passive state for the interface.
      *
-     * Reads the passive state of the interface and updates accordingly.
-     * May need to reset the neighbor if passive is enabled/disabled.
+     * Updates the interface according to the given passive state. May need
+     * to reset the neighbor if passive is enabled/disabled.
+     *
+     * @param passive The new `PASSIVE` value.
      */
-    void syncPassive();
+    void syncPassive(bool passive);
 
     /**
      * @brief Configures flood-reduction mode for the specified interface.
@@ -280,9 +311,6 @@ private:
     const config::OspfInterfaceRegistry& configs;             ///< Version-specific interface config.
 
 private:
-
-    OspfInterface(OspfProcess& proc, interface::Interface& iface,
-                  const OspfInterfaceId& id, const config::OspfGlobalInterfaceRegistry&);
 
     struct Private
     {

@@ -28,46 +28,23 @@ void NeighborTable::syncUnicast()
         for (const auto& [ip, _] : unicast)
             unicastNbrs.insert(ip);
 
-        // Update configs of all unicast neighbors (OspfInterface::NEIGHBOR has IgnoreCompare wrappers)
-        concreteIface.configs.get<config::OspfInterface::NEIGHBOR>().withRead([&](const auto& nbrs)
+        auto neighborUpdate = [&](const config::OspfNeighbor& nbr)
         {
-            for (const auto& entry : nbrs)
-            {
-                const auto& ip    = std::get<0>(entry);
-                const auto& cost  = std::get<1>(entry).value;
-                const auto& dbf   = std::get<2>(entry).value;
-                const auto& poll  = std::get<3>(entry).value;
-                const auto& prio  = std::get<4>(entry).value;
-                if (!concreteIface.interfaceAddress.contains(ip))
-                    continue;
-                unicastNbrs.erase(ip);
-                unicast.try_emplace(
-                    ip,
-                    cost,
-                    dbf,
-                    poll.value_or(120),
-                    prio.value_or(0)
-                );
-            }
-        });
+            if (!concreteIface.interfaceAddress.contains(nbr.address()))
+                return;
+            unicastNbrs.erase(nbr.address());
+            unicast.try_emplace(
+                nbr.address(),
+                nbr.cost(),
+                nbr.databaseFilter(),
+                nbr.pollInterval().value.value_or(120),
+                nbr.priority().value.value_or(0)
+            );
+        };
 
-        iface.getProcessConfigs().get<config::Ospf::NEIGHBORS>().withRead([&](const auto& nbrsList)
-        {
-            for (const auto& nbrs : nbrsList)
-            {
-                const auto& [ip, cost, dbfilter, pollIntv, priority] = nbrs;
-                if (!concreteIface.interfaceAddress.contains(ip))
-                    continue;
-                unicastNbrs.erase(ip);
-                unicast.try_emplace(
-                    ip,
-                    cost.value,
-                    dbfilter.value,
-                    pollIntv.value.value_or(120),
-                    priority.value.value_or(0)
-                );
-            }
-        });
+        // Update configs of all unicast neighbors (OspfInterface::NEIGHBOR has IgnoreCompare wrappers)
+        concreteIface.configs.get<config::OspfInterface::NEIGHBOR>().readEach(neighborUpdate);
+        iface.getProcessConfigs().get<config::Ospf::NEIGHBORS>().readEach(neighborUpdate);
 
         // Erase left over neighbors
         for (const auto& ip : unicastNbrs)

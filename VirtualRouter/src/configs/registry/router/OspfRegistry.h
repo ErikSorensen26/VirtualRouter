@@ -20,7 +20,6 @@
 
 #include "IPAddress.h"
 #include "OspfInterfaceRegistry.h"
-#include "configs/RegistryTypes.hpp"
 
 namespace routing::ospf { class OspfProcess; class Area; }
 
@@ -36,12 +35,9 @@ namespace ospf
 DEFINE_CONFIG_ENUM_NS(ospf, AreaType, OSPF_AREA_TYPE_MEMBERS);
 }
 
-void OspfAreaTypeChange(void* area);
-void OspfAreaSycnRanges(void* area);
-
 #define OSPF_AREA_RANGE_FIELDS(X) \
     X(types::IPPrefix,          prefix) \
-    X(bool,                     nonAdvertise) \
+    X(bool,                     notAdvertise) \
     X(std::optional<uint32_t>,  cost)
 
 DEFINE_TUPLE_SCHEMA(OspfAreaRange, OSPF_AREA_RANGE_FIELDS);
@@ -54,7 +50,7 @@ DEFINE_TUPLE_SCHEMA(OspfAreaRange, OSPF_AREA_RANGE_FIELDS);
     OPTIONAL_ATOMIC_FIELD(X, Y, DEFAULT_COST, uint32_t) \
     VALUE_FIELD(X, Y, FILTER_LIST_IN, std::string) TODO \
     VALUE_FIELD(X, Y, FILTER_LIST_OUT, std::string) TODO \
-    ATOMIC_FIELD_CB(X, Y, AREA_TYPE, ospf::AreaType, ospf::AreaType::NORMAL, OspfAreaTypeChange) \
+    ATOMIC_FIELD_CB(X, Y, AREA_TYPE, ospf::AreaType, ospf::AreaType::NORMAL) \
     ATOMIC_FIELD(X, Y, NSSA_DEFAULT_ORIGINATE, bool, false) \
     ATOMIC_FIELD(X, Y, NSSA_DEFAULT_METRIC, uint32_t, 1) \
     ATOMIC_FIELD(X, Y, NSSA_DEFAULT_METRIC_TYPE, bool, true) \
@@ -65,7 +61,7 @@ DEFINE_TUPLE_SCHEMA(OspfAreaRange, OSPF_AREA_RANGE_FIELDS);
     ATOMIC_FIELD(X, Y, NO_EXT, bool, false) TODO \
     ATOMIC_FIELD(X, Y, NO_SUMMARY, bool, false) \
     ATOMIC_FIELD(X, Y, NO_TRANSIT, bool, false) TODO \
-    LIST_FIELD_CB(X, Y, RANGE, OspfAreaRange, OspfAreaSycnRanges) \
+    LIST_FIELD_CB(X, Y, RANGE, OspfAreaRange) \
     OWNED_LIST_FIELD(X, Y, VIRTUAL_LINKS, OspfVirtualLinkRegistry, uint32_t) TODO
 
 /**
@@ -73,10 +69,6 @@ DEFINE_TUPLE_SCHEMA(OspfAreaRange, OSPF_AREA_RANGE_FIELDS);
  * @ingroup OSPF
  */
 DEFINE_CONFIG_GROUP(OspfArea, OSPF_AREA_FIELD_LIST)
-
-void OspfSyncNeighbors(void* base);
-void OspfSyncNetworks(void* base);
-void OspfSyncSummaries(void* base);
 
 #define OSPF_TRAF_ENG_INTERFACE_FIELDS(X) \
     X(uint32_t, interfaceId) \
@@ -118,8 +110,9 @@ DEFINE_TUPLE_SCHEMA(OspfQueueDepth, OSPF_QUEUE_DEPTH_FIELDS);
 struct OspfRegistry;
 
 #define OSPF_FIELD_LIST(X, Y) \
-    OWNED_LIST_FIELD(X, Y, IPV4_INSTANCES, OspfRegistry, std::string) \
-    OWNED_LIST_FIELD(X, Y, IPV6_INSTANCES, OspfRegistry, std::string) \
+    OPTIONAL_ATOMIC_FIELD(X, Y, PROCESS_ID, uint16_t) \
+    OWNED_LIST_FIELD_CB_VA(X, Y, IPV4_INSTANCES, OspfRegistry, std::string) \
+    OWNED_LIST_FIELD_CB_VA(X, Y, IPV6_INSTANCES, OspfRegistry, std::string) \
     OWNED_LIST_FIELD(X, Y, AREA_CONFIGS, OspfAreaRegistry, uint32_t) \
     ATOMIC_FIELD(X, Y, REFERENCE_BANDWIDTH, uint32_t, 100) \
     ATOMIC_FIELD(X, Y, BFD, bool, false) TODO \
@@ -175,18 +168,18 @@ struct OspfRegistry;
     LIST_FIELD(X, Y, MPLS_TRAF_ENG_MESH_GROUP, OspfTrafEngMeshGroup) TODO \
     ATOMIC_FIELD(X, Y, MPLS_TRAF_ENG_MULTICAST_INACT, bool, false) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y, MPLS_TRAF_ENG_ROUTER_ID, uint32_t) TODO \
-    LIST_FIELD_CB(X, Y, NETWORKS, OspfNetwork, OspfSyncNetworks) \
-    LIST_FIELD_CB(X, Y, NEIGHBORS, OspfNeighbor, OspfSyncNeighbors) \
+    LIST_FIELD_CB(X, Y, NETWORKS, OspfNetwork) \
+    LIST_FIELD_CB(X, Y, NEIGHBORS, OspfNeighbor) \
     LIST_FIELD(X, Y, PASSIVE_INTERFACES, interface::InterfaceKey) TODO \
     LIST_FIELD(X, Y, PREFIX_PRIORITY_ROUTE_MAP, std::string) TODO \
     ATOMIC_FIELD(X, Y, PREFIX_SUPPRESSION, bool, false) TODO \
-    OPTIONAL_ATOMIC_FIELD(X, Y, HELLO_QUEUE_DEPTH, OspfQueueDepth) \
-    OPTIONAL_ATOMIC_FIELD(X, Y, UPDATE_QUEUE_DEPTH, OspfQueueDepth) \
+    VALUE_FIELD(X, Y, HELLO_QUEUE_DEPTH, OspfQueueDepth) \
+    VALUE_FIELD(X, Y, UPDATE_QUEUE_DEPTH, OspfQueueDepth) \
     OPTIONAL_ATOMIC_FIELD(X, Y, ROUTER_ID, uint32_t) \
     ATOMIC_FIELD(X, Y, SHUTDOWN, bool, false) \
     OPTIONAL_ATOMIC_FIELD(X, Y, REDISTRIBUTE, std::nullptr_t) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y, SNMP, std::nullptr_t) TODO \
-    LIST_FIELD_CB(X, Y, SUMMARY_ADDRESS, OspfSummaryAddress, OspfSyncSummaries) \
+    LIST_FIELD_CB(X, Y, SUMMARY_ADDRESS, OspfSummaryAddress) \
     ATOMIC_FIELD(X, Y, LSA_ARRIVAL, uint32_t, 1000) \
     ATOMIC_FIELD(X, Y, FLOOD_PACING, uint8_t, 33) \
     ATOMIC_FIELD(X, Y, LSA_GROUP_PACING, uint16_t, 240) \

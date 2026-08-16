@@ -231,7 +231,7 @@ void DualEngine::processReceivedQueryRoutes(std::vector<ReceivedRoute>& queriedR
     std::vector<const RouteInfo*> replies;
 
     auto stubField = process.getConfigs().get<config::Eigrp::STUB>();
-    bool isStub = stubField.hasValue() && stubField.load();
+    bool isStub = stubField.hasValue() && stubField.load().any();
 
     for (auto& route : queriedRoutes)
     {

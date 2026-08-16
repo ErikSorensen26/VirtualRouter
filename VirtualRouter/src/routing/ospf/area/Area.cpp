@@ -28,7 +28,7 @@ Area::Area(OspfProcess& base, uint32_t id)
       opaqueOriginator(base.isV3 ? std::nullopt : std::make_optional<OpaqueOriginatorV2>(originContext)),
       originator(IntraOriginator::create(originContext)),
       routeManager(*this),
-      configs(base.configs.get<config::Ospf::AREA_CONFIGS>().emplaceBack(id)),
+      configs(*base.configs.get<config::Ospf::AREA_CONFIGS>().emplaceBack(id)),
       priv(*this)
 {
     priv.type = configs.get<config::OspfArea::AREA_TYPE>().load();
@@ -69,6 +69,13 @@ void Area::enqueueReset()
     });
 }
 
+void Area::enqueueReset(config::ospf::AreaType newType)
+{
+    scheduler.post([this, newType] {
+        reset(newType);
+    });
+}
+
 void Area::enqueueSyncRanges()
 {
     scheduler.post([this] {
@@ -78,7 +85,11 @@ void Area::enqueueSyncRanges()
 
 void Area::reloadType()
 {
-    auto newType = configs.get<config::OspfArea::AREA_TYPE>().load();
+    reloadType(configs.get<config::OspfArea::AREA_TYPE>().load());
+}
+
+void Area::reloadType(config::ospf::AreaType newType)
+{
     if (newType == priv.type) return;
 
     priv.type.store(newType, std::memory_order_release);
@@ -93,7 +104,17 @@ void Area::reloadType()
 void Area::reset()
 {
     reloadType();
+    resetCommon();
+}
 
+void Area::reset(config::ospf::AreaType newType)
+{
+    reloadType(newType);
+    resetCommon();
+}
+
+void Area::resetCommon()
+{
     // Reset all neighbors on all interfaces in this area
     process.ifaceMgr.resetNeighbors();
 
@@ -181,18 +202,15 @@ void Area::syncRangeConfig()
     std::unordered_set<types::IPPrefix> activeRanges;
     priv.rangePrefixes.clear();
 
-    cfgRanges.withRead([&](const auto& tsList)
-    {
-        for (const auto& t : tsList)
+    cfgRanges.readEach(
+        [&](const config::OspfAreaRange& range)
         {
-            const auto& [pfx, noAdv, cost] = t;
-            priv.rangePrefixes.insert(pfx);
-
-            auto& r = priv.ranges[pfx];
-            r.notAdvertise = noAdv;
-            r.costOverride = cost;
+            priv.rangePrefixes.insert(range.prefix());
+            auto& r = priv.ranges[range.prefix()];
+            r.notAdvertise = range.notAdvertise();
+            r.costOverride = range.cost();
         }
-    });
+    );
 
     for (auto it = priv.ranges.begin(); it != priv.ranges.end();)
     {

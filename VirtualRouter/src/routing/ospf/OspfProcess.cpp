@@ -13,59 +13,39 @@
 
 namespace routing::ospf
 {
-OspfProcess::OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, core::VirtualRouter& vrf)
+OspfProcess::OspfProcess(config::OspfRegistry& reg, bool isV3, uint16_t procId, types::AddressFamily af, core::VirtualRouter* vrf)
     : isV3(isV3),
       procId(procId),
       af(af),
-      routingInstance(vrf),
+      routingInstance(*vrf),
       rib(*this),
-      scheduler(vrf.getControlScheduler().create()),
+      scheduler(vrf->getControlScheduler().create()),
       interOriginator(*this),
       externalOriginator(*this),
       externalRouteManager(*this),
       ifaceMgr(*this),
-      configs([af, isV3, &vrf, procId]() -> config::OspfRegistry& {
-          if (isV3)
-          {
-              auto& base = vrf.getGlobal().getConfigs().get<config::Global::ROUTER_OSPFV3_DEFAULT>().emplaceBack(procId);
-              auto& v3Reg = vrf.getConfigs().get<config::Vrf::ROUTER_OSPFV3>().emplaceBack(procId);
-              config::OspfRegistry& afCfgs = [&]() -> config::OspfRegistry& {
-                  if (af == types::AddressFamily::IPv4)
-                      return v3Reg.get<config::Ospfv3AddressFamily::IPV4>().get();
-                  else
-                      return v3Reg.get<config::Ospfv3AddressFamily::IPV6>().get();
-              }();
-
-              afCfgs.setMask(&base);
-              return afCfgs;
-          }
-          else
-          {
-              // OSPFv2 types::AddressFamily
-              if (af == types::AddressFamily::IPv4)
-                  return vrf.getConfigs().get<config::Vrf::ROUTER_OSPF>().emplaceBack(procId);
-              else
-                  return vrf.getConfigs().get<config::Vrf::IPV6_ROUTER_OSPF>().emplaceBack(procId);
-          }
-      }()),
+      configs(reg),
       priv(*this)
 {
     configs.context().set(this);
     calculateRID();
 
     // Subscribe to interface lifecycle events so the interface list stays
-    auto& ifMgr = vrf.getInterfaceManager();
-
-    auto postRefresh = [](void* ctx, interface::Interface&) {
-        auto* p = static_cast<OspfProcess*>(ctx);
-        p->scheduler.post([p]{ p->ifaceMgr.refreshInterfaceList(); });
-    };
-
-    priv.ifUpId   = ifMgr.subscribe(interface::StateChange::IF_READY, this, postRefresh);
-    priv.ifDownId = ifMgr.subscribe(interface::StateChange::IF_DOWN,  this, postRefresh);
+    auto& ifMgr = vrf->getInterfaceManager();
 
     if (!isV3)
     {
+        // OSPFv2: area membership is derived from `network` statements
+        // matched against the interface's live address, so a config change
+        // on any interface can move any other interface between areas.
+        // That many-to-many relationship still requires a full re-scan.
+        auto postRefresh = [](void* ctx, interface::Interface&) {
+            auto* p = static_cast<OspfProcess*>(ctx);
+            p->scheduler.post([p]{ p->ifaceMgr.refreshInterfaceList(); });
+        };
+        priv.ifUpId   = ifMgr.subscribe(interface::StateChange::IF_READY, this, postRefresh);
+        priv.ifDownId = ifMgr.subscribe(interface::StateChange::IF_DOWN,  this, postRefresh);
+
         auto postRefreshV4 = [](void* ctx, interface::Interface&, types::IPv4Prefix&) {
             auto* p = static_cast<OspfProcess*>(ctx);
             p->scheduler.post([p]{ p->ifaceMgr.refreshInterfaceList(); });
@@ -75,12 +55,30 @@ OspfProcess::OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, co
     }
     else
     {
-        auto postRefreshV6 = [](void* ctx, interface::Interface&, types::IPv6Prefix&) {
+        // OSPFv3: enabled directly on the physical interface (no area-range
+        // matching), so each event targets exactly the interface that fired
+        // it -- no sweep.
+        auto onIfUp = [](void* ctx, interface::Interface& iface) {
             auto* p = static_cast<OspfProcess*>(ctx);
-            p->scheduler.post([p]{ p->ifaceMgr.refreshInterfaceList(); });
+            p->scheduler.post([p, &iface]{ p->ifaceMgr.addInterface(iface); });
         };
-        priv.ipReadyId = ifMgr.subscribe(interface::IPv6Event::IPV6_LL_READY, this, postRefreshV6);
-        priv.ipDelId   = ifMgr.subscribe(interface::IPv6Event::IPV6_LL_DEL,   this, postRefreshV6);
+        auto onIfDown = [](void* ctx, interface::Interface& iface) {
+            auto* p = static_cast<OspfProcess*>(ctx);
+            p->scheduler.post([p, &iface]{ p->ifaceMgr.removeInterface(iface); });
+        };
+        priv.ifUpId   = ifMgr.subscribe(interface::StateChange::IF_READY, this, onIfUp);
+        priv.ifDownId = ifMgr.subscribe(interface::StateChange::IF_DOWN,  this, onIfDown);
+
+        auto onIpReadyV6 = [](void* ctx, interface::Interface& iface, types::IPv6Prefix&) {
+            auto* p = static_cast<OspfProcess*>(ctx);
+            p->scheduler.post([p, &iface]{ p->ifaceMgr.addInterface(iface); });
+        };
+        auto onIpDelV6 = [](void* ctx, interface::Interface& iface, types::IPv6Prefix&) {
+            auto* p = static_cast<OspfProcess*>(ctx);
+            p->scheduler.post([p, &iface]{ p->ifaceMgr.removeInterface(iface); });
+        };
+        priv.ipReadyId = ifMgr.subscribe(interface::IPv6Event::IPV6_LL_READY, this, onIpReadyV6);
+        priv.ipDelId   = ifMgr.subscribe(interface::IPv6Event::IPV6_LL_DEL,   this, onIpDelV6);
     }
 }
 

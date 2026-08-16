@@ -191,6 +191,17 @@ public:
     void enqueueReset();
 
     /**
+     * @brief Schedules a reset driven by an area-type config change.
+     *
+     * Config-change entry point: called when the area's `AREA_TYPE` setting
+     * is written. Passes the new type straight through to `reset()` so the
+     * scheduler-thread work doesn't need to re-read the config.
+     *
+     * @param newType The area type just written to config.
+     */
+    void enqueueReset(config::ospf::AreaType newType);
+
+    /**
      * @brief Schedules `syncRangeConfig()` on the process queue.
      *
      * Config-change entry point: called when the area's `range` configuration
@@ -362,6 +373,17 @@ private:
     void reset();
 
     /**
+     * @brief Performs a full area reset using an already-known new area type.
+     *
+     * Same as `reset()` but passes `newType` straight to `reloadType()`
+     * instead of having it re-read from config. Used by the `AREA_TYPE`
+     * config-change path.
+     *
+     * @param newType The area type to reload with.
+     */
+    void reset(config::ospf::AreaType newType);
+
+    /**
      * @brief Reloads the area type from configuration and synchronizes options flags.
      *
      * Called before reset() when the area type config changes so that the
@@ -369,6 +391,21 @@ private:
      * origination all reflect the new type without destroying the Area object.
      */
     void reloadType();
+
+    /**
+     * @brief Reloads the area type using an already-known value and
+     *        synchronizes options flags. See @ref reloadType.
+     *
+     * @param newType The area type to reload with.
+     */
+    void reloadType(config::ospf::AreaType newType);
+
+    /**
+     * @brief Shared body of `reset()`/`reset(AreaType)`: flushes self-originated
+     *        LSAs and resets neighbor state. Run after `reloadType()` has
+     *        already applied the (possibly unchanged) area type.
+     */
+    void resetCommon();
 
     /**
      * @brief Clears the LSDB and all runtime state without destroying the area object.

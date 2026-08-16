@@ -59,23 +59,16 @@ DEFINE_CONFIG_ENUM_NS(ospf, IPsecAuthType, OSPF_IPSEC_AUTH_TYPE);
 DEFINE_CONFIG_ENUM_NS(ospf, IPsecEncryptType, OSPF_IPSEC_ENCRYPT_TYPE);
 }
 
-void OspfInterfaceBaseSyncTimers(void* iface);
-
 #define OSPF_INTERFACE_BASE_FIELD_LIST(X, Y) \
-    OPTIONAL_ATOMIC_FIELD_CB(X, Y, DEAD_INTERVAL, uint16_t, OspfInterfaceBaseSyncTimers) \
-    OPTIONAL_ATOMIC_FIELD_CB(X, Y, HELLO_INTERVAL, uint16_t, OspfInterfaceBaseSyncTimers) \
-    OPTIONAL_ATOMIC_FIELD_CB(X, Y, HELLO_MULTIPLIER, uint8_t, OspfInterfaceBaseSyncTimers) \
+    OPTIONAL_ATOMIC_FIELD_CB(X, Y, DEAD_INTERVAL, uint16_t) \
+    OPTIONAL_ATOMIC_FIELD_CB(X, Y, HELLO_INTERVAL, uint16_t) \
+    OPTIONAL_ATOMIC_FIELD_CB(X, Y, HELLO_MULTIPLIER, uint8_t) \
     ATOMIC_FIELD(X, Y, RETRANSMIT_INTERVAL, uint16_t, 5) \
     ATOMIC_FIELD(X, Y, TRANSMIT_DELAY, uint16_t, 1) \
     OPTIONAL_ATOMIC_FIELD(X, Y, TTL_SEC, bool) TODO \
     ATOMIC_FIELD(X, Y, TTL_SEC_HOPS, uint8_t, 1) TODO
 
 DEFINE_CONFIG_GROUP(OspfInterfaceBase, OSPF_INTERFACE_BASE_FIELD_LIST);
-
-void OspfInterfaceSyncNeighbors(void* iface);
-void OspfInterfaceSyncNetworkType(void* iface);
-void OspfInterfaceDemandCircuit(void* iface);
-void OspfInterfaceSyncPassive(void* iface);
 
 #define OSPF_NEIGHBOR_FIELDS(X) \
     X(types::IPAddress,               address) \
@@ -91,15 +84,15 @@ DEFINE_TUPLE_SCHEMA(OspfNeighbor, OSPF_NEIGHBOR_FIELDS);
     ATOMIC_FIELD(X, Y, BFD, bool, false) TODO \
     OPTIONAL_ATOMIC_FIELD(X, Y, COST, uint16_t) \
     ATOMIC_FIELD(X, Y, DATABASE_FILTER, bool, false) \
-    ATOMIC_FIELD_CB(X, Y, DEMAND_CIRCUIT, bool, false, OspfInterfaceDemandCircuit) \
-    ATOMIC_FIELD_CB(X, Y, DEMAND_CIRCUIT_IGNORE, bool, false, OspfInterfaceDemandCircuit) \
-    ATOMIC_FIELD_CB(X, Y, FLOOD_REDUCTION, bool, false, OspfInterfaceDemandCircuit) \
+    ATOMIC_FIELD_CB(X, Y, DEMAND_CIRCUIT, bool, false) \
+    ATOMIC_FIELD_CB(X, Y, DEMAND_CIRCUIT_IGNORE, bool, false) \
+    ATOMIC_FIELD_CB(X, Y, FLOOD_REDUCTION, bool, false) \
     ATOMIC_FIELD(X, Y, GRACEFUL_RESTART_HELPER, bool, true) \
     ATOMIC_FIELD(X, Y, MTU_IGNORE, bool, false) \
-    LIST_FIELD(X, Y, NEIGHBOR, OspfNeighbor) \
-    ATOMIC_FIELD_CB(X, Y, NETWORK, ospf::NetworkType, ospf::NetworkType::BROADCAST, OspfInterfaceSyncNetworkType) \
+    LIST_FIELD_CB(X, Y, NEIGHBOR, OspfNeighbor) \
+    ATOMIC_FIELD_CB(X, Y, NETWORK, ospf::NetworkType, ospf::NetworkType::BROADCAST) \
     ATOMIC_FIELD(X, Y, PRIORITY, uint8_t, 1) \
-    ATOMIC_FIELD_CB(X, Y, PASSIVE, bool, false, OspfInterfaceSyncPassive)
+    ATOMIC_FIELD_CB(X, Y, PASSIVE, bool, false)
 
 DEFINE_CONFIG_GROUP(OspfInterface, OSPF_INTERFACE_FIELD_LIST);
 
@@ -125,18 +118,14 @@ DEFINE_CONFIG_GROUP(OspfIPsec, OSPF_IPSEC_FIELD_LIST);
 
 DEFINE_TUPLE_SCHEMA(OspfMessageDigestKey, OSPF_MESSAGE_DIGEST_KEY);
 
-void OspfGlobalInterfaceBaseUpdateDigestKey(void* iface);
-
 #define OSPF_GLOBAL_INTERFACE_BASE_FIELD_LIST(X, Y) \
     ATOMIC_FIELD(X, Y, INSTANCE_ID, uint8_t, 0) \
     OPTIONAL_ATOMIC_FIELD(X, Y, AUTHENTICATION_TYPE, ospf::AuthType) \
     OPTIONAL_ATOMIC_FIELD(X, Y, AUTHENTICATION_KEY, uint64_t) \
-    LIST_FIELD_CB(X, Y, MESSAGE_DIGEST_KEYS, OspfMessageDigestKey, OspfGlobalInterfaceBaseUpdateDigestKey) \
+    LIST_FIELD_CB(X, Y, MESSAGE_DIGEST_KEYS, OspfMessageDigestKey) \
     ATOMIC_FIELD(X, Y, MESSAGE_DIGEST_ENCRYPT, bool, false)
 
 DEFINE_CONFIG_GROUP(OspfGlobalInterfaceBase, OSPF_GLOBAL_INTERFACE_BASE_FIELD_LIST);
-
-void OspfGlobalInterfacePrefixSuppression(void* iface);
 
 #define OSPF_GLOBAL_INTERFACE_FIELD_LIST(X, Y) \
     REGISTRY_CONTAINER(X, Y, BASE, OspfInterfaceRegistry) \
@@ -147,7 +136,7 @@ void OspfGlobalInterfacePrefixSuppression(void* iface);
     ATOMIC_FIELD(X, Y, INCLUDE_SECONDARIES, bool, true) \
     REGISTRY_CONTAINER(X, Y, IPSEC, OspfIPsecRegistry) \
     OPTIONAL_ATOMIC_FIELD(X, Y, LLS, bool) \
-    ATOMIC_FIELD_CB(X, Y, PREFIX_SUPPRESSION, bool, false, OspfGlobalInterfacePrefixSuppression) \
+    ATOMIC_FIELD_CB(X, Y, PREFIX_SUPPRESSION, bool, false) \
     ATOMIC_FIELD(X, Y, RESYNC_TIMEOUT, uint16_t, 5) TODO \
     ATOMIC_FIELD(X, Y, SHUTDOWN, bool, false) TODO
 

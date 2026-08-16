@@ -54,23 +54,20 @@ struct RouteManagerUtility;
  * Owned by the VirtualRouter.  Each OspfProcess pointer is non-owning; the
  * actual OspfProcess objects are created and destroyed by the router framework.
  */
-struct OspfV3Instance
+struct Ospfv3Instance
 {
-    /**
-     * @brief Constructs an OspfV3Instance with the given address-family configuration reference.
-     *
-     * The `ipv4` and `ipv6` process pointers are left null and must be assigned
-     * after the OspfProcess objects are created by the router framework.
-     *
-     * @param cfgs Shared OSPFv3 address-family configuration reference.
-     */
-    OspfV3Instance(config::OspfRegistry& cfgs)
-        : configs(cfgs) {}
-
     OspfProcess* ipv4 = nullptr; ///< OSPFv3 process handling the IPv4 address family.
     OspfProcess* ipv6 = nullptr; ///< OSPFv3 process handling the IPv6 address family.
+};
 
-    config::OspfRegistry& configs; ///< Shared AF-level configuration reference.
+/**
+ * @brief Pairs IPv4 and IPv6 @ref OspfInterfaceBase pointers for a dual-stack interface binding.
+ * @ingroup OSPF
+ */
+struct Ospfv3InterfaceInstance
+{
+    OspfInterfaceBase* IPv4; ///< Pointer to the IPv4 OSPF interface instance.
+    OspfInterfaceBase* IPv6; ///< Pointer to the IPv6 OSPF interface instance.
 };
 
 /**
@@ -131,12 +128,13 @@ public:
      * events on the owning VRF so the process automatically brings interfaces
      * in and out of OSPF as the hardware state changes.
      *
+     * @param reg   Config registry holding state for the ospf process.
      * @param isV3  True if this process runs OSPFv3 packet encoding (RFC 5340).
      * @param procId Process identifier (shown in show commands and used as config key).
      * @param af    Address family this process services (IPv4 or IPv6).
      * @param vrf   Owning VirtualRouter; must outlive this process.
      */
-    OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, core::VirtualRouter& vrf);
+    OspfProcess(config::OspfRegistry& reg, bool isV3, uint16_t procId, types::AddressFamily af, core::VirtualRouter* vrf);
 
     /**
      * @brief Destroys the OSPF process.
@@ -204,6 +202,8 @@ public:
     bool isASBR() const; ///< Returns true if this process is currently acting as an ASBR.
     bool isABR() const;  ///< Returns true if this process is currently acting as an ABR.
     uint32_t getRouterId() const;
+
+    InterfaceManager& getIfaceMgr() { return ifaceMgr; } ///< Accessor for config appliers (e.g. InterfaceRegistry) that live outside routing::ospf.
 
     const bool isV3; ///< True when this process uses OSPFv3 packet encoding (RFC 5340).
     const bool afCapable = false;

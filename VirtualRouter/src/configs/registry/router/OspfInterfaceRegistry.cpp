@@ -7,45 +7,69 @@
 
 namespace config
 {
-void OspfInterfaceBaseSyncTimers(void* ifacePtr)
+DEFINE_CONFIG_APPLIER(OspfInterfaceBase, DEAD_INTERVAL, ctx, dead)
 {
-    auto& iface = *static_cast<routing::ospf::OspfInterfaceBase*>(ifacePtr);
-    iface.enqueueSyncTimers();
+    if (routing::ospf::OspfInterfaceBase* iface = Context::cast<routing::ospf::OspfInterfaceBase*>(ctx); iface)
+        iface->enqueueSyncTimers();
 }
 
-void OspfInterfaceSyncNeighbors(void* ifacePtr)
+DEFINE_CONFIG_APPLIER(OspfInterfaceBase, HELLO_INTERVAL, ctx, hello)
 {
-    auto& iface = *static_cast<routing::ospf::OspfInterface*>(ifacePtr);
-    iface.enqueueSyncUnicastNeighbors();
+    if (routing::ospf::OspfInterfaceBase* iface = Context::cast<routing::ospf::OspfInterfaceBase*>(ctx); iface)
+        iface->enqueueSyncTimers();
 }
 
-void OspfInterfaceSyncNetworkType(void* ifacePtr)
+DEFINE_CONFIG_APPLIER(OspfInterfaceBase, HELLO_MULTIPLIER, ctx, multiplier)
 {
-    auto& iface = *static_cast<routing::ospf::OspfInterface*>(ifacePtr);
-    iface.enqueueSyncNetworkType();
+    if (routing::ospf::OspfInterfaceBase* iface = Context::cast<routing::ospf::OspfInterfaceBase*>(ctx); iface)
+        iface->enqueueSyncTimers();
 }
 
-void OspfInterfaceDemandCircuit(void* ifacePtr)
+DEFINE_CONFIG_APPLIER(OspfInterface, NEIGHBOR, ctx, nbr, add)
 {
-    auto& iface = *static_cast<routing::ospf::OspfInterface*>(ifacePtr);
-    iface.enqueueSyncDemandCircuit();
+    if (routing::ospf::OspfInterface* iface = Context::cast<routing::ospf::OspfInterface*>(ctx); iface)
+        iface->enqueueSyncUnicastNeighbors();
 }
 
-void OspfInterfaceSyncPassive(void* ifacePtr)
+DEFINE_CONFIG_APPLIER(OspfInterface, NETWORK, ctx, ntype)
 {
-    auto& iface = *static_cast<routing::ospf::OspfInterface*>(ifacePtr);
-    iface.enqueueSyncPassive();
+    if (routing::ospf::OspfInterface* iface = Context::cast<routing::ospf::OspfInterface*>(ctx); iface)
+        iface->enqueueSyncNetworkType(ntype);
 }
 
-void OspfGlobalInterfaceBaseUpdateDigestKey(void* ifacePtr)
+DEFINE_CONFIG_APPLIER(OspfInterface, DEMAND_CIRCUIT, ctx, demand)
 {
-    auto& iface = *static_cast<routing::ospf::OspfInterfaceBase*>(ifacePtr);
-    iface.enqueueSyncDigestKey();
+    if (routing::ospf::OspfInterface* iface = Context::cast<routing::ospf::OspfInterface*>(ctx); iface)
+        iface->enqueueSyncDemandCircuit();
 }
 
-void OspfGlobalInterfacePrefixSuppression(void* ifacePtr)
+DEFINE_CONFIG_APPLIER(OspfInterface, DEMAND_CIRCUIT_IGNORE, ctx, ignore)
 {
-    auto& iface = *static_cast<routing::ospf::OspfInterface*>(ifacePtr);
-    iface.enqueueSyncPrefixSuppression();
+    if (routing::ospf::OspfInterface* iface = Context::cast<routing::ospf::OspfInterface*>(ctx); iface)
+        iface->enqueueSyncDemandCircuit();
+}
+
+DEFINE_CONFIG_APPLIER(OspfInterface, FLOOD_REDUCTION, ctx, reduce)
+{
+    if (routing::ospf::OspfInterface* iface = Context::cast<routing::ospf::OspfInterface*>(ctx); iface)
+        iface->enqueueSyncDemandCircuit();
+}
+
+DEFINE_CONFIG_APPLIER(OspfInterface, PASSIVE, ctx, passive)
+{
+    if (routing::ospf::OspfInterface* iface = Context::cast<routing::ospf::OspfInterface*>(ctx); iface)
+        iface->enqueueSyncPassive(passive);
+}
+
+DEFINE_CONFIG_APPLIER(OspfGlobalInterfaceBase, MESSAGE_DIGEST_KEYS, ctx,,)
+{
+    if (routing::ospf::OspfInterfaceBase* iface = Context::cast<routing::ospf::OspfInterfaceBase*>(ctx); iface)
+        iface->enqueueSyncDigestKey();
+}
+
+DEFINE_CONFIG_APPLIER(OspfGlobalInterface, PREFIX_SUPPRESSION, ctx, suppress)
+{
+    if (routing::ospf::OspfInterface* iface = Context::cast<routing::ospf::OspfInterface*>(ctx); iface)
+        iface->enqueueSyncPrefixSuppression();
 }
 }

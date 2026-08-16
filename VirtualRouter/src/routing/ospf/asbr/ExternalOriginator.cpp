@@ -212,18 +212,16 @@ void ExternalOriginator::syncSummaryConfig()
 
     std::unordered_set<types::IPPrefix> seen;
 
-    cfg.withRead([&](const auto& tsList) {
-        for (const auto& ts : tsList)
+    cfg.readEach(
+        [&](const config::OspfSummaryAddress& sum)
         {
-            const auto& [pfx, noAdv, nssaOnly, tag] = ts;
-            seen.insert(pfx);
-
-            auto& s = active[pfx];
-            s.notAdvertise = noAdv;
-            s.nssaOnly = nssaOnly;
-            s.tag = tag;
+            seen.insert(sum.prefix());
+            auto& s = active[sum.prefix()];
+            s.notAdvertise = sum.notAdvertise();
+            s.nssaOnly = sum.nssaOnly();
+            s.tag = sum.tag();
         }
-    });
+    );
 
     for (auto it = active.begin(); it != active.end();)
     {

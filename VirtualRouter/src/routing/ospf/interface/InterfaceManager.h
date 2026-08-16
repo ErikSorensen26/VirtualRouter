@@ -92,6 +92,51 @@ public:
     OspfInterfaceBase& createInterface(interface::Interface& interface, const OspfInterfaceId& id);
 
     /**
+     * @brief Constructs the @ref OspfInterface for an already-created OSPFV3
+     *        registry slot and inserts it into `ospfInterfaceList`.
+     *
+     * Called by the OSPFV3 applier once the registry slot exists; not for use
+     * as a general entry point -- `addInterface()` is that entry point.
+     *
+     * @param interface Physical interface this OSPFv3 slot belongs to.
+     * @param id        Composite key (hardware index + area) for this interface.
+     * @param cfg       Registry slot to bind the new OspfInterface to.
+     * @return Reference to the newly-constructed OspfInterfaceBase.
+     */
+    OspfInterfaceBase& createInterface(interface::Interface& interface, const OspfInterfaceId& id, const config::OspfGlobalInterfaceRegistry& cfg);
+
+    /**
+     * @brief Creates the OSPFV3 registry slot for a physical interface (OSPFv3 only).
+     *
+     * Called when the owning @ref OspfProcess observes `IF_READY` /
+     * `IPV6_LL_READY` for `interface`. Unlike OSPFv2 (where area membership
+     * is derived from `network` statements and requires `refreshInterfaceList()`),
+     * OSPFv3 interfaces are enabled directly on the physical interface, so this
+     * is a single targeted `emplaceBack()` -- no sweep. Firing it synchronously
+     * invokes the OSPFV3 applier (InterfaceRegistry.cpp), which calls back into
+     * `createInterface(interface, id, cfg)` for each OSPFv3 process (v4/v6)
+     * registered under this process ID.
+     *
+     * No-op if this interface is already tracked for this process.
+     *
+     * @param interface Physical interface to enable OSPFv3 on; must not be null.
+     */
+    void addInterface(interface::Interface& interface);
+
+    /**
+     * @brief Removes the OSPFV3 registry slot for a physical interface (OSPFv3 only).
+     *
+     * Called when the owning @ref OspfProcess observes `IF_DOWN` /
+     * `IPV6_LL_DEL` for `interface`. Firing `erase()` synchronously invokes
+     * the OSPFV3 applier, which calls back into `removeInterface(id)`.
+     *
+     * No-op if no entry for this interface exists.
+     *
+     * @param interface Physical interface to disable OSPFv3 on.
+     */
+    void removeInterface(interface::Interface& interface);
+
+    /**
      * @brief Removes and destroys the interface identified by @p id.
      *
      * Stops all timers and tears down any active neighbor adjacencies before

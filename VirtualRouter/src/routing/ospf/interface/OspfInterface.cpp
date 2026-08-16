@@ -35,7 +35,7 @@ OspfInterface::OspfInterface(OspfProcess& proc, interface::Interface& iface, con
           auto& ifCfgs = iface.configs.getConfigs();
           if (proc.isV3)
           {
-            auto& afReg = ifCfgs.get<config::Interface::OSPFV3>().emplaceBack(proc.procId);
+            auto& afReg = *ifCfgs.get<config::Interface::OSPFV3>().emplaceBack(proc.procId);
             if (proc.af == types::AddressFamily::IPv4)
                 return afReg.get<config::OspfInterfaceAf::IPV4>().get();
             else
@@ -72,10 +72,10 @@ OspfInterface::OspfInterface(
     tmgr.startHello();
 }
 
-void OspfInterface::enqueueSyncNetworkType()
+void OspfInterface::enqueueSyncNetworkType(config::ospf::NetworkType ntype)
 {
-    getScheduler().post([this] {
-        syncNetworkType();
+    getScheduler().post([this, ntype] {
+        syncNetworkType(ntype);
     });
 }
 
@@ -94,10 +94,10 @@ void OspfInterface::enqueueSyncDemandCircuit()
     });
 }
 
-void OspfInterface::enqueueSyncPassive()
+void OspfInterface::enqueueSyncPassive(bool passive)
 {
-    getScheduler().post([this] {
-        syncPassive();
+    getScheduler().post([this, passive] {
+        syncPassive(passive);
     });
 }
 
@@ -334,10 +334,8 @@ void OspfInterface::election()
     }
 }
 
-void OspfInterface::syncNetworkType()
+void OspfInterface::syncNetworkType(config::ospf::NetworkType ntype)
 {
-    auto ntype = configs.get<config::OspfInterface::NETWORK>().load();
-
     syncTimers();
     isMulticast.store(
         ntype == config::ospf::NetworkType::BROADCAST ||
@@ -348,10 +346,8 @@ void OspfInterface::syncNetworkType()
     ntable.syncUnicast();
 }
 
-void OspfInterface::syncPassive()
+void OspfInterface::syncPassive(bool passive)
 {
-    bool passive = configs.get<config::OspfInterface::PASSIVE>().load();
-
     if (passive)
     {
         ntable.resetNeighbors();
