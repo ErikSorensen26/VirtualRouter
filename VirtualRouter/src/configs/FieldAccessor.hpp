@@ -7,6 +7,8 @@
 #ifndef FIELD_ACCESSOR_HPP
 #define FIELD_ACCESSOR_HPP
 
+#include <algorithm>
+
 #include "SubRegistry.hpp"
 
 namespace config
@@ -47,8 +49,7 @@ public:
     AtomicFieldAccessor(S& sub, AccessorField<EF>)
         : field(sub.template getValue<EF>()),
           getDefaultValue(getDefaultGetter<typename F::type, EF>()),
-          ctx(&sub),
-          applier(+[](void* ctx) { static_cast<S*>(ctx)->template runApplier<EF>(); })
+          provider(&sub)
     {
         static_assert(std::is_same_v<decltype(EF), typename S::type>, "The provided field does not belong to this sub-registry.");
     }
@@ -58,7 +59,7 @@ public:
     AtomicFieldAccessor& operator=(const AtomicFieldAccessor&) = default;
     AtomicFieldAccessor& operator=(AtomicFieldAccessor&&) = default;
 
-    inline F::type load() const noexcept
+    inline typename F::type load() const noexcept
     {
         const F* f = &field;
         while (f->state.load(std::memory_order_relaxed) == FieldState::INHERIT && f->mask)
@@ -66,16 +67,21 @@ public:
         return f->value.load(std::memory_order_relaxed);
     }
 
-    inline void set(F::type v, uint32_t cmdIdx = NO_COMMAND_INDEX) noexcept
+    inline bool set(typename F::type v, uint32_t cmdIdx = NO_COMMAND_INDEX) noexcept
     {
+        if constexpr (RequiresValidation<F>)
+            if (!field.validator(provider, v))
+                return false;
         bool apply = load() != v;
         field.value.store(v, std::memory_order_release);
         field.state.store(FieldState::CANNED, std::memory_order_release);
         field.commandIndex = cmdIdx;
-        if (apply && applier)
+        if (apply)
         {
-            applier(ctx);
+            if constexpr (RequiresContext<F>)
+                field.applier(provider, v);
         }
+        return true;
     }
 
     inline void unset() noexcept
@@ -83,9 +89,11 @@ public:
         typename F::type old = load();
         field.value.store(getDefault(), std::memory_order_relaxed);
         field.state.store(FieldState::INHERIT, std::memory_order_relaxed);
-        if (load() != old && applier)
+        typename F::type nw = load();
+        if (nw != old)
         {
-            applier(ctx);
+            if constexpr (RequiresContext<F>)
+                field.applier(provider, nw);
         }
     }
 
@@ -95,21 +103,20 @@ public:
         field.state.store(FieldState::CANNED, std::memory_order_release);
     }
 
-    F::type getDefault() const noexcept
+    typename F::type getDefault() const noexcept
     {
         return getDefaultValue();
     }
 
     inline bool overridden() const noexcept
     {
-        return field.state.load(std::memory_order_relaxed) == FieldState::CANNED;
+        return field.state.load(std::memory_order_relaxed) != FieldState::INHERIT;
     }
 
 private:
     F& field;
     DefaultGetter<typename F::type> getDefaultValue;
-    void* ctx;
-    void (*applier)(void*) = nullptr;
+    Context provider;
 };
 
 /**
@@ -131,8 +138,7 @@ public:
     template <IsSubRegistry S, auto EF>
     OptionalAtomicFieldAccessor(S& sub, AccessorField<EF>)
         : field(sub.template getValue<EF>()),
-          ctx(&sub),
-          applier(+[](void* ctx) { static_cast<S*>(ctx)->template runApplier<EF>(); })
+          provider(&sub)
     {
         static_assert(std::is_same_v<decltype(EF), typename S::type>, "The provided field does not belong to this sub-registry.");
     }
@@ -148,7 +154,7 @@ public:
         return f->state.load(std::memory_order_relaxed) == FieldState::CANNED;
     }
 
-    inline F::type load() const noexcept
+    inline typename F::type load() const noexcept
     {
         const F* f = &field;
         while (f->state.load(std::memory_order_relaxed) == FieldState::INHERIT && f->mask)
@@ -157,16 +163,21 @@ public:
         return f->value.load(std::memory_order_relaxed);
     }
 
-    inline void set(F::type v, uint32_t cmdIdx = NO_COMMAND_INDEX) noexcept
+    inline bool set(typename F::type v, uint32_t cmdIdx = NO_COMMAND_INDEX) noexcept
     {
+        if constexpr (RequiresValidation<F>)
+            if (!field.validator(provider, v))
+                return false;
         bool apply = !hasValue() || load() != v;
         field.value.store(v, std::memory_order_release);
         field.state.store(FieldState::CANNED, std::memory_order_release);
         field.commandIndex = cmdIdx;
-        if (apply && applier)
+        if (apply)
         {
-            applier(ctx);
+            if constexpr (RequiresContext<F>)
+                field.applier(provider, &v);
         }
+        return true;
     }
 
     inline void unset() noexcept
@@ -174,9 +185,14 @@ public:
         if (field.state.load(std::memory_order_relaxed) != FieldState::INHERIT)
         {
             field.state.store(FieldState::INHERIT, std::memory_order_release);
-            if (applier)
             {
-                applier(ctx);
+                const F* f = &field;
+                while (f->state.load(std::memory_order_relaxed) == FieldState::INHERIT && f->mask)
+                    f = f->mask;
+                bool hasValue = f->state.load(std::memory_order_relaxed) == FieldState::CANNED;
+                typename F::type v = f->value.load(std::memory_order_relaxed);
+                if constexpr (RequiresContext<F>)
+                    field.applier(provider, hasValue ? &v : nullptr);
             }
         }
     }
@@ -187,9 +203,9 @@ public:
         if (state != FieldState::UNSET)
         {
             field.state.store(FieldState::UNSET, std::memory_order_release);
-            if (applier)
             {
-                applier(ctx);
+                if constexpr (RequiresContext<F>)
+                    field.applier(provider, nullptr);
             }
         }
     }
@@ -197,13 +213,12 @@ public:
     inline bool overridden() const noexcept
     requires (IsAtomicField<F> || IsOptionalAtomicField<F> || IsValueField<F>)
     {
-        return field.state.load(std::memory_order_relaxed) == FieldState::CANNED;
+        return field.state.load(std::memory_order_relaxed) != FieldState::INHERIT;
     }
 
 private:
     F& field;
-    void* ctx;
-    void (*applier)(void*) = nullptr;
+    Context provider;
 };
 
 /**
@@ -225,8 +240,7 @@ public:
     template <IsSubRegistry S, auto EF>
     ValueFieldAccessor(S& sub, AccessorField<EF>)
         : field(sub.template getValue<EF>()),
-          ctx(&sub),
-          applier(+[](void* ctx) { static_cast<S*>(ctx)->template runApplier<EF>(); })
+          provider(&sub)
     {
         static_assert(std::is_same_v<decltype(EF), typename S::type>, "The provided field does not belong to this sub-registry.");
     }
@@ -242,7 +256,7 @@ public:
         return f->state.load(std::memory_order_relaxed) == FieldState::CANNED;
     }
 
-    inline F::type load() const noexcept
+    inline typename F::type load() const noexcept
     {
         const F* f = &field;
         while (f->state.load(std::memory_order_relaxed) == FieldState::INHERIT && f->mask)
@@ -252,30 +266,45 @@ public:
         return val;
     }
 
-    inline void set(F::type v, uint32_t cmdIdx = NO_COMMAND_INDEX) noexcept
+    inline bool set(typename F::type v, uint32_t cmdIdx = NO_COMMAND_INDEX) noexcept
     {
+        if constexpr (RequiresValidation<F>)
+            if (!field.validator(provider, v))
+                return false;
         bool apply = !hasValue() || load() != v;
-        typename F::type* val = new F::type(v);
+        typename F::type* val = new typename F::type(v);
         typename F::type* old = field.value.exchange(val, std::memory_order_relaxed);
         utils::RCU::retire([](void* retireCtx) {
-            typename F::type* o = static_cast<F::type*>(retireCtx);
+            typename F::type* o = static_cast<typename F::type*>(retireCtx);
             delete o;
         }, old);
         field.state.store(FieldState::CANNED, std::memory_order_release);
         field.commandIndex = cmdIdx;
-        if (apply && applier)
+        if (apply)
         {
-            applier(ctx);
+            if constexpr (RequiresContext<F>)
+                field.applier(provider, &v);
         }
+        return true;
     }
 
     inline void unset() noexcept
     {
         typename F::type old = load();
-        field.state.store(FieldState::INHERIT, std::memory_order_relaxed);
-        if (load() != old && applier)
+        if (field.state.load(std::memory_order_relaxed) != FieldState::INHERIT)
         {
-            applier(ctx);
+            field.state.store(FieldState::INHERIT, std::memory_order_relaxed);
+            if (load() != old)
+            {
+                const F* f = &field;
+                while (f->state.load(std::memory_order_relaxed) == FieldState::INHERIT && f->mask)
+                    f = f->mask;
+                bool hasValue = f->state.load(std::memory_order_relaxed) == FieldState::CANNED;
+                utils::RCU::Guard g;
+                typename F::type* v = f->value.load(std::memory_order_relaxed);
+                if constexpr (RequiresContext<F>)
+                    field.applier(provider, hasValue ? v : nullptr);
+            }
         }
     }
 
@@ -285,32 +314,32 @@ public:
         if (state != FieldState::UNSET)
         {
             field.state.store(FieldState::UNSET, std::memory_order_release);
-            if (applier)
             {
-                applier(ctx);
+                if constexpr (RequiresContext<F>)
+                    field.applier(provider, nullptr);
             }
         }
     }
 
     inline bool overridden() const noexcept
     {
-        return field.state.load(std::memory_order_relaxed) == FieldState::CANNED;
+        return field.state.load(std::memory_order_relaxed) != FieldState::INHERIT;
     }
 
 private:
     F& field;
-    void* ctx;
-    void (*applier)(void*) = nullptr;
+    Context provider;
 };
 
 /**
  * @brief Live accessor for a `ListField<T>`, with mutex-guarded read and write windows.
  * @ingroup CONFIG
  *
- * `withRead(fn)` acquires the list mutex and calls `fn` with a const reference to the
- * underlying vector (no-op if the list has never been written). `withWrite(fn)` allocates
- * the list on first write, calls `fn` with a mutable reference, and fires the applier if
- * `fn` returns `true` (indicating a structural change).
+ * `readEach(fn)` acquires the list mutex and calls `fn` once per element; returning
+ * `bool` from `fn` lets it stop early by returning `true`, otherwise every element is
+ * visited. `get()` returns a locked copy of the whole list. `add()` / `erase()` take
+ * the mutex to mutate the list and fire the applier once the lock is released if the
+ * value was actually inserted / removed.
  *
  * @tparam F The concrete `ListField<T>` type this accessor wraps.
  */
@@ -324,8 +353,7 @@ public:
     ListFieldAccessor(S& sub, AccessorField<EF>)
         : field(sub.template getValue<EF>()),
           mu(sub.mu),
-          ctx(&sub),
-          applier(+[](void* ctx) { static_cast<S*>(ctx)->template runApplier<EF>(); })
+          provider(&sub)
     {
         static_assert(std::is_same_v<decltype(EF), typename S::type>, "The provided field does not belong to this sub-registry.");
     }
@@ -333,41 +361,137 @@ public:
     ListFieldAccessor(const ListFieldAccessor&) = default;
     ListFieldAccessor(ListFieldAccessor&&) = default;
 
-    template <typename Fn>
-    void withRead(Fn&& fn) const
+    F::type get() const noexcept
     {
-        if (auto* lst = field.value.load(std::memory_order_relaxed); lst)
-        {
-            std::lock_guard<std::mutex> lock(mu);
-            std::forward<Fn>(fn)(*lst);
-        }
+        typename F::type& list = *field.value.load(std::memory_order_relaxed);
+        std::lock_guard<std::mutex> lock(mu);
+        return list;
     }
 
     template <typename Fn>
-    void withWrite(Fn&& fn, uint32_t cmdIdx = NO_COMMAND_INDEX)
+    void readEach(Fn&& fn) const
     {
+        typename F::type& list = *field.value.load(std::memory_order_relaxed);
+        std::lock_guard<std::mutex> lock(mu);
+
+        for (const auto& element : list)
+        {
+            if constexpr (std::is_same_v<std::invoke_result_t<Fn&, const typename F::element&>, bool>)
+            {
+                if (fn(element))
+                    break;
+            }
+            else
+            {
+                fn(element);
+            }
+        }
+    }
+
+    std::optional<typename F::element> front() const
+    {
+        typename F::type& list = *field.value.load(std::memory_order_relaxed);
+        std::lock_guard<std::mutex> lock(mu);
+        if (!list.empty()) return list.front();
+        return std::nullopt;
+    }
+
+    std::optional<typename F::element> back() const
+    {
+        typename F::type& list = *field.value.load(std::memory_order_relaxed);
+        std::lock_guard<std::mutex> lock(mu);
+        if (!list.empty()) return list.back();
+        return std::nullopt;
+    }
+
+    bool contains(typename F::element value) const
+    {
+        typename F::type& list = *field.value.load(std::memory_order_relaxed);
+        std::lock_guard<std::mutex> lock(mu);
+        return std::any_of(list.begin(), list.end(), [&](typename F::element& v) { return value == v; });
+    }
+
+    bool size() const 
+    {
+        typename F::type& list = *field.value.load(std::memory_order_relaxed);
+        std::lock_guard<std::mutex> lock(mu);
+        return list.size();
+    }
+
+    void add(typename F::element value, uint32_t cmdIdx = NO_COMMAND_INDEX)
+    {
+        addMatching([&](const typename F::element& entry) { return entry == value; }, value, cmdIdx);
+    }
+
+    void erase(typename F::element value)
+    {
+        eraseMatching([&](const typename F::element& entry) { return entry == value; });
+    }
+
+    /**
+     * @brief Like @ref add, but identifies the entry to replace with `match`
+     *        instead of `operator==` (e.g. `compareTuple`'s partial-pattern
+     *        matching, which lets an omitted/`IgnoreCompare`-wrapped member
+     *        pass through without disqualifying the match).
+     */
+    template <typename Match>
+    void addMatching(Match&& match, typename F::element value, uint32_t cmdIdx = NO_COMMAND_INDEX)
+    {
+        bool shouldApply{true};
+        if constexpr (RequiresValidation<F>)
+            shouldApply = field.validator(provider, value);
+        if (!shouldApply)
+            return;
+
         field.commandIndex = cmdIdx;
-        bool shouldApply{false};
         {
             std::lock_guard<std::mutex> lk(mu);
-            if (!field.value.load(std::memory_order_relaxed))
-            {
-                typename Field::type* list = new Field::type{};
-                field.value.store(list, std::memory_order_release);
-            }
-            shouldApply = std::forward<Fn>(fn)(*field.value.load(std::memory_order_relaxed));
+            typename Field::type& list = *field.value.load(std::memory_order_relaxed);
+            auto it = std::find_if(list.begin(), list.end(), match);
+            if (it != list.end())
+                *it = value;
+            else
+                list.push_back(value);
         }
-        if (shouldApply && applier)
+        if constexpr (RequiresContext<F>)
+            field.applier(provider, value, true);
+    }
+
+    /**
+     * @brief Like @ref erase, but identifies entries to remove with `match`
+     *        instead of `operator==` (e.g. `compareTuple`'s partial-pattern
+     *        matching). Removes every entry `match` accepts, same as
+     *        `std::erase_if`; fires the applier once per removed entry.
+     */
+    template <typename Match>
+    void eraseMatching(Match&& match, uint32_t cmdIdx = NO_COMMAND_INDEX)
+    {
+        std::vector<typename F::element> removed;
         {
-            applier(ctx);
+            std::lock_guard<std::mutex> lk(mu);
+            typename Field::type& list = *field.value.load(std::memory_order_relaxed);
+            for (auto it = list.begin(); it != list.end();)
+            {
+                if (match(*it))
+                {
+                    removed.push_back(std::move(*it));
+                    it = list.erase(it);
+                }
+                else
+                    ++it;
+            }
         }
+        if (!removed.empty())
+            field.commandIndex = cmdIdx;
+        if constexpr (RequiresContext<F>)
+            for (auto& value : removed)
+                field.applier(provider, value, false);
     }
 
 private:
     F& field;
     std::mutex& mu;
-    void* ctx;
-    void (*applier)(void*) = nullptr;
+    Context provider;
 };
 
 /**
@@ -392,8 +516,8 @@ public:
     template <IsSubRegistry S, auto EF>
     OwnedListFieldAccessor(S& sub, AccessorField<EF>)
         : field(sub.template getValue<EF>()),
-          ctx(&sub),
-          applier(+[](void* ctx) { static_cast<S*>(ctx)->template runApplier<EF>(); })
+          parent(&sub),
+          provider(&sub)
     {
         static_assert(std::is_same_v<decltype(EF), typename S::type>, "The provided field does not belong to this sub-registry.");
     }
@@ -407,10 +531,10 @@ public:
      * Called internally by `erase()`, `clear()`, and @ref RegistryDatabase::emplaceBack
      * after every structural change to the children map.
      */
-    void notifyChanged() noexcept
+    void notifyChanged(typename F::type* reg, const key& k) noexcept
     {
-        if (applier)
-            applier(ctx);
+        if constexpr (RequiresContext<F>)
+            field.applier(provider, reg, k);
     }
 
     /**
@@ -421,19 +545,28 @@ public:
      * structural change (e.g., re-evaluate neighbor configuration).
      *
      * @param k  Key identifying the child entry.
-     * @return Reference to the (new or existing) child entry.
+     * @return Pointer to the (new or existing) child entry, or `nullptr` if
+     *         `k` was rejected by the field's validator (new insertions only;
+     *         an already-existing entry is always returned regardless).
      */
-    type& emplaceBack(const key& k, uint32_t cmdIdx = NO_COMMAND_INDEX) noexcept
+    type* emplaceBack(const key& k, uint32_t cmdIdx = NO_COMMAND_INDEX) noexcept
     {
-        if (!field.delFn)
-            field.delFn = [](type* p) { delete p; };
         auto [it, ok] = field.children.try_emplace(k, nullptr);
-        if (ok) {
-            it->second = new type();
+        if (ok)
+        {
+            if constexpr (RequiresValidation<F>)
+            {
+                if (!field.validator(provider, const_cast<key&>(it->first)))
+                {
+                    field.children.erase(it);
+                    return nullptr;
+                }
+            }
+            it->second = new type(parent);
             field.commandIndex = cmdIdx;
-            notifyChanged();
+            notifyChanged(it->second, k);
         }
-        return *it->second;
+        return it->second;
     }
 
     /**
@@ -442,7 +575,7 @@ public:
      * @param k  Key to search for.
      * @return Const iterator to the matching entry, or `end()` if not found.
      */
-    inline std::unordered_map<key, type*>::const_iterator find(const key& k) const noexcept
+    inline typename std::unordered_map<key, type*>::const_iterator find(const key& k) const noexcept
     {
         return field.children.find(k);
     }
@@ -450,7 +583,7 @@ public:
     /**
      * @brief Returns the past-the-end iterator for the local children map.
      */
-    inline std::unordered_map<key, type*>::const_iterator end() const noexcept
+    inline typename std::unordered_map<key, type*>::const_iterator end() const noexcept
     {
         return field.children.end();
     }
@@ -458,7 +591,7 @@ public:
     /**
      * @brief Returns the begin iterator for the local children map.
      */
-    inline std::unordered_map<key, type*>::const_iterator begin() const noexcept
+    inline typename std::unordered_map<key, type*>::const_iterator begin() const noexcept
     {
         return field.children.begin();
     }
@@ -502,10 +635,11 @@ public:
     {
         auto it = field.children.find(k);
         if (it != field.children.end()) {
-            if (field.delFn) field.delFn(it->second);
+            notifyChanged(nullptr, k);
+            if (it->second)
+                delete it->second;
             field.children.erase(it);
         }
-        notifyChanged();
     }
 
     /**
@@ -514,23 +648,25 @@ public:
     inline void clear() noexcept
     {
         for (auto& [k, v] : field.children)
-            if (field.delFn) field.delFn(v);
+        {
+            notifyChanged(nullptr, k);
+            if (v) delete v;
+        }
         field.children.clear();
-        notifyChanged();
     }
 
 private:
     F& field;
-    void* ctx;
-    void (*applier)(void*) = nullptr;
+    utils::Any parent;
+    Context provider;
 };
 
-template <typename Base, typename ENUM, ApplyFn H, typename Fields>
+template <typename Base, typename ENUM, typename Fields>
 template <ENUM F>
-decltype(auto) SubRegistry<Base, ENUM, H, Fields>::get() noexcept
+decltype(auto) SubRegistry<Base, ENUM, Fields>::get() noexcept
 {
     using Field = FieldTypeAt<F>;
-    if constexpr (IsRefContainer<Field>)
+    if constexpr (IsRefContainer<Field> || IsOptionalRefContainer<Field>)
         return getValue<F>();
     else if constexpr (IsAtomicField<Field>)
         return AtomicFieldAccessor<Field>(*static_cast<Base*>(this), AccessorField<F>{});
@@ -544,9 +680,9 @@ decltype(auto) SubRegistry<Base, ENUM, H, Fields>::get() noexcept
         return OwnedListFieldAccessor<Field>(*static_cast<Base*>(this), AccessorField<F>{});
 }
 
-template <typename Base, typename ENUM, ApplyFn H, typename Fields>
+template <typename Base, typename ENUM, typename Fields>
 template <ENUM F>
-decltype(auto) SubRegistry<Base, ENUM, H, Fields>::get() const noexcept
+decltype(auto) SubRegistry<Base, ENUM, Fields>::get() const noexcept
 {
     return const_cast<SubRegistry&>(*this).template get<F>();
 }

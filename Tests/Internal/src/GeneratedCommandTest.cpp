@@ -290,9 +290,9 @@ uint64_t hashRegistry(void* ptr)
                 mixInto(h, members);
             }
             // A list field, read under its own lock.
-            else if constexpr (requires { accessor.withRead([](auto&){}); })
+            else if constexpr (requires { accessor.readEach([](auto&){}); })
             {
-                accessor.withRead([&](const auto& list) { mixInto(h, list.size()); });
+                mixInto(h, accessor.size());
             }
             // A scalar that may be unset; hasValue is itself state.
             else if constexpr (requires { accessor.hasValue(); accessor.load(); })

@@ -103,7 +103,7 @@ bool writeTupleMember(cli::ContextBase& ctx, Node& staging, Token* value, Token*
             }
         }(), ...);
         return done;
-    }(std::make_index_sequence<std::tuple_size_v<Node>>{});
+    }(std::make_index_sequence<std::tuple_size_v<config::TupleBaseOf<Node>>>{});
 }
 
 /**

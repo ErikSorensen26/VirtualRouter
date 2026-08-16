@@ -73,14 +73,14 @@ enum class RoutingMode
  * @brief Centralized command-tree manager and multi-session orchestration layer for the CLI subsystem.
  *
  * The `CliEngine` owns and manages:
- * - The global command tree (parsed from JSON / CBOR at runtime)
+ * - The global command tree (compiled from grammar JSON into a binary format and mmap’d at runtime)
  * - The configuration schema used for validation and mode enforcement
  * - The lifecycle of all active CLI sessions (`CliSession`)
  * - Integration points with the router’s persistent configuration and boot-up sequence
  *
  * ### Architectural Role
  * - Acts as the authoritative root of all CLI structural information.
- * - Loads, validates, transforms, and publishes the command hierarchy for runtime use.
+ * - Loads and validates the pre-compiled command tree; regenerates from source if stale or invalid.
  * - Serves as the synchronization point between the configuration subsystem (`Configs`),
  *   routing instances, and CLI sessions.
  * - Provides helpers to determine legal command paths, numeric parsing, directory validity,
@@ -88,12 +88,13 @@ enum class RoutingMode
  *
  * ### Memory & Ownership Model
  * - Owns the dynamically allocated `CliSession` objects and is responsible for destroying them.
- * - Owns the JSON command tree and configuration schema for the lifetime of the process.
+ * - Owns a memory-mapped `CommandTree` (compiled binary from grammar sources) for the lifetime
+ *   of the process. The tree is immutable after initialization and safe for concurrent reads.
  * - Uses `Configs` (its base class) to manage persistent configuration lifecycle and recovery.
  *
  * ### Concurrency Model
- * - CLI sessions may perform reads of the command tree concurrently; the tree itself is loaded
- *   once at initialization and is not mutated thereafter (except during early initialization).
+ * - CLI sessions may perform reads of the command tree concurrently; the tree is loaded once
+ *   at initialization and is not mutated thereafter.
  * - `recoverState()` executes sequentially during engine initialization; sessions are not active yet.
  * - Condition variables (`stateCondition`) support future synchronization between CLI and other
  *   subsystems, though in the current implementation they are used minimally.
@@ -101,18 +102,18 @@ enum class RoutingMode
  * ### Interaction With Subsystems
  * - Interfaces with router boot logic through `StartupFiles` and persistent configuration restore.
  * - Provides session instances which interact with `CommandProcessor` and `Mode` subsystems.
- * - Uses JSON-based command definitions to enforce grammar, help generation, and mode transitions.
+ * - Uses the compiled command tree to enforce grammar, help generation, and mode transitions.
  *
  * ### Invariants
- * - `commandTree` must be a valid JSON object containing at minimum the variables block and
- *   command definitions.
- * - Schema objects, when present, must be valid JSON maps.
+ * - `commandTree` must be a valid, memory-mapped command tree built from grammar JSON sources.
+ * - The tree’s content hash must match the grammar source hash, or regeneration occurs automatically.
  * - All sessions created must be tracked in `sessions` and destroyed inside `clearSessions()` or
  *   the destructor.
  *
  * ### Performance Notes
- * - JSON parsing (CBOR or text JSON) is optimized for boot; all heavy computation happens once.
- * - Session creation is lightweight and context-bound; parsing depth/structure is offloaded to
+ * - Grammar compilation happens once during tree setup and is cached in `Commands.bin`.
+ * - The tree is memory-mapped for fast startup; staleness is detected via content hashing.
+ * - Session creation is lightweight and context-bound; tree traversal is offloaded to
  *   `CommandProcessor` and runtime modes.
  */
 class CliEngine : public Configs

@@ -36,10 +36,7 @@
 #include "cli/session/Token.hpp"
 #include "cli/modes/Context.hpp"
 #include "cli/session/TreeNavigator.hpp"
-#include "configs/RegistryTable.hpp"
 #include "cli/tree/nodes/Command.h"
-#include "configs/FieldAccessor.hpp"
-#include "configs/RegistryDefaultTable.hpp"
 
 namespace cli::execution
 {
@@ -437,7 +434,7 @@ private:
                     Key key{};
                     if (!utils::resolveKey<Key>(toks, key) && !std::ranges::range<Key>) return;
 
-                    auto& entered = field.emplaceBack(key, binding->node.nodeIndex());
+                    auto& entered = *field.emplaceBack(key, binding->node.nodeIndex());
                     ok = nav.changeMode(
                         utils::modeOf(bound), static_cast<void*>(&entered),
                         TreeNavigator::registryIdOf<std::remove_reference_t<decltype(entered)>>(),
@@ -573,7 +570,7 @@ private:
                         && !std::is_default_constructible_v<Key>)
                         return;
 
-                    auto& moved = field.emplaceBack(key, binding->node.nodeIndex());
+                    auto& moved = *field.emplaceBack(key, binding->node.nodeIndex());
                     ctx.rescope(static_cast<void*>(&moved),
                                  TreeNavigator::registryIdOf<std::remove_reference_t<decltype(moved)>>());
                     ok = true;

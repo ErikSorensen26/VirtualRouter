@@ -25,7 +25,6 @@
  * - @ref CONFIG_POLICY — policy-map, route-map, ACL, and prefix-list schemas
  */
 
-
 #ifndef REGISTRY_TYPES_HPP
 #define REGISTRY_TYPES_HPP
 
@@ -36,6 +35,7 @@
 #include <utility>
 #include <unordered_map>
 #include <vector>
+#include <Any.hpp>
 
 #include "configs/TupleSchema.hpp"
 
@@ -54,15 +54,24 @@ template <typename...>
 class RegistryDatabase;
 
 // TYPE ALIASES
-using ApplyFn = void (*)(void* ctx); ///< Callback signature for live-notification appliers.
-using ValidFn = bool (*)(void* ctx, void* obj); ///< Callback signature for live-validation.
+using Context = utils::Any;
+template <typename T>
+using ApplyFn = void (*)(Context&, T&); ///< Callback signature for live-notification appliers.
+template <typename T>
+using OptApplyFn = void (*)(Context&, T*); ///< Callback signature for live-notification appliers.
+template <typename T>
+using ListApplyFn = void (*)(Context&, T&, bool); ///< Callback signature for live-notifiaction appliers for owned lists.
+template <typename T, typename K>
+using OwnedApplyFn = void (*)(Context&, T*, const K&); ///< Callback signature for live-notifiaction appliers for owned lists.
+template <typename T>
+using ValidateFn = bool (*)(Context& ctx, T& val); ///< Callback signature for validators.
 
 /// @brief Command-tree node index of a field never written from the CLI.
 inline constexpr uint32_t NO_COMMAND_INDEX = 0xFFFFFFFFu;
 
 template <typename ...Fields>
 struct FieldTuple;
-template <typename Base, typename ENUM, ApplyFn H, typename Fields>
+template <typename Base, typename ENUM, typename Fields>
 class SubRegistry;
 
 // FIELD FLAG TAGS
@@ -132,34 +141,144 @@ struct OwnedListFieldFlag {};
  * Types derived by 'IgnoreCompareFlag' satisfy the @ref IsIgnoreCompare concept.
  */
 struct IgnoreCompareFlag {};
+/**
+ * @brief No-op base: primary template for when `V` is not a `ValidateFn<T>` (no validator configured).
+ * @ingroup CONFIG
+ */
+template <typename Flag, typename T, auto V>
+struct ValidatorHolder : Flag
+{
+    template <typename S, auto EF>
+    ValidatorHolder(std::in_place_type_t<S>, std::in_place_index_t<EF>) {};
+};
+
+/// @brief `ValidatorHolder` specialization that installs the validator callback.
+template <typename Flag, typename T, auto V>
+    requires std::is_same_v<decltype(V), ValidateFn<T>>
+struct ValidatorHolder<Flag, T, V> : Flag
+{
+    template <typename S, auto EF>
+    ValidatorHolder(std::in_place_type_t<S>, std::in_place_index_t<EF>)
+        : validator(+[](Context& s, T& type) { return Context::cast<S*>(s)->template runValidator<static_cast<typename S::type>(EF)>(type); }) {}
+    ValidateFn<T> validator;
+private:
+    template <typename, typename, typename>
+    friend class SubRegistry;
+    static constexpr ValidateFn<T> validatorImpl = V;
+};
 
 /**
- * TODO finish doxy comment
- * @brief Carries the optional live-notification applier for a field type.
+ * @brief No-op base: primary template for when `H` is not an `ApplyFn<T>` (no applier configured).
  * @ingroup CONFIG
  *
- * Every field template takes an `H` parameter that is either `nullptr` or an
- * @ref ApplyFn. Deriving from `ApplierHolder<Flag, H>` keeps the two cases in a
- * single class definition: the primary template contributes nothing but the
- * flag base, while the `ApplyFn` partial specialization adds the static
- * `applier` member that @ref RequiresContext detects.
- *
- * `applier` must be public. @ref RequiresContext is a namespace-scope concept
- * with no friendship, and concept satisfaction honours access control, so a
- * private or protected `applier` makes `requires { T::applier; }` silently
- * false and disables every applier-firing branch that guards on it.
- *
- * @tparam Flag  Field-category flag base (e.g. `AtomicFieldFlag`).
- * @tparam H     `nullptr` for no notification, or an `ApplyFn` to install.
+ * Note this primary template does not chain to @ref ValidatorHolder; only
+ * the specialization below (when `H` does match) does. A field wanting a
+ * validator without an applier still needs `H`'s type to select that
+ * specialization for `V` to take effect.
  */
-template <typename Flag, auto H, auto V> // applier, validator
-struct CallbackHolder : Flag {};
-
-/// @brief `ApplierHolder` specialization that installs the applier callback.
-template <typename Flag, ApplyFn H, ValidFn V>
-struct CallbackHolder<Flag, H, V> : Flag
+template <typename Flag, typename T, auto H, auto V> // applier, validator
+struct CallbackHolder : Flag
 {
-    static constexpr ApplyFn applier = H; ///< Callback invoked whenever the effective value changes.
+    template <typename S, auto EF>
+    CallbackHolder(std::in_place_type_t<S>, std::in_place_index_t<EF>) {};
+};
+
+/// @brief `CallbackHolder` specialization that installs the callback.
+template <typename Flag, typename T, auto H, auto V>
+    requires std::is_same_v<decltype(H), ApplyFn<T>>
+struct CallbackHolder<Flag, T, H, V> : ValidatorHolder<Flag, T, V>
+{
+    template <typename S, auto EF>
+    CallbackHolder(std::in_place_type_t<S> t, std::in_place_index_t<EF> i)
+        : ValidatorHolder<Flag, T, V>(t, i),
+          applier(+[](Context& s, T& type) { Context::cast<S*>(s)->template runApplier<static_cast<typename S::type>(EF)>(false, type); }) {}
+    ApplyFn<T> applier; ///< Callback invoked whenever the effective value changes.
+private:
+    template <typename, typename, typename>
+    friend class SubRegistry;
+    static constexpr ApplyFn<T> applierImpl = H;
+};
+
+/**
+ * @brief No-op base: primary template for when `H` is not an `OptApplyFn<T>` (no applier configured).
+ * @ingroup CONFIG
+ */
+template <typename Flag, typename T, auto H, auto V> // applier, validator
+struct OptionalCallbackHolder : Flag
+{
+    template <typename S, auto EF>
+    OptionalCallbackHolder(std::in_place_type_t<S>, std::in_place_index_t<EF>) {};
+};
+
+/// @brief 'CallbackHolder' specialization that installs the optional callbacks.
+template <typename Flag, typename T, auto H, auto V>
+    requires std::is_same_v<decltype(H), OptApplyFn<T>>
+struct OptionalCallbackHolder<Flag, T, H, V> : ValidatorHolder<Flag, T, V>
+{
+    template <typename S, auto EF>
+    OptionalCallbackHolder(std::in_place_type_t<S> t, std::in_place_index_t<EF> i)
+        : ValidatorHolder<Flag, T, V>(t, i),
+          applier(+[](Context& s, T* type) { Context::cast<S*>(s)->template runApplier<static_cast<typename S::type>(EF)>(false, type); }) {}
+    OptApplyFn<T> applier; ///< Callback invoked whenever the effective value changes.
+private:
+    template <typename, typename, typename>
+    friend class SubRegistry;
+    static constexpr OptApplyFn<T> applierImpl = H; ///< Callback invoked whenever the effective value changes.
+};
+
+/**
+ * @brief No-op base: primary template for when `H` is not a `ListApplyFn<T>` (no applier configured).
+ * @ingroup CONFIG
+ */
+template <typename Flag, typename T, auto H, auto V> // applier, validator
+struct ListCallbackHolder : Flag
+{
+    template <typename S, auto EF>
+    ListCallbackHolder(std::in_place_type_t<S>, std::in_place_index_t<EF>) {};
+};
+
+/// @brief 'CallbackHolder' specialization that installs the list callbacks.
+template <typename Flag, typename T, auto H, auto V>
+    requires std::is_same_v<decltype(H), ListApplyFn<T>>
+struct ListCallbackHolder<Flag, T, H, V> : ValidatorHolder<Flag, T, V>
+{
+    template <typename S, auto EF>
+    ListCallbackHolder(std::in_place_type_t<S> t, std::in_place_index_t<EF> i)
+        : ValidatorHolder<Flag, T, V>(t, i),
+          applier(+[](Context& s, T& type, bool add) { Context::cast<S*>(s)->template runApplier<static_cast<typename S::type>(EF)>(false, type, add); }) {}
+    ListApplyFn<T> applier; ///< Callback invoked whenever the effective value changes.
+private:
+    template <typename, typename, typename>
+    friend class SubRegistry;
+    static constexpr ListApplyFn<T> applierImpl = H; ///< Callback invoked whenever the effective value changes.
+};
+
+
+/**
+ * @brief No-op base: primary template for when `H` is not an `OwnedApplyFn<T, K>` (no applier configured).
+ * @ingroup CONFIG
+ */
+template <typename Flag, typename T, typename K, auto H, auto V> // applier, validator
+struct OwnedCallbackHolder : Flag
+{
+    template <typename S, auto EF>
+    OwnedCallbackHolder(std::in_place_type_t<S>, std::in_place_index_t<EF>) {};
+};
+
+/// @brief 'CallbackHolder' specialization that installs the owned list callbacks.
+template <typename Flag, typename T, typename K, auto H, auto V>
+    requires (std::is_same_v<decltype(H), OwnedApplyFn<T, K>>)
+struct OwnedCallbackHolder<Flag, T, K, H, V> : ValidatorHolder<Flag, K, V>
+{
+    template <typename S, auto EF>
+    OwnedCallbackHolder(std::in_place_type_t<S> t, std::in_place_index_t<EF> i)
+        : ValidatorHolder<Flag, K, V>(t, i),
+          applier(+[](Context& s, T* type, const K& key) { Context::cast<S*>(s)->template runApplier<static_cast<typename S::type>(EF)>(false, type, key); }) {}
+    OwnedApplyFn<T, K> applier = nullptr; ///< Callback invoked whenever the effective value changes.
+private:
+    template <typename, typename, typename>
+    friend class SubRegistry;
+    static constexpr OwnedApplyFn<T, K> applierImpl = H; ///< Callback invoked whenever the effective value changes.
 };
 
 // FIELD CONCEPTS
@@ -189,6 +308,19 @@ concept IsFieldBase =
 template <typename T>
 concept RequiresContext =
     requires { T::applier; };
+
+/**
+ * @brief Satisfied by any field type that exposes a static `validator` function pointer.
+ *
+ * When a field satisfies `RequiresValidation`, the owning @ref SubRegistry must
+ * supply a @ref ContextProvider so that the validator can be called before the
+ * field value changes.
+ *
+ * @tparam T  Field type to test.
+ */
+template <typename T>
+concept RequiresValidation =
+    requires { T::validator; };
 
 /**
  * @brief Satisfied by field types that support masking (expose `setMask(const T*)`).
@@ -316,60 +448,6 @@ enum class FieldState : uint8_t
     UNSET,   ///< Field is not currently set, but does not support inheritance.
 };
 
-/**
- * @brief Holds a type-erased context pointer used by applier callbacks.
- * @ingroup CONFIG
- *
- * When a protocol process registers itself with a registry field (via
- * `SubRegistry::context().set(ptr)`), the `ContextProvider` stores the raw
- * pointer. Fields with an `ApplyFn` template argument call
- * `applier(provider.get())` whenever the value changes, allowing the running
- * protocol to react immediately without polling.
- *
- * @see AtomicField
- * @see SubRegistry
- */
-struct ContextProvider
-{
-    /**
-     * @brief Returns `true` when a context pointer has been registered.
-     */
-    inline bool hasCtx() noexcept
-    {
-        return ctx != nullptr;
-    }
-
-    /**
-     * @brief Returns the stored context pointer; nullptr if not set.
-     */
-    inline void* get() noexcept
-    {
-        return ctx;
-    }
-
-    /**
-     * @brief Registers the protocol context pointer.
-     *
-     * @param c  Raw pointer to the protocol instance (e.g. the EIGRP process).
-     *           The caller must ensure the pointer outlives the registry field.
-     */
-    void set(void* c) noexcept
-    {
-        ctx = c;
-    }
-
-    /**
-     * @brief Clears the stored context pointer, disabling live notifications.
-     */
-    void clear() noexcept
-    {
-        ctx = nullptr;
-    }
-
-private:
-    void* ctx{nullptr}; ///< Raw pointer to the owning protocol process; null when inactive.
-};
-
 
 /**
  * @brief Lock-free config field backed by `std::atomic<T>`.
@@ -398,15 +476,18 @@ private:
  * @see SubRegistry
  */
 template <typename T, auto H = nullptr, auto V = nullptr>
-class AtomicField : public CallbackHolder<AtomicFieldFlag, H, V>
+class AtomicField : public CallbackHolder<AtomicFieldFlag, T, H, V>
 {
 public:
-    using node = T;
+    template <typename S, auto EF>
+    AtomicField(std::in_place_type_t<S> t, std::in_place_index_t<EF> i)
+        : CallbackHolder<AtomicFieldFlag, T, H, V>(t, i)
+    {}
     using type = T;
     void setMask(const AtomicField* p) noexcept { mask = p; }
     void clearMask() noexcept { mask = nullptr; }
 private:
-    template <typename, typename, ApplyFn, typename>
+    template <typename, typename, typename>
     friend class SubRegistry;
     template <IsAtomicField>
     friend class AtomicFieldAccessor;
@@ -433,15 +514,18 @@ private:
  * @see AtomicField
  */
 template <typename T, auto H = nullptr, auto V = nullptr>
-class OptionalAtomicField : public CallbackHolder<OptionalAtomicFieldFlag, H, V>
+class OptionalAtomicField : public OptionalCallbackHolder<OptionalAtomicFieldFlag, T, H, V>
 {
 public:
-    using node = T;
+    template <typename S, auto EF>
+    OptionalAtomicField(std::in_place_type_t<S> t, std::in_place_index_t<EF> i)
+        : OptionalCallbackHolder<OptionalAtomicFieldFlag, T, H, V>(t, i)
+    {}
     using type = T;
     void setMask(const OptionalAtomicField* p) noexcept { mask = p; }
     void clearMask() noexcept { mask = nullptr; }
 private:
-    template <typename, typename, ApplyFn, typename>
+    template <typename, typename, typename>
     friend class SubRegistry;
     template <IsOptionalAtomicField>
     friend class OptionalAtomicFieldAccessor;
@@ -474,17 +558,20 @@ private:
  * @see OptionalAtomicField
  */
 template <typename T, auto H = nullptr, auto V = nullptr>
-class ValueField : public CallbackHolder<ValueFieldFlag, H, V>
+class ValueField : public OptionalCallbackHolder<ValueFieldFlag, T, H, V>
 {
 public:
-    using node = T;
-    using type = config::StorageOf<T>;
+    template <typename S, auto EF>
+    ValueField(std::in_place_type_t<S> t, std::in_place_index_t<EF> i)
+        : OptionalCallbackHolder<ValueFieldFlag, T, H, V>(t, i)
+    {}
+    using type = T;
     void setMask(const ValueField* p) noexcept { mask = p; }
     void clearMask() noexcept { mask = nullptr; }
 
     ~ValueField() { delete value.load(std::memory_order_relaxed); }
 private:
-    template <typename, typename, ApplyFn, typename>
+    template <typename, typename, typename>
     friend class SubRegistry;
     template <IsValueField>
     friend class ValueFieldAccessor;
@@ -501,20 +588,22 @@ private:
  *
  * Use `ListField<T>` when `T` cannot be held in a `std::atomic` — for
  * example, `std::string`, `std::vector`, or other heap-allocated types.
- * Reads and writes go through the accessor's `withRead()` / `withWrite()`
- * lambdas, which hold the owning registry's mutex for the duration of the call.
+ * Reads and writes go through @ref ListFieldAccessor's `readEach()` /
+ * `get()` / `add()` / `erase()`, which hold the owning registry's mutex for
+ * the duration of the call.
  *
  * Unlike @ref AtomicField, `ListField` does not participate in parent
- * inheritance: it has no `state` or `mask` member, and an unwritten list simply
- * holds a null pointer. It does support the optional `ApplyFn` callback.
+ * inheritance: it has no `state` or `mask` member. The list is allocated
+ * unconditionally by the constructor, so the value pointer is never null.
+ * It does support the optional `ApplyFn` callback.
  *
  * ## Concurrency Model
  * - The mutex lives in the owning `SubRegistry` and is handed to
  *   @ref ListFieldAccessor on construction; the field itself stores only the
  *   value pointer. All `ListField` and `ValueField` members of the same
  *   registry share that one mutex.
- * - `withRead()` and `withWrite()` both take a `std::lock_guard` on it.
- *   Do not call one from inside the other.
+ * - Each accessor method takes a `std::lock_guard` on it for the duration of
+ *   the call. Do not call one from inside another.
  * - The destructor deletes the list without locking; see the ownership note below.
  *
  * @tparam T  Value type (heap-allocated or non-atomic-capable).
@@ -524,21 +613,25 @@ private:
  * @see SubRegistry
  */
 template <typename T, auto H = nullptr, auto V = nullptr>
-class ListField : public CallbackHolder<ListFieldFlag, H, V>
+class ListField : public ListCallbackHolder<ListFieldFlag, T, H, V>
 {
 public:
-    using node    = T;
-    using element = config::StorageOf<T>;
+    template <typename S, auto EF>
+    ListField(std::in_place_type_t<S> t, std::in_place_index_t<EF> i)
+        : ListCallbackHolder<ListFieldFlag, T, H, V>(t, i),
+          value(new type())
+    {}
+    using element = T;
     using type    = std::vector<element>;
 
     ~ListField() { delete value.load(std::memory_order_relaxed); }
 private:
-    template <typename, typename, ApplyFn, typename>
+    template <typename, typename, typename>
     friend class SubRegistry;
     template <IsListField>
     friend class ListFieldAccessor;
 
-    std::atomic<type*> value = nullptr; ///< Guarded value; null until the first withWrite().
+    std::atomic<type*> value = nullptr; ///< Guarded value.
     uint32_t commandIndex = NO_COMMAND_INDEX;
 };
 
@@ -553,12 +646,6 @@ private:
  *
  * Mutations go through @ref OwnedListFieldAccessor — `emplaceBack()` inserts or
  * returns an existing child, and `erase()` / `clear()` remove them.
- *
- * ## Lifecycle & Ownership
- * The field owns its children outright. `delFn` is installed on the first
- * `emplaceBack()` and is what frees an entry, so it is called on `erase()`,
- * `clear()`, and for every remaining child in the destructor. Copying is
- * deleted to keep that ownership single.
  *
  * ## Callback variant
  * When the optional `H` template parameter is set to an `ApplyFn`, the field
@@ -575,27 +662,30 @@ private:
  * @see Reference
  */
 template <typename T, typename K, auto H = nullptr, auto V = nullptr>
-class OwnedListField : public CallbackHolder<OwnedListFieldFlag, H, V>
+class OwnedListField : public OwnedCallbackHolder<OwnedListFieldFlag, T, K, H, V>
 {
 public:
+    template <typename S, auto EF>
+    OwnedListField(std::in_place_type_t<S> t, std::in_place_index_t<EF> i)
+        : OwnedCallbackHolder<OwnedListFieldFlag, T, K, H, V>(t, i)
+    {}
     using type = T; ///< Child entry type.
     using key = K;  ///< Key type used to look up children.
 
-    ~OwnedListField() {
+    ~OwnedListField()
+    {
         for (auto& [k, v] : children)
-            if (delFn) delFn(v);
+            if (v) delete v;
     }
     OwnedListField(const OwnedListField&) = delete;
     OwnedListField& operator=(const OwnedListField&) = delete;
-    OwnedListField() = default;
 private:
-    template <typename, typename, ApplyFn, typename>
+    template <typename, typename, typename>
     friend class SubRegistry;
     template <IsOwnedListField>
     friend class OwnedListFieldAccessor;
 
-    std::unordered_map<key, type*> children{}; ///< Pointer-owning child entries; ownership managed via delFn.
-    void(*delFn)(type*) = nullptr; ///< Deleter set on first emplaceBack; called in destructor and erase.
+    std::unordered_map<key, type*> children{}; ///< Pointer-owning child entries.
     uint32_t commandIndex = NO_COMMAND_INDEX; ///< Node that last wrote the field.
 };
 

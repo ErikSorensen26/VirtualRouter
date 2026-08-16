@@ -16,37 +16,34 @@
 namespace config
 {
 /**
- * @brief Optional slot-reference field that supports parent-inheritance.
+ * @brief Always-present slot-reference field inside a `SubRegistry` struct.
  * @ingroup CONFIG
  *
- * A `RegistryContainer` lives as a field inside a `SubRegistry` struct.
- * It holds either:
- * - An *inherited* reference from a parent scope (state = `INHERIT`), or
- * - A locally-set reference (state = `SET`).
- *
- * The `bound()` / `effective()` / `get()` API resolves the correct reference
- * according to the current mask state, mirroring how atomic fields walk the
- * parent chain.
- *
- * ## Lifecycle & Ownership
- * `RegistryContainer` does not own the reference; it holds an `optional` copy
- * whose destructor decrements the bucket refcount.
+ * A `RegistryContainer` owns a heap-allocated `T`, unconditionally allocated
+ * by the constructor so `get()` is always valid. `init()` replaces it with a
+ * fresh `T`, discarding whatever was there before.
  *
  * @tparam T  Registry struct type of the referenced scope.
  *
- * @see Reference
+ * @see OptionalRegistryContainer
  * @see SubRegistry
  */
-template <typename T>
-class RegistryContainer : public RefContainerFieldFlag
+template <typename T, auto H = nullptr, auto V = nullptr>
+class RegistryContainer : public CallbackHolder<RefContainerFieldFlag, T, H, V>
 {
 public:
     using type = T;
 
     // CONSTRUCTION
 
-    RegistryContainer() { ptr = new T(); };
-    ~RegistryContainer() { if (delFn) delFn(ptr); else delete ptr; }
+    template <typename S, auto EF>
+    RegistryContainer(std::in_place_type_t<S> t, std::in_place_index_t<EF> i)
+        : CallbackHolder<RefContainerFieldFlag, T, H, V>(t, i),
+          configIndex(static_cast<uint32_t>(EF))
+    {
+        ptr = new T();
+    }
+    ~RegistryContainer() { if (ptr) delete ptr; }
 
     RegistryContainer(const RegistryContainer&) = delete;
     RegistryContainer& operator=(const RegistryContainer&) = delete;
@@ -57,50 +54,43 @@ public:
 
     void init() {
         delete ptr; // the ctor already allocated; don't orphan it
-        delFn = [](T* p) { delete p; };
         ptr = new T();
     }
 
 private:
     T* ptr = nullptr;
-    void(*delFn)(T*) = nullptr;
     uint32_t configIndex;
 };
 
 /**
- * @brief Optional slot-reference field that supports parent-inheritance and explicit unsetting.
+ * @brief Lazily-allocated, resettable slot-reference field inside a `SubRegistry` struct.
  * @ingroup CONFIG
  *
- * An `OptionalRegistryContainer` lives as a field inside a `SubRegistry` struct.
- * It holds one of three states:
- * - An *inherited* reference from a parent scope (state = `INHERIT`),
- * - A locally-set reference (state = `SET`), or
- * - Explicitly un-configured/empty (state = `UNSET`).
- *
- * The `bound()` / `effective()` / `get()` API resolves the correct reference
- * according to the current mask state, mirroring how optional atomic fields 
- * walk the parent chain or return nullopt/throw if completely unconfigured.
- *
- * ## Lifecycle & Ownership
- * `OptionalRegistryContainer` does not own the reference; it holds an `optional` 
- * copy whose destructor decrements the bucket refcount if a local reference is active.
+ * An `OptionalRegistryContainer` owns a heap-allocated `T`, allocated on first
+ * use (`get()`/`assertRegistry()`) rather than at construction, and freeable
+ * again via `reset()`; `hasValue()` reports whether it is currently allocated.
  *
  * @tparam T  Registry struct type of the referenced scope.
+ * @tparam H  Optional applier callback, invoked like other `CallbackHolder` fields.
+ * @tparam V  Optional validator callback, invoked like other `CallbackHolder` fields.
  *
- * @see Reference
  * @see RegistryContainer
  * @see SubRegistry
  */
-template <typename T>
-class OptionalRegistryContainer : public RefContainerFieldFlag
+template <typename T, auto H = nullptr, auto V = nullptr>
+class OptionalRegistryContainer : public OptionalCallbackHolder<OptionalRefContainerFieldFlag, T, H, V>
 {
 public:
     using type = T;
 
     // CONSTRUCTION
 
-    OptionalRegistryContainer() = default;
-    ~OptionalRegistryContainer() { if (delFn) delFn(owned); }
+    template <typename S, auto EF>
+    OptionalRegistryContainer(std::in_place_type_t<S> t, std::in_place_index_t<EF> i)
+        : OptionalCallbackHolder<OptionalRefContainerFieldFlag, T, H, V>(t, i),
+          configIndex(static_cast<uint32_t>(EF))
+    {}
+    ~OptionalRegistryContainer() { reset(); }
 
     OptionalRegistryContainer(const OptionalRegistryContainer&) = delete;
     OptionalRegistryContainer& operator=(const OptionalRegistryContainer&) = delete;
@@ -124,21 +114,18 @@ public:
 
     void reset() noexcept
     {
-        if (delFn) delFn(owned);
+        if (owned) delete owned;
         owned = nullptr;
     }
 
 private:
     void assertRegistry()
     {
-        if (!owned) {
-            delFn = [](T* p) { delete p; };
+        if (!owned)
             owned = new T();
-        }
     }
 
     T* owned = nullptr;
-    void(*delFn)(T*) = nullptr;
     uint32_t configIndex;
 };
 }

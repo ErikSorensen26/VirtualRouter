@@ -37,6 +37,7 @@
 #include "configs/registry/router/BgpRegistry.h"
 #include "configs/registry/router/EigrpInterfaceRegistry.h"
 #include "configs/registry/router/EigrpRegistry.h"
+#include "configs/registry/router/OspfInterfaceRegistry.h"
 #include "configs/registry/router/OspfRegistry.h"
 
 #define REGISTRY_ID_LIST(X) \
@@ -67,6 +68,7 @@
     X(Interface) \
     X(OspfArea) \
     X(OspfIPsec) \
+    X(OspfInterface) \
     X(Ospf)
 
 namespace config
@@ -287,16 +289,29 @@ constexpr void visitField(RegistryIdList<Ts...>, uint16_t registry, uint16_t fie
 /**
  * @brief The tuple schema a field stores; the field itself when it stores none.
  *
- * Only fields holding a list or a value name a node, so the alias has to stay
- * unevaluated for every other kind rather than resolve to a missing member.
+ * ListField names its per-entry type `element`, since it also builds
+ * `std::vector<element>` from it; every other field kind names the same thing
+ * `type`. hasElement is checked first so a ListField (which has both) resolves
+ * to the schema rather than the vector.
  */
 namespace rt
 {
 template <typename FieldT, typename = void>
+inline constexpr bool hasElementV = false;
+template <typename FieldT>
+inline constexpr bool hasElementV<FieldT, std::void_t<typename FieldT::element>> = true;
+
+// Every real field kind has `type`; ListField also has `element`, its
+// per-entry type, which must win since `type` there is std::vector<element>.
+template <typename FieldT, typename = void>
 struct Schema { using type = FieldT; };
 
 template <typename FieldT>
-struct Schema<FieldT, std::void_t<typename FieldT::node>> { using type = typename FieldT::node; };
+struct Schema<FieldT, std::enable_if_t<hasElementV<FieldT>>> { using type = typename FieldT::element; };
+
+template <typename FieldT>
+struct Schema<FieldT, std::enable_if_t<!hasElementV<FieldT>, std::void_t<typename FieldT::type>>>
+{ using type = typename FieldT::type; };
 }
 
 template <typename FieldT>
@@ -479,7 +494,7 @@ constexpr FieldScope resolveScopeAt(RegistryIdList<Ts...> list, uint16_t registr
 {
     FieldScope out;
     visitField(list, registry, field, [&]<typename FieldT>{
-        if constexpr (IsRefContainer<FieldT> || IsOwnedListField<FieldT>)
+        if constexpr (IsRefContainer<FieldT> || IsOptionalRefContainer<FieldT> || IsOwnedListField<FieldT>)
         {
             out.isContainer = true;
             using Child = std::remove_cvref_t<typename FieldT::type>;

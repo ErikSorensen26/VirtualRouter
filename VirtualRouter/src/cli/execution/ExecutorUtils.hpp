@@ -61,7 +61,7 @@ concept TokenWritable =
     && requires (typename Field::type a) { { a != a } -> std::convertible_to<bool>; };
 
 template <typename T>
-struct IsTuple : std::false_type {};
+struct IsTuple : std::bool_constant<config::hasTupleSchemaV<T>> {};
 
 template <typename... Ts>
 struct IsTuple<std::tuple<Ts...>> : std::true_type {};
@@ -492,9 +492,11 @@ struct isOptional<std::optional<T>> : std::true_type {};
 template <size_t I = 0, typename Tuple>
 bool compareTuple(const Tuple& lhs, const Tuple& rhs)
 {
-    if constexpr (I < std::tuple_size_v<Tuple>)
+    using TupleBase = config::TupleBaseOf<Tuple>;
+
+    if constexpr (I < std::tuple_size_v<TupleBase>)
     {
-        using Elem = std::tuple_element_t<I, Tuple>;
+        using Elem = std::tuple_element_t<I, TupleBase>;
 
         if constexpr (isOptional<Elem>::value)
         {
@@ -534,38 +536,22 @@ requires config::IsListField<typename T::Field>
 bool setListEntry(T& field, cli::ContextBase& ctx, typename T::Field::element& tup,
                   uint32_t cmdIdx = config::NO_COMMAND_INDEX)
 {
-    // The stored element, not the schema naming it: the list holds storage, and
-    // a schema-typed list would otherwise compare and insert the wrong type.
     using type = typename T::Field::element;
+
+    auto matches = [&](const type& entry) {
+        if constexpr (IsTuple<type>::value)
+            return compareTuple(entry, tup);
+        else
+            return entry == tup;
+    };
 
     if (ctx.negate || ctx.defaulted)
     {
-        field.withWrite([&](std::vector<type>& entries) -> bool {
-            std::erase_if(entries, [&](const type& entry) {
-                if constexpr (IsTuple<type>::value)
-                    return compareTuple(entry, tup);
-                else
-                    return entry == tup;
-            });
-            return true;
-        }, config::NO_COMMAND_INDEX);
+        field.eraseMatching(matches);
         return true;
     }
 
-    field.withWrite([&](std::vector<type>& list) -> bool {
-        auto it = std::find_if(list.begin(), list.end(), [&](const type& entry) {
-            if constexpr (IsTuple<type>::value)
-                return compareTuple(entry, tup);
-            else
-                return entry == tup;
-        });
-
-        if (it != list.end())
-            *it = tup;
-        else
-            list.push_back(tup);
-        return true;
-    }, cmdIdx);
+    field.addMatching(matches, tup, cmdIdx);
 
     return true;
 }

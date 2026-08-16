@@ -107075,10 +107075,14 @@
                 {
                     "description": "Border Gateway Protocol (BGP)",
                     "name": "bgp",
+                    "config": "Global::VRF_CONFIG",
+                    "deferred": "VRF",
                     "subcommands": [
                         {
                             "description": "Autonomous system number",
                             "name": "<1-4294967295>",
+                            "config": "Vrf::ROUTER_BGP",
+                            "mode": "(config-router)#/bgp",
                             "subcommands": [
                                 {
                                     "description": "",
@@ -107089,6 +107093,8 @@
                         {
                             "description": "Autonomous system number",
                             "name": "<1.0-XX.YY>",
+                            "config": "Vrf::ROUTER_BGP",
+                            "mode": "(config-router)#/bgp",
                             "subcommands": [
                                 {
                                     "description": "",
@@ -107161,11 +107167,13 @@
                 {
                     "description": "Open Shortest Path First (OSPF)",
                     "name": "ospf",
+                    "config": "Global::VRF_CONFIG",
+                    "deferred": "VRF",
                     "subcommands": [
                         {
                             "description": "Process ID",
                             "name": "<1-65535>",
-                            "config": "Global::ROUTER_OSPF",
+                            "config": "Vrf::ROUTER_OSPF",
                             "mode": "(config-router)#/ospf",
                             "subcommands": [
                                 {
@@ -107175,6 +107183,7 @@
                                         {
                                             "description": "VPN Routing/Forwarding Instance (VRF) name",
                                             "name": "WORD",
+                                            "resolver": "VRF",
                                             "subcommands": [
                                                 {
                                                     "description": "",

@@ -1604,8 +1604,7 @@ TEST_F(Internal_EigrpTest, RoutingTable_Duplicate_Route_Prevention)
     types::IPPrefix net{ uint32_t{0xC0A80100}, 24 };
     addNetworkRange(net);
     addNetworkRange(net);
-    size_t networkSize = 0;
-    getConfigs().get<config::Eigrp::NETWORK>().withRead([&](const auto& v) { networkSize = v.size(); });
+    size_t networkSize = getConfigs().get<config::Eigrp::NETWORK>().size();
     EXPECT_EQ(networkSize, 1);
 }
 
@@ -3979,10 +3978,10 @@ TEST_F(Internal_EigrpTest, WideMetrics_LegacyCoexistence_OnSameInterface)
     // A legacy peer must always be encoded with the classic IPv4 TLV
     EXPECT_EQ(legacyNbr->tlvType, TLVType::LEGACY_V4);
 
-    // This process is in classic (non-named) mode, so even a wide-capable IPv4
-    // peer is encoded LEGACY_V4 -- wide encoding is gated on named mode
-    ASSERT_FALSE(eigrpInstance->namedMode);
-    EXPECT_EQ(wideNbr->tlvType, TLVType::LEGACY_V4);
+    // A wide-capable IPv4 peer is encoded WIDE regardless of any process-level
+    // mode -- the format is negotiated per-neighbor from the version TLV each
+    // peer advertised in its own HELLO
+    EXPECT_EQ(wideNbr->tlvType, TLVType::WIDE);
 
     // Routes from each peer land in the same topology entry without one
     // neighbor's encoding disturbing the other's
@@ -4291,37 +4290,19 @@ TEST_F(Internal_EigrpTest, ConditionalReceive_UnknownSequence_RejectedAndArmsPee
 
 TEST_F(Internal_EigrpTest, WideMetrics_ResyncAfterLegacyTeardown)
 {
-    // resync() keys off tlvType, and an IPv4 peer only encodes WIDE when the
-    // process is in named mode -- the fixture's instance is classic
-    auto named = Eigrp(asNumber + 50, types::AddressFamily::IPv4, vrf, true);
-    start(&named);
-    ASSERT_TRUE(named.namedMode);
-
-    interface::MockInterface iface(*global, interface::InterfaceType::GIGABIT_ETHERNET);
-    iface.blockEnqueues();
-    iface.enableIPs();
-    iface.enableShutdown();
-
-    setIPv4(0xC0A80302, 24, &iface);
-
-    uint32_t key = interface::encodeInterfaceKey(interface::InterfaceType::GIGABIT_ETHERNET, 21);
-    iface.configs.key = key;
-    iface.configs.id = 21;
-    vrf->getInterfaceManager().add(&iface, key);
-
-    EigrpInterface* intf = createInterface(&iface, &named);
-    ASSERT_TRUE(intf);
-
+    // resync() keys off tlvType. An IPv4 peer encodes WIDE whenever it
+    // negotiated wide support in its own HELLO, regardless of any
+    // process-level mode -- the fixture's instance is plain classic config.
     types::IPAddress legacyIp = uint32_t{0x0A000071};
     types::IPAddress wideIp   = uint32_t{0x0A000072};
 
-    addNeighbor(legacyIp, Neighbor::Version::LEGACY, intf);
-    addNeighbor(wideIp, Neighbor::Version::WIDE, intf);
+    addNeighbor(legacyIp, Neighbor::Version::LEGACY, eigrpInterface);
+    addNeighbor(wideIp, Neighbor::Version::WIDE, eigrpInterface);
 
-    ASSERT_TRUE(getNeighbor(legacyIp, intf));
-    ASSERT_TRUE(getNeighbor(wideIp, intf));
-    ASSERT_EQ(getNeighbor(legacyIp, intf)->tlvType, TLVType::LEGACY_V4);
-    ASSERT_EQ(getNeighbor(wideIp, intf)->tlvType, TLVType::WIDE);
+    ASSERT_TRUE(getNeighbor(legacyIp));
+    ASSERT_TRUE(getNeighbor(wideIp));
+    ASSERT_EQ(getNeighbor(legacyIp)->tlvType, TLVType::LEGACY_V4);
+    ASSERT_EQ(getNeighbor(wideIp)->tlvType, TLVType::WIDE);
 
     getNTable(intf).resync();
 

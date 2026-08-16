@@ -244,7 +244,7 @@
                                         {
                                             "description": "DoNotAdvertise this range",
                                             "name": "not-advertise",
-                                            "config": "OspfArea::RANGE::nonAdvertise",
+                                            "config": "OspfArea::RANGE::notAdvertise",
                                             "properties": [
                                                 "negate"
                                             ],
@@ -960,7 +960,7 @@
                                         {
                                             "description": "DoNotAdvertise this range",
                                             "name": "not-advertise",
-                                            "config": "OspfArea::RANGE::nonAdvertise",
+                                            "config": "OspfArea::RANGE::notAdvertise",
                                             "properties": [
                                                 "negate"
                                             ],

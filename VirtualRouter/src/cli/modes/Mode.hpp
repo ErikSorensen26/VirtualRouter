@@ -51,16 +51,17 @@
     X(RouterEigrpAddressFamilyV6,       "(config-router-af)#", "eigrp-ipv6") \
     X(RouterEigrpInterfaceV4,           "(config-router-af-interface)#", "eigrp-ipv4") \
     X(RouterEigrpInterfaceV6,           "(config-router-af-interface)#", "eigrp-ipv6") \
-    X(RouterEigrpTopologyV4,            "(config-router-af-topology)#", "eigrp-ipv4") \
-    X(RouterEigrpTopologyV6,            "(config-router-af-topology)#", "eigrp-ipv6") \
 /*Ospf*/ \
     X(RouterOspf,                       "(config-router)#", "ospf") \
     X(RouterOspfv3,                     "(config-router)#", "ospfv3") \
     X(RouterOspfAddressFamilyV4,        "(config-router-af)#", "ospf-ipv4") \
     X(RouterOspfAddressFamilyV6,        "(config-router-af)#", "ospf-ipv6") \
-    X(RouterOspfTopologyV4,             "(config-router-af-topology)#", "ospf-ipv4") \
+    X(RouterOspfInterfaceV4,            "(config-router-af-interface)#", "ospf-ipv4") \
+    X(RouterOspfInterfaceV6,            "(config-router-af-interface)#", "ospf-ipv6") \
 /*Bgp*/ \
     X(RouterBgp,                        "(config-router)#", "bgp") \
+    X(RouterBgpAddressFamilyV4,         "(config-router)#", "bgp-ipv4") \
+    X(RouterBgpAddressFamilyV6,         "(config-router)#", "bgp-ipv6") \
 
 namespace cli
 {

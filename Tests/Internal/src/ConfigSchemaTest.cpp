@@ -175,8 +175,6 @@ TEST(Internal_ConfigSchemaTest, LiveFieldsResolveTheirMembers)
     // resolves to is a std::get into the shape actually held.
     static_assert(std::is_same_v<
         SchemaAt<OspfArea, OspfArea::RANGE>::Tuple, OspfAreaRange::Tuple>);
-    static_assert(std::is_same_v<
-        StorageOf<SchemaAt<OspfArea, OspfArea::RANGE>>, OspfAreaRange::Tuple>);
     SUCCEED();
 }
 
@@ -186,9 +184,6 @@ TEST(Internal_ConfigSchemaTest, FieldWithoutSchemaReportsAbsent)
     static_assert(findTupleMember<SchemaAt<Ospf, Ospf::ROUTER_ID>>(tokenHash("prefix"))
                   == TUPLE_NOT_FOUND);
     static_assert(tupleMemberName<SchemaAt<Ospf, Ospf::ROUTER_ID>>(0).empty());
-
-    // A field with no schema stores what it declared, unchanged.
-    static_assert(std::is_same_v<StorageOf<uint32_t>, uint32_t>);
     SUCCEED();
 }
 }

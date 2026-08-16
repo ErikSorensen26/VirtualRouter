@@ -152,11 +152,10 @@ struct BasicFixture
 using Fixture     = BasicFixture<config::EigrpRegistry>;
 using OspfFixture = BasicFixture<config::OspfRegistry>;
 
-std::vector<config::policy::DistributeList::Tuple> entriesOf(config::EigrpRegistry& reg)
+std::vector<config::policy::DistributeList> entriesOf(config::EigrpRegistry& reg)
 {
-    std::vector<config::policy::DistributeList::Tuple> out;
-    reg.get<config::Eigrp::DISTRIBUTE_LIST_IN>().withRead(
-        [&](const auto& list) { out.assign(list.begin(), list.end()); });
+    std::vector<config::policy::DistributeList> out = 
+        reg.get<config::Eigrp::DISTRIBUTE_LIST_IN>().get();
     return out;
 }
 

@@ -2,10 +2,10 @@
  * @file TreePatch.h
  * @brief Runtime edits layered over the read-only command tree.
  *
- * Some of the grammar is not knowable when @c Commands.json is flattened. Port
- * numbering is the first case: the grammar writes a bare @c "<N>" for an
- * interface number because how many ports exist is a property of the hardware,
- * not of the grammar, and the same binary has to serve every chassis.
+ * Some of the grammar is not knowable when the grammar directory is compiled into
+ * a @c Commands.bin binary. Port numbering is the first case: the grammar writes
+ * a bare @c "<N>" for an interface number because how many ports exist is a property
+ * of the hardware, not of the grammar, and the same binary has to serve every chassis.
  *
  * Baking the answer into the binary would tie the cache to one machine's
  * hardware config, and resolving it at every match site would spread the same

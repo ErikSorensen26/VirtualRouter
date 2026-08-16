@@ -31,9 +31,9 @@
 #include <utility>
 #include <cstddef>
 #include <mutex>
-#include <typeinfo>
 #include <stdexcept>
 #include <RCU.hpp>
+#include <Any.hpp>
 
 #include "RegistryTypes.hpp"
 #include "RegistryDefaultTable.hpp"
@@ -67,8 +67,8 @@ concept IsSubRegistry =
 template <typename T>
 concept IsSubRegistryWrapper =
     requires(T& object) {
-        []<typename ENUM, ApplyFn H, typename... Fields>
-        (SubRegistry<T, ENUM, H, Fields...>&) {}(object);
+        []<typename ENUM, typename... Fields>
+        (SubRegistry<T, ENUM, Fields...>&) {}(object);
     };
 
 template <typename T>
@@ -102,7 +102,9 @@ struct FieldTuple
  * ## Architecture
  * - **Field tuple**: Each enum value corresponds to one field in the tuple
  * - **Inheritance**: Child registries can inherit from parent, with fields masked
- * - **Optional storage**: Fields are stored in `optional<Field>` for lazy initialization
+ * - **Placement-constructed storage**: Fields are non-movable (they hold
+ *   `std::atomic` members), so the tuple is placement-constructed directly
+ *   into raw storage rather than built as a temporary; see @ref makeFields
  * - **Thread-safe**: Mutex protects concurrent field access/modification
  *
  * ## Type requirements
@@ -119,7 +121,7 @@ struct FieldTuple
  *
  * @see RegistryTypes.hpp, RegistryDefaultTable.hpp
  */
-template <typename Base, typename ENUM, ApplyFn H, typename Fields>
+template <typename Base, typename ENUM, typename Fields>
 class SubRegistry : public SubRegistryFlag
 {
 public:
@@ -127,7 +129,6 @@ public:
 
     using sub     = SubRegistry;
     using type    = ENUM;
-    static constexpr ApplyFn applier = H; ///< Callback invoked whenever the effective value changes.
 
     // Meta tuple: used ONLY for compile-time checks / type indexing.
     /// Type alias for the field tuple (for type checking only, not storage).
@@ -140,19 +141,18 @@ public:
 
     SubRegistry()
         : ctxProvider(),
-          fields(),
-          parent(this),
-          parentType(typeid(*this))
+          fields(makeFields(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{})),
+          parent(this)
     {
-        constructFields(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
         installDefaults(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
     }
 
     ~SubRegistry()
     {
         removeMask();
-        for (SubRegistry* sub : derived)
+        for (SubRegistry* sub : std::vector(derived))
             sub->removeMask();
+        std::destroy_at(&fields);
     }
 
     template <ENUM F>
@@ -176,7 +176,7 @@ public:
      *
      * @return Reference to this registry's own context provider.
      */
-    ContextProvider& context() const noexcept { return ctxProvider; }
+    config::Context& context() const noexcept { return ctxProvider; }
 
     /**
      * @brief Returns a typed accessor for the field identified by enum constant `F`.
@@ -319,7 +319,11 @@ public:
     }
 
     /**
-     * TODO add doxy comment
+     * @brief Clears masking against the current parent, if any.
+     *
+     * Resets every `INHERIT`-state field to its own default and unregisters
+     * this registry from its (former) parent's derived list. A no-op if
+     * `inherited` is already `nullptr`.
      */
     void removeMask()
     {
@@ -331,34 +335,44 @@ public:
     }
 
     template <typename P>
-    P& resolveParent()
+    P* resolveParent()
     {
-        if (parentType != typeid(P))
+        if (parent.type() != typeid(P))
             throw std::runtime_error("Parent type mismatch");
-        return *static_cast<P*>(parent);
+        return utils::Any::cast<P*>(parent);
     }
 
-    template <ENUM EF>
-    void runApplier(bool derivedCall = false)
+    template <ENUM EF, typename... Args>
+    void runApplier(bool derivedCall, Args&&... args)
     {
         using F = FieldTypeAt<EF>;
-        if (ctxProvider.hasCtx())
+        if (ctxProvider.hasValue())
         {
             if constexpr (RequiresContext<F>)
-                F::applier(ctxProvider.get());
-            if (applier)
-                applier(ctxProvider.get());
+                getValue<EF>().applierImpl(ctxProvider, std::forward<Args>(args)...);
         }
-        for (SubRegistry* ctx : derived)
+        if constexpr (IsMaskable<F>)
         {
-            if constexpr (IsMaskable<F>)
+            for (SubRegistry* ctx : derived)
             {
                 F& derivedField = ctx->template getValue<EF>();
                 if (derivedCall && derivedField.state.load(std::memory_order_relaxed) != FieldState::INHERIT)
                     continue;
+                ctx->template runApplier<EF>(true, std::forward<Args>(args)...);
             }
-            ctx->template runApplier<EF>(true);
         }
+    }
+
+    template <ENUM EF, typename T>
+    bool runValidator(T& type)
+    {
+        using F = FieldTypeAt<EF>;
+        if constexpr (RequiresValidation<F>)
+        {
+            if (ctxProvider.hasValue())
+                return getValue<EF>().validatorImpl(ctxProvider, type);
+        }
+        return true;
     }
 
     /**
@@ -414,7 +428,7 @@ public:
      *
      * @return Reference to the `ContextProvider` owned by this registry.
      */
-    ContextProvider& getProvider()
+    utils::Any& getProvider()
     {
         return ctxProvider;
     }
@@ -423,6 +437,9 @@ private:
     template <typename T, typename K, auto A, auto V>
     friend class OwnedListField;
 
+    template <IsOwnedListField>
+    friend class OwnedListFieldAccessor;
+
     /**
      * @brief Constructs a root registry with no parent.
      *
@@ -430,14 +447,11 @@ private:
      *
      * @param p Owner of this registry, retained for scope traversal.
      */
-    template <typename P>
-    explicit SubRegistry(P& p) noexcept
+    explicit SubRegistry(utils::Any& p) noexcept
         : ctxProvider(),
-          fields(),
-          parent(&p),
-          parentType(typeid(p))
+          fields(makeFields(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{})),
+          parent(p)
     {
-        constructFields(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
         installDefaults(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
     }
 
@@ -458,14 +472,12 @@ private:
      * @param p Owner of this registry, retained for scope traversal.
      * @param mask Registry of the same type whose values are inherited.
      */
-    template <typename P>
-    SubRegistry(P& p, SubRegistry& mask)
+    SubRegistry(utils::Any& p, SubRegistry& mask)
         : ctxProvider(mask.ctxProvider),
-          fields(),
-          parent(&p),
-          parentType(typeid(p))
+          fields(makeFields(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{})),
+          parent(p),
+          inherited(&mask)
     {
-        constructFields(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
         installDefaults(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
         applyMask(inherited, std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
     }
@@ -475,56 +487,46 @@ private:
     {
         ([&]<size_t Index>() {
             using F = std::tuple_element_t<Index, FieldTuple>;
-            if constexpr (IsRefContainer<F>)
+            if constexpr (IsRefContainer<F> || IsOptionalRefContainer<F>)
                 db.autoInit(std::get<Index>(fields));
         }.template operator()<I>(), ...);
     }
 
-    /// Creates constructor arguments for a field (context/mutex/parent as needed).
-    template <typename F>
-    auto createField()
+    template <typename F, ENUM EF>
+    static auto createField()
     {
-        return std::tuple<>{};
-    }
-
-    /// Creates constructor arguments for a masked field (includes parent field).
-    template <typename F>
-    auto createMaskedField(const F& parentField)
-    {
-        if constexpr (IsListField<F> || IsValueField<F>)
-        {
-            if constexpr (RequiresContext<F>)
-                return std::forward_as_tuple(ctxProvider, mu, parentField);
-            else
-                return std::forward_as_tuple(mu, parentField);
-        }
-        else if constexpr (RequiresContext<F>)
-            return std::forward_as_tuple(ctxProvider, parentField);
-        else
-            return std::forward_as_tuple(parentField);
+        return std::tuple{std::in_place_type<Base>, std::in_place_index<config::toIndex<EF>>};
     }
 
     /**
-     * @brief Constructs all fields (fold expression over index_sequence).
+     * @brief Placement-constructs one field directly into its tuple slot.
      *
-     * The `fields()` member initializer has already default-constructed every
-     * field, so each one must be destroyed before construct_at reconstructs it
-     * in place -- otherwise fields that allocate (RegistryContainer) orphan
-     * their first allocation and leak one payload per field, per registry.
+     * Field types (AtomicField, ListField, OwnedListField, ...) hold `std::atomic`
+     * members, so they are neither copyable nor movable and cannot be built as a
+     * temporary and then placed into the tuple -- each one must be constructed
+     * in its final address to begin with.
+     */
+    template <size_t I>
+    void constructField(FieldTuple* tup)
+    {
+        using F = std::tuple_element_t<I, FieldTuple>;
+        F* slot = &std::get<I>(*tup);
+        std::apply(
+            [&](auto&&... args) { std::construct_at(slot, std::forward<decltype(args)>(args)...); },
+            createField<F, static_cast<ENUM>(I)>());
+    }
+
+    /**
+     * Placement-constructs `fieldStorage` as a `FieldTuple` and binds `fields`
+     * to it, then constructs every element in place. Called from every
+     * constructor's initializer list, before the body runs.
      */
     template <size_t... I>
-    void constructFields(std::index_sequence<I...>) noexcept
+    FieldTuple& makeFields(std::index_sequence<I...>) noexcept
     {
-        ([&]<size_t Index>() {
-            using F = std::tuple_element<Index, FieldTuple>;
-            std::destroy_at(&std::get<Index>(fields));
-            std::apply(
-                [&](auto&&... args) {
-                    std::construct_at(&std::get<Index>(fields), std::forward<decltype(args)>(args)...);
-                },
-                this->template createField<F>()
-            );
-        }.template operator()<I>(), ...);
+        FieldTuple* tup = std::launder(reinterpret_cast<FieldTuple*>(fieldStorage));
+        (constructField<I>(tup), ...);
+        return *tup;
     }
 
     /// Installs default values from RegistryDefaultTable for all AtomicFields.
@@ -569,7 +571,11 @@ private:
     }
 
     /**
-     * TODO add doxy comment
+     * @brief Clears every maskable field's `mask` pointer (fold expression over index_sequence).
+     *
+     * Companion to @ref applyMask, called by the public @ref removeMask() with
+     * `mask` implicitly `nullptr` -- every `INHERIT`-state field then falls
+     * back to its own default rather than a parent's value.
      */
     template <size_t... I>
     void removeMask(std::index_sequence<I...>) noexcept
@@ -585,7 +591,10 @@ private:
     }
 
     /**
-     * TODO add doxy comment
+     * @brief Adds `ctx` to this registry's list of children masking against it.
+     *
+     * Called from @ref setMask when a child newly masks against this registry,
+     * so @ref removeMask() (no-arg, on `this`) knows to cascade to `ctx` too.
      */
     void registerDerived(SubRegistry* ctx)
     {
@@ -593,7 +602,11 @@ private:
     }
 
     /**
-     * TODO add doxy comment
+     * @brief Removes `ctx` from this registry's list of children masking against it.
+     *
+     * Called from @ref setMask when a child stops masking against this
+     * registry (re-masked elsewhere, or cleared). `ctx` must currently be
+     * present in `derived`.
      */
     void unregisterDerived(SubRegistry* ctx)
     {
@@ -605,27 +618,23 @@ private:
     }
 
     /// Visit
-    ///
-    /// Hands the callback the accessor rather than the raw field. A raw field
-    /// keeps its storage private to SubRegistry and its own accessor, so a
-    /// visitor holding one could identify the field but not read or write it.
-    /// Is is a constant here, which is what get<> needs and what the runtime
-    /// index alone cannot supply.
     template <typename F, std::size_t... Is>
     void visitImpl(size_t idx, F&& f, std::index_sequence<Is...>)
     {
         ((idx == Is ? (void)f(this->template get<static_cast<ENUM>(Is)>()) : void()), ...);
     }
 
-    /// Context provider for fields requiring external data.
-    mutable ContextProvider ctxProvider;
-    
-    /// Optional storage for all fields (allows lazy initialization).
-    FieldTuple fields;
+    /// Context provider notified by field appliers; see @ref context().
+    mutable utils::Any ctxProvider;
+
+    /// Raw storage the field tuple is placement-constructed into; see @ref fields.
+    alignas(FieldTuple) unsigned char fieldStorage[sizeof(FieldTuple)];
+
+    /// Reference to the field tuple, laundered out of its raw storage above.
+    FieldTuple& fields;
 
     /// Parent pointer, must point to the parent object
-    void* const parent = nullptr;
-    const std::type_info& parentType;
+    utils::Any parent;
     
     /// Pointer to parent registry for field inheritance (nullptr if root).
     SubRegistry* inherited{nullptr};

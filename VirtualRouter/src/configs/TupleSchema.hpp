@@ -10,12 +10,11 @@
  * DEFINE_TUPLE_SCHEMA emits them beside the accessors it already generated.
  *
  * No reverse map is needed to get back. A field declares the schema itself and
- * stores the Tuple the schema names, so the schema stays reachable from the
- * field's own type. Declaring the Tuple directly would lose it: Tuple is
- * structural -- OspfTrafEngInterface and RouteMapMetricRange are both
- * tuple<uint32_t, uint32_t> -- while the schemas naming them are distinct types.
- *
- * @see StorageOf, which is what turns the declared schema into the stored tuple.
+ * stores it directly -- SCHEMA derives from its Tuple (see DEFINE_TUPLE_SCHEMA)
+ * rather than wrapping one, so the field's stored type already is the schema.
+ * Declaring the Tuple directly would lose the name: Tuple is structural --
+ * OspfTrafEngInterface and RouteMapMetricRange are both tuple<uint32_t,
+ * uint32_t> -- while the schemas naming them are distinct types.
  */
 
 // TupleSchema.hpp
@@ -71,23 +70,25 @@ inline constexpr bool hasTupleSchemaV<T, std::void_t<decltype(T::members)>> = tr
 namespace ts
 {
 /**
- * @brief What a field declared with a schema actually stores.
+ * @brief The literal std::tuple<Ts...> a type is, or that a schema derives from.
  *
- * A field names the schema rather than its Tuple so the schema stays reachable
- * from the field's type -- Tuple is structural, and two schemas that happen to
- * share a shape are indistinguishable once it is all that is left. The schema
- * itself holds no members, so what gets stored is the Tuple it names.
+ * tuple_size/tuple_element are keyed on the exact std::tuple<Ts...>
+ * specialization and do not see through inheritance, so code that needs
+ * either trait on a value that might be a schema has to resolve to
+ * TupleBaseOf first. Written as a partial specialization (like @ref Storage) rather than
+ * std::conditional_t, whose branches are both named even when only one is
+ * selected -- fatal for the branch naming T::Tuple when T is a bare tuple.
  */
 template <typename T, typename = void>
-struct Storage { using type = T; };
+struct TupleBase { using type = T; };
 
 template <typename T>
-struct Storage<T, std::enable_if_t<hasTupleSchemaV<T>>> { using type = typename T::Tuple; };
+struct TupleBase<T, std::enable_if_t<hasTupleSchemaV<T>>> { using type = typename T::Tuple; };
 }
 
-/// @brief The stored type for a field declared with a schema; the type itself otherwise.
+/// @brief The literal std::tuple<Ts...> behind T; T itself when T already is one.
 template <typename T>
-using StorageOf = typename ts::Storage<T>::type;
+using TupleBaseOf = typename ts::TupleBase<T>::type;
 
 template <typename T>
 constexpr uint16_t findTupleMember(uint32_t nameHash)
@@ -159,16 +160,18 @@ constexpr TupleResolution resolveTupleSchema(uint32_t typeHash, uint32_t memberH
 #define TS_NAME_ELEM(T, NAME)  std::string_view(#NAME),
 
 #define TS_ACCESSOR_ELEM(T, NAME)                                                         \
-    static TS_TYPE(T)& NAME(Tuple& t) noexcept {                                          \
-        return std::get<static_cast<size_t>(Index::Index_##NAME)>(t); }                   \
-    static const TS_TYPE(T)& NAME(const Tuple& t) noexcept {                              \
-        return std::get<static_cast<size_t>(Index::Index_##NAME)>(t); }
+    TS_TYPE(T)& NAME() noexcept {                                                          \
+        return std::get<static_cast<size_t>(Index::Index_##NAME)>(*this); }                \
+    const TS_TYPE(T)& NAME() const noexcept {                                              \
+        return std::get<static_cast<size_t>(Index::Index_##NAME)>(*this); }
 
 #define DEFINE_TUPLE_SCHEMA(SCHEMA, FIELD_LIST)                                           \
-    struct SCHEMA final {                                                                 \
+    using SCHEMA##_TupleT = decltype(std::tuple_cat(FIELD_LIST(TS_TUPLE_ELEM)             \
+                                          std::declval<std::tuple<>>()));                  \
+    struct SCHEMA final : SCHEMA##_TupleT {                                               \
+        using Tuple = SCHEMA##_TupleT;                                                    \
+        using Tuple::Tuple;                                                               \
         enum class Index : std::size_t { FIELD_LIST(TS_INDEX_ELEM) Count };               \
-        using Tuple = decltype(std::tuple_cat(FIELD_LIST(TS_TUPLE_ELEM)                   \
-                                              std::declval<std::tuple<>>()));             \
         static constexpr size_t count = static_cast<size_t>(Index::Count);                \
         static constexpr std::string_view typeName = std::string_view(#SCHEMA);           \
         static constexpr uint32_t typeHash = config::tokenHash(#SCHEMA);                  \
