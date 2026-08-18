@@ -1,5 +1,6 @@
 /**
  * @file Dhcpv6Relay.h
+ * @brief DHCPv6 relay agent: forwards client/server traffic through helper addresses.
  */
 
 //Dhcpv6Relay.h
@@ -18,9 +19,10 @@ namespace services::dhcp
 // Forward declarations
 
 /**
- * @brief Represents a DHCPv6 relay agent.
+ * @brief DHCPv6 relay agent.
+ * @ingroup SERVICES_DHCP_V6
  *
- * Forwards DHCPv6 packet between clients and servers.
+ * Forwards DHCPv6 packets between clients and servers.
  */
 class DhcpRelayV6
     {
@@ -32,9 +34,6 @@ class DhcpRelayV6
          */
         explicit DhcpRelayV6(interface::Interface* interface);
 
-        /**
-         * @brief Destructor.
-         */
         ~DhcpRelayV6();
 
         /**
@@ -85,9 +84,10 @@ class DhcpRelayV6
         void forwardToHelper(PacketInfo& packet);
 
         /**
-         * @brief Forwards a DHCPv6 packet to the client.
+         * @brief Extracts the client's IPv6 address from a DHCPv6 packet.
          *
-         * @param packet The packet to forward.
+         * @param packet The packet to inspect.
+         * @return The extracted address.
          */
         ByteString extractAddress(PacketInfo& packet) const;
 };

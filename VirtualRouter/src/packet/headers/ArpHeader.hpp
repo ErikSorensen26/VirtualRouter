@@ -1,5 +1,6 @@
 /**
  * @file ArpHeader.hpp
+ * @brief ARP (Address Resolution Protocol) wire-format structure.
  */
 
 // ArpHeader.hpp
@@ -33,11 +34,11 @@ namespace packet
 #pragma pack(push, 1)
 struct ArpHeaderRaw
 {
-    uint8_t hardwareType[2];
-    uint8_t protocolType[2];
-    uint8_t hardwareSize;
-    uint8_t protocolSize;
-    uint8_t opcode[2];
+    uint8_t hardwareType[2];           ///< Network link protocol type (e.g. ARP_HARDWARE_ETHERNET).
+    uint8_t protocolType[2];           ///< Upper-layer protocol for which the ARP request is intended (EtherType).
+    uint8_t hardwareSize;              ///< Length in bytes of a hardware address.
+    uint8_t protocolSize;              ///< Length in bytes of a protocol (logical) address.
+    uint8_t opcode[2];                 ///< Operation being performed (ARP_OPCODE_*).
     uint8_t senderHardwareAddress[6];
     uint8_t senderIpAddress[4];
     uint8_t targetHardwareAddress[6];

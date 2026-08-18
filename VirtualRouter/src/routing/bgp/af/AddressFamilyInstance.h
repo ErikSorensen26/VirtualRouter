@@ -152,7 +152,6 @@ public:
 
     /**
      * @brief Constructs the AFI instance, registers AF-base config, and starts network-command watches.
-     * @ingroup BGP_AF
      *
      * Initialises all RIBs empty. The IGP metric resolver defaults to returning
      * max uint64 (unreachable) until overridden via setIgpMetricResolver. Config
@@ -1445,7 +1444,6 @@ private:
 
     /**
      * @brief MRAI timer callback: flushes deferred NLRIs for one peer.
-     * @ingroup BGP_AF
      *
      * Sets `mraiBypassPeer` so that @ref recomputeAdjRibOut skips the rate-limit check
      * for this peer, then recomputes each pending NLRI. Clears `mraiBypassPeer` once
@@ -1922,7 +1920,6 @@ private:
 public:
     /**
      * @brief Originates the default route (0.0.0.0/0 or ::/0) to a specific peer.
-     * @ingroup BGP_AF
      *
      * Sends a synthesised UPDATE announcing the AFI-appropriate default prefix.
      * The generated path attributes are built locally — no Loc-RIB entry is required.
@@ -2362,7 +2359,6 @@ private:
 
     /**
      * @brief RIB watch callback invoked when a next-hop's best route changes.
-     * @ingroup BGP_AF
      *
      * Called on the RIB's thread. Posts a lambda back to the BGP scheduler that calls
      * @ref onNhtChange with the new reachability state. Returning `false` keeps the
@@ -2643,7 +2639,6 @@ private:
 
     /**
      * @brief RIB watch callback for network-command prefix reachability changes.
-     * @ingroup BGP_AF
      *
      * Invoked on the RIB thread when a watched network prefix appears or disappears.
      * Posts a lambda to the BGP scheduler that calls @ref onNetworkRibChanged with the

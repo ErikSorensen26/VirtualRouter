@@ -1,6 +1,7 @@
 /**
  * @file Ifname.h
  * @brief Helpers to convert between interface names and kernel interface indices.
+ * @ingroup HARDWARE
  */
 
 #ifndef IFNAME_H

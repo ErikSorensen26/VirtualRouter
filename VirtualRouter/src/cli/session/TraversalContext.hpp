@@ -1,6 +1,7 @@
 /**
  * @file TraversalContext.hpp
  * @brief The state of one walk through the command tree, one word at a time.
+ * @ingroup CLI_RUNTIME
  *
  * Parsing a CLI line is a walk: each word selects a node, and the node's
  * children become the candidates for the next word. @ref cli::TraversalContext

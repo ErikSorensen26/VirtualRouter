@@ -1,8 +1,7 @@
 /**
  * @file IcmpHeader.hpp
+ * @brief ICMPv4 wire-format header.
  */
-
-// Icmpv6Header
 
 #ifndef ICMP_HEADER_HPP
 #define ICMP_HEADER_HPP
@@ -20,11 +19,11 @@ namespace packet
 #pragma pack(push, 0)
 struct IcmpHeaderRaw
 {
-    uint8_t type;
-    uint8_t code;
+    uint8_t type;               ///< ICMP message type (e.g. echo request/reply, unreachable).
+    uint8_t code;                ///< Type-specific subcode.
     uint8_t checksum[2];
-    uint8_t identifier[2];
-    uint8_t sequenceNumber[2];
+    uint8_t identifier[2];       ///< Echo request/reply identifier; unused by other types.
+    uint8_t sequenceNumber[2];   ///< Echo request/reply sequence number; unused by other types.
 };
 #pragma pack(pop)
 

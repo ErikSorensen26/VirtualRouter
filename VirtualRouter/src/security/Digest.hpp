@@ -1,6 +1,7 @@
 /**
  * @file Digest.hpp
  * @brief Stateless non-cryptographic hashing helpers (content hashing, cache
+ * @ingroup SECURITY
  *        staleness checks) — the security::digest counterpart to
  *        security::authentication's HMAC helpers in Encryption.hpp.
  */

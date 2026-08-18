@@ -48,7 +48,9 @@ class NeighborAf
 public:
     /**
      * @brief Construct for the given AFI/SAFI and owning Neighbor.
+     * @param cfgs   Per-neighbor AF config registry for this family.
      * @param family The address family this object tracks.
+     * @param af     Scope-wide AddressFamilyVariant this neighbor is activated against.
      * @param parent The Neighbor that owns this NeighborAf.
      */
     NeighborAf(config::BgpNeighborRegistry& cfgs, const AfiSafi& family, AddressFamilyVariant& af, Neighbor& parent);

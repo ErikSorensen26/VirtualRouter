@@ -1,5 +1,6 @@
 /**
  * @file DhcpTlvManager.hpp
+ * @ingroup SERVICES_DHCP_V4
  */
 
 // DhcpTLVManager.hpp

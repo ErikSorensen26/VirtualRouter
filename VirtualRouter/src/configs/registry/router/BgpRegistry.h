@@ -253,6 +253,10 @@ DEFINE_TUPLE_SCHEMA(BgpNetwork, BGP_NETWORK_FIELDS);
 
 DEFINE_CONFIG_GROUP(BgpAddressFamily, BGP_ADDRESS_FAMILY_FIELD_LIST)
 
+/**
+ * @brief Per-VRF BGP address-family activation (`address-family ipv4/ipv6 vrf <name>`).
+ * @ingroup BGP
+ */
 #define BGP_AF_VRF_LIST(X, Y) \
     VALUE_FIELD(X, Y, VRF, std::string) \
     OPTIONAL_REGISTRY_CONTAINER_CB(X, Y, IPV4_UNICAST, BgpAddressFamilyRegistry) \

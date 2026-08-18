@@ -1,5 +1,6 @@
 /**
  * @file Ospfv2HelloHeader.hpp
+ * @ingroup PACKET_HEADERS_OSPF
  */
 
 // Ospfv2HelloHeader

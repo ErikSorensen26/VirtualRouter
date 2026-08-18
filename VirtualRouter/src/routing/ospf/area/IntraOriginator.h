@@ -39,10 +39,6 @@ class Neighbor;
  * version-specific link-state building logic — how Router LSA links are
  * encoded and how Network LSAs are formed.
  *
- * Each instance contains:
- * - Cache of the last-originated key for Router LSAs (`lastRouterKey`)
- * - The set of interfaces holding an active Network LSA (`networkLsas`)
- *
  * ## Architectural Role
  * `IntraOriginator` sits between the `Area` (which detects topology events and
  * calls `updateInterface`, `fullRefresh`, etc.) and the origination mechanism
@@ -52,10 +48,8 @@ class Neighbor;
  * ## Lifecycle & Ownership
  * Created and owned by the `Area`.  The @ref OriginatorContext reference
  * stored in the protected `context` member must remain valid for the entire
- * lifetime of the IntraOriginator.
- *
- * ## Concurrency Model
- * All methods run on the area's single-threaded `ProcessQueue`.
+ * lifetime of the IntraOriginator. All methods run on the area's
+ * single-threaded `ProcessQueue`.
  *
  * @warning Subclasses must not submit LSAs from outside the area's process
  * queue thread.
@@ -74,7 +68,6 @@ public:
 
     /**
      * @brief Constructs the originator and binds it to its area's origination context.
-     * @ingroup OSPF_AREA
      *
      * Does not originate any LSAs at construction time; the first origination
      * is triggered by the area calling `fullRefresh()` after the process starts.

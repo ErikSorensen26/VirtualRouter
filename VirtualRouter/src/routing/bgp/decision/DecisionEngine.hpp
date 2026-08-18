@@ -26,16 +26,10 @@ class BgpScope;
  *
  * Implements the decision process (RFC 4271 § 9.1): takes candidate routes
  * from Adj-RIB-In, selects best using BestPathComparator, manages equal-cost
- * multipaths, and installs results to Loc-RIB and routing table.
+ * multipaths, and installs results to Loc-RIB and routing table. Owned by
+ * BgpScope and thread-safe only under that scope's single-threaded scheduler
+ * pattern.
  *
- * ## Lifecycle
- * Owned by BgpScope. Created during scope initialization and destroyed
- * with the scope.
- *
- * ## Concurrency Model
- * Thread-safe if BgpScope is single-threaded (scheduler pattern).
- *
- * @tparam N NLRI type (IPv4Prefix, IPv6Prefix, etc.)
  * @see BestPathComparator, AddressFamilyInstance
  */
 class DecisionEngine
@@ -44,6 +38,21 @@ public:
     explicit DecisionEngine(BgpScope& p, BestPathConfig cfg = {})
         : comparator(p, cfg) {}
 
+    /**
+     * @brief Selects the best route among @p canidates and collects its equal-cost multipaths.
+     *
+     * Applies BestPathComparator to find the single best route, then walks the
+     * remaining candidates for routes that are neither better nor worse than the
+     * best (per @ref DecisionEngine::equivalent "equivalent") and adds them as
+     * multipaths, up to @p maxEPaths (eBGP-sourced best) or @p maxIPaths (iBGP-sourced best).
+     *
+     * @param canidates Candidate routes to the same destination; must be non-empty to return a result.
+     * @param maxEPaths Maximum total paths (best + multipaths) when the best route is eBGP.
+     * @param maxIPaths Maximum total paths (best + multipaths) when the best route is iBGP.
+     * @return The selected route with its multipaths, or std::nullopt if @p canidates is empty.
+     *
+     * @tparam N NLRI type (IPv4Prefix, IPv6Prefix, etc.).
+     */
     template <typename N>
     std::optional<LocalRoute<N>> selectBest(std::vector<InboundRoute<N>*>& canidates, size_t maxEPaths, size_t maxIPaths) const
     {
@@ -89,7 +98,14 @@ public:
         return result;
     }
 
-    // Returns all candidates sorted best-first (stable, does not modify input).
+    /**
+     * @brief Returns @p candidates sorted best-first per BestPathComparator.
+     *
+     * Stable sort; ties keep their relative input order. Operates on a copy,
+     * so the caller's vector is left unmodified.
+     *
+     * @tparam N NLRI type (IPv4Prefix, IPv6Prefix, etc.).
+     */
     template <typename N>
     std::vector<InboundRoute<N>*> rankCandidates(std::vector<InboundRoute<N>*> candidates) const
     {
@@ -106,6 +122,9 @@ public:
         return candidates;
     }
 
+    /**
+     * @brief True if neither route is preferable to the other under BestPathComparator.
+     */
     bool equivalent(const InboundRouteBase& lhs, const types::IPAddress& lhsNbr, const InboundRouteBase& rhs, const types::IPAddress& rhsNbr) const
     {
         if (comparator.better(lhs, lhsNbr, rhs, rhsNbr))

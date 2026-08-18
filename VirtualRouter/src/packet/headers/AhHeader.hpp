@@ -1,5 +1,6 @@
 /**
  * @file AhHeader.hpp
+ * @brief IPsec Authentication Header (AH) wire-format structure.
  */
 
 // AhHeader.hpp
@@ -22,11 +23,11 @@ namespace packet
 #pragma pack(push, 1)
 struct AhHeaderRaw
 {
-    uint8_t nextHeader[1];      ///< Next Header field.
-    uint8_t payloadLength[1];    ///< Payload Length field.
-    uint8_t reserved[2];  ///< Reserved field.
-    uint8_t spi[4];       ///< Security Parameters Index (SPI).
-    uint8_t sequence[4];  ///< Sequence Number.
+    uint8_t nextHeader[1];    ///< IP protocol number of the payload following this header.
+    uint8_t payloadLength[1]; ///< AH length in 4-octet words, minus 2.
+    uint8_t reserved[2];      ///< Reserved; must be zero on send, ignored on receive.
+    uint8_t spi[4];           ///< Security Parameters Index (SPI).
+    uint8_t sequence[4];      ///< Anti-replay sequence number.
 };
 #pragma pack(pop)
 

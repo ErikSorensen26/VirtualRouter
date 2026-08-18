@@ -14,13 +14,12 @@ struct TopologyEntry;
 /**
  * @brief Manages process-level summary routes configured via the
  *        @c summary-address command in EIGRP named mode.
+ * @ingroup EIGRP_CORE
  *
  * @c GlobalAggregator tracks which component prefixes are present in the RIB
  * and originates or withdraws the corresponding aggregate entry in the EIGRP
  * topology table when reachability changes.  Auto-summary (classful
  * summarisation at network boundaries) is also controlled here.
- *
- * @ingroup EIGRP_CORE
  */
 class GlobalAggregator
 {

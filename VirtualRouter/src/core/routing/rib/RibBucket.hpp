@@ -1,6 +1,7 @@
 /**
  * @file RibBucket.hpp
  * @brief Per-prefix RIB bucket holding all candidate routes for one prefix.
+ * @ingroup CORE_ROUTING_RIB
  */
 
 #ifndef RIB_BUCKET_HPP

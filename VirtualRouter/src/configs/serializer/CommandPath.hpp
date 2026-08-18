@@ -1,7 +1,7 @@
 /**
  * @file CommandPath.hpp
  * @brief Maps a config field back to the canonical keyword path that writes it.
- * @ingroup CONFIG
+ * @ingroup CONFIG_SERIALIZER
  *
  * Execution goes tree -> field: a matched @c CommandNode carries a configId and
  * writes whatever it names. Serialization needs the other direction -- a field

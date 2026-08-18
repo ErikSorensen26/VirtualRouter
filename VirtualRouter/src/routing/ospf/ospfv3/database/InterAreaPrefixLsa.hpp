@@ -45,9 +45,8 @@ struct InterAreaPrefixLsa
      *
      * @param buf Input buffer.
      * @param len Buffer length.
-     * @return Parsed LSA or nullopt on failure.
-     *
-     * @warning Reserved fields must be zero or parsing fails.
+     * @return Parsed LSA, or nullopt if reserved fields are non-zero or the
+     *         buffer is truncated.
      */
     static std::optional<InterAreaPrefixLsa> build(const uint8_t* buf, uint16_t len)
     {

@@ -1,4 +1,8 @@
-// Token.hpp
+/**
+ * @file Token.hpp
+ * @brief A resolved CLI input token and its placeholder classification.
+ * @ingroup CLI_RUNTIME
+ */
 
 #ifndef TOKEN_HPP
 #define TOKEN_HPP
@@ -16,6 +20,7 @@ namespace utils
 
 /**
  * @brief Pattern category assigned to a token matched against a variable placeholder.
+ * @ingroup CLI_RUNTIME
  *
  * Set on a @ref Token when the parser resolves a user-typed value against a
  * named placeholder in the command tree (e.g. `A.B.C.D`, `LINE`, `<0-255>`).
@@ -62,6 +67,7 @@ inline Pattern matchVolatilePattern(std::string_view p)
 
 /**
  * @brief A single resolved token produced by @ref CliSession::parseInput.
+ * @ingroup CLI_RUNTIME
  *
  * `value` holds the canonical form: for keyword tokens it is the exact name
  * from the command tree (always lower-case); for pattern tokens it is the raw

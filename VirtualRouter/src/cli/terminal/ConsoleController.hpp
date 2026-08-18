@@ -1,6 +1,7 @@
 /**
  * @file ConsoleController.hpp
  * @brief Console control interface: terminal output, colors, and cursor manipulation.
+ * @ingroup CLI_RUNTIME
  *
  * Provides an abstraction for console-level operations including text output,
  * color/styling, cursor positioning, and terminal feature detection.

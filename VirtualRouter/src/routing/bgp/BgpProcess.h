@@ -1,6 +1,7 @@
 /**
  * @file BgpProcess.h
  * @brief Top-level BGP process: one per configured AS, owns a BgpScope per VRF.
+ * @ingroup BGP
  */
 
 #ifndef BGP_PROCESS_H

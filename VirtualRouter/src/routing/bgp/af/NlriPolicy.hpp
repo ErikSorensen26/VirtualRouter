@@ -1,6 +1,7 @@
 /**
  * @file NlriPolicy.hpp
  * @brief Abstract base class template for per-AFI/SAFI NLRI installation policy.
+ * @ingroup BGP_AF
  */
 
 #ifndef BGP_NLRI_POLICY_HPP
@@ -53,7 +54,6 @@ class NlriPolicy
 public:
     /**
      * @brief Constructs the policy with references to the owning VRF and BGP scope.
-     * @ingroup BGP_AF
      * @param v The VRF / platform router that provides the global RIB.
      * @param s The `BgpScope` that owns this address-family instance.
      */

@@ -1,27 +1,7 @@
 /**
  * @file SubRegistry.hpp
  * @brief Hierarchical configuration registry: field storage, inheritance, and masking.
- *
- * Implements a template-based configuration container that manages typed fields
- * organized by an enum index. Supports inheritance hierarchy with field masking
- * (child registries inherit parent values by default). Uses compile-time type
- * checking and optional field values for flexible configuration schemas.
- *
- * ## Features
- * - **Field storage**: Type-safe tuple-based storage for heterogeneous fields
- * - **Inheritance**: Child SubRegistry instances inherit parent field values
- * - **Masking**: Child fields can override parent defaults via optional wrapper
- * - **Context support**: Optional ContextProvider for fields requiring external data
- * - **Thread-safe**: Mutex-guarded access for concurrent configuration updates
- *
- * ## Usage
- * ```cpp
- * enum class MyConfig { TIMEOUT, RETRIES, COUNT };
- * using MyRegistry = SubRegistry<MyConfig,
- *     AtomicField<uint16_t>,
- *     AtomicField<uint8_t>
- * >;
- * ```
+ * @ingroup CONFIG
  */
 
 #ifndef SUB_REGISTRY_HPP

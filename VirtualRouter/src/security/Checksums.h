@@ -1,6 +1,7 @@
 /**
  * @file Checksums.h
  * @brief Packet checksum calculation utilities for protocol header validation.
+ * @ingroup SECURITY
  */
 
 /**

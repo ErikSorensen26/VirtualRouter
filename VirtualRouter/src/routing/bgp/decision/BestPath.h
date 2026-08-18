@@ -42,9 +42,8 @@ struct BestPathConfig
  * 6. Lowest IGP metric to next-hop
  * 7. Oldest route (lowest router ID or peer IP)
  *
- * ## Concurrency Model
- * Thread-safe if BgpScope is not modified concurrently. Intended for use
- * from BgpScope scheduler thread only.
+ * Thread-safe only if BgpScope is not modified concurrently; intended for
+ * use from the BgpScope scheduler thread only.
  *
  * @see BgpScope, DecisionEngine
  */

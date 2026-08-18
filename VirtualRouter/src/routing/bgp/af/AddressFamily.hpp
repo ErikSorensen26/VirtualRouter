@@ -2,6 +2,7 @@
  * @file AddressFamily.hpp
  * @brief Compile-time AFI/SAFI dispatch: maps an `AfiSafi` constant to the
  *        concrete `AddressFamilyInstance` specialisation that handles it.
+ * @ingroup BGP_AF
  */
 
 #ifndef BGP_ADDRESS_FAMILY__HPP
@@ -35,8 +36,8 @@ struct AddressFamilyVariant<std::variant<Ts...>>
 
 /**
  * @brief Walks a `std::variant` of NLRI policy types at compile time to find
- * @ingroup BGP_AF
  *        the one whose `afi` constant matches `AF`.
+ * @ingroup BGP_AF
  *
  * A hard compile-time error is emitted when `AF` is not present in the variant
  * (i.e. the address family has not been registered in the `Nlri` variant).
@@ -66,8 +67,8 @@ struct AddressFamily<AF, std::variant<>>
 
 /**
  * @brief Returns `true` when the compile-time constant `AF` is present in the
- * @ingroup BGP_AF
  *        `std::variant` pointed to by the (unused) pointer argument.
+ * @ingroup BGP_AF
  *
  * @tparam AF   The `AfiSafi` constant to search for.
  * @tparam Ts   The NLRI policy types packed into the variant.
@@ -100,6 +101,7 @@ using AddressFamilyVariant = detail::AddressFamilyVariant<Nlri>::type;
 /**
  * @brief Resolves the `AfiSafi` compile-time constant `AF` to the matching
  *        `AddressFamilyInstance` specialisation.
+ * @ingroup BGP_AF
  *
  * Usage: `AddressFamily<BGP_AFI_IPV4_UNICAST>::type` yields
  * `AddressFamilyInstance<ExampleNlri>` (or whichever policy registered that
@@ -122,6 +124,7 @@ struct AddressFamily
 
 /**
  * @brief Compile-time predicate: `true` when `AF` names a registered address family.
+ * @ingroup BGP_AF
  *
  * @tparam AF  The `AfiSafi` constant to check.
  * @return `true` if the constant is present in the `Nlri` variant; `false` otherwise.

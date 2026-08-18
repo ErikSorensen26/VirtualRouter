@@ -1,5 +1,6 @@
 /**
  * @file IPv6LeaseManager.h
+ * @ingroup SERVICES_DHCP_V6
  */
 
 // IPv6LeaseManager.h

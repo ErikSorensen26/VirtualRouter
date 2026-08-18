@@ -1,6 +1,7 @@
 /**
  * @file Json.hpp
  * @brief A small recursive-descent JSON reader.
+ * @ingroup UTILS
  *
  * Read-only and self-contained: text goes in, a @ref utils::json::JsonNode tree
  * comes out. There is no writer and no mutation API, because the two things this

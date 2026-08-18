@@ -107,4 +107,6 @@ build/TestSelection
 
 ## Further Reading
 
-[ARCHITECTURE.md](ARCHITECTURE.md) — internal design reference covering the RIB/FIB, protocol internals, concurrency model, CLI engine, and config registry.
+[ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) — internal design reference covering the RIB/FIB, protocol internals, concurrency model, CLI engine, and config registry.
+
+[GRAMMAR_SYNTAX.md](docs/architecture/GRAMMAR_SYNTAX.md) — complete JSON syntax reference for the CLI command grammar.

@@ -84,7 +84,7 @@ public:
      * Config-change entry point: called when this interface's
      * `passive-interface` setting is written. Safe to call from any thread.
      *
-     * @params passive whether or not this interface should be set passive
+     * @param passive True to make the interface passive, false to restore normal operation.
      */
     void enqueueSetPassive(bool passive);
 

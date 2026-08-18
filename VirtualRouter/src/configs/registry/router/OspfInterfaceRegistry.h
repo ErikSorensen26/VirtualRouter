@@ -1,6 +1,7 @@
 /**
  * @file OspfInterfaceRegistry.h
  * @brief OSPF interface-specific configuration registry.
+ * @ingroup OSPF
  *
  * Defines per-interface OSPF parameters including area assignment,
  * router timers (hello, dead), cost metric, network type, authentication,
@@ -23,7 +24,7 @@ namespace config
 {
 namespace ospf
 {
-class OspfInterface;
+class OspfInterface; ///< Runtime OSPF interface object bound via this registry's ContextProvider.
 
 #define OSPF_NETWORK_TYPE(X) \
     X(BROADCAST) \
@@ -59,6 +60,10 @@ DEFINE_CONFIG_ENUM_NS(ospf, IPsecAuthType, OSPF_IPSEC_AUTH_TYPE);
 DEFINE_CONFIG_ENUM_NS(ospf, IPsecEncryptType, OSPF_IPSEC_ENCRYPT_TYPE);
 }
 
+/**
+ * @brief Timer/retransmission fields shared between a physical OSPF interface and its virtual links.
+ * @ingroup OSPF
+ */
 #define OSPF_INTERFACE_BASE_FIELD_LIST(X, Y) \
     OPTIONAL_ATOMIC_FIELD_CB(X, Y, DEAD_INTERVAL, uint16_t) \
     OPTIONAL_ATOMIC_FIELD_CB(X, Y, HELLO_INTERVAL, uint16_t) \
@@ -79,6 +84,10 @@ DEFINE_CONFIG_GROUP(OspfInterfaceBase, OSPF_INTERFACE_BASE_FIELD_LIST);
 
 DEFINE_TUPLE_SCHEMA(OspfNeighbor, OSPF_NEIGHBOR_FIELDS);
 
+/**
+ * @brief Per-interface OSPF configuration fields (cost, network type, DR priority, neighbors).
+ * @ingroup OSPF
+ */
 #define OSPF_INTERFACE_FIELD_LIST(X, Y) \
     REGISTRY_CONTAINER(X, Y, BASE, OspfInterfaceBaseRegistry) \
     ATOMIC_FIELD(X, Y, BFD, bool, false) TODO \
@@ -96,6 +105,10 @@ DEFINE_TUPLE_SCHEMA(OspfNeighbor, OSPF_NEIGHBOR_FIELDS);
 
 DEFINE_CONFIG_GROUP(OspfInterface, OSPF_INTERFACE_FIELD_LIST);
 
+/**
+ * @brief Groups the address-family-agnostic base interface config with its IPv4 and IPv6 variants.
+ * @ingroup OSPF
+ */
 #define OSPF_INTERFACE_ADDRESS_FAMILY(X, Y) \
     REGISTRY_CONTAINER(X, Y, BASE, OspfInterfaceRegistry) \
     REGISTRY_CONTAINER(X, Y, IPV4, OspfInterfaceRegistry) \
@@ -103,6 +116,10 @@ DEFINE_CONFIG_GROUP(OspfInterface, OSPF_INTERFACE_FIELD_LIST);
 
 DEFINE_CONFIG_GROUP(OspfInterfaceAddressFamily, OSPF_INTERFACE_ADDRESS_FAMILY)
 
+/**
+ * @brief IPsec (SPI, auth/encryption type and keys) fields for an OSPFv3 interface or virtual link.
+ * @ingroup OSPF
+ */
 #define OSPF_IPSEC_FIELD_LIST(X, Y) \
     OPTIONAL_ATOMIC_FIELD(X, Y, SPI, uint32_t) \
     OPTIONAL_ATOMIC_FIELD(X, Y, AUTHENTICATION_TYPE, ospf::IPsecAuthType) \
@@ -118,6 +135,10 @@ DEFINE_CONFIG_GROUP(OspfIPsec, OSPF_IPSEC_FIELD_LIST);
 
 DEFINE_TUPLE_SCHEMA(OspfMessageDigestKey, OSPF_MESSAGE_DIGEST_KEY);
 
+/**
+ * @brief OSPFv2-style authentication fields (key, message-digest keys) for a global interface config.
+ * @ingroup OSPF
+ */
 #define OSPF_GLOBAL_INTERFACE_BASE_FIELD_LIST(X, Y) \
     ATOMIC_FIELD(X, Y, INSTANCE_ID, uint8_t, 0) \
     OPTIONAL_ATOMIC_FIELD(X, Y, AUTHENTICATION_TYPE, ospf::AuthType) \
@@ -127,6 +148,10 @@ DEFINE_TUPLE_SCHEMA(OspfMessageDigestKey, OSPF_MESSAGE_DIGEST_KEY);
 
 DEFINE_CONFIG_GROUP(OspfGlobalInterfaceBase, OSPF_GLOBAL_INTERFACE_BASE_FIELD_LIST);
 
+/**
+ * @brief Per-interface OSPF process binding: area/process assignment, IPsec, and per-process config.
+ * @ingroup OSPF
+ */
 #define OSPF_GLOBAL_INTERFACE_FIELD_LIST(X, Y) \
     REGISTRY_CONTAINER(X, Y, BASE, OspfInterfaceRegistry) \
     REGISTRY_CONTAINER(X, Y, GLOBAL_BASE, OspfGlobalInterfaceBaseRegistry) \
@@ -142,6 +167,10 @@ DEFINE_CONFIG_GROUP(OspfGlobalInterfaceBase, OSPF_GLOBAL_INTERFACE_BASE_FIELD_LI
 
 DEFINE_CONFIG_GROUP(OspfGlobalInterface, OSPF_GLOBAL_INTERFACE_FIELD_LIST);
 
+/**
+ * @brief Per-interface IPv4/IPv6/default OSPF process bindings, indexed by address family.
+ * @ingroup OSPF
+ */
 #define OSPF_INTERFACE_AF_FIELD_LIST(X, Y) \
     REGISTRY_CONTAINER(X, Y, IPV4, OspfGlobalInterfaceRegistry) \
     REGISTRY_CONTAINER(X, Y, IPV6, OspfGlobalInterfaceRegistry) \
@@ -149,6 +178,10 @@ DEFINE_CONFIG_GROUP(OspfGlobalInterface, OSPF_GLOBAL_INTERFACE_FIELD_LIST);
 
 DEFINE_CONFIG_GROUP(OspfInterfaceAf, OSPF_INTERFACE_AF_FIELD_LIST);
 
+/**
+ * @brief OSPF virtual-link configuration fields (reuses the interface base and authentication schemas).
+ * @ingroup OSPF
+ */
 #define OSPF_VIRTUAL_LINK_FIELD_LIST(X, Y) \
     REGISTRY_CONTAINER(X, Y, GLOBAL_BASE, OspfGlobalInterfaceBaseRegistry) \
     REGISTRY_CONTAINER(X, Y, BASE, OspfInterfaceBaseRegistry)

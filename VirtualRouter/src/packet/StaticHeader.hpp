@@ -19,10 +19,8 @@ namespace packet
  *
  * Wraps a malloc'd buffer containing a packet header. Supports move/copy semantics for
  * header passing between layers. Can extract a typed header object (using @ref get<T>())
- * if the header type provides a static setBuffer() interface.
- *
- * ## Concurrency Model
- * Not thread-safe; intended for single-threaded packet processing chains.
+ * if the header type provides a static setBuffer() interface. Not thread-safe; intended
+ * for single-threaded packet processing chains.
  */
 struct StaticHeader
 {

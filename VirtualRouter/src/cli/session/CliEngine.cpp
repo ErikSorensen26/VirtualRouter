@@ -44,22 +44,8 @@ void CliEngine::clearSessions()
     sessions.clear();
 }
 
-void CliEngine::recoverState() 
+void CliEngine::recoverState()
 {
-    /*// Retrieve the list of saved commands from the JSON recovery system
-    std::vector<std::string> savedCommands = recoverConfigs();
-	CliSession recoverSession(*this);
-
-    // Set initial mode for command recovery
-    recoverSession.changeModeConfig(new cli::GlobalContext(*recoverSession.modeConfig.modeConfig, global, *global.getRoutingInstance(DEFAULT_VRF)));
-    recoverSession.changeMode(CliMode::GlobalConfiguration, true);
-
-    // Execute each saved command to restore the terminal's state
-    for (std::string& command : savedCommands) {
-        recoverSession.initializeProcessingState();
-        recoverSession.executeCommand(command);  // Execute the command
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));  // Add a delay for stability
-    }*/
 }
 
 bool CliEngine::isNumeric(const std::string &input)

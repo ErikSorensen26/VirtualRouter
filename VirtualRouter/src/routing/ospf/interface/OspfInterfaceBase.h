@@ -1,6 +1,6 @@
 /**
- * @file OspfInterfaceBaseBase.h
- * @brief OSPF interface: state machine, neighbor management, and flooding.
+ * @file OspfInterfaceBase.h
+ * @brief Abstract base for OSPF interfaces: shared state machine, neighbor management, and flooding hooks.
  */
 
 /**
@@ -68,10 +68,10 @@ struct LsaHeader;
  * removes the interface from its area's interface list.
  *
  * ## Concurrency Model
- * `dr`, `bdr`, `isDr`, `isBdr`, `isVirtual`, `isMulticast`, `opaqueEnabled`,
- * and `isTransit` (on neighbors) are `std::atomic` because the data plane and
- * the SPF thread may read them concurrently with the control-plane thread that
- * updates them. All state-machine transitions go through the process scheduler.
+ * `opaqueEnabled` and `gracefulRestartInProgress` are `std::atomic` because
+ * the data plane and the SPF thread may read them concurrently with the
+ * control-plane thread that updates them. All state-machine transitions go
+ * through the process scheduler.
  *
  * @warning The `area` reference must remain valid for the entire lifetime of
  * this object. `OspfInterfaceBase` must be destroyed before its owning `Area`.
@@ -87,14 +87,17 @@ public:
 
     /**
      * @brief Constructs an OSPF interface and attaches it to its area.
-     * @ingroup OSPF_INTERFACE
      *
      * Resolves the `Area` reference from the process, selects the correct
      * `PacketDispatcher` subclass (OSPFv2 or OSPFv3), and initialises cost
      * and timer values from @p configs.
      *
+     * @tparam T Config registry type for this interface; instantiated for
+     *           `config::OspfVirtualLinkRegistry` and
+     *           `config::OspfGlobalInterfaceRegistry`.
      * @param proc      The OSPF process that owns this interface.
      * @param id        Composite key (hardware index + area) for this interface.
+     * @param configs   Configuration registry slot to initialise cost and timer values from.
      */
     template <typename T>
     OspfInterfaceBase(OspfProcess& proc, const OspfInterfaceId& id, const T& configs);
@@ -451,16 +454,16 @@ protected:
      * must not add or remove neighbors during iteration.
      */
     template <typename Fn>
-    void forEachNeighbor(Fn&& fn); // NOTE:
+    void forEachNeighbor(Fn&& fn);
 
     /**
      * @brief Const overload of @ref forEachNeighbor for read-only traversal.
      */
     template <typename Fn>
-    void forEachNeighbor(Fn&& fn) const; // NOTE:
+    void forEachNeighbor(Fn&& fn) const;
 
-    InterfaceFlagManager flags; ///< NOTE: Event flags (e.g. DR changed, neighbor state changed).
-    InterfaceFlagManager lsaFlags; ///< NOTE: LSA dirty flags driving re-origination decisions.
+    InterfaceFlagManager flags; ///< Event flags (e.g. DR changed, neighbor state changed).
+    InterfaceFlagManager lsaFlags; ///< LSA dirty flags driving re-origination decisions.
 
     const config::OspfGlobalInterfaceBaseRegistry& globalConfigsBase; ///< Base (version-agnostic) interface config.
     const config::OspfInterfaceBaseRegistry& configsBase;             ///< Version-specific interface config.
@@ -484,12 +487,12 @@ private:
         friend class OspfInterfaceBase;
         friend class ::Internal_OspfTest;
 
-        std::chrono::seconds helloTime;        ///< NOTE: Configured Hello interval.
-        std::chrono::seconds deadTime;         ///< NOTE: Configured Dead interval (must be > helloTime).
+        std::chrono::seconds helloTime;        ///< Configured Hello interval.
+        std::chrono::seconds deadTime;         ///< Configured Dead interval (must be > helloTime).
 
         // AUTH
-        std::optional<__uint128_t> authKey = std::nullopt;  ///< NOTE: Active authentication key bytes; nullopt if no auth.
-        std::optional<uint8_t> authKeyId = std::nullopt;    ///< NOTE: Key ID associated with authKey.
+        std::optional<__uint128_t> authKey = std::nullopt;  ///< Active authentication key bytes; nullopt if no auth.
+        std::optional<uint8_t> authKeyId = std::nullopt;    ///< Key ID associated with authKey.
     } priv;
 };
 } // namespace routing::ospf

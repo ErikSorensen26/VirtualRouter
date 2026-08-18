@@ -90,9 +90,6 @@ public:
      * @c computeNextDelay and posts a timer callback. If an SPF run is already
      * in progress, sets @c reschedule so that a follow-up run is triggered
      * automatically when the current one completes.
-     *
-     * @tparam Policy  Version-specific LSA policy (OSPFv2 or OSPFv3) forwarded
-     *                 to the engine and topology builder.
      */
     void requestSpf();
 
@@ -102,8 +99,6 @@ public:
      * Clears the scheduled flag and, if @c requested is still set, calls
      * @c runSpf. If a reschedule was requested while the run was in progress,
      * immediately calls @c requestSpf again.
-     *
-     * @tparam Policy  LSA policy forwarded to @c runSpf.
      */
     void onSpfTimer();
 
@@ -122,8 +117,7 @@ private:
      * Sets @c spfScheduled and arms the timer identified by @c timerId to fire
      * after @p delayMs milliseconds, at which point @c onSpfTimer is invoked.
      *
-     * @tparam Policy  LSA policy forwarded to the timer callback.
-     * @param  delayMs Delay in milliseconds before the SPF run is allowed to start.
+     * @param delayMs Delay in milliseconds before the SPF run is allowed to start.
      */
     void scheduleSpf(uint32_t delayMs);
 

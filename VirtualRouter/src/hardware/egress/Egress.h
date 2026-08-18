@@ -1,6 +1,7 @@
 /**
  * @file Egress.h
  * @brief Factory function for creating the appropriate egress backend.
+ * @ingroup HARDWARE_EGRESS
  */
 
 #ifndef EGRESS_H

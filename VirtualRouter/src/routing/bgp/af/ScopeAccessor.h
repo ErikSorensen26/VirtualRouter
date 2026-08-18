@@ -3,6 +3,7 @@
  * @brief Friend-based accessor that gives `AddressFamilyInstance` (and other
  *        AF-layer types) controlled access to `BgpScope` internals without
  *        creating a circular include dependency.
+ * @ingroup BGP_AF
  */
 
 #ifndef BGP_SCOPE_ACCESSOR_H

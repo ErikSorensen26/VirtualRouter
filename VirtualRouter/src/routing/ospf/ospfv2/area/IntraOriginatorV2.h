@@ -1,5 +1,5 @@
 /**
- * @file OriginatorV2.h
+ * @file IntraOriginatorV2.h
  * @brief OSPFv2-specific LSA origination: Router LSA, Network LSA, and Summary LSAs.
  */
 

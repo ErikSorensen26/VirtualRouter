@@ -1,14 +1,6 @@
 /**
  * @file Capabilities.hpp
  * @brief BGP session capabilities: multiprotocol, graceful restart, add-path, etc.
- *
- * Defines the Capabilities and NegotiatedCapabilities structures which model
- * the optional features a BGP session can advertise and negotiate. These
- * include multiprotocol support, route refresh, 4-byte ASN, graceful restart,
- * long-lived graceful restart (LLGR), add-path, outbound route filtering (ORF),
- * extended next-hop encoding, labeling, BGPsec, and FQDN.
- *
- * Helper functions provide efficient querying of capabilities per AFI/SAFI.
  */
 
 #ifndef BGP_CAPABILITIES_HPP
@@ -24,17 +16,11 @@ namespace routing::bgp
 
 /**
  * @brief Represents the capabilities advertised by a BGP peer.
+ * @ingroup BGP_SESSION
  *
  * Populated during BGP OPEN message processing. Indicates which optional
- * features the remote or local peer supports.
- *
- * ## Lifecycle
- * Constructed during session negotiation and used to determine enabled
- * features during the session.
- *
- * ## Invariants
- * - AFI/SAFI lists contain no duplicates.
- * - Boolean flags reflect support for specific protocol features.
+ * features the remote or local peer supports. AFI/SAFI lists are expected
+ * to contain no duplicates.
  */
 struct Capabilities
 {
@@ -124,7 +110,6 @@ struct Capabilities
 
     /**
      * @brief Checks if a given AFI/SAFI is supported by the peer.
-     * @ingroup BGP_SESSION
      *
      * @param fam Address family to check.
      * @return True if the peer supports this AFI/SAFI.
@@ -150,13 +135,12 @@ struct Capabilities
 
 /**
  * @brief Represents the actual negotiated capabilities for a BGP session.
+ * @ingroup BGP_SESSION
  *
  * Populated after OPEN message exchange and negotiation. Indicates which
  * features are enabled for the session and includes per-family data for
- * add-path, graceful restart, LLGR, and ORF.
- *
- * ## Lifecycle
- * Used by session FSM, route advertisement, and timers to determine behavior.
+ * add-path, graceful restart, LLGR, and ORF. Used by the session FSM, route
+ * advertisement, and timers to determine behavior.
  */
 struct NegotiatedCapabilities
 {

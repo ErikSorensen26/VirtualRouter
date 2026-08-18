@@ -1,10 +1,6 @@
 /**
  * @file IntraAreaPrefixLsa.hpp
- * @brief OSPFv3 Intra-Area-Prefix LSA representation and wire-format handling.
- *
- * Defines IntraAreaPrefix and IntraAreaPrefixLsa structures used to model
- * OSPFv3 LSAs advertising IPv6 prefixes within a single area. Supports parsing
- * from buffers, serialization, size calculation, and RFC-compliant checksums.
+ * @brief OSPFv3 Intra-Area-Prefix LSA body: IPv6 prefixes advertised within a single area.
  */
 
 #ifndef INTRA_AREA_PREFIX_HPP
@@ -20,20 +16,12 @@
 namespace routing::ospf
 {
 /**
- * @brief Represents a single IPv6 prefix entry in an Intra-Area-Prefix LSA.
+ * @brief A single IPv6 prefix entry inside an Intra-Area-Prefix LSA.
  * @ingroup OSPF_V3_DATABASE
  *
- * Contains the prefix length, metric, and option flags. Flags encode:
- * No-Unicast, Local Address, Multicast, and Propagate behaviors.
- *
- * ## Architectural Role
- * Mirrors RFC-defined LSA prefix structure. Used by IntraAreaPrefixLsa to
- * build full LSA payloads.
- *
- * ## Lifecycle & Ownership
- * Lightweight value type. Fully owned by the LSA container; safe to copy.
- *
- * @warning Metric and option flags must comply with RFC constraints.
+ * Holds the prefix length, metric, and option flags (No-Unicast, Local
+ * Address, Multicast, Propagate) for one prefix. A lightweight value type
+ * owned by the containing IntraAreaPrefixLsa's prefix vector.
  */
 struct IntraAreaPrefix
 {
@@ -41,50 +29,11 @@ struct IntraAreaPrefix
     uint16_t metric;           ///< Cost to reach this prefix.
     types::IPv6Prefix prefix;  ///< IPv6 prefix and length.
 
-    /**
-     * @brief Sets or clears the No-Unicast flag (bit 7).
-     *
-     * Controls whether the prefix is allowed for unicast routing.
-     *
-     * @param val True to set, false to clear.
-     */
-    void setNoUnicast(bool val) { utils::setBit(&options, 7, val); }
+    void setNoUnicast(bool val) { utils::setBit(&options, 7, val); }    ///< Sets the NU (no-unicast) prefix option bit.
+    void setLocalAddress(bool val) { utils::setBit(&options, 6, val); } ///< Sets the LA (local address) prefix option bit.
+    void setMulticast(bool val) { utils::setBit(&options, 5, val); }    ///< Sets the MC (multicast) prefix option bit.
+    void setPropagate(bool val) { utils::setBit(&options, 4, val); }    ///< Sets the P (propagate, NSSA) prefix option bit.
 
-    /**
-     * @brief Sets or clears the Local Address flag (bit 6).
-     *
-     * Indicates if the prefix is associated with a local interface.
-     *
-     * @param val True to set, false to clear.
-     */
-    void setLocalAddress(bool val) { utils::setBit(&options, 6, val); }
-
-    /**
-     * @brief Sets or clears the Multicast flag (bit 5).
-     *
-     * Marks the prefix for multicast eligibility.
-     *
-     * @param val True to set, false to clear.
-     */
-    void setMulticast(bool val) { utils::setBit(&options, 5, val); }
-
-    /**
-     * @brief Sets or clears the Propagate flag (bit 4).
-     *
-     * Determines whether the prefix should be propagated to other routers.
-     *
-     * @param val True to set, false to clear.
-     */
-    void setPropagate(bool val) { utils::setBit(&options, 4, val); }
-
-    /**
-     * @brief Compares two prefixes for equality.
-     *
-     * Checks options, metric, and prefix fields.
-     *
-     * @param rhs Prefix to compare.
-     * @return True if identical, false otherwise.
-     */
     bool operator==(const IntraAreaPrefix& rhs) const noexcept
     {
         return options == rhs.options &&
@@ -94,22 +43,13 @@ struct IntraAreaPrefix
 };
 
 /**
- * @brief Represents an OSPFv3 Intra-Area-Prefix LSA containing multiple prefixes.
+ * @brief OSPFv3 Intra-Area-Prefix LSA body: IPv6 prefixes attached to a router,
+ * transit network, or stub link within a single area.
  * @ingroup OSPF_V3_DATABASE
  *
- * Contains referenced LSA type, Link State ID, advertising router, and a vector
- * of IntraAreaPrefix entries. Supports parsing, serialization, size calculation,
- * and RFC-compliant checksums.
- *
- * ## Architectural Role
- * Forms the complete payload of an Intra-Area-Prefix LSA for flooding and
- * database storage. Works with checksum routines to ensure protocol compliance.
- *
- * ## Lifecycle & Ownership
- * Constructed via `build()` or manually populated. Owns its vector of prefixes;
- * no external references retained.
- *
- * @warning Truncated buffers or malformed prefixes cause parsing to fail.
+ * Identifies the LSA (Router or Network) that these prefixes are attached to
+ * via @ref referencedLsaType, @ref referencedLinkStateId, and
+ * @ref referencedAdvRouter, followed by the owned vector of prefix entries.
  */
 struct IntraAreaPrefixLsa
 {
@@ -197,13 +137,7 @@ struct IntraAreaPrefixLsa
         return true;
     }
 
-    /**
-     * @brief Computes the total serialized size of the LSA.
-     *
-     * Includes 12-byte header plus size of all contained prefixes.
-     *
-     * @return Length in bytes needed for serialization.
-     */
+    /// Serialised size in bytes: fixed 12-byte header plus each prefix's 4-byte header and prefix bytes.
     inline uint16_t size() const
     {
         uint16_t len = 12;
@@ -214,13 +148,7 @@ struct IntraAreaPrefixLsa
         return len;
     }
 
-    /**
-     * @brief Appends LSA fields to a Fletcher checksum.
-     *
-     * Used to validate integrity before transmission or storage.
-     *
-     * @param check Checksum object to which fields are added.
-     */
+    /// Folds this LSA body's fields into @p check for OSPF LSA checksum computation.
     void appendChecksum(ChecksumFletcher& check) const
     {
         check.addU16(static_cast<uint16_t>(prefixes.size()));

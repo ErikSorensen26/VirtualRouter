@@ -1,7 +1,8 @@
 /**
  * @file HeaderHelpers.hpp
+ * @brief Macros that generate the buffer-binding boilerplate shared by all wire-format headers.
+ * @ingroup PACKET
  */
-
 
 #ifndef HEADER_HELPER_HPP
 #define HEADER_HELPER_HPP
@@ -12,6 +13,12 @@
 #include <Likely.hpp>
 #include <ByteUtils.hpp>
 
+/**
+ * @def DEFINE_PACKET_HEADER
+ * Generates the accessor boilerplate for a header with a variable-length trailer (options,
+ * TLVs, payload): binds to a buffer, parses with a caller-supplied total header size, and
+ * tracks the trailing bytes separately from the fixed `RAWTYPE` prefix.
+ */
 #define DEFINE_PACKET_HEADER(RAWTYPE)                                                               \
     using RawType = RAWTYPE;                                                                        \
     inline static constexpr size_t fixedSize = sizeof(RawType);                                     \
@@ -67,7 +74,11 @@
                                                                                                     \
     size_t size() const { return trailing.size() + fixedSize; }
 
-
+/**
+ * @def DEFINE_FIXED_HEADER
+ * Generates the accessor boilerplate for a header with no variable-length trailer: binds to
+ * a buffer and parses using only `sizeof(RAWTYPE)`.
+ */
 #define DEFINE_FIXED_HEADER(RAWTYPE)                                                                \
     static constexpr size_t fixedSize = sizeof(RAWTYPE);                                            \
     RAWTYPE* raw = nullptr;                                                                         \

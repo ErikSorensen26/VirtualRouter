@@ -44,8 +44,8 @@ class Neighbor;
  * additional locking.
  *
  * ## Lifecycle & Ownership
- * Created inside `DualEngine` at process construction.  Both `base` and
- * `scheduler` references must outlive this object.
+ * Created inside `DualEngine` at process construction.  The `process`
+ * reference must outlive this object.
  *
  * @see DualEngine
  * @see OutgoingQuery

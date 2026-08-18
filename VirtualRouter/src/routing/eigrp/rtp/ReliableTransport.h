@@ -83,8 +83,8 @@ public:
 
     /**
      * @brief Aggregates the received EIGRP packet header, source IP, parsed TLV
-     * @ingroup EIGRP_RTP
      *        options, and resolved neighbor pointer for a single incoming packet.
+     * @ingroup EIGRP_RTP
      *
      * Constructed on the stack in @ref handleIncoming and passed by reference
      * into each `process*` handler so they share a single parsed context without
@@ -94,7 +94,6 @@ public:
     {
         /**
          * @brief Constructs from the wire-decoded header and the IP source address.
-         * @ingroup EIGRP_RTP
          *
          * @param eigrp      Reference to the parsed EIGRP common header.
          * @param neighborIp Source IP of the packet; used to look up the neighbor.
@@ -440,6 +439,7 @@ public:
 
     /**
      * @brief Per-packet metric and format metadata computed once at send time.
+     * @ingroup EIGRP_RTP
      *
      * Gathered before packet construction and passed through the `create*`
      * helpers so metric-dependent fields are written only once rather than

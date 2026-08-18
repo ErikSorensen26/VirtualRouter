@@ -86,7 +86,6 @@ struct RouterLsaV2
     uint8_t flags;                   ///< Router flags (bit 0=ASBR, bit 1=ABR, bit 2=Vlink endpoint).
     std::vector<RouterLinkV2> links; ///< Ordered list of link descriptors.
 
-    // Build the LSA
     /**
      * @brief Parses an OSPFv2 Router LSA body from a wire buffer.
      * @param buf Pointer to the start of the LSA body (after the 20-byte LSA header).

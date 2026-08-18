@@ -1,10 +1,6 @@
 /**
  * @file PacketDispatcherV3.h
- * @brief OSPFv3 packet transmission and reception for a single interface.
- *
- * Handles all aspects of OSPFv3 packet building, sending, and reception.
- * Supports Hello, DBD, LSRequest, LSUpdate, and LSAck messages, including
- * neighbor-specific transmission and retransmissions.
+ * @brief OSPFv3-specific packet dispatcher: encode, decode, and send OSPFv3 wire packets.
  */
 
 /**
@@ -33,150 +29,150 @@ class Neighbor;
 class NeighborTable;
 
 /**
- * @brief Dispatches OSPFv3 packets for a specific interface.
+ * @brief OSPFv3 concrete packet dispatcher.
+ * @ingroup OSPF_V3_TRANSMISSION
  *
- * Responsible for packet building, transmission, reception, retransmission,
- * and integration with the neighbor table and LSDB.
+ * Implements all OSPFv3 wire-format encoding and decoding on top of the
+ * @ref PacketDispatcher base. This includes IPv6 link-local addressing, the LLS
+ * Data Block extension (RFC 4813), and all five OSPFv3 packet types.
+ *
+ * ## Architectural Role
+ * One instance is created per OSPFv3 interface by `OspfInterfaceBase` during
+ * initialisation. It delegates LSA body serialisation to the LSA type structs
+ * in `ospfv3/database/`, and calls `transmit()` which hands the finished packet
+ * to the underlying @ref processing::PacketBuilder.
+ *
+ * ## Concurrency Model
+ * All methods run on the owning process's scheduler thread. No locking.
+ *
+ * @see PacketDispatcherV2, PacketDispatcher
  */
 class PacketDispatcherV3 : public PacketDispatcher
 {
     friend class ::Internal_OspfTest;
 public:
     /**
-     * @brief Constructs a PacketDispatcherV3 for a given interface.
+     * @brief Constructs the dispatcher and binds it to an OSPFv3 interface.
      *
-     * Initializes interface reference, base configuration registry, and
-     * interface-specific configuration handles.
-     *
-     * @param iface The interface this dispatcher operates on.
+     * @param iface The OSPFv3 interface that owns this dispatcher.
      */
     PacketDispatcherV3(OspfInterfaceBase& iface);
 
     /**
-     * @brief Handles an incoming OSPFv3 packet.
+     * @brief Dispatches an incoming OSPFv3 packet to the appropriate handler.
      *
-     * Dispatches to the appropriate processing function depending on the
-     * packet type (Hello, DBD, LSRequest, LSUpdate, LSAck).
+     * Called by the ingress path after the outer IPv6 header has been stripped.
+     * Validates the common OSPFv3 header, then routes it to `processHello`,
+     * `processDBD`, `processLSUpdate`, etc.
      *
-     * @param ospfHeader Reference to the parsed OSPFv3 header.
-     * @param neighborIp Pointer to the sender's IP address.
-     * @param multicast True if the packet was received via multicast.
+     * @param ospfHeader  Decoded OSPFv3 common header.
+     * @param neighborIp  Source IPv6 address of the packet.
+     * @param multicast   True if the packet arrived on an AllSPFRouters multicast address.
      */
     void handleIncoming(const packet::Ospfv3Header& ospfHeader, const uint8_t* neighborIp, bool multicast);
 
-    /**
-     * @brief Sends a Hello message on the interface.
-     *
-     * Used for neighbor discovery and DR/BDR election. May be multicast or
-     * unicast depending on context.
-     */
     void sendHello() override;
-
-    /**
-     * @brief Sends a unicast Hello message to a specific neighbor.
-     *
-     * Used when directly addressing a neighbor, typically during adjacency
-     * establishment.
-     *
-     * @param nbr The neighbor to which the Hello is sent.
-     */
     void sendUnicastHello(Neighbor& nbr) override;
-
-    /**
-     * @brief Sends the initial Database Description (DBD) packet to a neighbor.
-     *
-     * Starts the exchange of link-state information after adjacency
-     * establishment.
-     *
-     * @param nbr The neighbor to which the DBD is sent.
-     */
     void sendInitDbd(Neighbor& nbr) override;
-
-    /**
-     * @brief Sends a DBD packet to a neighbor.
-     *
-     * Returns true if the packet was successfully transmitted; false if
-     * the neighbor cannot accept a DBD at this time.
-     *
-     * @param nbr The neighbor to send the DBD to.
-     * @return True if DBD transmission succeeds.
-     */
     bool sendDbd(Neighbor& nbr) override;
-
-    /**
-     * @brief Sends an LSAck message to a neighbor.
-     *
-     * Acknowledges received LSAs to reduce retransmission. Batch of LSA
-     * references is included.
-     *
-     * @param nbr Neighbor to acknowledge LSAs to.
-     * @param records Vector of LSA records being acknowledged.
-     * @return True if transmission succeeds.
-     */
     bool sendLsAck(Neighbor& nbr, std::vector<LsaRecordRef>& records) override;
 
-    /**
-     * @brief Sends an LSRequest message to a neighbor.
-     *
-     * Requests missing LSAs for synchronization.
-     *
-     * @param nbr The neighbor to request LSAs from.
-     * @return True if transmission succeeds.
-     */
     bool sendLsr(Neighbor& nbr) override;
-
-    /**
-     * @brief Sends an LSUpdate message to a neighbor or flood list.
-     *
-     * Used to advertise new or updated LSAs.
-     *
-     * @param nbr Optional neighbor to send unicast; nullptr for flood.
-     * @return True if transmission succeeds.
-     */
     bool sendLsu(Neighbor* nbr) override;
 
-    /**
-     * @brief Handles DBD retransmission timer expiration for a neighbor.
-     *
-     * Retransmits the last DBD packet to ensure reliable database description
-     * delivery.
-     *
-     * @param nbr Neighbor whose timer fired.
-     */
     void onDbdRetransmissionTimer(Neighbor& nbr) override;
 
 private:
-    // Internal helpers and builders...
     void transmit(processing::PacketBuilder& pkt, const types::IPAddress* dest = nullptr) override;
 
+    /**
+     * @brief Finalizes the OSPFv3 common header: sets length and checksum.
+     *
+     * @param hdr     Header to finalize (modified in place).
+     * @param builder Builder positioned just past the payload.
+     * @param lls     True if an LLS Data Block was appended after the OSPF payload.
+     * @param nbr     Target neighbor for a unicast send, or null for multicast; used
+     *                to source the LLS resync/restart bits (multicast never sets resync).
+     */
     void finalizeHeader(packet::Ospfv3Header& hdr, OspfBuilder& builder, bool lls = false, Neighbor* nbr = nullptr);
+
+    /**
+     * @brief Transmits a packet reliably (queues in the retransmission list for `neighbor`).
+     *
+     * @param pkt      Serialized packet.
+     * @param neighbor Target neighbor, or null for multicast.
+     * @param header   Reference to the OSPFv3 header embedded in `pkt` (for sequence stamping).
+     */
     void transmitReliable(processing::PacketBuilder& pkt, Neighbor* neighbor, packet::Ospfv3Header& header);
+
+    /**
+     * @brief Prepares a neighbor for a new DD exchange and builds the outgoing header stub.
+     *
+     * @param neighbor Neighbor entering or re-entering Exchange state.
+     * @param pkt      Header to fill in.
+     * @return True if setup succeeded and the packet should be sent.
+     */
     bool setupDbd(Neighbor& neighbor, packet::Ospfv3Header& pkt);
+
+    /// Returns the effective MTU for this interface, used to bound packet sizes.
     uint16_t getMtu();
 
+    /// Allocates a builder and writes the OSPFv3 common header of the given type.
     std::optional<packet::Ospfv3Header> buildHeader(processing::PacketBuilder& builder, uint8_t type);
+    /// Appends a Hello payload to `builder`; includes LLS block if `lls` is true.
     std::optional<packet::Ospfv3HelloHeader> buildHello(OspfBuilder& builder, bool lls);
+    /// Appends a DBD payload for the given neighbor.
     std::optional<packet::Ospfv3DBDHeader> buildDBD(OspfBuilder& builder, Neighbor& nbr, bool lls);
+    /// Serializes a single LSA header from the LSDB into `builder`.
     std::optional<packet::Ospfv3LSAHeader> buildLSAHeader(OspfBuilder& builder, const LsaKey& key, const LsaRecord& record, bool floodReduction);
+    /// Serializes a verbatim copy of an LSA header (no age recalculation).
     std::optional<packet::Ospfv3LSAHeader> buildCopyLSAHeader(OspfBuilder& builder, const LsaKey& key, const LsaRecord& record);
 
+    /// Builds the full LSR packet for `nbr` and returns the builder on success.
     std::optional<processing::PacketBuilder> buildLSRequest(Neighbor& nbr);
+    /// Builds the full LSU packet for `nbr` (or multicast if null) and returns the builder.
     std::optional<processing::PacketBuilder> buildLSUpdate(Neighbor* nbr);
 
+    /// Appends LS Request entries for outstanding requests from `nbr`.
     size_t addLSRequests(OspfBuilder& builder, Neighbor& nbr);
+    /// Appends LS Update entries from the neighbor's retransmission queue (or multicast queue).
     size_t addLSUpdates(OspfBuilder& builder, Neighbor* nbr);
+    /// Appends LS Acknowledgement entries from `acks`.
     size_t addLSAcks(OspfBuilder& builder, std::span<LsaRecordRef>& acks);
 
+    /// Fills the DD summary list into the builder for the neighbor's current exchange page.
     void buildDescriptions(OspfBuilder& builder, Neighbor& nbr);
+    /// Serializes the body of an LSA record into the builder based on its type field.
     bool buildLSABody(OspfBuilder& builder, const LsaRecord& body, uint16_t type);
 
+    // RECEIVE PATH
+
+    /// Processes an incoming Hello packet from a neighbor or candidate neighbor.
     void processHello(HeaderInfo& info, bool unicast);
+    /// Processes an incoming Database Description packet.
     void processDBD(HeaderInfo& info);
+    /// Processes an incoming LS Acknowledgement packet.
     void processLSAck(HeaderInfo& info);
+    /// Processes an incoming LS Request packet.
     void processLSRequest(HeaderInfo& info);
+    /// Processes an incoming LS Update packet.
     void processLSUpdate(HeaderInfo& info);
+
+    /**
+     * @brief Parses and validates the LLS Data Block that may follow an OSPFv3 packet.
+     *
+     * @param info Parsing context; `offset` is advanced past the LLS block on success.
+     */
     void processLLSDataBlock(PacketDispatcher::HeaderInfo& info);
 
+    /**
+     * @brief Deserializes an LSA body from a raw buffer using the given OSPFv3 LSA function code.
+     *
+     * @param type OSPFv3 LSA type field (function code plus U/S1/S2 bits).
+     * @param buf  Pointer to the LSA body bytes (after the 20-byte LSA header).
+     * @param len  Length of the body in bytes.
+     * @return Populated `LsaBody` variant on success, `std::nullopt` if parsing fails.
+     */
     std::optional<LsaBody> buildLsaBody(uint16_t type, const uint8_t* buf, uint16_t len);
 };
 

@@ -1,6 +1,7 @@
 /**
  * @file CliSession.h
  * @brief Per-user CLI session: command parsing, mode navigation, and execution dispatch.
+ * @ingroup CLI_RUNTIME
  */
 
 #ifndef CLI_SESSION_H

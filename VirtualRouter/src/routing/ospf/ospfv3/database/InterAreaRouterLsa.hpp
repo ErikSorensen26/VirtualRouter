@@ -41,9 +41,7 @@ struct InterAreaRouterLsa
      *
      * @param buf Input buffer.
      * @param len Buffer length (must be 12).
-     * @return Parsed LSA or nullopt on failure.
-     *
-     * @warning Any deviation from fixed format is rejected.
+     * @return Parsed LSA, or nullopt if the length or reserved bytes don't match.
      */
     static std::optional<InterAreaRouterLsa> build(const uint8_t* buf, uint16_t len)
     {

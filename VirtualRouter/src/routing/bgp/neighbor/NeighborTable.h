@@ -89,6 +89,7 @@ public:
      * returns a pointer to the existing entry without modifying it or touching
      * its session.
      *
+     * @param cfgs      Per-neighbor session config registry to bind to the new Neighbor.
      * @param ipAddress Peer IP address; used as the primary key.
      * @return Pointer to the new or existing Neighbor entry.
      */
@@ -183,8 +184,8 @@ public:
      * router ID is known.  Overwrites any previous entry for @p peer.
      *
      * @param peer 32-bit router ID from the peer's OPEN message.
-     * @param session Session object for peers open session.
-     * @return True if the neighbor at @p nbr exists and was indexed; false if
+     * @param sess Session object for the peer's open session.
+     * @return True if a neighbor for @p sess exists and was indexed; false if
      *         no neighbor exists at that address.
      */
     bool activatePeer(uint32_t peer, Session& sess);
@@ -192,7 +193,7 @@ public:
     /**
      * @brief Remove the router-ID-to-neighbor mapping for a peer that went down.
      *
-     * @param session Session that is being de-registered.
+     * @param sess Session that is being de-registered.
      * @return True if the entry existed and was removed; false if not found.
      */
     bool deactivatePeer(Session& sess);

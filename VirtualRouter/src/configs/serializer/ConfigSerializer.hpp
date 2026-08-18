@@ -1,7 +1,11 @@
 /**
  * @file ConfigSerializer.hpp
  * @brief Walks a live registry tree and writes it back out as CLI text.
+ * @ingroup CONFIG_SERIALIZER
+ *
+ * @defgroup CONFIG_SERIALIZER Configuration Serializer
  * @ingroup CONFIG
+ * @brief Reconstructs CLI command text from live registry state (the "show running-config" direction).
  *
  * The inverse of the CLI executor: where @ref cli::execution::Executor turns a
  * parsed line into a config write, this turns the config back into lines that

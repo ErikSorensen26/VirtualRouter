@@ -251,6 +251,9 @@ bool TLVBuilder::encodeDestination(RouteData& data)
     uint8_t prefSize = (plen + 7) / 8;
     if (data.offset + prefSize > data.valueSize) return false;
     data.value[data.offset] = plen; data.offset += 1;
+    // Let T deduce per-branch (uint32_t for v4, __uint128_t for v6) -- pinning
+    // this to <__uint128_t> for the v4 case shifts a 32-bit value as if it
+    // were 128 bits wide, discarding it entirely for any prefSize < 16.
     if (data.v6)
         utils::write(data.value + data.offset, data.r.prefix.v6(), prefSize);
     else

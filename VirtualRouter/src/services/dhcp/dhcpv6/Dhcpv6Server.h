@@ -1,5 +1,6 @@
 /**
  * @file Dhcpv6Server.h
+ * @brief DHCPv6 server: message processing, IPv6/prefix allocation, and lease management.
  */
 
 // Dhcpv6Server.h
@@ -42,7 +43,8 @@ struct InterfaceConfigs
 };
 
 /**
- * @brief Contains dhcpv6 configuration parameters
+ * @brief Server-wide DHCPv6 configuration, shared by every network and interface the server serves.
+ * @ingroup SERVICES_DHCP_V6
  */
 struct Configs
 {
@@ -361,6 +363,7 @@ struct ReconfigureAccepts
 /**
  * @struct ReconfigureState
  * @brief Per-client state tracking an in-flight Reconfigure exchange.
+ * @ingroup SERVICES_DHCP_V6
  */
 struct ReconfigureState
 {
@@ -378,7 +381,7 @@ struct RelayLink
 };
 
 /**
-* @brief Represents a DHCPv6 server.
+* @brief Owns every DHCPv6 network and address/prefix pool the router serves.
 * @ingroup SERVICES_DHCP_V6
 *
 * Handles DHCPv6 message processing (SOLICIT, REQUEST, RELEASE, DECLINE),

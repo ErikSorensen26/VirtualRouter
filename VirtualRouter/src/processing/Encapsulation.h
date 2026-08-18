@@ -1,5 +1,6 @@
 /**
  * @file Encapsulation.h
+ * @ingroup PROCESSING
  */
 
 // Encapsulation.h

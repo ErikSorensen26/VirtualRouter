@@ -127,19 +127,13 @@ public:
     /**
      * @brief A trie node.
      *
-     * ## Lookup hot path (read-side, lock-free)
-     * Only `skipPattern`, `skipMask`, `skipLen`, `best`, and the child array
-     * are touched. All are accessed with acquire semantics or relaxed (when the
-     * node pointer itself was already acquired).
-     *
-     * ## Prefix storage
-     * Inline array for ≤ PREFIX_INLINE entries; heap array beyond that.
-     * Kept sorted at all times.
-     *
-     * ## Child storage
-     * Always dense: `FANOUT` atomic Node* in a heap-allocated ChildArray.
-     * Null slots occupy no extra space beyond the pointer itself.
-     * For small strides (S=4) this is only 128 bytes per node.
+     * The lookup hot path touches only `skipPattern`, `skipMask`, `skipLen`,
+     * `best`, and the child array, all read with acquire semantics (or relaxed
+     * when the node pointer itself was already acquired). Prefixes live in an
+     * inline array up to PREFIX_INLINE entries and a heap array beyond, kept
+     * sorted at all times. Children are always dense: FANOUT atomic Node*
+     * pointers in a heap-allocated ChildArray, with null slots costing nothing
+     * beyond the pointer (128 bytes per node at S=4).
      */
     struct Node
     {

@@ -1,7 +1,7 @@
 /**
  * @file ConfigWriter.hpp
  * @brief Line-oriented output sink for the config serializer, with indent tracking.
- * @ingroup CONFIG
+ * @ingroup CONFIG_SERIALIZER
  *
  * Cisco-style running-config nests by indentation rather than by repeating an
  * `exit` for every mode entered -- `router ospf 1` / `\narea 1 range ...` reads

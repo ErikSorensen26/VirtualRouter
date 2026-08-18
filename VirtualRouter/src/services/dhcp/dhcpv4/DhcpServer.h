@@ -34,13 +34,18 @@ namespace services::dhcp
 {
 struct ClientID;
 
+/**
+ * @brief Which trailer field(s) DHCP options have overflowed into (Option 52).
+ * @ingroup SERVICES_DHCP_V4
+ */
 enum class Overload : uint8_t
 {
     NONE = 0,
-    FILE = 128,
-    SNAME = 64
+    FILE = 128,  ///< Options have overflowed into the `file` field.
+    SNAME = 64   ///< Options have overflowed into the `sname` field.
 };
 
+/** @brief DHCP snooping binding: client MAC/IP tied to the interface it was learned on. */
 struct SnoopingEntry
 {
     uint8_t mac[6];
@@ -49,6 +54,10 @@ struct SnoopingEntry
     std::chrono::steady_clock::time_point expiration;
 };
 
+/**
+ * @brief Server-wide DHCP option and enforcement settings, independent of any one pool.
+ * @ingroup SERVICES_DHCP_V4
+ */
 struct Configs
 {
     //TODO implement all of this
@@ -128,6 +137,13 @@ struct Configs
     } bootp;
 };
 
+/**
+ * @brief Per-network DHCP pool configuration: subnet, options, and metadata for one scope.
+ * @ingroup SERVICES_DHCP_V4
+ *
+ * Non-atomic fields (strings, vectors) are guarded by @c configMutex; atomics may be
+ * read or updated without it.
+ */
 struct DhcpNetworkConfig
 {
     std::atomic<uint8_t> defaultSubnetPrefix;       ///< The default subnet Prefix for the DHCP pool.
@@ -192,6 +208,10 @@ private:
 
 };
 
+/**
+ * @brief Owns the address pool and lease manager for one DHCP network scope.
+ * @ingroup SERVICES_DHCP_V4
+ */
 struct DhcpNetwork
 {
     DhcpNetwork(core::TimeManager& tmgr, dhcp::Configs& configs)
@@ -212,6 +232,7 @@ struct DhcpNetwork
     DhcpNetworkConfig configs;
 };
 
+/** @brief Per-client DHCP authentication state (RFC 3118): shared key, replay counter, enforcement flag. */
 struct DhcpAuthState
 {
     std::string sharedKey;
@@ -219,6 +240,10 @@ struct DhcpAuthState
     bool enforced = false;
 };
 
+/**
+ * @brief Per-client and default DHCP authentication key store, guarded by @c authMutex.
+ * @ingroup SERVICES_DHCP_V4
+ */
 class DhcpAuthManager
 {
 public:
@@ -272,8 +297,12 @@ private:
 
 
 /**
- * @brief Represents a fully functional DHCP server
- * Cabable of managing IP address leases, handling dhcp packets, and supporting relay agents.
+ * @brief DHCPv4 server: owns per-network address pools and handles client/relay DHCP messages.
+ * @ingroup SERVICES_DHCP_V4
+ *
+ * Each entry in @c networks is a separate DHCP scope with its own pool, lease manager,
+ * and configuration. Inbound packets are matched to a network via matchingNetwork() and
+ * dispatched to the appropriate process*() handler based on DHCP message type.
  */
 class DhcpServer
 {

@@ -27,9 +27,9 @@ namespace routing::ospf
  * `OspfInterface` objects within the same `OspfProcess` may share the same
  * `OspfInterfaceId`.
  *
- * ## Lifecycle & Ownership
- * Constructed at interface creation time and stored as a `const` member inside
- * `OspfInterface`. The value never changes for the lifetime of the interface.
+ * Constructed at interface creation time and stored as a `const` member
+ * inside `OspfInterface`; the value never changes for the lifetime of the
+ * interface.
  *
  * @see OspfInterface
  * @see InterfaceManager

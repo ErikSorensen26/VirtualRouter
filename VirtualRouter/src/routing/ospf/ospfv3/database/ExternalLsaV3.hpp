@@ -50,8 +50,6 @@ struct ExternalLsaV3
      * @param buf Input buffer.
      * @param len Buffer length.
      * @return Parsed LSA or nullopt on failure.
-     *
-     * @warning Any size or flag inconsistency aborts parsing.
      */
     static std::optional<ExternalLsaV3> build(const uint8_t* buf, uint16_t len)
     {
@@ -111,9 +109,8 @@ struct ExternalLsaV3
      *
      * @param[out] buf Output buffer.
      * @param len Buffer size.
-     * @return True on success, false if buffer too small.
-     *
-     * @warning referencedLsId must be present if referencedLsType != 0.
+     * @return True on success, false if buffer too small or referencedLsId is
+     *         missing while referencedLsType != 0.
      */
     bool buildBody(uint8_t* buf, uint16_t len) const
     {

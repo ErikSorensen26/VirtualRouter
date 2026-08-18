@@ -1,6 +1,7 @@
 /**
  * @file Xxh3.hpp
  * @brief XXH3-64 non-cryptographic hash, for content hashing and staleness checks.
+ * @ingroup SECURITY
  *
  * Not an authentication primitive — XXH3 is fast and well-distributed but not
  * collision-resistant against an adversary. Use it for things like grammar

@@ -38,8 +38,6 @@ struct OspfRouteChange;
  * ## Lifecycle & Ownership
  * One instance per @ref OspfProcess, constructed with it and living for the
  * whole process lifetime regardless of whether the router currently is an ABR.
- *
- * ## Concurrency Model
  * All methods run on the owning process's single-threaded `ProcessQueue`, so
  * touching per-area origination state from this process-scoped object is safe.
  *

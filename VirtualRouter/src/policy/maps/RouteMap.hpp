@@ -1,5 +1,11 @@
 /**
  * @file RouteMap.hpp
+ * @ingroup POLICY_MAPS
+ */
+
+/**
+ * @defgroup POLICY_MAPS Policy Maps
+ * @brief Route-map policy matching: field selectors, operators, and match/action sequences.
  */
 
 #ifndef ROUTE_MAP_HPP

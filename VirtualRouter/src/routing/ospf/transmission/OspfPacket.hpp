@@ -44,11 +44,9 @@ public:
     UnicastPacket(uint8_t* buf, size_t len, const types::IPAddress& dest)
         : packet(buf, len), destination(dest) {}
 
-    // Default copy constructor and assignment operator
     UnicastPacket(const UnicastPacket&) = default;
     UnicastPacket& operator=(const UnicastPacket&) = default;
 
-    // Default move constructor and move assignment operator
     UnicastPacket(UnicastPacket&&) = default;
     UnicastPacket& operator=(UnicastPacket&&) = default;
 

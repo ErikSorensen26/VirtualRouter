@@ -1,5 +1,6 @@
 /**
  * @file DhcpHeader.hpp
+ * @brief DHCP (RFC 2131) wire-format header, option codes, and TLV option parsing.
  */
 
 // DhcpHeader.hpp
@@ -59,7 +60,7 @@
 #define DHCP_OPTION_TFTP_SERVERS            0x96U ///< DHCP Option for TFTP Servers
 #define DHCP_OPTION_END                     0xFFU ///< DHCP Option End Marker
 
-#define DHCP_MAGIC_COOKIE 0x63825363U //< DHCP Magic Cookie
+#define DHCP_MAGIC_COOKIE 0x63825363U ///< DHCP Magic Cookie
 
 #define DHCP_TIMER_MIN_LEASE_TIME 3600
 #define DHCP_TIMER_MAX_LEASE_TIME 86400
@@ -158,6 +159,17 @@ struct DhcpHeader
         { utils::write<uint32_t>(raw->magicCookie, val); }
 };
 
+/**
+ * @brief Parses a buffer of DHCP TLV options (1-byte type, 1-byte length) into @p outOptions.
+ *
+ * @param data Option buffer to parse.
+ * @param size Length of @p data in bytes.
+ * @param[out] outOptions Parsed options, appended in encounter order.
+ * @param overload When true, stops parsing at a 0x00 pad byte instead of treating it as
+ * a malformed option, per the DHCP Option Overload convention (RFC 2131).
+ * @return True if the buffer was fully consumed (or overload-terminated) with valid
+ * options, false on a truncated or malformed option.
+ */
 inline bool parseDhcpOptions(const uint8_t* data, size_t size, std::vector<TLV8Option>& outOptions, bool overload = false)
 {
     size_t offset = 0;

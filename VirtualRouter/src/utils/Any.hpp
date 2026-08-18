@@ -1,6 +1,7 @@
 /**
  * @file Any.hpp
  * @brief Minimal type-erased, non-owning pointer wrapper (a raw-pointer `std::any`).
+ * @ingroup UTILS
  *
  * Stores a `void*` alongside its `std::type_index` (keyed on the pointer type,
  * e.g. `typeid(T*)`) so it can later be recovered with @ref Any::cast. Holds no

@@ -1,5 +1,6 @@
 /**
  * @file PrefixPool.h
+ * @ingroup SERVICES_DHCP_V6
  */
 
 

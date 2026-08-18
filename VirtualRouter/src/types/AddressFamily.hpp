@@ -1,6 +1,7 @@
 /**
  * @file AddressFamily.hpp
  * @brief Address family (IPv4, IPv6) enumeration and utilities.
+ * @ingroup TYPES
  */
 
 #ifndef ADDRESS_FAMILY_HPP

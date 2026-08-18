@@ -163,23 +163,18 @@ public:
 /**
  * @struct Context
  * @brief Polymorphic base for all CLI mode execution contexts.
+ * @ingroup CLI_MODE_CONTEXTS
  *
- * ## Architectural Role
  * `Context` is the type-erased handle stored in `Executor`'s ping-pong
- * buffer.  Each concrete context subclass extends it with references to the
+ * buffer. Each concrete context subclass extends it with references to the
  * subsystem objects that the commands in that mode need (e.g., `Interface&`,
  * `EigrpProcess*`).
  *
- * ## Lifecycle & Ownership
- * - Created by `Executor::changeMode` using `std::make_unique`.
- * - Owned exclusively by the `Executor` that created it.
- * - Destroyed automatically when the mode slot is overwritten or the session ends.
- *
- * ## Concurrency Model
- * Not thread-safe; all access must occur on the session's thread.
+ * Owned exclusively by the `Executor` that created it (see @ref ContextBase
+ * for the ownership model) and not thread-safe — all access must occur on the
+ * session's thread.
  *
  * @see Executor
- * @ingroup CLI
  */
 template <typename T>
 requires config::IsSubRegistryWrapper<T>

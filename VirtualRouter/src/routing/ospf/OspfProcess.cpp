@@ -107,8 +107,7 @@ OspfProcess::~OspfProcess()
     for (auto& [id, area] : priv.areas)
     {
         area.originContext.cancelAllTimers();
-        // cancel() misses already-fired timers mid-execution; drain them before teardown.
-        area.scheduler.waitIdle();
+        area.scheduler.release();
     }
 
     scheduler.release();

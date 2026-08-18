@@ -63,7 +63,6 @@ class PacketDispatcher
 public:
     /**
      * @brief Constructs the dispatcher and binds it to an interface.
-     * @ingroup OSPF_TRANSMISSION
      *
      * @param iface The OSPF interface that owns this dispatcher.
      */

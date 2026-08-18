@@ -58,6 +58,13 @@ class ControlScheduler;
  * It isolates routing information so that multiple routing contexts can exist in parallel,
  * enabling realistic testing, protocol isolation, and multi-tenant logical topologies.
  *
+ * The VRF owns all of its protocol instances (EIGRP classic and named mode). They
+ * interact with `routingTable` for RIB insertion/removal, with attached interfaces
+ * for neighbor discovery and hello processing, and with Global configuration for
+ * timing and authentication policies. Interface and protocol lifecycle changes are
+ * the slow path; route lookups and adjacency reads happen inside the protocol
+ * modules themselves.
+ *
  * ## Lifecycle & Ownership
  * - Owned and created by the `Global` object.
  * - Interfaces are not owned by VirtualRouter; they are globally allocated, but *attached*
@@ -81,17 +88,6 @@ class ControlScheduler;
  *      Protects EIGRP Named-mode configuration blocks.
  *
  * All public methods that access shared state acquire the appropriate locks.
- *
- * ## Routing Protocol Integration
- * The VRF owns all EIGRP instances (classic mode and named mode).  
- * They interact with:
- * - `routingTable` for RIB insertion/removal
- * - Attached interfaces for neighbor discovery and hello processing
- * - Global configuration for timing and authentication policies
- *
- * ## Fast Path vs. Slow Path
- * - **Slow path**: Creation/destruction of interfaces, protocol instances, VRF-wide config.
- * - **Fast path**: Route lookups and protocol adjacency reads (handled inside protocol modules).
  */
 class VirtualRouter
 {

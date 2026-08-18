@@ -1,6 +1,7 @@
 /**
  * @file Likely.hpp
  * @brief Branch prediction hints: likely() and unlikely() macros.
+ * @ingroup UTILS
  */
 
 #ifndef LIKELY_HPP

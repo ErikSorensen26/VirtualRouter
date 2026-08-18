@@ -1,6 +1,7 @@
 /**
  * @file PacketStructure.h
  * @brief Central include hub and structural types for multi-layer packet parsing and building.
+ * @ingroup PACKET
  *
  * @defgroup PACKET Wire-Format Packet Headers
  * @brief Protocol wire-format struct definitions for Ethernet, IP, TCP, UDP, OSPF, EIGRP, BGP,

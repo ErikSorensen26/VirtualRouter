@@ -1,5 +1,6 @@
 /**
  * @file InterfaceManager.h
+ * @ingroup INTERFACE
  */
 
 // InterfaceManager.h

@@ -1,6 +1,7 @@
 /**
  * @file FileSystem.hpp
  * @brief Filesystem abstraction used for all router persistence.
+ * @ingroup UTILS
  */
 
 #ifndef FILE_SYSTEM_HPP

@@ -1,6 +1,7 @@
 /**
  * @file EigrpInterfaceRegistry.h
  * @brief EIGRP interface-specific configuration registry.
+ * @ingroup EIGRP
  *
  * Defines per-interface EIGRP parameters including metric components
  * (bandwidth, delay, reliability, load, MTU), timers (hello, hold),
@@ -35,6 +36,10 @@ DEFINE_CONFIG_VALUE_ENUM_NS(eigrp, AuthType, EIGRP_AUTH_TYPES, uint16_t);
 
 DEFINE_TUPLE_SCHEMA(EigrpSummaryAddress, EIGRP_SUMMARY_ADDRESS_FIELDS);
 
+/**
+ * @brief Per-interface EIGRP configuration fields (metric weights, timers, passive/summarization).
+ * @ingroup EIGRP
+ */
 #define EIGRP_INTERFACE_FIELD_LIST(X, Y) \
     OPTIONAL_ATOMIC_FIELD(X, Y, ADD_PATHS, uint8_t) \
     VALUE_FIELD(X, Y, AUTHENTICATION_KEYCHAIN, std::string) \

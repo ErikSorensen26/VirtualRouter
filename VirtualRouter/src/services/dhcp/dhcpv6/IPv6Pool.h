@@ -1,5 +1,6 @@
 /**
  * @file IPv6Pool.h
+ * @ingroup SERVICES_DHCP_V6
  */
 
 // IPv6Pool.h

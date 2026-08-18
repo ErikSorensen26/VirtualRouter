@@ -1,7 +1,7 @@
 /**
  * @file ValueFormat.hpp
  * @brief Turns a stored field value back into the token(s) the grammar reads it from.
- * @ingroup CONFIG
+ * @ingroup CONFIG_SERIALIZER
  *
  * Parsing this codebase has always been one-way -- @c CliUtils and
  * @c ExecutorUtils turn CLI text into a typed value, and nothing turns a typed

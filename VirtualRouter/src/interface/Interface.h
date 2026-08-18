@@ -98,25 +98,10 @@ struct InterfaceCreation
  * **No global locks are taken inside the interface** except when notifying
  * routing protocols through the VRF (EIGRP refresh).
  *
- * ## Packet Processing Pipeline
- * Ingress path:
- * ```
- * NIC → RxQueue → processIngress() → inspect() → decapsulate() → processPacket()
- * ```
- *
- * Egress path:
- * ```
- * enqueuePacket() → encapsulate() → qos::TxDistributor → NIC driver
- * ```
- *
- * ## State Machine
- * StateChange:
- * - INITIATE: Bring-up sequence (ARP/NDP/DHCP start)
- * - SHUTDOWN: Tear-down sequence (ARP/NDP/DHCP stop)
- * - IPCHANGE: React to change in IPv4/IPv6 address
- * - IPREMOVAL: React to address deletion
- *
- * These state transitions propagate into the control plane, especially EIGRP.
+ * Packet I/O runs through the hardware queues via processIngress() /
+ * enqueuePacket(), and StateChange transitions (INITIATE, SHUTDOWN, IPCHANGE,
+ * IPREMOVAL) propagate into the control plane, especially EIGRP. See
+ * docs/architecture/ARCHITECTURE.md for the full ingress/egress pipeline.
  *
  * ## Ownership
  * Interface owns:
@@ -158,7 +143,7 @@ public:
     Interface(const InterfaceCreation& cfgs);
 
     /**
-     * @brief Destructor.
+     * @brief Tears down the interface's protocol handlers, HW queues, and VRF membership.
      *
      * Performs full cleanup of:
      * - All dynamic protocol handlers (ARP, NDP, DHCP)

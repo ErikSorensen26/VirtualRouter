@@ -1,4 +1,8 @@
-// Egress.hpp
+/**
+ * @file Egress.hpp
+ * @brief AF_XDP zero-copy TX backend.
+ * @ingroup HARDWARE_EGRESS
+ */
 
 #ifndef EGRESS_HPP
 #define EGRESS_HPP
@@ -20,6 +24,23 @@
 
 namespace hardware::egress
 {
+/**
+ * @brief AF_XDP TX backend: frames carved from a umem area, sent through the kernel TX ring.
+ *
+ * Allocates a umem area split into fixed-size frames, tracks free frames on a
+ * lock-free Treiber stack, and hands completed frames back once the hardware
+ * has transmitted them.
+ *
+ * Single-producer, single-consumer: one thread owns the getFrame()/releaseFrame()
+ * pairing and one owns the send()/reclaim() cycle. The free list and TX ring are
+ * synchronized with acquire/release fences; reclaim() is what returns a frame to
+ * the free list after the consumer index catches up with it.
+ *
+ * @warning frameCount must be a power of two and frameSize must be page-aligned
+ * (ring masking and mmap layout depend on both); send() fails rather than
+ * blocking when the ring is full, and both send() and getFrame() reject indices
+ * outside the frameCount range.
+ */
 class Egress
 {
 public:

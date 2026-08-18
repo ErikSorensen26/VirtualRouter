@@ -132,10 +132,8 @@ CalcResults runLsaCalculations(const LsaHeader& hdr, const LsaKey& key, const Ls
  * Area sits below @ref OspfProcess (which owns all areas) and above individual
  * interfaces (@ref OspfInterfaceBase).  It is the unit of topology isolation in OSPF:
  * LSAs do not cross area boundaries except via ABR summary origination.
- *
- * ## Lifecycle & Ownership
- * Constructed and destroyed by OspfProcess.  Construction registers an aging
- * timer; destruction cancels all timers before the LSDB is torn down.
+ * Constructed and destroyed by OspfProcess; construction registers an aging
+ * timer, and destruction cancels all timers before the LSDB is torn down.
  *
  * ## Concurrency Model
  * All mutable Area state is accessed on the owning OspfProcess scheduler
@@ -156,7 +154,6 @@ public:
 
     /**
      * @brief Constructs an OSPF area.
-     * @ingroup OSPF_AREA
      *
      * Initializes the LSDB, SPF manager, flood manager, origination context,
      * and intra-area originator, then starts the LSA aging timer.
@@ -262,7 +259,8 @@ private:
      */
     template <typename Policy>
     std::optional<Result> processLsa(IncomingLsaContext& ctx, LsaBody& body);
-/**
+
+    /**
      * @brief Processes a received (const body) LSA against the area LSDB.
      *
      * Const overload for callers that cannot give up body ownership.

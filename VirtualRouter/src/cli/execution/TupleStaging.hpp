@@ -1,6 +1,7 @@
 /**
  * @file TupleStaging.hpp
  * @brief Collects the members of a tuple-valued field and writes them as one entry.
+ * @ingroup CLI_PARSER
  *
  * Most commands write a single field, and @ref ExecutorUtils.hpp translates those
  * a token at a time. Tuple fields cannot work that way: `range A.B.C.D cost 100`

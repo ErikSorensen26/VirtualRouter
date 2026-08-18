@@ -1,6 +1,7 @@
 /**
  * @file Storage.h
  * @brief Owns the bytes of a flattened command tree.
+ * @ingroup CLI_RUNTIME
  *
  * Holds its buffer one of two ways: a read-only @c mmap of a cache file, or a
  * heap vector for a tree built in memory. Callers see only @c data() and

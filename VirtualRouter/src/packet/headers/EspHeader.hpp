@@ -1,5 +1,6 @@
 /**
  * @file EspHeader.hpp
+ * @brief ESP (Encapsulating Security Payload) wire-format header.
  */
 
 // EspHeader.hpp
@@ -20,8 +21,8 @@ namespace packet
 #pragma pack(push, 1)
 struct EspHeaderRaw
 {
-    uint32_t spi;
-    uint32_t sequence;
+    uint32_t spi;      ///< Security Parameter Index; identifies the security association.
+    uint32_t sequence; ///< Monotonically increasing anti-replay sequence number.
 };
 #pragma pack(pop)
 

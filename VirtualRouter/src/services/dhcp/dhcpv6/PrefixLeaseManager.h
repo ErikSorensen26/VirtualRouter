@@ -1,5 +1,6 @@
 /**
  * @file PrefixLeaseManager.h
+ * @ingroup SERVICES_DHCP_V6
  */
 
 // PrefixLeaseManager.h

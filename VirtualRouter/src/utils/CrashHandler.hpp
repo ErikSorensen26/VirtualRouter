@@ -1,6 +1,7 @@
 /**
  * @file CrashHandler.hpp
  * @brief Signal handlers that write timestamped crash reports to disk on fatal signals.
+ * @ingroup UTILS
  */
 
 #include <execinfo.h>

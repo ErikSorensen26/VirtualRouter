@@ -34,9 +34,6 @@ struct LsaRecordRef;
  * helpers that the SPF engine, flooding logic, and packet dispatcher use to
  * locate interfaces by address or area reachability.
  *
- * Each instance contains:
- * - `ospfInterfaceList` — flat map of all live OSPF interfaces.
- *
  * ## Architectural Role
  * `InterfaceManager` sits between the `OspfProcess` (which drives configuration
  * changes) and the individual `OspfInterfaceBase` objects (which run the per-link
@@ -266,7 +263,7 @@ public:
     /**
      * @brief Returns an interface's version-specific (OSPFv2/OSPFv3) configuration registry.
      *
-     * Same friend-mediation pattern as @ref getInterfaceBaseConfigs.
+     * Same friend-mediation pattern as @ref getGlobalInterfaceConfigs.
      *
      * @param iface The interface whose config is requested.
      */

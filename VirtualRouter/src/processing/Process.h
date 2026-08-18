@@ -1,6 +1,7 @@
 /**
  * @file Process.h
  * @brief Packet processing pipeline entry point.
+ * @ingroup PROCESSING
  */
 
 /**

@@ -1,12 +1,6 @@
 /**
  * @file OspfInterface.h
- * @brief OSPF interface: state machine, neighbor management, and flooding.
- */
-
-/**
- * @defgroup OSPF_INTERFACE OSPF Interface
- * @ingroup OSPF
- * @brief Per-interface state machine, interface manager, timers, and interface ID types.
+ * @brief Concrete OSPF interface bound to a hardware/logical interface, with DR/BDR election.
  */
 
 #ifndef OSPF_INTERFACE_H
@@ -58,45 +52,19 @@ struct DrCandidate
 };
 
 /**
- * @brief Represents one OSPF-enabled interface within a process and area.
+ * @brief Concrete `OspfInterfaceBase` bound to a real hardware/logical
+ *        interface, with DR/BDR election.
  * @ingroup OSPF_INTERFACE
  *
- * `OspfInterface` is the per-link protocol object. It owns:
- * - `NeighborTable` — the set of OSPF peers discovered on this segment.
- * - `InterfaceTimers` — Hello, Dead, retransmit, and pacing timer management.
- * - `InterfaceFlagManager` (×2) — per-interface event and LSA dirty flags.
- * - `PacketDispatcher*` — constructed during interface initialisation; handles
- *   version-specific packet encoding and multicast/unicast dispatch.
+ * Unlike `VirtualLink`, `OspfInterface` owns a fixed `interface::Interface`
+ * and address (`iface`, `interfaceAddress`) resolved once at construction
+ * rather than re-resolved per transmit, and it is the only subclass that
+ * runs DR/BDR election (RFC 2328 §9.4) via `dr`/`bdr`/`election()`. `dr`,
+ * `bdr`, `isDr`, `isBdr`, and `isMulticast` are `std::atomic` for the same
+ * cross-thread-read reason as the base class's atomics.
  *
- * The interface mirrors the RFC 2328 / RFC 5340 interface data structure and
- * drives the interface state machine (Down → Loopback / Waiting / P2P →
- * DROther / Backup / DR).
- *
- * ## Architectural Role
- * `OspfInterface` is the boundary between the link-layer hardware
- * (`interface::Interface`) and the OSPF protocol engine. Everything above it
- * (flooding, SPF, LSA origination) uses it as a handle for sending packets and
- * querying link parameters. Everything below it (socket, MTU, address) is
- * owned by `interface::Interface`.
- *
- * ## Lifecycle & Ownership
- * Created and stored by `InterfaceManager`. The constructor attaches the
- * interface to its area and allocates the appropriate `PacketDispatcher` (V2
- * or V3 depending on the process AF). The destructor stops all timers and
- * removes the interface from its area's interface list.
- *
- * ## Concurrency Model
- * `dr`, `bdr`, `isDr`, `isBdr`, `isVirtual`, `isMulticast`, `opaqueEnabled`,
- * and `isTransit` (on neighbors) are `std::atomic` because the data plane and
- * the SPF thread may read them concurrently with the control-plane thread that
- * updates them. All state-machine transitions go through the process scheduler.
- *
- * @warning The `area` reference must remain valid for the entire lifetime of
- * this object. `OspfInterface` must be destroyed before its owning `Area`.
- *
- * @see InterfaceManager
- * @see NeighborTable
- * @see InterfaceTimers
+ * @see OspfInterfaceBase for the shared interface contract, lifecycle, and
+ * concurrency model.
  */
 class OspfInterface : public OspfInterfaceBase
 {
@@ -105,7 +73,6 @@ public:
 
     /**
      * @brief Constructs an OSPF interface and attaches it to its area.
-     * @ingroup OSPF_INTERFACE
      *
      * Resolves the `Area` reference from the process, selects the correct
      * `PacketDispatcher` subclass (OSPFv2 or OSPFv3), and initialises cost

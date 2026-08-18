@@ -21,7 +21,7 @@
 #include "interface/configs/InterfaceType.hpp"
 #include "EigrpInterfaceRegistry.h"
 
-namespace routing::eigrp { class Eigrp; }
+namespace routing::eigrp { class Eigrp; } ///< EIGRP process object bound via this registry's ContextProvider.
 
 namespace config
 {
@@ -109,6 +109,10 @@ DEFINE_TUPLE_SCHEMA(EigrpSummaryMetric, EIGRP_SUMMARY_METRIC_FIELDS);
 
 DEFINE_TUPLE_SCHEMA(EigrpWeight, EIGRP_WEIGHT_FIELDS);
 
+/**
+ * @brief Static-neighbor EIGRP configuration fields (used for non-multicast-capable links).
+ * @ingroup EIGRP
+ */
 #define EIGRP_NEIGHBOR_FIELDS(X, Y) \
     OPTIONAL_ATOMIC_FIELD_CB(X, Y, INTERFACE, interface::InterfaceKey) \
     ATOMIC_FIELD(X, Y, MAXIMUM_PREFIX, uint32_t, 0) \
@@ -188,10 +192,10 @@ DEFINE_CONFIG_GROUP(EigrpNeighbor, EIGRP_NEIGHBOR_FIELDS)
 
 DEFINE_CONFIG_GROUP(Eigrp, EIGRP_FIELD_LIST)
 
-void eigrpNamedV4(config::Context&, EigrpRegistry*, std::string&);
-bool eigrpNamedV4Validation(config::Context&, std::string&);
-void eigrpNamedV6(config::Context&, EigrpRegistry*, std::string&);
-bool eigrpNamedV6Validation(config::Context&, std::string&);
+void eigrpNamedV4(config::Context&, EigrpRegistry*, std::string&); ///< Applier for `EigrpNamed::V4_INSTANCES` insert/erase.
+bool eigrpNamedV4Validation(config::Context&, std::string&);      ///< Validator for `EigrpNamed::V4_INSTANCES` keys.
+void eigrpNamedV6(config::Context&, EigrpRegistry*, std::string&); ///< Applier for `EigrpNamed::V6_INSTANCES` insert/erase.
+bool eigrpNamedV6Validation(config::Context&, std::string&);      ///< Validator for `EigrpNamed::V6_INSTANCES` keys.
 
 #define EIGRP_NAMED_FIELD_LIST(X, Y) \
     OPTIONAL_ATOMIC_FIELD(X, Y, AS, uint16_t) \

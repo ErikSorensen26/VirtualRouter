@@ -36,7 +36,6 @@ struct RouteInfo;
  * decoding when a packet is received. No state is held here; every method
  * operates on caller-supplied buffers or option objects.
  *
- * ## Lifecycle & Ownership
  * Not instantiable. All methods are static. Callers own every buffer passed in
  * and every @ref ReceivedRoute returned by @ref decodeRoute.
  *

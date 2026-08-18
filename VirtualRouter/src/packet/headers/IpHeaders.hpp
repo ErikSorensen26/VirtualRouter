@@ -51,17 +51,16 @@ namespace packet
 #pragma pack(push, 1)
 struct IPv4HeaderRaw
 {
-    uint8_t versionAndLength;
+    uint8_t versionAndLength;  ///< Upper 4 bits: IP version. Lower 4 bits: IHL in 32-bit words.
     uint8_t typeOfService;
     uint8_t totalLength[2];
     uint8_t identification[2];
-    uint8_t fragmentFlags[2];
+    uint8_t fragmentFlags[2];  ///< Upper 3 bits of byte 0: reserved/DF/MF flags. Remaining 13 bits: fragment offset.
     uint8_t ttl;
-    uint8_t protocol;
+    uint8_t protocol;          ///< IP protocol number of the payload (see IP_* constants above).
     uint8_t checksum[2];
     uint8_t sourceAddress[4];
     uint8_t destinationAddress[4];
-
 };
 #pragma pack(pop)
 
@@ -132,9 +131,9 @@ struct IPv4Header
 #pragma pack(push, 1)
 struct IPv6HeaderRaw
 {
-    uint8_t versionTrafficFlow[4];
+    uint8_t versionTrafficFlow[4]; ///< Upper 4 bits: version. Next 8 bits: traffic class. Remaining 20 bits: flow label.
     uint8_t payloadLength[2];
-    uint8_t nextHeader;
+    uint8_t nextHeader;            ///< Protocol number of the next header (see IP_* constants above).
     uint8_t hopLimit;
     uint8_t sourceAddress[16];
     uint8_t destinationAddress[16];

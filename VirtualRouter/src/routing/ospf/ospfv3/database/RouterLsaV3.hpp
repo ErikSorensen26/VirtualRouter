@@ -1,11 +1,6 @@
 /**
  * @file RouterLsaV3.hpp
- * @brief OSPFv3 Router LSA representation and wire-format handling.
- *
- * Defines RouterLinkV3 and RouterLsaV3 structures. Supports parsing from
- * wire-format buffers, serialization, size calculation, checksum computation,
- * and equality comparison. Each RouterLinkV3 represents a link advertised by
- * the router.
+ * @brief OSPFv3 Router LSA body and per-link descriptor.
  */
 
 /**
@@ -31,16 +26,13 @@ namespace routing::ospf
 
 
 /**
- * @brief Represents a single link in a Router LSA.
+ * @brief A single link descriptor within an OSPFv3 Router LSA body.
  * @ingroup OSPF_V3_DATABASE
  *
- * Each RouterLinkV3 contains the type, metric, local interface ID, neighbor
- * interface ID, and neighbor router ID.
- *
- * ## Architectural Role
- * Used as a building block by RouterLsaV3 to describe all router-attached links.
- *
- * @warning All IDs must conform to OSPFv3 identifier constraints.
+ * Describes one router-attached link (point-to-point, transit, stub, or
+ * virtual) by type, cost, and the local/neighbor interface and router IDs
+ * that identify it. Used by RouterLsaV3 to enumerate all links a router
+ * advertises.
  */
 struct RouterLinkV3
 {
@@ -84,16 +76,12 @@ struct RouterLinkV3
 
 
 /**
- * @brief Represents an OSPFv3 Router LSA.
+ * @brief Wire-format body of an OSPFv3 Router LSA.
  * @ingroup OSPF_V3_DATABASE
  *
- * Stores router options and a list of advertised links. Supports parsing,
- * serialization, size calculation, checksum computation, and equality checks.
- *
- * ## Lifecycle & Ownership
- * Constructed via `build()` or manually. Owns its links vector; safe to copy.
- *
- * @warning Buffer lengths must match 16-byte link entries during parsing.
+ * Describes all of the originating router's active links within an area.
+ * Stores the 24-bit router options field and the owned vector of
+ * @ref RouterLinkV3 descriptors; equality comparison is order-independent.
  */
 struct RouterLsaV3
 {
@@ -166,24 +154,15 @@ struct RouterLsaV3
         return true;
     }
 
-    /**
-     * @brief Computes the total serialized size of the Router LSA.
-     *
-     * Includes 4-byte header plus 16 bytes per link.
-     *
-     * @return Length in bytes needed for serialization.
-     */
+    /// Serialised size in bytes: `4 + 16 * links.size()`.
     inline uint16_t size() const
     {
         return 4 + static_cast<uint16_t>(16 * links.size());
     }
 
     /**
-     * @brief Appends Router LSA fields to a Fletcher checksum.
-     *
-     * Used to validate integrity before transmission or storage.
-     *
-     * @param check Checksum object to append fields to.
+     * @brief Feeds this LSA body's fields into a Fletcher checksum accumulator.
+     * @param check Checksum accumulator to update.
      */
     void appendChecksum(ChecksumFletcher& check) const
     {

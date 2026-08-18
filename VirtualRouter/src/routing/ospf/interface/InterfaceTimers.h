@@ -69,10 +69,10 @@ public:
     /**
      * @brief Constructs the timer manager for the given interface.
      *
-     * Initialises the scheduler reference from the interface's process queue.
      * No timers are started at construction time.
      *
-     * @param iface  The owning OSPF interface.
+     * @param iface      The owning OSPF interface.
+     * @param scheduler  Scheduler this instance posts all timer callbacks through.
      */
     explicit InterfaceTimers(OspfInterfaceBase& iface, core::ProcessQueue&& scheduler);
 

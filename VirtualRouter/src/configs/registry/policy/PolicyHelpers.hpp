@@ -1,6 +1,7 @@
 /**
  * @file PolicyHelpers.hpp
  * @brief Shared policy types used by more than one routing protocol registry.
+ * @ingroup CONFIG_POLICY
  *
  * Declares the `DistributeListType` config enum and the `DistributeList` tuple
  * schema. These live here rather than in a protocol registry because the

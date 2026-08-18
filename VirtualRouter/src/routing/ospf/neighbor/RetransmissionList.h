@@ -72,14 +72,14 @@ class RetransmissionList
 public:
     /**
      * @brief Constructs the retransmission list.
-     * @ingroup OSPF_NEIGHBOR
      *
      * Stores references to the process and interface so that
      * `getMaxRetransmission()` can consult the correct config registers at
      * retransmit time rather than caching a value that may change.
      *
-     * @param iface    The interface this list belongs to (provides
-     *                 demand-circuit status).
+     * @param iface  The interface this list belongs to (provides
+     *               demand-circuit status).
+     * @param cfgs   OSPF configuration registry supplying retransmit limits.
      */
     RetransmissionList(OspfInterfaceBase& iface, const config::OspfRegistry& cfgs)
         : iface(iface), processCfgs(cfgs)

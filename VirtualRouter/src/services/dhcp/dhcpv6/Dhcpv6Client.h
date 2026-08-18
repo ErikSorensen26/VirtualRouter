@@ -1,5 +1,6 @@
 /**
  * @file Dhcpv6Client.h
+ * @brief DHCPv6 client: SOLICIT/REQUEST/RENEW/REBIND/RELEASE state machine for one interface.
  */
 
 // Dhcpv6Client.h
@@ -88,11 +89,12 @@ struct IAOptions
     std::vector<IAPrefixRequest> pds;
 };
 
-    /**
-     * @brief Represents a DHCPv6 client.
-     *
-     * Handles sending DHCPv6 SOLICIT and REQUEST messages and processing responses.
-     */
+/**
+ * @brief DHCPv6 client bound to one interface; drives the SOLICIT/REQUEST exchange and IA lifecycle.
+ * @ingroup SERVICES_DHCP_V6
+ *
+ * Handles sending DHCPv6 SOLICIT and REQUEST messages and processing responses.
+ */
 class Dhcpv6Client 
 {
 public:
@@ -105,9 +107,6 @@ public:
      */
     Dhcpv6Client(interface::Interface* currentInterface);
 
-    /**
-     * @brief Destructor to clean up threads and resources.
-     */
     ~Dhcpv6Client();
 
     void initiate();

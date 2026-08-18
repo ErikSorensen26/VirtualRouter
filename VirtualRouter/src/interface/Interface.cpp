@@ -255,6 +255,12 @@ void Interface::markAddressDuplicate(types::IPv6Prefix address)
     }
     else
     {
+        // Mark the address invalid in place, matching the link-local branch above --
+        // do NOT erase it from the list. The IPv6Address object is still owned by
+        // globalAddresses/uniqueLocalAddresses and freed by IPv6State's own cleanup
+        // (destructor / removeAddress / removeAllAddresses); erasing it here without
+        // deleting orphaned the pointer and leaked it, while callers (e.g. DAD) still
+        // hold and dereference the same object after this call returns.
         auto markInvalid = [&](std::vector<InterfaceConfigs::IPv6State::IPv6Address*>& list) {
             for (auto* entry : list)
             {

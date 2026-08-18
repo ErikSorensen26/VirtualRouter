@@ -1,5 +1,7 @@
 /**
- * TODO add doxy comment
+ * @file SHA.hpp
+ * @brief SHA-1 and SHA-2 (224/256/384/512) block hash primitives for HMAC.
+ * @ingroup SECURITY
  */
 
 #ifndef HMAC_SHA_HPP
@@ -8,11 +10,16 @@
 #include <bit>
 #include "utils/ByteUtils.hpp"
 
+/**
+ * @namespace security::hmac::sha
+ * @brief Stateless SHA compression functions usable as HMAC building blocks.
+ */
 namespace security::hmac::sha
 {
 
 /**
  * @brief SHA-1 as specified by RFC 3174.
+ * @ingroup SECURITY
  *
  * Collision-broken since 2017 and kept only for protocols that specify it.
  */
@@ -111,9 +118,12 @@ struct Sha1
 
 /**
  * @brief SHA-224 and SHA-256, sharing one compression function.
+ * @ingroup SECURITY
  *
  * The two differ only in their initial state and in how much of the final
  * state is emitted, so @p Bytes selects the variant.
+ *
+ * @tparam Bytes Digest size in bytes: 28 (SHA-224) or 32 (SHA-256).
  */
 template <size_t Bytes>
 struct Sha256Base
@@ -251,14 +261,19 @@ struct Sha256Base
     }
 };
 
+/** @brief SHA-224 (28-byte digest). @ingroup SECURITY */
 using Sha224 = Sha256Base<28>;
+/** @brief SHA-256 (32-byte digest). @ingroup SECURITY */
 using Sha256 = Sha256Base<32>;
 
 /**
  * @brief SHA-384 and SHA-512, sharing one 64-bit compression function.
+ * @ingroup SECURITY
  *
  * Same relationship as the 32-bit pair: @p Bytes picks the initial state and
  * how much of the final state is emitted.
+ *
+ * @tparam Bytes Digest size in bytes: 48 (SHA-384) or 64 (SHA-512).
  */
 template <size_t Bytes>
 struct Sha512Base
@@ -403,7 +418,9 @@ struct Sha512Base
     }
 };
 
+/** @brief SHA-384 (48-byte digest). @ingroup SECURITY */
 using Sha384 = Sha512Base<48>;
+/** @brief SHA-512 (64-byte digest). @ingroup SECURITY */
 using Sha512 = Sha512Base<64>;
 }
 

@@ -54,11 +54,8 @@ struct ExternalOriginateContext
  * ## Lifecycle & Ownership
  * One instance per @ref OspfProcess, constructed with it and living for the
  * whole process lifetime regardless of whether the router currently is an
- * ASBR.
- *
- * ## Concurrency Model
- * All state, including `externalDb`, is accessed exclusively on the owning
- * process's single-threaded `ProcessQueue`.
+ * ASBR. All state, including `externalDb`, is accessed exclusively on the
+ * owning process's single-threaded `ProcessQueue`.
  *
  * @see OspfProcess, Area, OriginatorContext, InterOriginator
  */

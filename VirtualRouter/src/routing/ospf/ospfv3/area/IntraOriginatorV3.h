@@ -30,42 +30,31 @@ class OspfInterface;
  * @brief OSPFv3 concrete implementation of the @ref IntraOriginator base class.
  * @ingroup OSPF_V3_AREA
  *
- * `IntraOriginatorV3` overrides every abstract origination hook in @ref IntraOriginator to
- * produce OSPFv3 wire-format LSA bodies. The key difference from OSPFv2 is that
- * OSPFv3 separates topology information from prefix information:
+ * `IntraOriginatorV3` overrides every abstract origination hook in @ref IntraOriginator
+ * to produce OSPFv3 wire-format LSA bodies. Unlike OSPFv2, OSPFv3 separates topology
+ * from prefix information: Router-LSAs and Network-LSAs carry only link/adjacency
+ * data, while the stub, loopback, and on-link prefixes that OSPFv2 embeds directly
+ * are instead advertised through companion Intra-Area-Prefix-LSAs.
  *
- * - **Router-LSA** (type 0x2001): carries only router links (transit, P2P, virtual).
- * - **Intra-Area-Prefix-LSA** (type 0x2009): carries the stub and loopback prefixes
- *   that in OSPFv2 would appear directly in the Router-LSA or Network-LSA.
- * - **Network-LSA** (type 0x2002): lists attached routers; prefix info is in a
- *   separate Intra-Area-Prefix-LSA associated with this LSA.
- * - **Link-LSA** (type 0x0008): per-link LSA advertising the link-local address and
- *   on-link prefixes to neighbors on the same segment.
- * - **Inter-Area-Prefix-LSA / Inter-Area-Router-LSA** (type 0x2003 / 0x2004): summary
- *   LSAs originated by ABRs, handled via `originateSummary` / `addAsbrLsa`.
- * - **AS-External-LSA** (type 0x4005): redistributed routes, generated via `addExternal`.
- *
- * Because OSPFv3 may need multiple Router-LSAs and multiple Intra-Area-Prefix-LSAs
- * (one per Router-LSA fragment and one per Network-LSA), this class manages two
- * separate LS-ID allocation queues (`routerLsidQueue` and `prefixLsidQueue`) to
- * reuse freed IDs before advancing the high-water marks.
- *
- * ## Architectural Role
- * Owned by an @ref Area. All originations are serialized through the area's
- * `ProcessQueue`. The class does not transmit LSAs itself; once an LSA body is
- * built it is handed to the base-class `originateLsa<Policy>()` which drives the
- * throttle / group-pacing machinery before flooding.
+ * Because a Router-LSA or Network-LSA may need multiple associated
+ * Intra-Area-Prefix-LSAs, and Router-LSAs themselves may be fragmented across
+ * several instances, this class manages two separate LS-ID allocation queues
+ * (`routerLsidQueue` and `prefixLsidQueue`) to reuse freed IDs before advancing
+ * the high-water marks.
  *
  * ## Lifecycle & Ownership
- * Constructed by `Area` when OSPFv3 is enabled. Destroyed when the area is removed
- * or the OSPF process shuts down. `fullRefresh()` is called once at startup to
+ * Constructed by `Area` when OSPFv3 is enabled and destroyed when the area is
+ * removed or the OSPF process shuts down. All originations are serialized through
+ * the area's `ProcessQueue`; the class does not transmit LSAs itself — built bodies
+ * are handed to the base-class `originateLsa<Policy>()`, which drives throttling and
+ * group pacing before flooding. `fullRefresh()` is called once at startup to
  * originate the initial LSA set.
  *
  * @warning The LS-ID queues are only valid for the lifetime of the originator. If
  * the originator is destroyed while LSAs are still in the LSDB, stale LS-IDs may
  * be reused on the next instantiation, which can confuse neighbors.
  *
- * @see Originator, OriginatorV2, Area
+ * @see IntraOriginator, IntraOriginatorV2, Area
  */
 class IntraOriginatorV3 : public IntraOriginator
 {
@@ -196,16 +185,24 @@ private:
     /**
      * @brief Address-family-generic implementation of @ref addRouterPrefixLsa.
      *
-     * Templated on the Intra-Area-Prefix-LSA body type (@ref IntraAreaPrefixLsa
-     * for IPv6, @ref IntraAreaPrefixLsaV4 for IPv4 per RFC 5838) and its prefix
-     * entry/prefix types so the identical incremental-diff logic is shared
-     * between address families instead of duplicated.
+     * Shares the incremental-diff logic between address families instead of
+     * duplicating it.
+     *
+     * @tparam PrefixLsaBody Intra-Area-Prefix-LSA body type: @ref IntraAreaPrefixLsa
+     *                       for IPv6, @ref IntraAreaPrefixLsaV4 for IPv4 (RFC 5838).
+     * @tparam PrefixEntry   Per-prefix TLV entry type used by @p PrefixLsaBody.
+     * @tparam PrefixType    Prefix value type carried by @p PrefixEntry.
      */
     template <typename PrefixLsaBody, typename PrefixEntry, typename PrefixType>
     void addRouterPrefixLsaImpl(std::vector<std::pair<LsaKey, std::optional<bool>>>& routerLsas, bool refresh);
 
     /**
      * @brief Address-family-generic implementation of @ref addNetworkPrefixLsa.
+     *
+     * @tparam PrefixLsaBody Intra-Area-Prefix-LSA body type: @ref IntraAreaPrefixLsa
+     *                       for IPv6, @ref IntraAreaPrefixLsaV4 for IPv4 (RFC 5838).
+     * @tparam PrefixEntry   Per-prefix TLV entry type used by @p PrefixLsaBody.
+     * @tparam PrefixType    Prefix value type carried by @p PrefixEntry.
      */
     template <typename PrefixLsaBody, typename PrefixEntry, typename PrefixType>
     void addNetworkPrefixLsaImpl(const OspfInterface& iface, bool refresh);

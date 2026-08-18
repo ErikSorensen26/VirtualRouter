@@ -399,6 +399,11 @@ protected:
     bool getHelloTimerActive(EigrpInterface* eigrpInt = nullptr) { if (eigrpInt) return eigrpInt->tmgr.helloTimerId.load() != 0; else return eigrpInterface->tmgr.helloTimerId.load() != 0;}
     uint32_t getRouterID(Eigrp* eigrp = nullptr) { if (eigrp) return eigrp->routerID(); else return eigrpInstance->routerID(); }
 
+    // refreshInterfaceList() no longer exists: interface membership is now
+    // maintained incrementally by per-event subscriptions (IF_READY/IF_DOWN/
+    // IPv4/IPv6 ready-del) that post synchronously via postAndWait, rather than
+    // by a bulk reconciliation sweep. Draining the process queue is the closest
+    // equivalent "settle any pending interface churn" operation available.
     void refreshInterfaceList(Eigrp* instance = nullptr)
     {
         Eigrp* e = instance ? instance : eigrpInstance;
@@ -406,6 +411,8 @@ protected:
     }
 
     // Helper: wraps Eigrp::getIfaceMgr().createInterface() for TEST_F bodies.
+    // createInterface() now requires an AF_INTERFACE registry slot to bind to
+    // (see InterfaceManager::createInterface in the product); emplace one first.
     EigrpInterface* createInterface(interface::Interface* iface, Eigrp* instance = nullptr)
     {
         Eigrp* e = instance ? instance : eigrpInstance;

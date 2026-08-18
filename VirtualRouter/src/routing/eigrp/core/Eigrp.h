@@ -55,6 +55,7 @@ namespace routing::eigrp
 /**
  * @brief Container pairing the IPv4 and IPv6 EIGRP process objects for a
  *        single Autonomous System number.
+ * @ingroup EIGRP_CORE
  *
  * Either pointer may be null if the corresponding address family has not been
  * configured.
@@ -67,8 +68,8 @@ struct EigrpAutonomousSystem
 
 /**
  * @brief Pair of per-address-family @ref EigrpInterface pointers for a single
- * @ingroup EIGRP_CORE
  *        physical interface slot.
+ * @ingroup EIGRP_CORE
  *
  * Used by @ref InterfaceManager to track which EIGRP interface objects are
  * active for each underlying network interface.
@@ -80,16 +81,21 @@ struct EigrpInterfaceInstance
 };
 
 /**
- * TODO add doxy comment
+ * @brief Lookup context for a statically configured unicast EIGRP neighbor.
+ * @ingroup EIGRP_CORE
+ *
+ * Stored in @ref Eigrp::nbrContext, keyed by neighbor address, so that a
+ * unicast neighbor can be resolved back to its owning process and interface
+ * without a table scan.
  */
 struct EigrpNeighborContext
 {
     EigrpNeighborContext(routing::eigrp::Eigrp& e, const types::IPAddress& a)
         : eigrp(e), addr(a)
     {}
-    routing::eigrp::Eigrp& eigrp;
-    types::IPAddress addr;
-    interface::InterfaceKey key;
+    routing::eigrp::Eigrp& eigrp;         ///< Owning EIGRP process.
+    types::IPAddress addr;                ///< Neighbor's configured IP address.
+    interface::InterfaceKey key;          ///< Interface the neighbor is configured under.
 };
 
 /**
@@ -144,12 +150,12 @@ public:
 
     /**
      * @brief Constructs an EIGRP process for the given AS number and address family.
-     * @ingroup EIGRP_CORE
      *
      * Initializes all subsystems (topology, interface manager, config, aggregator,
      * route manager) but does not subscribe to interface events or start timers.
      * Call @ref start() to activate the process.
      *
+     * @param reg   Process-level configuration registry; must outlive this object.
      * @param as    Autonomous System number.
      * @param af    Address family this process handles (IPv4 or IPv6).
      * @param vrf   Owning VRF; must outlive this object.
@@ -227,12 +233,13 @@ public:
     void enqueueSetAfInterface(const interface::InterfaceKey& iface, config::EigrpInterfaceRegistry* reg);
 
     /**
-     * TODO add doxy comment
+     * @brief Returns the unicast neighbor context for @p addr, creating an
+     *        empty one bound to this process if none exists yet.
      */
     EigrpNeighborContext& getNeighborContext(const types::IPAddress& addr);
 
     /**
-     * TODO add doxy comment
+     * @brief Erases the unicast neighbor context for @p addr, if present.
      */
     void eraseNeighborContext(const types::IPAddress& addr);
 
@@ -427,10 +434,10 @@ private:
          *        interfaces).
          *
          * Must only be called from within a task already running on
-         * @ref scheduler's queue (i.e. posted via @ref selfRef), or after
-         * @ref selfRef has been released and no other queue work can be
-         * in-flight (e.g. from `~Eigrp()`). Calling this directly from an
-         * arbitrary thread races with the interface up/down event handlers.
+         * @ref Eigrp::scheduler's queue, or after that queue has been
+         * released and no other queue work can be in-flight (e.g. from
+         * `~Eigrp()`). Calling this directly from an arbitrary thread races
+         * with the interface up/down event handlers.
          */
         void shutdown();
 
@@ -439,7 +446,7 @@ private:
 
     RouteManager routeManager; ///< Translates topology successors into RIB entries.
     
-    std::unordered_map<types::IPAddress, EigrpNeighborContext> nbrContext; ///< Unicast neighbor context
+    std::unordered_map<types::IPAddress, EigrpNeighborContext> nbrContext; ///< Unicast neighbor contexts, keyed by neighbor address.
     std::unordered_map<types::IPAddress, Neighbor*> allNeighbors; ///< All UP neighbors across all interfaces.
 };
 } // namespace routing::eigrp

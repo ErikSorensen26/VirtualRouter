@@ -146,7 +146,7 @@ public:
     //json root;                              ///< Root of hierarchical router configuration.
     //json configSchema;                      ///< Active schema controlling command ordering.
     FileSystem& fileSystem;                ///< Filesystem interface used for persistence.
-    hardware::HardwareManager hwManager;    ///< Hardware abstraction subsystem.
+    //hardware::HardwareManager hwManager;    ///< Hardware abstraction subsystem.
 
 private:
     std::vector<std::string> recover; ///< Holds recovered CLI commands.

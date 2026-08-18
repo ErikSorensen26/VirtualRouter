@@ -42,8 +42,7 @@ class Area;
  * global `core::RoutingTable`. It does not interpret LSA bodies — that is the
  * job of `RouteManager`. It also does not flood LSAs.
  *
- * ## Lifecycle & Ownership
- * Owned exclusively by `OspfProcess`. All methods must be called from the
+ * Owned exclusively by `OspfProcess`; all methods must be called from the
  * owning process's scheduler thread.
  *
  * @warning Candidate paths are keyed by area and type; passing the wrong `Area`

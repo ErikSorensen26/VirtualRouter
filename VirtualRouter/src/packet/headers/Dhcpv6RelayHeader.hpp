@@ -1,5 +1,6 @@
 /**
  * @file Dhcpv6RelayHeader.hpp
+ * @brief DHCPv6 Relay-Forward/Relay-Reply (RFC 8415 sec. 8) wire-format header.
  */
 
 // Dhcpv6RelayHeader.hpp
@@ -20,10 +21,10 @@ namespace packet
 #pragma pack(push, 1)
 struct Dhcpv6RelayHeaderRaw
 {
-    uint8_t msgType;
-    uint8_t hopCount;
-    uint8_t linkAddress[16];
-    uint8_t peerAddress[16];
+    uint8_t msgType;            ///< DHCPV6_TYPE_RELAY_FORWARD or DHCPV6_TYPE_RELAY_REPLY.
+    uint8_t hopCount;           ///< Number of relay agents that have relayed this message.
+    uint8_t linkAddress[16];    ///< Used by the server to identify the client's link.
+    uint8_t peerAddress[16];    ///< Address of the client or relay agent from which this message was received.
 };
 #pragma pack(pop)
 

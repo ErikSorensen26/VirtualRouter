@@ -1,6 +1,7 @@
 /**
  * @file MD5.hpp
  * @brief MD5 block function for use with security::hmac::hmac.
+ * @ingroup SECURITY
  */
 
 #ifndef HMAC_MD5_HPP

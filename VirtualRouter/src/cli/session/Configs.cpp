@@ -2,11 +2,8 @@
 
 // TODO add hex range volatile value
 
-#include <iostream>
-
 #include <IPAddress.h>
 #include "Configs.h"
-#include "CliUtils.h"
 
 namespace cli
 {
@@ -23,7 +20,7 @@ void Configs::initConfigs(const StartupFiles& stfs, bool enableDummies)
 {
     recover.clear();
 
-    hwManager.addHardware(stfs.hwConfigFile, fileSystem, enableDummies);
+    //hwManager.addHardware(stfs.hwConfigFile, fileSystem, enableDummies);
 
     routerConfigFilename = stfs.routerConfigFile;
 

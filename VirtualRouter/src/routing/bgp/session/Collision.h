@@ -13,24 +13,16 @@ namespace routing::bgp
 class Session;
 
 /**
- * @class CollisionDetector
  * @brief Resolves simultaneous-open collisions per RFC 4271 §6.8.
+ * @ingroup BGP_SESSION
  *
  * When two BGP speakers both initiate TCP connections to each other the
  * result is two concurrent sessions.  The collision is resolved by comparing
- * BGP Identifiers (router-IDs):
- *
- *   - The speaker with the HIGHER BGP Identifier keeps its outgoing session
- *     and sends NOTIFICATION (Cease / Connection Collision Resolution) on the
- *     incoming session.
- *   - The speaker with the LOWER BGP Identifier keeps the incoming session
- *     and sends NOTIFICATION on its outgoing session.
- *   - Equal BGP Identifiers: should not occur; both sessions are closed.
- *
- * Usage:
- *   CollisionDetector::resolve(session, localRouterId, peerRouterId)
- *   returns true  → keep this session (drop the other)
- *   returns false → drop this session  (keep the other)
+ * BGP Identifiers (router-IDs): the speaker with the higher ID keeps its
+ * outgoing session, the speaker with the lower ID keeps the incoming session,
+ * and the loser's session is sent a Cease / Connection Collision Resolution
+ * NOTIFICATION.  Equal BGP Identifiers should not occur; both sessions are
+ * closed in that case.
  */
 class CollisionDetector
 {

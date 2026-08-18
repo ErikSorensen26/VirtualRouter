@@ -1,6 +1,7 @@
 /**
  * @file Ingress.h
  * @brief Factory function for creating the appropriate ingress backend.
+ * @ingroup HARDWARE_INGRESS
  */
 
 #ifndef INGRESS_H

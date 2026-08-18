@@ -1,6 +1,7 @@
 /**
  * @file CommandTree.h
  * @brief The CLI grammar, flattened once and mapped read-only at runtime.
+ * @ingroup CLI_RUNTIME
  *
  * The grammar directory is parsed into a flat buffer of fixed-size records and
  * a string blob, cached to disk, and thereafter @c mmap ed. Nothing is allocated

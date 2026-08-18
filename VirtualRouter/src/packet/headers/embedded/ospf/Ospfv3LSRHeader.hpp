@@ -1,5 +1,6 @@
 /**
  * @file Ospfv3LSRHeader.hpp
+ * @ingroup PACKET_HEADERS_OSPF
  */
 
 // Ospfv3LSRHeader.hpp

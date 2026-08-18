@@ -2,8 +2,6 @@
  * @file PacketBuilder.hpp
  */
 
-// PacketBuilder.hpp
-
 #ifndef PACKET_BUILDER_HPP
 #define PACKET_BUILDER_HPP
 

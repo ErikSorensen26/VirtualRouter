@@ -1,6 +1,7 @@
 /**
  * @file Command.h
  * @brief A node in the flattened command tree, and a cursor over it.
+ * @ingroup CLI_RUNTIME
  *
  * @c CommandNode is the packed on-disk record: ids into the string tables for
  * its name and description, the span of its children, and its property flags.

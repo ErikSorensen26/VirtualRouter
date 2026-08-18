@@ -144,16 +144,18 @@ VirtualRouter/src/
                                    │ ApplyFn callbacks on field change
 ┌──────────────────────────────────▼───────────────────────────────────────────┐
 │                        Global System Controller                               │
-│  ControlScheduler  ·  ThreadPool  ·  TimeManager  ·  Interface registry      │
+│  ControlScheduler · ThreadPool · TimeManager · Interface registry            │
+│  BgpProcess (per AS, spans VRFs) — owns one BgpScope per (AS, VRF)           │
 └──────────────────────────────────┬───────────────────────────────────────────┘
-                                   │ creates / owns VRFs
+                                   │ creates / owns VRFs; VRF's BgpScope
+                                   │ reached via Global::getBgp(), not owned here
 ┌──────────────────────────────────▼───────────────────────────────────────────┐
 │                         VirtualRouter  (= VRF)                                │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌──────────────────┐    │
-│  │ BgpProcess  │  │ OspfProcess │  │    Eigrp    │  │  RoutingTable    │    │
-│  │  (per AS)   │  │ (per procId)│  │  (per AS)   │  │  (RIB + FIB)    │    │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └────────┬─────────┘    │
-│         └────────────────┴─────────────────┴──────────────────┘             │
+│  ┌─────────────┐  ┌─────────────┐  ┌───────────────────┐  ┌───────────────┐ │
+│  │ OspfProcess │  │    Eigrp    │  │  BgpScope (VRF's   │  │ RoutingTable  │ │
+│  │ (per procId)│  │  (per AS)   │  │  slice, in Global) │  │  (RIB + FIB)  │ │
+│  └──────┬──────┘  └──────┬──────┘  └─────────┬──────────┘  └───────┬───────┘ │
+│         └────────────────┴───────────────────┴──────────────────────┘        │
 │                            route install / withdraw                           │
 └──────────────────────────────────┬───────────────────────────────────────────┘
                                    │ FIB lookup (RCU, lock-free)
@@ -181,11 +183,20 @@ VirtualRouter/src/
 
 `Global` is the process-level. It owns everything that exists
 independently of how many VRFs are running: the hardware interface registry,
-`ControlScheduler`, `ThreadPool`, `TimeManager`, the CLI engine, and TX/RX
-queue managers. It has to be separate from `VirtualRouter` because these
-resources must exist before the first VRF is created and survive after the last
-one is destroyed — you can't tear down the thread pool while a VRF is still
-draining its queues.
+`ControlScheduler`, `ThreadPool`, `TimeManager`, the CLI engine, TX/RX
+queue managers, and the single process-wide `BgpProcess`. It has to be separate
+from `VirtualRouter` because these resources must exist before the first VRF is
+created and survive after the last one is destroyed — you can't tear down the
+thread pool while a VRF is still draining its queues.
+
+`BgpProcess` belongs here rather than on `VirtualRouter` because a BGP AS is
+not VRF-scoped — one AS can run sessions across several VRFs, and the shared
+per-AS state (`AttributeManager`, `PeerTemplateTable`) is process-wide, exactly
+like the AS-independent resources listed above. This makes BGP's ownership the
+one exception to "protocol instances live inside the VRF that owns them" — see
+[VirtualRouter](#2-virtualrouter--the-vrf-boundary) and
+[BGP](#4-bgp) for how VRF-scoped BGP state (`BgpScope`) is reached from a
+`BgpProcess` rather than owned by the VRF directly.
 
 #### Design Decision
 
@@ -226,15 +237,28 @@ can appear in VRF B's FIB.
 
 #### Design Decision
 
-`VirtualRouter` fully owns all protocol instances. Destroying one destroys all
-its protocols in a well-defined order with no external coordination needed.
+`VirtualRouter` fully owns its OSPF and EIGRP protocol instances. Destroying
+one destroys all of them in a well-defined order with no external coordination
+needed.
+
+BGP is the one exception: `VirtualRouter` holds no BGP object at all. A BGP AS
+is process-wide (see [Global System Controller](#1-global-system-controller)),
+so the VRF-scoped slice of its state — `BgpScope` — lives inside the
+process-wide `BgpProcess`, keyed by VRF name, and is reached via
+`Global::getBgp()` rather than through a member on `VirtualRouter`. Section 4
+covers `BgpScope` in full. This keeps the exception contained to lookup: a VRF
+still never leaks routes across the boundary, because `BgpScope` writes into
+*this* VRF's `RoutingTable` the same way OSPF and EIGRP do — only the object's
+storage location differs.
 
 Rejected alternative: Globally owned protocol instances referenced by VRFs.
 This approach requires the caller to know which protocols exist in a VRF at
 teardown time and call teardown on each individually. Adding a new protocol
 would silently break VRF teardown for anyone who didn't update the teardown
 code — and the bug would only show up under specific timing as a use-after-free.
-Full VRF ownership means `~VirtualRouter()` gets it right automatically.
+Full VRF ownership means `~VirtualRouter()` gets it right automatically for
+OSPF and EIGRP; BGP's teardown is instead the responsibility of `BgpProcess`,
+which removes a VRF's `BgpScope` when the VRF goes away.
 
 **Router ID calculation** (`calculateRID`): Scans all interfaces for the highest
 IPv4 address on a loopback, then falls back to the highest Ethernet IPv4 if no
@@ -243,14 +267,19 @@ on stable topologies without requiring manual configuration.
 
 #### Invariants
 
-- No protocol state exists outside a `VirtualRouter`. Code that reaches for
-  protocol state without going through the VRF boundary is either wrong or a
-  design violation.
-- Destroying a `VirtualRouter` is sufficient and complete teardown. Callers don't
-  need to know which protocols were running or in what order to stop them.
+- No OSPF or EIGRP state exists outside a `VirtualRouter`. Code that reaches for
+  that protocol state without going through the VRF boundary is either wrong or
+  a design violation. BGP is the documented exception: its VRF-scoped state
+  (`BgpScope`) is reached through `Global::getBgp()`, not a `VirtualRouter`
+  member — see [Global System Controller](#1-global-system-controller) and
+  [BGP](#4-bgp).
+- Destroying a `VirtualRouter` is sufficient and complete teardown for OSPF and
+  EIGRP. Callers don't need to know which protocols were running or in what
+  order to stop them. BGP teardown for a VRF is `BgpProcess`'s responsibility,
+  triggered by the VRF's destruction rather than performed by it directly.
 - Adding a second VRF requires instantiating a second `VirtualRouter` — no other
-  code changes. Any design where this statement is false has leaked global
-  protocol state somewhere.
+  code changes for OSPF or EIGRP. Any design where this statement is false for
+  those two protocols has leaked global protocol state somewhere.
 
 ---
 
@@ -347,6 +376,37 @@ or EIGRP.
 
 #### Design Decision
 
+**`BgpScope` is the runtime unit for one (AS, VRF) pair.** A BGP AS is
+process-wide — one AS can run sessions across several VRFs — so the AS-wide
+state (`AttributeManager`, `PeerTemplateTable`) lives once in `BgpProcess`,
+owned by `Global`. Everything that *is* VRF-scoped — the `NeighborTable`, the
+per-AFI `AddressFamilyVariant` map, the live `Session` map, and a dedicated
+`ProcessQueue scheduler` — is owned instead by a `BgpScope`, one per (AS, VRF)
+pair, held in `BgpProcess::scopes` and keyed by VRF name. `BgpScope` also owns
+a port-179 TCP `Listener` and registers the same three `noexcept` TCP callbacks
+described under [TCP Transport Layer](#13-tcp-transport-layer), posting
+through its own scheduler rather than a shared one.
+
+`BgpScope` is created lazily — the first time an address family is enabled for
+an AS in a given VRF — and erased once that VRF's last address family is
+disabled. This means a VRF that never configures BGP costs nothing, and a
+VRF's BGP teardown is driven by `BgpProcess`, not by `VirtualRouter` directly
+(see [VirtualRouter](#2-virtualrouter--the-vrf-boundary)).
+
+Giving each `BgpScope` its own `ProcessQueue` rather than sharing one scheduler
+per AS keeps the single-threaded-protocol-state invariant
+(see [ControlScheduler & ProcessQueue](#7-controlscheduler--processqueue))
+at VRF granularity: convergence in one VRF never contends with, or waits
+behind, FSM work for the same AS in a different VRF.
+
+Rejected alternative: One `ProcessQueue` per `BgpProcess`, shared by every VRF
+running that AS. A single scheduler would serialize FSM and RIB work across
+VRFs that have nothing to do with each other — a slow best-path recompute in
+VRF A would delay session keepalives in VRF B, purely because they share an AS
+number. Per-scope scheduling makes VRF isolation (see
+[VRF isolation is a first-class constraint](#design-philosophy)) hold for BGP's
+timing behavior, not just its data.
+
 **Session and address family are fully decoupled.** The session drives the FSM
 and delivers parsed messages. Address family instances (`AddressFamilyInstance<N>`)
 consume those messages independently through their own pipeline.
@@ -397,10 +457,13 @@ a `uint32_t pathId`. `RouteBase` RAII handles retain/release automatically.
   directly sets a session to ESTABLISHED or IDLE bypasses the RFC-mandated
   validation in OPEN_RECEIVED and will produce sessions with incorrect negotiated
   state.
-- All BGP state mutations happen on the BGP ProcessQueue. Any external thread
-  that touches BGP data structures directly is introducing a race with the
-  ProcessQueue consumer and needs locks on everything it touches — which breaks
-  the design invariant that protocol code is lock-free.
+- All BGP state mutations happen on the owning `BgpScope`'s ProcessQueue. Any
+  external thread that touches BGP data structures directly is introducing a
+  race with that scope's ProcessQueue consumer and needs locks on everything it
+  touches — which breaks the design invariant that protocol code is lock-free.
+  Because scheduling is per-scope, this also means code must post to the
+  correct VRF's scope — posting a VRF A event to VRF B's scope is a
+  correctness bug, not just a threading one.
 - No `RouteBase` outlives its referenced attribute set in AttributeManager. If
   a route is destroyed without releasing its pathId, the attribute set leaks. If
   a route holds a stale pathId after the attribute set is freed, it's a
@@ -757,6 +820,22 @@ changes via `set()` or `unset()`, the registered `ApplyFn` fires immediately.
 Structural changes to `OwnedListField<T, K, H>` fire applier `H`. The CLI layer
 writes to the registry; it never calls protocol code directly.
 
+**Validation** (`ContextProvider` + `ValidateFn`): A field can also carry a
+`ValidateFn<T>`, the same shape as `ApplyFn` but returning `bool`. It runs
+synchronously inside `set()`, before the value is committed and before the
+applier fires. Returning `false` rejects the write outright — the field's
+state and value are left unchanged, and `set()` reports failure to the caller.
+Like appliers, a validator only runs once its `SubRegistry` has a bound
+`ContextProvider`; an unbound field accepts any value of the right type, same
+as one with no applier. This is the mechanism behind CLI-level rejections that
+the type system can't express on its own — a range check or a policy
+constraint that depends on other configured state, not just the field's type.
+
+Rejected alternative: Validating in the CLI layer, ahead of the registry
+write. That would duplicate the constraint at every call site that could write
+the field — CLI, config-file load, and any future config API — instead of
+once, on the field itself, enforced no matter which path reaches it.
+
 **Field access:**
 ```cpp
 // Optional field:
@@ -787,6 +866,9 @@ applier already wired in.
 - The ApplyFn fires exactly when the effective value changes — neither more nor
   less. Protocol code that depends on notifications to react to config changes
   can't miss one or receive a spurious one.
+- A ValidateFn runs, and can reject, before any state changes. A field's value
+  and FieldState are unmodified after a rejected `set()`, and the ApplyFn does
+  not fire — callers can rely on failure meaning nothing happened.
 
 ---
 
@@ -908,7 +990,7 @@ the grammar changes far more often than the code that walks it.
 >
 > Constraint: A flattened cache that no longer matches its inputs is read as valid and produces a silently wrong grammar — the edit simply does not appear, which reads as the grammar being wrong rather than the cache being stale. This affects the CLI Grammar Tree and the Configuration Registry, since a registry change shifts the ids that `configId` encodes.
 >
-> Mechanism: The header carries a format version, a registry signature, and an FNV-1a hash over every grammar file's relative path and contents. On open, any mismatch discards the mapping and rebuilds from source. The hash covers names as well as bytes, so an addition, removal, rename, or edit all change it. A zero hash means the sources could not be read and is treated as a non-match rather than as a particular value.
+> Mechanism: The header carries a format version, a registry signature, and an XXH3-64 hash over every grammar file's relative path and contents, XOR-folded to 32 bits so both halves of the digest contribute rather than truncated. On open, any mismatch discards the mapping and rebuilds from source. The hash covers names as well as bytes, so an addition, removal, rename, or edit all change it. A zero hash means the sources could not be read and is treated as a non-match rather than as a particular value.
 >
 > Trade-offs: Startup hashes every grammar file, which is one sequential read of a directory that is small and in page cache. Reversing this means grammar edits again require deleting the cache by hand, and the failure mode returns to a silently stale tree. Removing it would touch `FileHeader`, `TreeParser`, and `CommandTree`'s two-path constructor.
 
@@ -1120,20 +1202,22 @@ nothing to enumerate.
 >
 > Trade-offs: The caller must know the message size before reserving. BGP message sizes are bounded by `kMaxMessageLen`, so this isn't a practical constraint.
 
-**Callback integration:** BGP registers three `noexcept` static callbacks with
-the TCP engine. Each callback receives a `ConnCallbackCtx` with a `void* user`
-pointing to the `BgpProcess`, enqueues an FSM event onto the BGP ProcessQueue,
-and returns. The TCP thread never calls into BGP directly.
+**Callback integration:** Each `BgpScope` registers three `noexcept` static
+callbacks with the TCP engine. Each callback receives a `ConnCallbackCtx` with
+a `void* user` pointing to that `BgpScope`, enqueues an FSM event onto the
+scope's own `ProcessQueue` (see [BGP](#4-bgp)), and returns. The TCP thread
+never calls into BGP directly.
 
 #### Invariants
 
 - All TCP connections in a VRF are closed when the VRF's `TCP::Tcp` is destroyed.
   Any connection that outlives its VRF holds a reference to destroyed state.
-- BGP processes in different VRFs share no sockets. A misconfigured BGP process
-  in VRF A can't accidentally send to a neighbor that belongs to VRF B.
+- `BgpScope`s in different VRFs share no sockets, even when they belong to the
+  same AS and therefore the same `BgpProcess`. A misconfigured session in VRF A
+  can't accidentally send to a neighbor that belongs to VRF B.
 - TCP callbacks never execute BGP state machine logic directly. A TCP callback
   that calls BGP code is running on the TCP thread and creates a race with the
-  BGP ProcessQueue consumer.
+  owning `BgpScope`'s ProcessQueue consumer.
 - `TxBuffer` spans are committed or discarded before the next `reserveSpan`. A
   pending span that's abandoned leaves the buffer in an inconsistent state and
   corrupts all subsequent writes.

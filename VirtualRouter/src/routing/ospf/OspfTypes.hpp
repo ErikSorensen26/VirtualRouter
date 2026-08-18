@@ -1,6 +1,7 @@
 /**
  * @file OspfTypes.hpp
  * @brief Protocol-level OSPF constants shared across OSPFv2 and OSPFv3.
+ * @ingroup OSPF
  */
 
 #ifndef OSPF_TYPES_HPP

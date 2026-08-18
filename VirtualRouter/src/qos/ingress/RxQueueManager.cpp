@@ -11,6 +11,7 @@
 #include <net/if.h>
 
 #include "RxQueueManager.h"
+#include "hardware/ingress/Ingress.h"
 
 namespace qos::ingress
 {

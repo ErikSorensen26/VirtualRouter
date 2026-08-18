@@ -17,8 +17,6 @@
  * uint32_t> -- while the schemas naming them are distinct types.
  */
 
-// TupleSchema.hpp
-
 #ifndef TUPLE_SCHEMA_HPP
 #define TUPLE_SCHEMA_HPP
 

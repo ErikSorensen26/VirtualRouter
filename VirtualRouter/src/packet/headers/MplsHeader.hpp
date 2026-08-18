@@ -1,5 +1,6 @@
 /**
  * @file MplsHeader.hpp
+ * @brief MPLS shim header (label stack entry).
  */
 
 // MplsHeader.hpp
@@ -20,7 +21,7 @@ namespace packet
 #pragma pack(push, 0)
 struct MplsHeaderRaw
 {
-    uint8_t bytes[4];
+    uint8_t bytes[4]; ///< 20-bit label, 3-bit traffic class (exp), 1-bit bottom-of-stack, 8-bit TTL, packed MSB-first.
 };
 #pragma pack(pop)
 

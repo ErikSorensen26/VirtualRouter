@@ -18,11 +18,6 @@
  * processes subscribe via `ContextProvider` and receive callbacks whenever a field
  * that affects them changes. This keeps the CLI layer decoupled from the protocol
  * implementation.
- *
- * ## Subdirectory Groups
- * - @ref CONFIG_GLOBAL  — global and per-VRF configuration schemas
- * - @ref CONFIG_INTERFACE — per-interface configuration schemas
- * - @ref CONFIG_POLICY — policy-map, route-map, ACL, and prefix-list schemas
  */
 
 #ifndef REGISTRY_TYPES_HPP
@@ -42,9 +37,14 @@
 #define IGNOR(type) config::IgnoreCompare<type>
 
 /**
- * @brief Typed configuration registry for all protocol scopes.
+ * @namespace config
+ * @brief Typed, hierarchical configuration storage for all protocol and system scopes.
  *
- * See RegistryDatabase.hpp for the full namespace description.
+ * Holds the field types (`AtomicField`, `ValueField`, `ListField`, etc.), the
+ * `SubRegistry` template that owns a fixed set of those fields, and the
+ * accessor classes that expose live-notification and validation semantics to
+ * the CLI and protocol engines. See @ref CONFIG for the full subsystem
+ * description.
  */
 namespace config
 {

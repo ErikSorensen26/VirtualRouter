@@ -1,5 +1,6 @@
 /**
  * @file Dhcpv6AuthManager.h
+ * @brief DHCPv6 authentication key storage and Delayed/RKAP digest handling.
  */
 
 // Dhcpv6AuthManager.h
@@ -40,8 +41,7 @@ class AuthManager
 public:
 
     /**
-     * @struct Key
-     * @brief Authentication key
+     * @brief Authentication secret plus the timestamp and TTL used to expire it.
      * @ingroup SERVICES_DHCP_V6
      */
     struct Key
@@ -99,6 +99,10 @@ public:
     bool hasValidKey(AuthProtocol proto);
 };
 
+/**
+ * @brief Client-side counterpart to AuthManager: holds Delayed/RKAP keys for a single client.
+ * @ingroup SERVICES_DHCP_V6
+ */
 class ClientAuthManager
 {
 private:

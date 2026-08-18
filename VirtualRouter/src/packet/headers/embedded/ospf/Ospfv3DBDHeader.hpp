@@ -1,5 +1,6 @@
 /**
  * @file Ospfv3DBDHeader.hpp
+ * @ingroup PACKET_HEADERS_OSPF
  */
 
 // Ospfv3DBDHeader.hpp

@@ -1,5 +1,6 @@
 /**
  * @file DhcpRelay.h
+ * @ingroup SERVICES_DHCP_V4
  */
 
 // DhcpRelay.h

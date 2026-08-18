@@ -1,6 +1,7 @@
 /**
  * @file Nlri.hpp
  * @brief Concrete NLRI policy implementations and the active Nlri variant type.
+ * @ingroup BGP_AF
  */
 
 #ifndef BGP_NLRI_HPP
@@ -54,7 +55,6 @@ class ExampleNlri : public ExampleNlriType
 public:
     /**
      * @brief Constructs the NLRI policy bound to a VRF and BGP scope.
-     * @ingroup BGP_AF
      *
      * @param vrf    VRF whose routing table receives installed routes.
      * @param scope  BGP scope; used by the NlriPolicy base to access AS number and config.

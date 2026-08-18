@@ -139,6 +139,7 @@ struct OspfRoute
                adminDistance == other.adminDistance;
     }
 
+    /// Returns true if all installed attributes, including suppression state, match `other`.
     bool operator==(const OspfRoute& other)
     {
         return type == other.type &&
@@ -168,6 +169,7 @@ struct OspfRouteChange
 
 /**
  * @brief Constructs an @ref OspfPath from its constituent attributes.
+ * @ingroup OSPF_TOPOLOGY
  *
  * Convenience factory used by all derive* functions to ensure consistent
  * field ordering and default values.

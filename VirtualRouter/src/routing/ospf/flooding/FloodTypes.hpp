@@ -78,15 +78,6 @@ enum class InstallAction : uint8_t
  * its own; all side effects are performed by the flood manager and area
  * originator that consume it.  Keeping the decision logic separate from the
  * action execution makes both easier to test.
- *
- * ## Field Groups
- * - **Storage instructions** (`newLsa`, `shouldStoreReplace`, `shouldUpdateAgeOnly`,
- *   `newStoredAge`): control what the LSDB writes.
- * - **Topology impact** (`affectsSpfGraph`, `topologyChanged`): indicate whether
- *   SPF needs to be rescheduled.
- * - **Flooding / origination signals** (`shouldFlood`, `shouldFightBack`): tell
- *   the flood manager what to enqueue.
- * - **Acknowledgement** (`shouldAck`): whether a delayed or direct ack is sent.
  */
 struct InstallResult final
 {

@@ -1,6 +1,7 @@
 /**
  * @file FrameBuffer.hpp
  * @brief Diffed grid buffer for the prompt+input region of the console
+ * @ingroup CLI_RUNTIME
  *
  * Holds the input region as a grid of cells and, on commit, emits only the
  * cells that differ from what is already on screen. Callers redraw the whole

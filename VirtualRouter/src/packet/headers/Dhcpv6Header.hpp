@@ -1,5 +1,6 @@
 /**
  * @file Dhcpv6Header.hpp
+ * @brief DHCPv6 (RFC 8415) wire-format header, option codes, and TLV option parsing.
  */
 
 // Dhcpv6Header.hpp
@@ -84,9 +85,9 @@
 #define DHCPV6_TIMER_REB_TIMEOUT       10 ///< Initial Rebind Timeout
 #define DHCPV6_TIMER_REB_MAX_RT       600 ///< Max Rebing Timeout
 
-inline constexpr uint8_t DHCPV6_CLIENT_TO_SERVER[16] = { 0xFF, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02 };
-inline constexpr uint8_t DHCPV6_RELAY_TO_SERVER[16] = { 0xFF, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x03 };
-inline constexpr uint8_t DHCPV6_SERVER_TO_ALL[16] = { 0xFF, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 };
+inline constexpr uint8_t DHCPV6_CLIENT_TO_SERVER[16] = { 0xFF, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02 }; ///< Site-local multicast address for client-to-relay/server sends (ff05::1:2).
+inline constexpr uint8_t DHCPV6_RELAY_TO_SERVER[16] = { 0xFF, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x03 }; ///< All_DHCP_Servers site-local multicast address (ff05::1:3).
+inline constexpr uint8_t DHCPV6_SERVER_TO_ALL[16] = { 0xFF, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 }; ///< All_DHCP_Relay_Agents_and_Servers link-local multicast address (ff02::1:1).
 
 namespace packet
 {
@@ -99,8 +100,8 @@ namespace packet
 #pragma pack(push, 1)
 struct Dhcpv6HeaderRaw
 {
-    uint8_t type;
-    uint8_t transId[3];
+    uint8_t type;         ///< Message type (DHCPV6_TYPE_*).
+    uint8_t transId[3];   ///< Client/server transaction ID; correlates a message exchange.
 };
 #pragma pack(pop)
 
@@ -124,6 +125,15 @@ struct Dhcpv6Header
         { std::memcpy(raw->transId, val, 3); }
 };
 
+/**
+ * @brief Parses a buffer of DHCPv6 TLV options (2-byte code, 2-byte length) into @p outOptions.
+ *
+ * @param data Option buffer to parse.
+ * @param size Length of @p data in bytes.
+ * @param[out] outOptions Parsed options, appended in encounter order.
+ * @return True if the buffer was fully consumed with valid options, false on a
+ * truncated or malformed option.
+ */
 inline bool parseDhcpv6Options(const uint8_t* data, size_t size, std::vector<TLV16Option>& outOptions)
 {
     size_t offset = 0;

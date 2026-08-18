@@ -1,6 +1,7 @@
 /**
  * @file CliUtils.h
  * @brief CLI input validation and network address extraction utilities.
+ * @ingroup CLI_RUNTIME
  */
 
 #ifndef CLI_UTILS_H

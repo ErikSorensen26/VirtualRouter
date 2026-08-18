@@ -1,7 +1,7 @@
 /**
  * @file Icmpv6Header.hpp
+ * @brief ICMPv6 wire-format header, NDP option codes, and option TLV parsing.
  */
-
 
 #ifndef ICMPV6_HEADER_HPP
 #define ICMPV6_HEADER_HPP
@@ -64,10 +64,10 @@ namespace packet
 #pragma pack(push, 1)
 struct Icmpv6HeaderRaw
 {
-    uint8_t type;
-    uint8_t code;
+    uint8_t type;         ///< ICMPv6 message type (e.g. NDP solicitation/advertisement, unreachable).
+    uint8_t code;         ///< Type-specific subcode.
     uint8_t checksum[2];
-    uint8_t reserved[4];
+    uint8_t reserved[4];  ///< Message-type-specific data (e.g. NDP flags + reserved bits).
 };
 #pragma pack(pop)
 
@@ -101,7 +101,9 @@ struct Icmpv6Header
         { utils::write<uint32_t>(raw->reserved, val); }
 };
 
-// Parses trailing data into ICMPv6 options
+/**
+ * @brief Parses trailing NDP/ICMPv6 options into TLV8Option structures.
+ */
 inline bool parseIcmpv6Options(const uint8_t* data, size_t size, std::vector<TLV8Option>& outOptions)
 {
     size_t offset = 0;

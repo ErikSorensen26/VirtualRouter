@@ -1,6 +1,7 @@
 /**
  * @file TreePatch.h
  * @brief Runtime edits layered over the read-only command tree.
+ * @ingroup CLI_RUNTIME
  *
  * Some of the grammar is not knowable when the grammar directory is compiled into
  * a @c Commands.bin binary. Port numbering is the first case: the grammar writes

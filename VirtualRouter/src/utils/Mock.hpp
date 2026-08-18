@@ -1,6 +1,7 @@
 /**
  * @file Mock.hpp
  * @brief Mock/test utilities for unit testing.
+ * @ingroup UTILS
  */
 
 #ifndef MOCK_HPP

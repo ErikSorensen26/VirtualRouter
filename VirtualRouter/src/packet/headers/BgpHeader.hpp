@@ -1,5 +1,6 @@
 /**
  * @file BgpHeader.hpp
+ * @brief BGP-4 message header wire-format structure and protocol constants.
  */
 
 // BgpHeader.hpp
@@ -226,9 +227,9 @@ namespace packet
 #pragma pack(push, 1)
 struct BgpHeaderRaw
 {
-    uint8_t marker[16];
-    uint8_t length[2];
-    uint8_t type;
+    uint8_t marker[16]; ///< Historically for authentication; must be all-ones (BGP_MARKER) per RFC 4271.
+    uint8_t length[2];  ///< Total message length in bytes, including this header.
+    uint8_t type;       ///< Message type (BGP_TYPE_*).
 };
 #pragma pack(pop)
 

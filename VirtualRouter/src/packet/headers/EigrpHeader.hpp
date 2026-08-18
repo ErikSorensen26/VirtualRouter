@@ -1,5 +1,6 @@
 /**
  * @file EigrpHeader.hpp
+ * @brief EIGRP wire-format header, TLV option codes, and TLV option parsing.
  */
 
 // EigrpHeader.hpp
@@ -79,14 +80,14 @@ namespace packet
 #pragma pack(push, 1)
 struct EigrpHeaderRaw
 {
-    uint8_t version;
-    uint8_t opcode;
-    uint8_t checksum[2];
-    uint8_t flags[4];
-    uint8_t sequence[4];
-    uint8_t ack[4];
-    uint8_t virtualRouterId[2];
-    uint8_t autonomousSystem[2];
+    uint8_t version;               ///< EIGRP header format version (always 2).
+    uint8_t opcode;                ///< Message type (EIGRP_TYPE_*).
+    uint8_t checksum[2];           ///< Checksum over the EIGRP header and payload.
+    uint8_t flags[4];              ///< Per-message flag bits; see getFlag*/setFlag* accessors.
+    uint8_t sequence[4];           ///< Sequence number for reliable delivery via RTP.
+    uint8_t ack[4];                ///< Sequence number being acknowledged; 0 if none.
+    uint8_t virtualRouterId[2];    ///< Virtual router (VRF/address-family context) identifier.
+    uint8_t autonomousSystem[2];   ///< EIGRP autonomous system number.
 };
 #pragma pack(pop)
 
@@ -134,6 +135,16 @@ struct EigrpHeader
         { utils::setBit(raw->flags, 28, val); }
 };
 
+/**
+ * @brief Parses a buffer of EIGRP TLVs (2-byte type, 2-byte length including the TLV header)
+ * into @p outOptions.
+ *
+ * @param data Option buffer to parse.
+ * @param size Length of @p data in bytes.
+ * @param[out] outOptions Parsed TLVs, appended in encounter order.
+ * @return True if the buffer was fully consumed with valid TLVs, false on a truncated
+ * or malformed TLV (including a length below the 4-byte TLV header size).
+ */
 [[nodiscard]] inline bool parseEigrpOptions(const uint8_t* data, size_t size, std::vector<TLV16Option>& outOptions)
 {
     size_t offset = 0;

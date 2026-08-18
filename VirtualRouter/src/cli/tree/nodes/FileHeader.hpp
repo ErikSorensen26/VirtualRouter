@@ -1,6 +1,7 @@
 /**
  * @file FileHeader.hpp
  * @brief On-disk header for the flattened command tree.
+ * @ingroup CLI_RUNTIME
  *
  * Describes the sections that follow it in the file:
  *

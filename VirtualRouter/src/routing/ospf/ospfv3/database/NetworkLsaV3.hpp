@@ -1,11 +1,6 @@
 /**
  * @file NetworkLsaV3.hpp
- * @brief OSPFv3 Network LSA representation and wire-format handling.
- *
- * Defines the NetworkLsaV3 structure, which represents OSPFv3 Network LSAs.
- * Supports parsing from buffers, serialization, size calculation, checksum
- * computation, and equality comparison. Attached routers are stored in a
- * vector and sorted when comparing equality.
+ * @brief OSPFv3 Network LSA body: routers attached to a multi-access network segment.
  */
 
 #ifndef NETWORK_LSA_V3_HPP
@@ -22,22 +17,12 @@ namespace routing::ospf
 {
 
 /**
- * @brief Represents an OSPFv3 Network LSA containing attached routers.
+ * @brief OSPFv3 Network LSA body: routers attached to a multi-access network segment.
  * @ingroup OSPF_V3_DATABASE
  *
- * Stores the 24-bit options field and a list of attached routers. Provides
- * parsing from wire buffers, serialization, size computation, and checksum
- * integration.
- *
- * ## Architectural Role
- * Used in flooding and database storage to advertise all routers attached
- * to a multi-access network segment.
- *
- * ## Lifecycle & Ownership
- * Constructed via `build()` or manually populated. Owns its vector of attached
- * routers; safe to copy and compare.
- *
- * @warning Buffer length must be consistent with 4-byte router entries.
+ * Originated by the segment's Designated Router. Stores the 24-bit options
+ * field and the list of attached router IDs; owns its router vector and is
+ * safe to copy and compare.
  */
 struct NetworkLsaV3
 {
@@ -100,25 +85,13 @@ struct NetworkLsaV3
         return true;
     }
 
-    /**
-     * @brief Calculates the total serialized size of the LSA.
-     *
-     * Includes 4-byte header plus 4 bytes per attached router.
-     *
-     * @return Length in bytes needed for serialization.
-     */
+    /// Serialised size in bytes: `4 + 4 * attachedRouters.size()`.
     inline uint16_t size() const
     {
         return 4 + static_cast<uint16_t>(4 * attachedRouters.size());
     }
 
-    /**
-     * @brief Appends LSA fields to a Fletcher checksum.
-     *
-     * Used to validate integrity before transmission or storage.
-     *
-     * @param check Checksum object to append fields to.
-     */
+    /// Folds this LSA body's fields into @p check for OSPF LSA checksum computation.
     void appendChecksum(ChecksumFletcher& check) const
     {
         check.addU24(options);

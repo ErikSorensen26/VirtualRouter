@@ -25,12 +25,9 @@ enum class GraceRestartReason : uint8_t;
  * restart's per-neighbor/per-interface signaling. V2-only; OSPFv3 opaque
  * origination is out of scope (see the OSPF todo plan).
  *
- * ## Lifecycle & Ownership
- * Owned by @ref OspfInterfaceBase, constructed alongside it. Only meaningful for
- * OSPFv2 interfaces.
- *
- * ## Concurrency Model
- * All methods run on the owning process's single-threaded `ProcessQueue`.
+ * Owned by @ref OspfInterfaceBase and constructed alongside it; only
+ * meaningful for OSPFv2 interfaces. All methods run on the owning process's
+ * single-threaded `ProcessQueue`.
  *
  * @see OpaqueOriginatorV2, GraceLsaTlv
  */

@@ -42,9 +42,8 @@ struct SpfNode;
  * It does not install routes into the global RIB itself; it only provides
  * router reachability data that the route manager uses to resolve ASBR next-hops.
  *
- * ## Lifecycle & Ownership
  * Owned by `OspfProcess`. Updated after every SPF computation via
- * `consumeSpfResult` and `updateAreaAsbrs`. Cleared when the process resets.
+ * `consumeSpfResult` and `updateAreaAsbrs`, and cleared when the process resets.
  *
  * @see OspfRib, SpfEngine
  */
@@ -143,14 +142,16 @@ private:
 
 private:
     /**
-     * @brief Attempts to merge a single candidate into the best-path `reach` table.
+     * @brief Merges a single candidate into the best-path `reach` table.
      *
-     * Returns `true` if the candidate was installed as the new best path,
-     * `false` if an existing entry wins, or `nullopt` if the candidate was
-     * removed and the best path must be recomputed from the remaining candidates.
+     * If no entry exists for the candidate's RID, it is installed directly.
+     * Otherwise the candidate replaces the current best when its cost is
+     * lower, or its next hops replace the current set when the cost ties but
+     * the equal-cost next-hop set differs.
      *
      * @param candidate Router reachability candidate to evaluate.
-     * @return true = newly installed, false = existing best unchanged, nullopt = removed.
+     * @return true if a new entry was installed, false if an existing entry's
+     *         cost or next hops changed, nullopt if nothing changed.
      */
     std::optional<bool> mergeCanidate(const OspfRouter& candidate);
 

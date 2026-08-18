@@ -1,6 +1,7 @@
 /**
  * @file BitMapFlags.hpp
  * @brief Applies a command's flag list to one EnumBitMap field.
+ * @ingroup CLI_PARSER
  *
  * An enum-valued field takes one member and keeps it, so each token can be
  * written as it is parsed. A bitmap field cannot work that way: `eigrp stub

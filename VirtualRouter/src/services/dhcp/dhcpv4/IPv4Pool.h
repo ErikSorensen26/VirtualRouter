@@ -1,5 +1,6 @@
 /**
  * @file IPv4Pool.h
+ * @ingroup SERVICES_DHCP_V4
  */
 
 // IPv4Pool.h

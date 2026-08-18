@@ -1,6 +1,7 @@
 /**
  * @file IngressXdp.h
  * @brief AF_XDP (XSK) zero-copy packet ingress backend.
+ * @ingroup HARDWARE_INGRESS
  *
  * Implements kernel-bypass packet reception using Linux AF_XDP (XDP Socket).
  * Packets are DMA'd directly into a userspace UMEM region shared with the kernel,

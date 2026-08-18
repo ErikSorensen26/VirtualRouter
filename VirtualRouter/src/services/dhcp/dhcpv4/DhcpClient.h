@@ -1,5 +1,6 @@
 /**
  * @file DhcpClient.h
+ * @brief DHCPv4 client: lease acquisition, renewal, and release for a single interface.
  */
 
 // DhcpClient.h
@@ -19,27 +20,26 @@ class DhcpClientTest;
 namespace services::dhcp
 {
 /**
- * @brief Represents a DHCP client that handles DHCP operations
- * DHCP client able to hanble operations such as discovery, offers,
- * acknowledgments, and lease renewals.
+ * @brief DHCPv4 client state machine for one interface: discover/request/renew/rebind/release.
+ * @ingroup SERVICES_DHCP_V4
+ *
+ * Drives the DORA exchange and subsequent lease lifecycle (T1/T2 renewal, rebind, expiry)
+ * via timers scheduled through TimeManager. @c dhcpMutex serializes access to lease state
+ * shared with callers outside the client's own send/receive path.
  */
-class DhcpClient 
+class DhcpClient
 {
 public:
     friend class ProcessPacket;
     friend class DhcpClientTest;
 
     /**
-     * @brief Constructs a DhcpClient with the specific interface.
-     *
+     * @brief Binds a DhcpClient to @p currentInterface without starting the DORA exchange.
      * @param currentInterface Interface this client requests a lease for.
-     * @param reduced Mode to reduce functions in the constructor for testing.
+     * @param reduced If true, skips setup steps not needed by unit tests.
      */
     DhcpClient(interface::Interface* currentInterface, bool reduced = false);
 
-    /**
-     * @brief Destructor to clean up threads and resources.
-     */
     ~DhcpClient();
 
     void initiate();

@@ -1,6 +1,7 @@
 /**
  * @file ModeEntry.h
  * @brief The mode table: which command list a session sees from where it stands.
+ * @ingroup CLI_RUNTIME
  *
  * Every CLI mode owns a command list, and a session in `(config-if)#` may only
  * run what that mode offers. @ref cli::tree::ModeEntryNode is one row of that

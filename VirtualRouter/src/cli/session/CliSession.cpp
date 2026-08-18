@@ -166,8 +166,6 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
         return result;
     }
 
-    // if (words[0] == "?" || words[0] == "\t") ctx.matchState = MatchState::EXACT;
-
     std::vector<Token> tokens;
     std::vector<tree::Command> prevCommands;
 
@@ -529,13 +527,6 @@ bool CliSession::handlePagination(char nextch)
             }
         }
 
-        /*Color color;
-        switch (cmd.support)
-        {
-            case Com::Support::SUPPORTED:  color = Color::WHITE;  break;
-            case Com::Support::PARTIAL:    color = Color::YELLOW; break;
-            default:                       color = Color::RED;    break;
-        }*/
         controller.print(display);
     }
 

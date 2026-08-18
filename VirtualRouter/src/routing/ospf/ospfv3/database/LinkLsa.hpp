@@ -64,8 +64,6 @@ struct LinkLsa
      * @param buf Input buffer.
      * @param len Buffer length.
      * @return Parsed LSA or nullopt on failure.
-     *
-     * @warning Any boundary violation aborts parsing.
      */
     static std::optional<LinkLsa> build(const uint8_t* buf, uint16_t len)
     {

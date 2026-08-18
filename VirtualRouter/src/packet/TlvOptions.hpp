@@ -65,14 +65,8 @@ struct TLV16Option
  * @ingroup PACKET
  *
  * Manages a buffer and appends TLV options with 1-byte type and 1-byte length.
- * Tracks offset to avoid overwrites and provides space queries to check for room
- * before appending.
- *
- * ## Usage Pattern
- * - Construct with buffer and max length
- * - Check hasRoom() before appending
- * - Call append() to add options
- * - Call getSpan() or size() to retrieve final data
+ * Tracks offset to avoid overwrites; callers should check hasRoom() before appending
+ * and retrieve the final data with getSpan() or size().
  */
 class TLV8BufferManager
 {
@@ -197,14 +191,8 @@ public:
  * @ingroup PACKET
  *
  * Manages a buffer and appends TLV options with 2-byte (network-order) type and 2-byte length.
- * Tracks offset and provides space queries. Typically used for protocol options with larger
- * type/length fields (BGP, EIGRP, etc.).
- *
- * ## Usage Pattern
- * - Construct with buffer and max length
- * - Check hasRoom() before appending
- * - Call append() to add options (type/length in network byte order)
- * - Call getSpan() or size() to retrieve final data
+ * Typically used for protocol options with larger type/length fields (BGP, EIGRP, etc.). Callers
+ * should check hasRoom() before appending and retrieve the final data with getSpan() or size().
  */
 class TLV16BufferManager
 {

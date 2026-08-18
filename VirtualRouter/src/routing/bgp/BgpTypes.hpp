@@ -1,6 +1,7 @@
 /**
  * @file BgpTypes.hpp
  * @brief Core BGP types: FSM states/events, AFI/SAFI keys, and protocol constants.
+ * @ingroup BGP
  */
 
 #ifndef BGP_TYPES_HPP

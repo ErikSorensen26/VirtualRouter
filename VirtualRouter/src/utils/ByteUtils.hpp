@@ -1,6 +1,8 @@
 /**
  * @file ByteUtils.hpp
- * @brief Network-order byte manipulation: endian conversion, fixed-width reads and writes. */
+ * @brief Network-order byte manipulation: endian conversion, fixed-width reads and writes.
+ * @ingroup UTILS
+ */
 
 #ifndef BYTE_UTILS_HPP
 #define BYTE_UTILS_HPP

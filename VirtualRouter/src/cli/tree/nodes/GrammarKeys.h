@@ -1,6 +1,7 @@
 /**
  * @file GrammarKeys.h
  * @brief The vocabulary of a grammar file: every key the flattener recognises.
+ * @ingroup CLI_RUNTIME
  *
  * These name things in the JSON source, not in the tree built from it. Once
  * @ref cli::tree::parser::flattenDir has run, nothing here is meaningful --

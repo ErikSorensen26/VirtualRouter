@@ -1,6 +1,7 @@
 /**
  * @file BaseQueue.h
  * @brief Abstract base class for all TX queues in the egress subsystem.
+ * @ingroup QOS_EGRESS
  */
 
 #ifndef BASE_QUEUE_H

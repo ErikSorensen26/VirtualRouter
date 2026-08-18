@@ -21,11 +21,14 @@ not by how much there is to say about it.
 | **2 — Brief** | 1 line, `/** @brief ... */` | Trivial methods, small structs, type aliases |
 | **3 — Standard** | 3–10 lines | Most methods, most classes |
 | **4 — Extended** | 11–25 lines | Subsystem entry points, concurrency-bearing classes |
-| **5 — Reference** | 26–40 lines | Hard cap. Only the handful of top-level orchestrators |
+| **5 — Reference** | 26+ lines | Only the handful of top-level orchestrators |
 
 Tiers 1–3 cover the overwhelming majority of the codebase. Tier 4 should be
-rare, tier 5 exceptional. **No block exceeds 40 lines.** If it wants to, the
-content belongs in `docs/architecture/`, linked with `@see`.
+rare, tier 5 exceptional. There is no hard cap, but tier 5 is not a place to
+let a block grow unchecked — a block that keeps growing past a reasonable
+reference length is usually absorbing content that belongs in
+`docs/architecture/` instead, linked with `@see`. Judge each block on whether
+every line still earns its place, not against a line count.
 
 ### Choosing a tier
 
@@ -118,8 +121,9 @@ Model` structure below is for **tier 4 and 5 only**. Rules:
 
 Do not sweep the codebase to reformat. Bring a block to standard when you
 are already editing that entity for another reason. The exceptions worth
-fixing on sight are the two failure modes above: blocks over 40 lines, and
-`@brief` lines that only restate the identifier.
+fixing on sight are the two failure modes above: a block that has grown
+past what a reasonable reference entry needs, and `@brief` lines that only
+restate the identifier.
 
 ---
 

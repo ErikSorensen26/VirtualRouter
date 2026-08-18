@@ -60,7 +60,6 @@ class NeighborTable
 public:
     /**
      * @brief Constructs the neighbor table for an interface.
-     * @ingroup OSPF_NEIGHBOR
      *
      * The table starts empty; neighbors are added as Hellos arrive.
      *

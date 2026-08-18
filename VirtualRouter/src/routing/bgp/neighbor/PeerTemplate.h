@@ -43,13 +43,10 @@ class PeerGroup
 {
 public:
     /**
-     * @brief Constructs a peer group with the given name and owning scope.
-     *
-     * Allocates a session configuration registry under the scope's config
-     * namespace.  Per-AF registries are deferred until first use.
-     *
+     * @brief Constructs a peer group binding the given name, process, and session registry.
      * @param groupName Unique name for this peer group within the scope.
-     * @param scope     Owning BGP scope; used for config registry allocation.
+     * @param proc      Owning BGP process; used when lazily creating per-AF registries.
+     * @param configs   Session-level configuration registry for this group.
      */
     PeerGroup(const std::string& groupName, BgpProcess& proc, config::BgpNeighborSessionRegistry& configs);
     ~PeerGroup() = default;
@@ -105,10 +102,9 @@ class PeerSessionTemplate
 {
 public:
     /**
-     * @brief Constructs a session template with the given name and owning scope.
-     *
+     * @brief Constructs a session template binding the given name and session registry.
      * @param groupName Unique name for this template within the scope.
-     * @param scope     Owning BGP scope; used for config registry allocation.
+     * @param configs   Session-level configuration registry for this template.
      */
     PeerSessionTemplate(const std::string& groupName, config::BgpNeighborSessionRegistry& configs);
     ~PeerSessionTemplate() = default;
@@ -153,10 +149,9 @@ class PeerPolicyTemplate
 {
 public:
     /**
-     * @brief Constructs a policy template with the given name and owning scope.
-     *
+     * @brief Constructs a policy template binding the given name and policy registry.
      * @param groupName Unique name for this template within the scope.
-     * @param scope     Owning BGP scope; used for config registry allocation.
+     * @param configs   Per-AF policy configuration registry for this template.
      */
     PeerPolicyTemplate(const std::string& groupName, config::BgpNeighborRegistry& configs);
     ~PeerPolicyTemplate() = default;
@@ -271,6 +266,7 @@ public:
     /**
      * @brief Create a new peer group with the given name.
      *
+     * @param reg  Session configuration registry to bind to the new PeerGroup.
      * @param name Unique peer group name within this scope.
      * @return Reference to the newly created PeerGroup.
      */
@@ -280,6 +276,7 @@ public:
     /**
      * @brief Create a new session template with the given name.
      *
+     * @param reg  Session configuration registry to bind to the new PeerSessionTemplate.
      * @param name Unique session template name within this scope.
      * @return Reference to the newly created PeerSessionTemplate.
      */
@@ -289,6 +286,7 @@ public:
     /**
      * @brief Create a new policy template with the given name.
      *
+     * @param reg  Policy configuration registry to bind to the new PeerPolicyTemplate.
      * @param name Unique policy template name within this scope.
      * @return Reference to the newly created PeerPolicyTemplate.
      */

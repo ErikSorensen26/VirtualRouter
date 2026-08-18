@@ -8,11 +8,6 @@
 
 #include "RegistryTypes.hpp"
 
-/**
- * @brief Typed configuration registry for all protocol scopes.
- *
- * See RegistryDatabase.hpp for the full namespace description.
- */
 namespace config
 {
 /**

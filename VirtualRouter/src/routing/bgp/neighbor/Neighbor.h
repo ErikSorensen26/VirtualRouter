@@ -47,18 +47,20 @@ class Neighbor
 {
 public:
     /**
-     * @brief Construct a neighbor for the given IP address within the given scope.
-     * @ingroup BGP_NEIGHBOR
+     * @brief Construct a statically configured neighbor for the given IP address.
+     * @param cfgs      Per-neighbor session config registry to bind.
      * @param ipAddress The peer IP address.
-     * @param scope     The BgpScope that owns this neighbor.
+     * @param ntable    The NeighborTable that owns this neighbor.
+     * @param schdlr    Scheduler queue this neighbor's session runs on.
      */
     Neighbor(config::BgpNeighborSessionRegistry& cfgs, const types::IPAddress& ipAddress, NeighborTable& ntable, core::ProcessQueue& schdlr);
 
     /**
-     * @brief Construct a dynamic neighbor for the given IP address within the given scope.
-     * @ingroup BGP_NEIGHBOR
+     * @brief Construct a dynamic neighbor spawned from a BGP_LISTEN_RANGE match.
+     * @param dynCfgs   PeerGroup this neighbor inherits session/policy config from.
      * @param ipAddress The peer IP address.
-     * @param scope     The BgpScope that owns this neighbor.
+     * @param ntable    The NeighborTable that owns this neighbor.
+     * @param schdlr    Scheduler queue this neighbor's session runs on.
      */
     Neighbor(PeerGroup& dynCfgs, const types::IPAddress& ipAddress, NeighborTable& ntable, core::ProcessQueue& schdlr);
 
@@ -85,9 +87,10 @@ public:
     BgpScope& getScope() const noexcept;
 
     /**
-     * @brief Retrieve the NeighborAf for the given AFI/SAFI (const overload).
+     * @brief Retrieve the NeighborAf for the given AFI/SAFI.
      * @param afi The address family to look up.
-     * @return Const reference to the NeighborAf.
+     * @return Reference to the NeighborAf.
+     * @warning @p afi must already be activated for this neighbor; asserts otherwise.
      */
     NeighborAf& getAfNeighbor(const AfiSafi& afi);
 

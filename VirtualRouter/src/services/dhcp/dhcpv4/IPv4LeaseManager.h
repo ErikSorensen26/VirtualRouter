@@ -1,5 +1,6 @@
 /**
  * @file IPv4LeaseManager.h
+ * @ingroup SERVICES_DHCP_V4
  */
 
 // LeaseManager.h

@@ -1,4 +1,8 @@
-// TelnetClient.hpp
+/**
+ * @file TelnetClient.hpp
+ * @brief Client-side Telnet terminal: IAC parsing, negotiation replies, raw stdio relay.
+ * @ingroup UTILS
+ */
 
 #ifndef TELNET_CLIENT_HPP
 #define TELNET_CLIENT_HPP
@@ -17,6 +21,14 @@
 #include <string>
 #include <thread>
 
+/**
+ * @namespace utils::telnet
+ * @brief Client-side Telnet: an IAC parser, a session wrapper, and raw stdio relay threads.
+ *
+ * readerThread() feeds socket bytes into a TelnetSession, which decodes IAC
+ * sequences and answers option negotiations; writerThread() relays keystrokes,
+ * doubling any IAC byte. Both stop on the shared gRunning flag.
+ */
 namespace utils::telnet
 {
 // TELNET CONSTANTS
@@ -93,6 +105,14 @@ static bool sendAll(int fd, const uint8_t* buf, size_t len)
     return true;
 }
 
+/**
+ * @brief Stateful streaming parser for Telnet IAC, option, and subnegotiation sequences.
+ *
+ * Feed bytes one at a time with feed(); each call returns at most one Event.
+ * A DATA event is a plain byte, a NEGO event pairs a WILL/WONT/DO/DONT command
+ * with its option, and an SB event carries subnegotiation content. Not
+ * thread-safe; a session owns its instance.
+ */
 class IacParser
 {
 public:
@@ -180,6 +200,13 @@ private:
     uint8_t sbOpt = 0;
 };
 
+/**
+ * @brief Drives an IacParser over one Telnet socket and answers option negotiations.
+ *
+ * processServerByte() forwards decoded data to stdout and replies to WILL/DO/
+ * WONT/DONT with the negotiated replay. Not thread-safe; used from the single
+ * reader thread.
+ */
 class TelnetSession
 {
 public:
@@ -243,8 +270,10 @@ private:
     IacParser parser;
 };
 
+/// Set by either thread when the socket or stdin closes; stops both loops.
 static std::atomic<bool> gRunning{true};
 
+/// Reads socket bytes into the session and writes decoded output to stdout.
 static void readerThread(int fd, TelnetSession& session)
 {
     uint8_t buf[4096];
@@ -263,6 +292,7 @@ static void readerThread(int fd, TelnetSession& session)
     std::cerr << "\r\n[Connection closed by server]\r\n";
 }
 
+/// Reads local keystrokes, doubling any IAC byte, and sends them to the socket.
 static void writerThread(int fd)
 {
     uint8_t byte;

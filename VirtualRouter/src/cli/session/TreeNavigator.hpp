@@ -1,6 +1,7 @@
 /**
  * @file TreeNavigator.hpp
  * @brief The CLI mode stack: where a session is, and how it gets back.
+ * @ingroup CLI_RUNTIME
  *
  * A session is always inside one mode, and entering a sub-mode has to be
  * reversible — `exit` from `(config-router-af)#` must land back in

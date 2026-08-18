@@ -1,6 +1,7 @@
 /**
  * @file Encryption.hpp
  * @brief Stateless HMAC authentication helpers for routing protocol security.
+ * @ingroup SECURITY
  */
 
 #ifndef ENCRYPTION_HPP

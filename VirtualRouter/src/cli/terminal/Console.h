@@ -1,6 +1,7 @@
 /**
  * @file Console.h
  * @brief Console I/O: user input, cursor control, and command-line editing.
+ * @ingroup CLI_RUNTIME
  *
  * Handles terminal input/output including character-by-character input processing,
  * history navigation, cursor positioning, and command-line editing features.

@@ -1,6 +1,7 @@
 /**
  * @file Mac.hpp
  * @brief Mac address (Mainly for config parsing)
+ * @ingroup TYPES
  */
 
 #ifndef MAC_HPP

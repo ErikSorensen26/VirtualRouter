@@ -1,5 +1,6 @@
 /**
  * @file FIFOQueue.hpp
+ * @ingroup QOS_EGRESS
  */
 
 // FIFOQueue.hpp

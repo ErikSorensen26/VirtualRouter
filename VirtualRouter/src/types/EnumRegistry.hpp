@@ -1,4 +1,9 @@
-// EnumRegistry.hpp
+/**
+ * @file EnumRegistry.hpp
+ * @brief X-macro enum registry: enum declaration plus string conversion and lookup.
+ * @ingroup TYPES
+ */
+
 #ifndef ENUM_REGISTRY_HPP
 #define ENUM_REGISTRY_HPP
 
@@ -13,6 +18,11 @@
 namespace types
 {
 
+/**
+ * @brief FNV-1a 64-bit hash of a string; not cryptographic.
+ *
+ * Used by DECLARE_ENUM_REGISTRY::fromString to match enum names in constant time.
+ */
 constexpr uint64_t hash(std::string_view str)
 {
     uint64_t h = 1469598103934665603ULL;
@@ -27,7 +37,7 @@ constexpr uint64_t hash(std::string_view str)
 } // namespace types
 
 /**
- * @brief Main Macro
+ * @brief Generates an enum plus a Util struct with string conversion and lookup.
  *
  * Usage:
  * #define COMMAND_LIST(X) \
@@ -35,6 +45,10 @@ constexpr uint64_t hash(std::string_view str)
  *     X(CONFIGURE, "configure")
  *
  * DECLARE_ENUM_REGISTRY(Command, COMMAND_LIST)
+ *
+ * The LIST_MACRO must call X(Name, "string") for every value. The generated
+ * enum gains implicit COUNT and UNKNOWN sentinels; toString() returns
+ * "unknown" for out-of-range values and fromString() returns UNKNOWN on miss.
  */
 #define DECLARE_ENUM_REGISTRY(EnumName, LIST_MACRO)                     \
                                                                         \

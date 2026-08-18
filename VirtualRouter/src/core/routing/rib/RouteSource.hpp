@@ -1,6 +1,7 @@
 /**
  * @file RouteSource.hpp
  * @brief Enumeration of routing protocol sources that can install routes.
+ * @ingroup CORE_ROUTING_RIB
  */
 
 #ifndef RIB_SOURCE_HPP
