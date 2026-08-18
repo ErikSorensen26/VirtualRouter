@@ -21,6 +21,7 @@
 #include <security/keys/KeyChain.h>
 #include <security/keys/KeyChainManager.h>
 #include <configs/FieldAccessor.hpp>
+#include <configs/registry/global/GlobalRegistry.h>
 
 using namespace routing::eigrp;
 
@@ -53,16 +54,22 @@ protected:
     void SetUp() override 
     {
         utils::RCU::registerThread();
-        global = new core::Global(fs, {}, false, true);
+        core::GlobalProperties props(fs);
+        props.enableDummies = true;
+        props.enableRouting = false;
+        props.threadPoolCapacity = (1 << 8);
+
+        global = new core::Global(props);
         mockInterface = new interface::MockInterface(*global, interface::InterfaceType::GIGABIT_ETHERNET);
         mKey = mockInterface->configs.key;
 
-        vrf = global->getRoutingInstance("default", types::AddressFamily::IPv4);
+        vrf = global->getRoutingInstance(DEFAULT_VRF, types::AddressFamily::IPv4);
         vrf->getInterfaceManager().add(mockInterface, mKey);
         vrf->enabledAddressFamilies.insert(types::AddressFamily::IPv6);
-        auto as = vrf->addEigrpAutonomousSystem(1);
-        eigrpInstance = new Eigrp(asNumber, addressFamily, vrf);
-        as->ipv4 = eigrpInstance;
+        auto* namedReg = global->getConfigs().get<config::Global::ROUTER_EIGRP>().emplaceBack(asNumber);
+        namedReg->get<config::EigrpNamed::V4_INSTANCES>().emplaceBack(DEFAULT_VRF);
+        eigrpInstance = vrf->getEigrpAutonomousSystem(asNumber, addressFamily);
+        ASSERT_TRUE(eigrpInstance);
 
         mockInterface->enableIPs();
         mockInterface->enableShutdown();
@@ -75,9 +82,7 @@ protected:
         // Create the real EigrpInterface using the mock interface.
         EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_)).Times(::testing::AtLeast(1));
 
-        //network.ip = uint32_t{read<uint32_t>(ipIntv4Net));
-        //network.mask = 24;
-        eigrpInstance->addNetworkRange(types::IPv4Prefix{ipIntv4Net.addr, 24});
+        addNetwork(types::IPv4Prefix{ipIntv4Net.addr, 24});
         eigrpInstance->waitIdle();
         eigrpInterface = eigrpInstance->getIfaceMgr().getInterface(mKey);
     }
@@ -141,7 +146,11 @@ protected:
     }
     
     // Helper: clear network configuration in the EIGRP instance.
-    void clearNetworks() { std::lock_guard lock(eigrpInstance->scheduler.getLock()); eigrpInstance->clearNetworks(); }
+    void clearNetworks(Eigrp* instance = nullptr)
+    {
+        Eigrp* e = instance ? instance : eigrpInstance;
+        e->configs.get<config::Eigrp::AF_INTERFACE>().clear();
+    }
     
     // Helper: add a neighbor via the real EigrpInterface.
     void addNeighbor(const types::IPAddress& ip, Neighbor::Version v = Neighbor::Version::LEGACY, EigrpInterface* intf = nullptr) 
@@ -393,15 +402,18 @@ protected:
     void refreshInterfaceList(Eigrp* instance = nullptr)
     {
         Eigrp* e = instance ? instance : eigrpInstance;
-        std::lock_guard lock(e->scheduler.getLock());
-        e->refreshInterfaceList();
+        e->waitIdle();
     }
 
     // Helper: wraps Eigrp::getIfaceMgr().createInterface() for TEST_F bodies.
     EigrpInterface* createInterface(interface::Interface* iface, Eigrp* instance = nullptr)
     {
         Eigrp* e = instance ? instance : eigrpInstance;
-        return e->getIfaceMgr().createInterface(iface);
+        e->routingInstance->getInterfaceManager().add(iface, iface->configs.key);
+        auto* cfg = e->configs.get<config::Eigrp::AF_INTERFACE>().emplaceBack(iface->configs.key);
+        if (!cfg) return nullptr;
+        e->waitIdle();
+        return e->getIfaceMgr().getInterface(iface->configs.key);
     }
 
     // Helper: wraps Eigrp::getIfaceMgr().deactivateAll() for TEST_F bodies.
@@ -411,11 +423,19 @@ protected:
         e->getIfaceMgr().deactivateAll();
     }
 
-    // Helper: wraps Eigrp::addNetworkRange() for TEST_F bodies.
-    void addNetworkRange(const types::IPv4Prefix& net, Eigrp* instance = nullptr)
+    // Helper: adds networks to eigrp
+    void addNetwork(const types::IPv4Prefix& net, Eigrp* instance = nullptr)
     {
         Eigrp* e = instance ? instance : eigrpInstance;
-        e->addNetworkRange(net);
+        for (auto& [key, iface] : e->routingInstance->getInterfaceManager().snapshot())
+        {
+            if (!iface) continue;
+            types::IPv4Address primary = iface->configs.ipv4.getPrimaryAddress();
+            if (primary.isUnspecified()) continue;
+            if (!net.contains(primary)) continue;
+            e->configs.get<config::Eigrp::AF_INTERFACE>().emplaceBack(key);
+        }
+        e->waitIdle();
     }
 
     // Helper: wraps Eigrp::enableStub() for TEST_F bodies.
@@ -545,11 +565,12 @@ protected:
         return i->currentInterface;
     }
 
-    // Helper: wraps EigrpInterface::syncPassive() for TEST_F bodies.
+    // Helper: wraps EigrpInterface::setPassive() for TEST_F bodies.
     void syncPassive(EigrpInterface* intf = nullptr)
     {
         EigrpInterface* i = intf ? intf : eigrpInterface;
-        i->syncPassive();
+        i->enqueueSetPassive(i->configs.get<config::EigrpInterface::PASSIVE_INTERFACE>().load());
+        i->process.waitIdle();
     }
 
     // Helper: wraps EigrpInterface::configs for TEST_F bodies.
@@ -685,6 +706,7 @@ TEST_F(Internal_EigrpTest, Neighbor_TWOWAY_To_LOADING)
     extraIface->configs.id = 1;
     extraIface->configs.key = 1;
     extraIface->enableIPs();
+    extraIface->enableShutdown();
     setIPv4(0xC0A80202, 24, extraIface);
     createInterface(extraIface);
 
@@ -1457,12 +1479,9 @@ TEST_F(Internal_EigrpTest, Interface_Removal_On_Shutdown)
 TEST_F(Internal_EigrpTest, Dynamic_Interface_Addition_And_Removal) 
 {
     // Add a new interface and then remove it.
-    interface::MockInterface* extraIface = new interface::MockInterface(*global, interface::InterfaceType::GIGABIT_ETHERNET);
+    interface::MockInterface* extraIface = new interface::MockInterface(*global, interface::InterfaceType::GIGABIT_ETHERNET, defaultHwInfo, 1);
     uint32_t key = interface::encodeInterfaceKey(interface::InterfaceType::GIGABIT_ETHERNET, 1);
-    vrf->getInterfaceManager().add(extraIface, key);
     extraIface->blockEnqueues();
-    extraIface->configs.id = 1;
-    extraIface->configs.key = 1;
     extraIface->enableIPs();
     extraIface->enableShutdown();
     setIPv4(0xC0A80202, 24, extraIface);
@@ -1475,7 +1494,7 @@ TEST_F(Internal_EigrpTest, Dynamic_Interface_Addition_And_Removal)
     EXPECT_EQ(getInterfaceList().size(), 0);
 
     types::IPPrefix network = {uint32_t{0xC0a80000}, 16};
-    addNetworkRange(network);
+    addNetwork(network);
     waitIdle();
 
     EXPECT_EQ(getInterfaceList().size(), 2);
@@ -1598,13 +1617,13 @@ TEST_F(Internal_EigrpTest, TopologyTable_Update_Successors)
 }
 
 // Test: RoutingTable_Duplicate_Route_Prevention
-TEST_F(Internal_EigrpTest, RoutingTable_Duplicate_Route_Prevention) 
+TEST_F(Internal_EigrpTest, RoutingTable_Duplicate_Route_Prevention)
 {
     // Verify that duplicate networks are not added.
-    types::IPPrefix net{ uint32_t{0xC0A80100}, 24 };
-    addNetworkRange(net);
-    addNetworkRange(net);
-    size_t networkSize = getConfigs().get<config::Eigrp::NETWORK>().size();
+    types::IPv4Prefix net{ uint32_t{0xC0A80100}, 24 };
+    addNetwork(net);
+    addNetwork(net);
+    size_t networkSize = getConfigs().get<config::Eigrp::AF_INTERFACE>().get().size();
     EXPECT_EQ(networkSize, 1);
 }
 
@@ -1827,7 +1846,7 @@ TEST_F(Internal_EigrpTest, TopologyTable_Handles_Neighbor_Down)
 TEST_F(Internal_EigrpTest, RoutingTable_All_Connected_Routes_Count) 
 {
     types::IPPrefix net{ uint32_t{0xC0A80000}, 16 };
-    addNetworkRange(net);
+    addNetwork(net);
     utils::RCU::Guard guard;
     auto route = vrf->getRib().lookup<uint32_t>(mockInterface->configs.ipv4.getPrimaryPrefix().addr, guard);
     ASSERT_TRUE(route);
@@ -2017,13 +2036,14 @@ TEST_F(Internal_EigrpTest, Reply_Returned_After_Full_Query_Sequence)
     interface::MockInterface* extraIface = new interface::MockInterface(*global, interface::InterfaceType::GIGABIT_ETHERNET);
     uint32_t key = interface::encodeInterfaceKey(interface::InterfaceType::GIGABIT_ETHERNET, 1);
     vrf->getInterfaceManager().add(extraIface, key);
+    extraIface->blockEnqueues();
     extraIface->configs.id = 1;
     extraIface->configs.key = key;
     extraIface->enableIPs();
     extraIface->enableShutdown();
     setIPv4(0xC0A80102, 24, extraIface);
+    createInterface(extraIface);
 
-    EXPECT_CALL(*extraIface, enqueuePacket(::testing::_)).Times(::testing::AnyNumber());
     refreshInterfaceList();
 
     ASSERT_TRUE(getInterfaceList().contains(key));
@@ -2288,7 +2308,8 @@ TEST_F(Internal_EigrpTest, PassiveInterface_Blocks_UpdateTransmission)
 TEST_F(Internal_EigrpTest, IPv6_HelloPacket_Construction) 
 {
     // Verify that an IPv6 hello packet is constructed correctly.
-    auto ipv6Eigrp = Eigrp(asNumber, types::AddressFamily::IPv6, vrf);
+    config::EigrpRegistry ipv6EigrpReg;
+    auto ipv6Eigrp = Eigrp(ipv6EigrpReg, asNumber, types::AddressFamily::IPv6, vrf);
     start(&ipv6Eigrp);
     interface::MockInterface ipv6Interface = interface::MockInterface(*global, interface::InterfaceType::GIGABIT_ETHERNET);
     ipv6Interface.blockEnqueues();
@@ -2315,7 +2336,8 @@ TEST_F(Internal_EigrpTest, IPv6_HelloPacket_Construction)
 TEST_F(Internal_EigrpTest, IPv6_Full_Adjacency_Establishment)
 {
     // Create and start an IPv6 EIGRP process for the given AS number and VRF
-    auto ipv6Eigrp = Eigrp(asNumber, types::AddressFamily::IPv6, vrf);
+    config::EigrpRegistry ipv6EigrpReg;
+    auto ipv6Eigrp = Eigrp(ipv6EigrpReg, asNumber, types::AddressFamily::IPv6, vrf);
     start(&ipv6Eigrp);
 
     // Create a mock interface and enable basic functionality
@@ -2400,7 +2422,8 @@ TEST_F(Internal_EigrpTest, IPv6_Full_Adjacency_Establishment)
 // Test: IPv6_Update_Processing
 TEST_F(Internal_EigrpTest, IPv6_Update_Processing) //TODO
 {
-    auto ipv6Eigrp = Eigrp(asNumber, types::AddressFamily::IPv6, vrf);
+    config::EigrpRegistry ipv6EigrpReg;
+    auto ipv6Eigrp = Eigrp(ipv6EigrpReg, asNumber, types::AddressFamily::IPv6, vrf);
     start(&ipv6Eigrp);
 
     interface::MockInterface iface(*global, interface::InterfaceType::GIGABIT_ETHERNET);
@@ -2458,7 +2481,8 @@ TEST_F(Internal_EigrpTest, IPv6_Update_Processing) //TODO
 // Test: IPv6_Query_Reply_SIA
 TEST_F(Internal_EigrpTest, IPv6_Query_Reply_SIA) //TODO
 {
-    auto ipv6Eigrp = Eigrp(asNumber, types::AddressFamily::IPv6, vrf);
+    config::EigrpRegistry ipv6EigrpReg;
+    auto ipv6Eigrp = Eigrp(ipv6EigrpReg, asNumber, types::AddressFamily::IPv6, vrf);
     start(&ipv6Eigrp);
         
     interface::MockInterface iface(*global, interface::InterfaceType::GIGABIT_ETHERNET);
@@ -2672,7 +2696,7 @@ TEST_F(Internal_EigrpTest, Frequent_Interface_Flapping_No_Global_Corruption)
     // Verify that repeated interface flapping does not corrupt global state.
     setIPv4(0xC0A80101, 24);
     types::IPPrefix net = { uint32_t{0xC0A80000}, 16 };
-    addNetworkRange(net);
+    addNetwork(net);
     refreshInterfaceList();
     mockInterface->shutdown(true);
     refreshInterfaceList();
@@ -2779,7 +2803,7 @@ TEST_F(Internal_EigrpTest, MultiInterface_Failure_Isolation)
     iface1.enableShutdown();
     iface2.enableShutdown();
     types::IPPrefix network = { uint32_t{0}, 0 };
-    addNetworkRange(network);
+    addNetwork(network);
     auto int1 = createInterface(&iface1);
     auto int2 = createInterface(&iface2);
     addNeighbor(uint32_t{0x0A000005}, Neighbor::Version::LEGACY, int1);
@@ -2794,9 +2818,10 @@ TEST_F(Internal_EigrpTest, MultiInterface_Failure_Isolation)
 #pragma region AdvancesEdgeCases
 
 // Test: Duplicate_RouterID_Detection
-TEST_F(Internal_EigrpTest, Duplicate_RouterID_Detection) 
+TEST_F(Internal_EigrpTest, Duplicate_RouterID_Detection)
 {
     // Verify that duplicate router IDs are detected (placeholder test).
+    calculateRID();
     EXPECT_EQ(getRouterID(), 0xC0A80101);
     SUCCEED();
 }
@@ -2903,7 +2928,7 @@ TEST_F(Internal_EigrpTest, Frequent_Interface_Flapping_No_Global_Corruption_Exte
     // Verify that interface flapping does not corrupt global state.
     setIPv4(0xC0A80101, 24);
     types::IPPrefix network{ uint32_t{0xC0A80000}, 16 };
-    addNetworkRange(network);
+    addNetwork(network);
     refreshInterfaceList();
     mockInterface->shutdown(true);
     refreshInterfaceList();
@@ -2981,7 +3006,7 @@ TEST_F(Internal_EigrpTest, MultiInterface_Failure_Isolation_Extended)
     auto int1 = createInterface(&iface1);
     auto int2 = createInterface(&iface2);
     types::IPPrefix network{ uint32_t{}, 0 };
-    addNetworkRange(network);
+    addNetwork(network);
     addNeighbor(uint32_t{0x0A000005}, Neighbor::Version::LEGACY, int1);
     addNeighbor(uint32_t{0x0A000006}, Neighbor::Version::LEGACY, int2);
     iface1.shutdown(true);
@@ -3116,15 +3141,15 @@ TEST_F(Internal_EigrpTest, Summarization_Advertises_Summary_Only)
     interface::MockInterface* extraIface = new interface::MockInterface(*global, interface::InterfaceType::GIGABIT_ETHERNET);
     uint32_t key = interface::encodeInterfaceKey(interface::InterfaceType::GIGABIT_ETHERNET, 1);
     vrf->getInterfaceManager().add(extraIface, key);
+    extraIface->blockEnqueues();
     extraIface->configs.id = 1;
     extraIface->configs.key = key;
     extraIface->enableIPs();
     extraIface->enableShutdown();
     setIPv4(0xC0A80102, 24, extraIface);
-    {
-        EXPECT_CALL(*extraIface, enqueuePacket(::testing::_)).Times(::testing::AnyNumber());
-        refreshInterfaceList();
-    }
+    createInterface(extraIface);
+
+    refreshInterfaceList();
     EXPECT_EQ(getInterfaceList().size(), 2);
 
     types::IPAddress neighborIp1 = uint32_t{0xC0A80110};
@@ -3814,7 +3839,12 @@ TEST_F(Internal_EigrpTest, WideMetrics_OverflowValues_ClampedOrRejected)
     constexpr uint64_t infinity = std::numeric_limits<uint64_t>::max();
     auto& metrics = getMetrics();
 
-    getConfigs().get<config::Eigrp::WEIGHT_K3>().set(255);
+    {
+        auto weightsAccessor = getConfigs().get<config::Eigrp::WEIGHTS>();
+        config::EigrpWeight weights = weightsAccessor.load();
+        weights.w3() = 255;
+        weightsAccessor.set(weights);
+    }
 
     const uint64_t hugeDelay = infinity - 1;
     uint64_t m = metrics.calculateCompositeMetric(1, 255, hugeDelay, 10);
@@ -3978,10 +4008,8 @@ TEST_F(Internal_EigrpTest, WideMetrics_LegacyCoexistence_OnSameInterface)
     // A legacy peer must always be encoded with the classic IPv4 TLV
     EXPECT_EQ(legacyNbr->tlvType, TLVType::LEGACY_V4);
 
-    // A wide-capable IPv4 peer is encoded WIDE regardless of any process-level
-    // mode -- the format is negotiated per-neighbor from the version TLV each
-    // peer advertised in its own HELLO
-    EXPECT_EQ(wideNbr->tlvType, TLVType::WIDE);
+    ASSERT_FALSE(eigrpInstance->namedMode);
+    EXPECT_EQ(wideNbr->tlvType, TLVType::LEGACY_V4);
 
     // Routes from each peer land in the same topology entry without one
     // neighbor's encoding disturbing the other's
@@ -4015,7 +4043,8 @@ TEST_F(Internal_EigrpTest, WideMetrics_LegacyCoexistence_OnSameInterface)
 TEST_F(Internal_EigrpTest, MultiAsInstance_TopologyIsolation_BetweenDifferentAsNumbers)
 {
     // A second process in a different AS, on its own interface
-    auto other = Eigrp(asNumber + 100, types::AddressFamily::IPv4, vrf);
+    config::EigrpRegistry otherReg;
+    auto other = Eigrp(otherReg, asNumber + 100, types::AddressFamily::IPv4, vrf);
     start(&other);
     ASSERT_NE(other.asNumber, eigrpInstance->asNumber);
 
@@ -4069,7 +4098,8 @@ TEST_F(Internal_EigrpTest, MultiAsInstance_TopologyIsolation_BetweenDifferentAsN
 
 TEST_F(Internal_EigrpTest, IPv6_Update_Processing_InstallsRouteWithCorrectNextHop)
 {
-    auto ipv6Eigrp = Eigrp(asNumber, types::AddressFamily::IPv6, vrf);
+    config::EigrpRegistry ipv6EigrpReg;
+    auto ipv6Eigrp = Eigrp(ipv6EigrpReg, asNumber, types::AddressFamily::IPv6, vrf);
     start(&ipv6Eigrp);
 
     interface::MockInterface iface(*global, interface::InterfaceType::GIGABIT_ETHERNET);
@@ -4139,7 +4169,8 @@ TEST_F(Internal_EigrpTest, IPv6_Update_Processing_InstallsRouteWithCorrectNextHo
 
 TEST_F(Internal_EigrpTest, IPv6_Query_Reply_Sia_TimeoutBehavesLikeIPv4)
 {
-    auto ipv6Eigrp = Eigrp(asNumber, types::AddressFamily::IPv6, vrf);
+    config::EigrpRegistry ipv6EigrpReg;
+    auto ipv6Eigrp = Eigrp(ipv6EigrpReg, asNumber, types::AddressFamily::IPv6, vrf);
     start(&ipv6Eigrp);
 
     interface::MockInterface iface(*global, interface::InterfaceType::GIGABIT_ETHERNET);
@@ -4290,19 +4321,36 @@ TEST_F(Internal_EigrpTest, ConditionalReceive_UnknownSequence_RejectedAndArmsPee
 
 TEST_F(Internal_EigrpTest, WideMetrics_ResyncAfterLegacyTeardown)
 {
-    // resync() keys off tlvType. An IPv4 peer encodes WIDE whenever it
-    // negotiated wide support in its own HELLO, regardless of any
-    // process-level mode -- the fixture's instance is plain classic config.
-    types::IPAddress legacyIp = uint32_t{0x0A000071};
-    types::IPAddress wideIp   = uint32_t{0x0A000072};
+    config::EigrpRegistry ipv6EigrpReg;
+    auto ipv6Eigrp = Eigrp(ipv6EigrpReg, asNumber + 50, types::AddressFamily::IPv6, vrf);
+    start(&ipv6Eigrp);
 
-    addNeighbor(legacyIp, Neighbor::Version::LEGACY, eigrpInterface);
-    addNeighbor(wideIp, Neighbor::Version::WIDE, eigrpInterface);
+    interface::MockInterface iface(*global, interface::InterfaceType::GIGABIT_ETHERNET);
+    iface.blockEnqueues();
+    iface.enableIPs();
+    iface.enableShutdown();
 
-    ASSERT_TRUE(getNeighbor(legacyIp));
-    ASSERT_TRUE(getNeighbor(wideIp));
-    ASSERT_EQ(getNeighbor(legacyIp)->tlvType, TLVType::LEGACY_V4);
-    ASSERT_EQ(getNeighbor(wideIp)->tlvType, TLVType::WIDE);
+    uint8_t ipv6Buff[16] = { 0x20, 0x01, 0x0D, 0xB8, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 };
+    setIPv6(ipv6Buff, 64, &iface);
+
+    uint32_t key = interface::encodeInterfaceKey(interface::InterfaceType::GIGABIT_ETHERNET, 21);
+    iface.configs.key = key;
+    iface.configs.id = 21;
+    vrf->getInterfaceManager().add(&iface, key);
+
+    EigrpInterface* intf = createInterface(&iface, &ipv6Eigrp);
+    ASSERT_TRUE(intf);
+
+    types::IPAddress legacyIp = (static_cast<__uint128_t>(0x20010DB800000002) << 64) | 0x0000000000000071;
+    types::IPAddress wideIp   = (static_cast<__uint128_t>(0x20010DB800000002) << 64) | 0x0000000000000072;
+
+    addNeighbor(legacyIp, Neighbor::Version::LEGACY, intf);
+    addNeighbor(wideIp, Neighbor::Version::WIDE, intf);
+
+    ASSERT_TRUE(getNeighbor(legacyIp, intf));
+    ASSERT_TRUE(getNeighbor(wideIp, intf));
+    ASSERT_EQ(getNeighbor(legacyIp, intf)->tlvType, TLVType::LEGACY_V6);
+    ASSERT_EQ(getNeighbor(wideIp, intf)->tlvType, TLVType::WIDE);
 
     getNTable(intf).resync();
 
@@ -4310,9 +4358,9 @@ TEST_F(Internal_EigrpTest, WideMetrics_ResyncAfterLegacyTeardown)
     EXPECT_FALSE(getNeighbor(legacyIp, intf));
     EXPECT_TRUE(getNeighbor(wideIp, intf));
 
-    deactivateAllInterfaces(&named);
+    deactivateAllInterfaces(&ipv6Eigrp);
     vrf->getInterfaceManager().remove(key);
-    shutdownInstance(&named);
+    shutdownInstance(&ipv6Eigrp);
 }
 
 TEST_F(Internal_EigrpTest, PeerTermination_TlvReceived_NeighborGracefullyRemoved)

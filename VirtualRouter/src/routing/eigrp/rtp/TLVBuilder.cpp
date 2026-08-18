@@ -252,9 +252,9 @@ bool TLVBuilder::encodeDestination(RouteData& data)
     if (data.offset + prefSize > data.valueSize) return false;
     data.value[data.offset] = plen; data.offset += 1;
     if (data.v6)
-        utils::write<__uint128_t>(data.value + data.offset, data.r.prefix.v6(), prefSize);
+        utils::write(data.value + data.offset, data.r.prefix.v6(), prefSize);
     else
-        utils::write<__uint128_t>(data.value + data.offset, data.r.prefix.v4(), prefSize);
+        utils::write(data.value + data.offset, data.r.prefix.v4(), prefSize);
     data.offset += prefSize;
     return true;
 }

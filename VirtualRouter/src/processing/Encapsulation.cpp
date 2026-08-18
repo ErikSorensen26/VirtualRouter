@@ -40,7 +40,8 @@ bool encapsulate(PacketBuilder& packet)
             case HeaderType::ESP: break;
             case HeaderType::ICMP:
             {
-                //security::checksum::calculateProtocolChecksum("", encapsulatedPacket, header.offset, index, 2, 2);
+                // ICMPv4 checksum has no pseudo-header, unlike ICMPv6/TCP/UDP.
+                security::checksum::calculateChecksum(header.buffer, header.length, 2, 2);
                 break;
             }
             case HeaderType::ICMPV6:

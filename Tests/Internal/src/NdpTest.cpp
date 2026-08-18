@@ -31,7 +31,13 @@ protected:
     void SetUp() override
     {
         std::memset(buf, 0, 128);
-        global = new core::Global(fs, {}, true, true);
+
+        core::GlobalProperties props(fs);
+        props.enableDummies = true;
+        props.enableRouting = true;
+        props.threadPoolCapacity = (1 << 8);
+
+        global = new core::Global(props);
         iface = new interface::MockInterface(*global);
         iface->enableShutdown();
         iface->configs.ipv6.addAddress(localLinkIp, true);
@@ -65,7 +71,13 @@ protected:
     std::vector<interface::InterfaceConfigs::IPv6State::IPv6Address*>& getIPv6s() { return iface->configs.ipv6.globalAddresses; }
     interface::InterfaceConfigs::IPv6State::IPv6Address* getLinkLocal() { return iface->configs.ipv6.linkLocalAddress; }
     std::mutex& getIPv6Mutex() { return iface->configs.ipv6.ipMutex; }
-    void clearIPv6s() { std::lock_guard<std::mutex> lock(iface->configs.ipv6.ipMutex); iface->configs.ipv6.globalAddresses.clear(); }
+    void clearIPv6s() {
+        std::lock_guard<std::mutex> lock(iface->configs.ipv6.ipMutex);
+        // Entries are heap-owned by globalAddresses; clear() alone drops the
+        // pointers without freeing them (leak), so delete each first.
+        for (auto* addr : iface->configs.ipv6.globalAddresses) delete addr;
+        iface->configs.ipv6.globalAddresses.clear();
+    }
     void clearUnsolidated() { std::lock_guard<std::mutex> lock(iface->configs.ipv6.ipMutex); ndp->lastUnsolicitedNaTime.clear(); }
     processing::PacketBuilder& routeAdvertisment(processing::PacketBuilder& pkt, types::Mac* raMac = nullptr) { ndp->routeAdvertisement(pkt, raMac ? *raMac : iface->configs.getMac()); return pkt; }
     config::NdpRegistry& getConfigs() { return ndp->configs; }

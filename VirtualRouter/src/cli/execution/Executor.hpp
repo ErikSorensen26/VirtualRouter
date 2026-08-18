@@ -26,6 +26,7 @@
 #define CLI_EXECUTOR_HPP
 
 #include <span>
+#include <cstdio>
 
 #include <algorithm>
 #include <vector>
@@ -151,28 +152,81 @@ public:
         std::vector<Token*> toks;
         toks.reserve(tokens.size());
 
+        std::vector<Token*> tail;   // deferred words that index at the end of the line
+
         for (size_t i = 0; i < tokens.size(); i++)
         {
             Token& tok = tokens[i];
 
-            if (tok.resolver() && !tok.hasNode()) continue;
+            if (tok.deferred()
+                && (tok.registryFlagged() || tok.modeFlagged()
+                    || tok.bitMapFlag() || tok.tupChange()))
+            {
+                toks.push_back(&tok);
 
-            toks.push_back(&tok);
+                const uint16_t deferKey = tok.node.node().deferKey();
+                for (size_t x = tokens.size(); x-- > 0; )
+                {
+                    Token& r = tokens[x];
 
-            if (!tok.deferred()) continue;
+                    if (r.resolver() && r.node.node().deferKey() == deferKey)
+                    {
+                        if (!mergeDeferredResolver(tok, r)) toks.push_back(&r);
+                        break;
+                    }
+                }
+                continue;
+            }
+
+            if (tok.resolver()) continue;
+
+            if (!tok.deferred())
+            {
+                toks.push_back(&tok);
+                continue;
+            }
 
             const uint16_t deferKey = tok.node.node().deferKey();
-            for (size_t x = tokens.size(); x-- > 0; )
+            for (size_t x = i + 1; x < tokens.size(); x++)
             {
                 Token& r = tokens[x];
+                if (!r.resolver() || r.node.node().deferKey() != deferKey) continue;
 
-                if (r.resolver() && r.node.node().deferKey() == deferKey)
+                bool claimed = false;
+                for (size_t y = i + 1; y < x; y++)
                 {
-                    if (!mergeDeferredResolver(tok, r)) toks.push_back(&r);
-                    break;
+                    if (tokens[y].deferred() && tokens[y].node.node().deferKey() == deferKey)
+                    {
+                        claimed = true;
+                        break;
+                    }
                 }
+                if (claimed) break;
+
+                if (!mergeDeferredResolver(tok, r))
+                {
+                    // Two different fields on one word: each writes its own.
+                    toks.push_back(&tok);
+                    toks.push_back(&r);
+                }
+                else if (!r.node.node().hasConfig())
+                {
+                    // The resolver supplied nothing of its own, so the deferred
+                    // word is the one that indexes.
+                    tok.deferredWrite = true;
+                    tail.push_back(&tok);
+                }
+                else
+                {
+                    // The resolver named the field: the merged word writes
+                    // where it was typed.
+                    toks.push_back(&tok);
+                }
+                break;
             }
         }
+
+        toks.insert(toks.end(), tail.begin(), tail.end());
 
         orderByScope(toks);
 
@@ -195,6 +249,14 @@ public:
                 if (!commitStaged(staged)) return false;
 
                 i = utils::nextBound(toks, i, &Token::registryFlagged);
+                scope.arm();
+                if (!handleRegistryChange(std::span<Token*>(toks.data() + start, i - start))) return false;
+            }
+            else if (tok.deferredWrite)
+            {
+                if (!commitStaged(staged)) return false;
+
+                ++i;
                 scope.arm();
                 if (!handleRegistryChange(std::span<Token*>(toks.data() + start, i - start))) return false;
             }
@@ -356,7 +418,7 @@ private:
             Token* t = toks[i];
             if (!t) continue;
 
-            if (t->modeFlagged())          current = Block{ true, 0 };
+            if (t->modeFlagged() || t->deferredWrite) current = Block{ true, 0 };
             else if (t->registryFlagged()) current = Block{ false, next++ };
 
             block[i] = current;
@@ -433,6 +495,13 @@ private:
 
                     Key key{};
                     if (!utils::resolveKey<Key>(toks, key) && !std::ranges::range<Key>) return;
+
+                    if (ctx.negate || ctx.defaulted)
+                    {
+                        field.erase(key);
+                        ok = true;
+                        return;
+                    }
 
                     auto& entered = *field.emplaceBack(key, binding->node.nodeIndex());
                     ok = nav.changeMode(
@@ -566,11 +635,24 @@ private:
                     using Key = typename Field::key;
 
                     Key key{};
-                    if (!utils::resolveKey<Key>(toks, key)
-                        && !std::is_default_constructible_v<Key>)
-                        return;
+                    bool resolved = utils::resolveKey<Key>(toks, key);
+                    if (!resolved)
+                    {
+                        bool spelled = false;
+                        for (const Token* t : toks)
+                            if (t && t->pattern != P_NONE) { spelled = true; break; }
+                        if (spelled || !std::is_default_constructible_v<Key>) return;
+                    }
 
-                    auto& moved = *field.emplaceBack(key, binding->node.nodeIndex());
+                    if (ctx.negate || ctx.defaulted)
+                    {
+                        field.erase(key);
+                        ok = true;
+                        return;
+                    }
+
+                    auto* movedPtr = field.emplaceBack(key, binding->node.nodeIndex());
+                    auto& moved = *movedPtr;
                     ctx.rescope(static_cast<void*>(&moved),
                                  TreeNavigator::registryIdOf<std::remove_reference_t<decltype(moved)>>());
                     ok = true;

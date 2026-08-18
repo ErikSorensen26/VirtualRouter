@@ -171,7 +171,7 @@ bool decapsulate(PacketInfo& packet, uint8_t* data, size_t len)
                     packet.headers[packet.count++] = { packet::HeaderType::DHCPV6, packet.offset, dhcpSize };
                     return true;
                 }
-                break;
+                return true;
             }
             case IP_EIGRP:
             {

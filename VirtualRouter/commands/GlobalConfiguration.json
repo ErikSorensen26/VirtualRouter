@@ -2405,19 +2405,10 @@
                             "description": "Global proxy ARP configuration",
                             "name": "proxy",
                             "config": "Global::IP_ARP_PROXY",
-                            "properties": [
-                                "negate_all"
-                            ],
                             "subcommands": [
                                 {
-                                    "description": "Disable proxy ARP on all interfaces",
-                                    "name": "disable",
-                                    "subcommands": [
-                                        {
-                                            "description": "",
-                                            "name": "<cr>"
-                                        }
-                                    ]
+                                    "description": "",
+                                    "name": "<cr>"
                                 }
                             ]
                         },

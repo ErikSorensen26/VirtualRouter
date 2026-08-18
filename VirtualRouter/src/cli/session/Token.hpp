@@ -102,6 +102,17 @@ struct Token
     tree::Command node;
     Pattern           pattern = P_NONE;
 
+    /**
+     * @brief Runtime-only marker: the deferred word that this token stands for
+     * has paired with its resolver, so it indexes its own field now.
+     *
+     * Purely a property of the line being executed, never of the shared tree --
+     * the tree flags a deferred container with nothing at all until a resolver
+     * shows up, and marking the tree would leak across lines. Set by the
+     * executor's pairing pre-pass, consumed by orderByScope and the run loop.
+     */
+    bool deferredWrite = false;
+
     bool isLine()     const { return pattern == P_LINE; }
 
     // node() resolves against the tree without checking it is there, so an

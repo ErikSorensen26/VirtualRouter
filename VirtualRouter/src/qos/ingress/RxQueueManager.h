@@ -19,11 +19,17 @@
 #include <string>
 
 #include "interface/Interface.h"
-#include "hardware/ingress/Ingress.h"
+#include "hardware/ingress/IngressBase.h"
 #include "RxQueueOpts.hpp"
 
 namespace qos::ingress
 {
+/**
+ * @enum CpuPolicy
+ * @brief CPU allocation policy for RX queue distribution across cores.
+ * @ingroup QOS_INGRESS
+ */
+enum class CpuPolicy { EqualShare, Weighted };
 
 /**
  * @brief Manages RX queue lifecycle and distribution across CPU cores.
@@ -60,13 +66,6 @@ public:
         int weight = 1;              ///< Weight for weighted CPU allocation.
         RxQueueOpts defaultQueueOpts{}; ///< Default options per queue.
     };
-
-    /**
-     * @enum CpuPolicy
-     * @brief CPU allocation policy for RX queue distribution across cores.
-     * @ingroup QOS_INGRESS
-     */
-    enum class CpuPolicy { EqualShare, Weighted };
 
     /**
      * @brief Constructs the RX queue manager.

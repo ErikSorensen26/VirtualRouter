@@ -37,9 +37,9 @@ Interface::Interface(const InterfaceCreation& cfgs)
 {
     if (!debug)
     {
-        cfgs.vrf.getGlobal().txMgr.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
-        cfgs.vrf.getGlobal().rxMgr.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
-        cfgs.vrf.getGlobal().engine.hwManager.registerInterface(&configs.hwInfo, this);
+        cfgs.vrf.getGlobal().txManager.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
+        cfgs.vrf.getGlobal().rxManager.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
+        cfgs.vrf.getGlobal().hwManager.registerInterface(&configs.hwInfo, this);
     }
 }
 
@@ -49,9 +49,9 @@ Interface::~Interface()
     if (!debug)
     {
         core::VirtualRouter* vrf = getVRF();
-        vrf->getGlobal().txMgr.removeInterface(*this);
-        vrf->getGlobal().rxMgr.removeInterface(*this);
-        vrf->getGlobal().engine.hwManager.unregisterInterface(&configs.hwInfo, this);
+        vrf->getGlobal().txManager.removeInterface(*this);
+        vrf->getGlobal().rxManager.removeInterface(*this);
+        vrf->getGlobal().hwManager.unregisterInterface(&configs.hwInfo, this);
     }
 }
 
@@ -256,11 +256,11 @@ void Interface::markAddressDuplicate(types::IPv6Prefix address)
     else
     {
         auto markInvalid = [&](std::vector<InterfaceConfigs::IPv6State::IPv6Address*>& list) {
-            for (auto it = list.begin(); it != list.end(); ++it)
+            for (auto* entry : list)
             {
-                if ((*it)->prefix.addr == address.addr)
+                if (entry->prefix.addr == address.addr)
                 {
-                    list.erase(it);
+                    entry->valid = false;
                     return;
                 }
             }
@@ -479,9 +479,9 @@ void Interface::startThreads()
 {
     // Add the interface to the TX Queue manager
     core::VirtualRouter* vrf = getVRF();
-    vrf->getGlobal().txMgr.start(this);
-    vrf->getGlobal().rxMgr.start(this);
-    vrf->getGlobal().engine.hwManager.bringUp(configs.hwInfo.ifname);
+    vrf->getGlobal().txManager.start(this);
+    vrf->getGlobal().rxManager.start(this);
+    vrf->getGlobal().hwManager.bringUp(configs.hwInfo.ifname);
 
     threadsRunning = true;
 
@@ -493,8 +493,8 @@ void Interface::stopThreads()
 {
     // Add the interface to the TX Queue manager
     core::VirtualRouter* vrf = getVRF();
-    vrf->getGlobal().txMgr.stop(this);
-    vrf->getGlobal().rxMgr.stop(this);
+    vrf->getGlobal().txManager.stop(this);
+    vrf->getGlobal().rxManager.stop(this);
     threadsRunning.store(false, std::memory_order_release); 
 }
 

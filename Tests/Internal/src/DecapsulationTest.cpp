@@ -456,13 +456,83 @@ TEST_F(Internal_DecapsulationTest, EthernetIPv4Tcp_Invalid)
 // Test EthernetIPv6Tcp_Valid
 TEST_F(Internal_DecapsulationTest, EthernetIPv6Tcp_Valid)
 {
-    GTEST_SKIP();
+    // Ethernet(14) + IPv6(40, NextHeader=6 => TCP) + TCP(20)
+    alignas(64) uint8_t packet[14 + 40 + 20] = {
+       0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+       0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+       0x86, 0xDD, // EtherType for IPv6
+       // Minimal IPv6 (40 bytes, NextHeader=6 => TCP)
+       0x60, 0x00, 0x00, 0x00, 0x00, 0x14, 0x06, 0x40,
+       0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+       0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+       // TCP(20 bytes)
+       0x1F, 0x90, 0x00, 0x50, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x50, 0x02, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00
+    };
+
+    ASSERT_TRUE(inspection(pkt, packet, 14 + 40 + 20));
+
+    bool hasEth = false;
+    bool hasIPv6 = false;
+    bool hasTcp = false;
+    for (int i = 0; i < pkt.count; ++i)
+    {
+        if (pkt.headers[i].type == HeaderType::ETHERNET)
+        {
+            if (hasEth) FAIL();
+            hasEth = true;
+        }
+        else if (pkt.headers[i].type == HeaderType::IPV6)
+        {
+            if (hasIPv6) FAIL();
+            hasIPv6 = true;
+        }
+        else if (pkt.headers[i].type == HeaderType::TCP)
+        {
+            if (hasTcp) FAIL();
+            hasTcp = true;
+        }
+        else
+            FAIL();
+    }
+
+    ASSERT_TRUE(hasEth);
+    ASSERT_TRUE(hasIPv6);
+    ASSERT_TRUE(hasTcp);
 }
 
 // Test EthernetIPv6Tcp_Invalid
 TEST_F(Internal_DecapsulationTest, EthernetIPv6Tcp_Invalid)
 {
-    GTEST_SKIP();
+    // Truncated TCP => only 4 bytes
+    alignas(64) uint8_t packet[14 + 40 + 4] = {
+       0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+       0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+       0x86, 0xDD,
+       0x60, 0x00, 0x00, 0x00, 0x00, 0x04, 0x06, 0x40,
+       0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+       0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+       // Only 4 bytes for TCP
+       0x1F, 0x90, 0x00, 0x50
+    };
+
+    ASSERT_FALSE(inspection(pkt, packet, 14 + 40 + 4));
+
+    bool hasEth = false;
+    bool hasIPv6 = false;
+    bool hasTcp = false;
+    for (int i = 0; i < pkt.count; ++i)
+    {
+        if (pkt.headers[i].type == HeaderType::ETHERNET)
+            hasEth = true;
+        else if (pkt.headers[i].type == HeaderType::IPV6)
+            hasIPv6 = true;
+        else if (pkt.headers[i].type == HeaderType::TCP)
+            hasTcp = true;
+    }
+
+    ASSERT_TRUE(hasEth);
+    ASSERT_TRUE(hasIPv6);
+    ASSERT_FALSE(hasTcp);
 }
 
 //--------------------------------------------------------------------------------
@@ -557,13 +627,83 @@ TEST_F(Internal_DecapsulationTest, EthernetIPv4Udp_Invalid)
 // Test EthernetIPv6Udp_Valid
 TEST_F(Internal_DecapsulationTest, EthernetIPv6Udp_Valid)
 {
-    GTEST_SKIP();
+    // Ethernet(14) + IPv6(40, NextHeader=17 => UDP) + UDP(8)
+    alignas(64) uint8_t packet[14 + 40 + 8] = {
+       0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+       0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+       0x86, 0xDD, // EtherType for IPv6
+       // Minimal IPv6 (40 bytes, NextHeader=17 => UDP)
+       0x60, 0x00, 0x00, 0x00, 0x00, 0x08, 0x11, 0x40,
+       0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+       0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+       // UDP(8)
+       0x1F, 0x90, 0x00, 0x35, 0x00, 0x08, 0x12, 0x34
+    };
+
+    ASSERT_TRUE(inspection(pkt, packet, 14 + 40 + 8));
+
+    bool hasEth = false;
+    bool hasIPv6 = false;
+    bool hasUdp = false;
+    for (int i = 0; i < pkt.count; ++i)
+    {
+        if (pkt.headers[i].type == HeaderType::ETHERNET)
+        {
+            if (hasEth) FAIL();
+            hasEth = true;
+        }
+        else if (pkt.headers[i].type == HeaderType::IPV6)
+        {
+            if (hasIPv6) FAIL();
+            hasIPv6 = true;
+        }
+        else if (pkt.headers[i].type == HeaderType::UDP)
+        {
+            if (hasUdp) FAIL();
+            hasUdp = true;
+        }
+        else
+            FAIL();
+    }
+
+    ASSERT_TRUE(hasEth);
+    ASSERT_TRUE(hasIPv6);
+    ASSERT_TRUE(hasUdp);
 }
 
 // Test EthernetIPv6Udp_Invalid
 TEST_F(Internal_DecapsulationTest, EthernetIPv6Udp_Invalid)
 {
-    GTEST_SKIP();
+    // Truncated UDP => 4 bytes
+    alignas(64) uint8_t packet[14 + 40 + 4] = {
+       0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+       0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+       0x86, 0xDD,
+       0x60, 0x00, 0x00, 0x00, 0x00, 0x04, 0x11, 0x40,
+       0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+       0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+       // Only 4 bytes for UDP
+       0x1F, 0x90, 0x00, 0x35
+    };
+
+    ASSERT_FALSE(inspection(pkt, packet, 14 + 40 + 4));
+
+    bool hasEth = false;
+    bool hasIPv6 = false;
+    bool hasUdp = false;
+    for (int i = 0; i < pkt.count; ++i)
+    {
+        if (pkt.headers[i].type == HeaderType::ETHERNET)
+            hasEth = true;
+        else if (pkt.headers[i].type == HeaderType::IPV6)
+            hasIPv6 = true;
+        else if (pkt.headers[i].type == HeaderType::UDP)
+            hasUdp = true;
+    }
+
+    ASSERT_TRUE(hasEth);
+    ASSERT_TRUE(hasIPv6);
+    ASSERT_FALSE(hasUdp);
 }
 
 //--------------------------------------------------------------------------------
@@ -678,15 +818,96 @@ TEST_F(Internal_DecapsulationTest, EthernetIPv4UdpDhcp_Invalid)
 // Test EthernetIPv6UdpDhcpv6_Valid
 TEST_F(Internal_DecapsulationTest, EthernetIPv6Dhcpv6_Valid)
 {
-    std::cout << "DHCPV6 IS NEEDED" << std::endl;
-    GTEST_SKIP();
+    // Ethernet(14) + IPv6(40, NextHeader=17 => UDP) + UDP(8, ports 546/547 => DHCPv6) + Dhcpv6Header(4)
+    alignas(64) uint8_t packet[14 + 40 + 8 + 4] = {
+       0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+       0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+       0x86, 0xDD, // EtherType for IPv6
+       // Minimal IPv6 (40 bytes, NextHeader=17 => UDP)
+       0x60, 0x00, 0x00, 0x00, 0x00, 0x0C, 0x11, 0x40,
+       0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+       0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+       // UDP(8), src=546(client), dst=547(server)
+       0x02, 0x22, 0x02, 0x23, 0x00, 0x0C, 0x12, 0x34,
+       // Dhcpv6Header(4): type=SOLICIT(1), 3-byte transaction id
+       0x01, 0x00, 0x1A, 0x2B
+    };
+
+    ASSERT_TRUE(inspection(pkt, packet, 14 + 40 + 8 + 4));
+
+    bool hasEth = false;
+    bool hasIPv6 = false;
+    bool hasUdp = false;
+    bool hasDhcpv6 = false;
+    for (int i = 0; i < pkt.count; ++i)
+    {
+        if (pkt.headers[i].type == HeaderType::ETHERNET)
+        {
+            if (hasEth) FAIL();
+            hasEth = true;
+        }
+        else if (pkt.headers[i].type == HeaderType::IPV6)
+        {
+            if (hasIPv6) FAIL();
+            hasIPv6 = true;
+        }
+        else if (pkt.headers[i].type == HeaderType::UDP)
+        {
+            if (hasUdp) FAIL();
+            hasUdp = true;
+        }
+        else if (pkt.headers[i].type == HeaderType::DHCPV6)
+        {
+            if (hasDhcpv6) FAIL();
+            hasDhcpv6 = true;
+        }
+        else
+            FAIL();
+    }
+
+    ASSERT_TRUE(hasEth);
+    ASSERT_TRUE(hasIPv6);
+    ASSERT_TRUE(hasUdp);
+    ASSERT_TRUE(hasDhcpv6);
 }
 
 // Test EthernetIPv6UdpDhcpv6_Invalid
 TEST_F(Internal_DecapsulationTest, EthernetIPv6Dhcpv6_Invalid)
 {
-    std::cout << "DHCPV6 IS NEEDED" << std::endl;
-    GTEST_SKIP();
+    // UDP with DHCPv6 ports but no payload => not enough data for the 4-byte Dhcpv6Header
+    alignas(64) uint8_t packet[14 + 40 + 8] = {
+       0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+       0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+       0x86, 0xDD,
+       0x60, 0x00, 0x00, 0x00, 0x00, 0x08, 0x11, 0x40,
+       0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+       0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+       // UDP(8), src=546(client), dst=547(server), no payload after it
+       0x02, 0x22, 0x02, 0x23, 0x00, 0x08, 0x12, 0x34
+    };
+
+    ASSERT_FALSE(inspection(pkt, packet, 14 + 40 + 8));
+
+    bool hasEth = false;
+    bool hasIPv6 = false;
+    bool hasUdp = false;
+    bool hasDhcpv6 = false;
+    for (int i = 0; i < pkt.count; ++i)
+    {
+        if (pkt.headers[i].type == HeaderType::ETHERNET)
+            hasEth = true;
+        else if (pkt.headers[i].type == HeaderType::IPV6)
+            hasIPv6 = true;
+        else if (pkt.headers[i].type == HeaderType::UDP)
+            hasUdp = true;
+        else if (pkt.headers[i].type == HeaderType::DHCPV6)
+            hasDhcpv6 = true;
+    }
+
+    ASSERT_TRUE(hasEth);
+    ASSERT_TRUE(hasIPv6);
+    ASSERT_TRUE(hasUdp);
+    ASSERT_FALSE(hasDhcpv6);
 }
 
 //--------------------------------------------------------------------------------

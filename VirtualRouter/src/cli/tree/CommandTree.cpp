@@ -4,7 +4,6 @@
 #include "nodes/FileHeader.hpp"
 #include "configs/RegistryTable.hpp"
 #include <Json.hpp>
-#include <filesystem>
 #include <fstream>
 #include <cstdio>
 
@@ -24,7 +23,6 @@ CommandTree::CommandTree(Storage storage)
 
 CommandTree::CommandTree(const std::string& sourcePath, const std::string& binaryPath)
 {
-
     const uint32_t sources = parser::hashDir(sourcePath);
 
     auto discard = [this]

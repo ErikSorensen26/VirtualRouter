@@ -33,6 +33,18 @@ const JsonNode* member(const JsonNode& obj, std::string_view key)
     return nullptr;
 }
 
+bool subtreeEntersMode(const JsonNode* subs)
+{
+    if (!subs || subs->type != JsonNode::ARRAY) return false;
+
+    for (const JsonNode& child : subs->children)
+    {
+        if (member(child, KEY_MODE)) return true;
+        if (subtreeEntersMode(member(child, KEY_SUBCOMMANDS))) return true;
+    }
+    return false;
+}
+
 // A misspelled key is not inert: "subcommads" silently costs the whole subtree.
 void rejectUnknownKeys(const JsonNode& obj)
 {
@@ -762,7 +774,6 @@ struct TreeEmitter
             for (const JsonNode& p : props->children)
                 n.flags |= propertyFlag(p.strValue);
 
-        // "exit" and "end" are the grammar's only mode exits.
         if (emitName.starts_with("exit") || emitName == "end")
             n.flags |= CommandNode::MODE_EXIT;
 
@@ -787,18 +798,12 @@ struct TreeEmitter
                     + "; every config below a rescope names that registry");
         }
 
-        // A shared definition names fields its caller fills in, so a caller that
-        // leaves them out drops the binding rather than failing: the keys below
-        // set a field this node no longer has, and go quiet along with it.
         const bool configDropped = argUnbound && !n.hasConfig();
 
         // "Type::MEMBER" sets the bound field to one enum member.
         if (const std::string* en = keyValue(KEY_ENUM); en && !configDropped)
             bindEnum(n, *en, emitName, cfgKeyText);
 
-        // Both name a deferral key, and both land in deferKeyId, so a node that
-        // named both would have one overwrite the other -- bindDeferred/bindResolver
-        // each refuse a node that already claimed deferKeyId as the other kind.
         if (const std::string* key = keyValue(KEY_DEFERRED); key && !configDropped)
             bindDeferred(n, *key, emitName, cfgKeyText);
 
@@ -861,11 +866,12 @@ struct TreeEmitter
                         + "' binds container '" + cfgKeyText + "', whose entries are"
                         " not a registered registry");
 
-                n.flags |= CommandNode::REGISTRY_CHANGE;
+                if (!n.hasDeferred() || subtreeEntersMode(member(src, KEY_SUBCOMMANDS)))
+                {
+                    n.flags |= CommandNode::REGISTRY_CHANGE;
 
-                // Everything below now writes into what was rescoped to,
-                // which supersedes whatever an outer rescope established.
-                expect = scope.registry;
+                    expect = scope.registry;
+                }
             }
         }
 
@@ -935,11 +941,14 @@ struct TreeEmitter
     {
         std::vector<bool> deferred(deferKeys.size(), false);
         std::vector<bool> resolved(deferKeys.size(), false);
+        std::vector<bool> hasField(deferKeys.size(), false);
 
         for (const CommandNode& n : nodes)
         {
             if (n.hasDeferred()) deferred[n.deferKey()] = true;
             if (n.hasResolver()) resolved[n.deferKey()] = true;
+            if ((n.hasDeferred() || n.hasResolver()) && n.hasConfig())
+                hasField[n.deferKey()] = true;
         }
 
         for (size_t i = 0; i < deferKeys.size(); ++i)
@@ -955,6 +964,12 @@ struct TreeEmitter
                     + "' is resolved but nothing defers under it; a "
                     + std::string(KEY_RESOLVER) + " needs a matching "
                     + std::string(KEY_DEFERRED));
+
+            if ((deferred[i] || resolved[i]) && !hasField[i])
+                throw std::runtime_error("cli::grammar: key '" + deferKeys[i]
+                    + "' is named by no command that binds a field; a "
+                    + std::string(KEY_DEFERRED) + " value needs a config on "
+                    "itself or on one of its resolvers");
         }
     }
 

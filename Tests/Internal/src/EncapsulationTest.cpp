@@ -223,7 +223,6 @@ TEST_F(Internal_EncapsulationTest, EthernetMplsIPv4)
 // Test EthernetIPv4Icmp
 TEST_F(Internal_EncapsulationTest, EthernetIPv4Icmp)
 {
-    GTEST_SKIP() << "Finish implementation for icmpv4";
     // Ethernet(14) + IPv4(20) + ICMP(8) = 42 bytes
     uint8_t expectedEthernet[14] = {
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // Destination MAC
@@ -233,7 +232,7 @@ TEST_F(Internal_EncapsulationTest, EthernetIPv4Icmp)
 
     uint8_t expectedIPv4[20] = {
         0x45, 0x00, // Version/IHL, TOS
-        0x00, 0xC1, // Total Length = 28
+        0x00, 0x1C, // Total Length = 28
         0x00, 0x01, // Identification
         0x40, 0x00, // Flags, Fragment Offset
         0x40, 0x01, // TTL=64, Protocol=ICMP

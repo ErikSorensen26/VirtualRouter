@@ -12,7 +12,6 @@
 #define GLOBAL_H
 
 #include <string>
-#include <memory>
 #include <mutex>
 #include <shared_mutex>
 #include <atomic>
@@ -31,7 +30,7 @@
 #define DEFAULT_HOSTNAME "router"
 #define DEFAULT_VRF ""
 
-namespace config { struct GlobalRegistry; struct VrfRegistry; struct InterfaceRegistry; struct BgpRegistry; }
+namespace config { class GlobalRegistry; struct VrfRegistry; struct InterfaceRegistry; struct BgpRegistry; }
 namespace routing::bgp { class BgpProcess; }
 
 namespace interface { class Interface; }
@@ -53,6 +52,36 @@ namespace core
 {
 
 class VirtualRouter;
+
+/**
+ * TODO add doxy comment
+ */
+struct GlobalProperties
+{
+    GlobalProperties(cli::FileSystem& fs)
+        : fileSystem(fs)
+    {}
+
+    // FileSystem
+    cli::FileSystem& fileSystem;
+    cli::StartupFiles stfs;
+
+    cli::tree::CommandTree* tree = nullptr;
+    config::GlobalRegistry* registry = nullptr;
+
+    // Threading
+    size_t threadPoolCoreCount = 5;
+    size_t threadPoolCapacity = (1 << 16);
+    std::vector<int> txThreadPool = {0, 1, 2, 3};
+    std::vector<int> rxThreadPool = {4, 5, 6, 7};
+    double txQueueBias = 1.0;
+    qos::egress::CpuPolicy txQueuePolicy = qos::egress::CpuPolicy::EqualShare;
+    qos::ingress::CpuPolicy rxQueuePolicy = qos::ingress::CpuPolicy::EqualShare;
+
+    bool enableRouting = false;
+    bool enableDummies = false;
+    bool test = false;
+};
 
 /**
  * @class Global
@@ -144,7 +173,7 @@ public:
      * @note The CLI engine *requires* access to Global during construction, therefore
      * this object passes a reference to itself into `CliEngine`.
      */
-    Global(cli::FileSystem& fs, const cli::StartupFiles& stfs = {}, bool enableRouting = false, bool test = false);
+    Global(GlobalProperties& props);
 
     /**
      * @brief Destructor for the Global system controller.
@@ -160,7 +189,7 @@ public:
     ~Global();
 
     /**
-     * TODO apply configs
+     * TODO add doxy comment
      */
     void initConfigs();
 
@@ -380,6 +409,7 @@ private:
     services::dhcp::Dhcpv6Server* dhcpv6Server = nullptr; ///< Global IPv6 DHCP Server.
 
     config::GlobalRegistry* configs = nullptr; ///< Heap-allocated global config registry (decouples Global.h from GlobalRegistry.h).
+    bool configOwner = false; ///< Indicates whether this instance owns the configuration state.
 
 public:
     // PUBLIC SYSTEM COMPONENTS
@@ -389,10 +419,11 @@ public:
 
     config::GlobalRegistry& getConfigs(); ///< Returns the global configuration registry.
 
-    cli::CliEngine engine;            ///< Global CLI engine for user interface.
+    cli::CliEngine* engine = nullptr;            ///< Global CLI engine for user interface.
 
-    qos::egress::TxQueueManager txMgr;        ///< Hardware TX queue controller.
-    qos::ingress::RxQueueManager rxMgr;        ///< Hardware RX queue controller.
+    hardware::HardwareManager hwManager;       ///< Physical hardware manager.
+    qos::egress::TxQueueManager txManager;      ///< Hardware TX queue controller.
+    qos::ingress::RxQueueManager rxManager;     ///< Hardware RX queue controller.
 
 };
 

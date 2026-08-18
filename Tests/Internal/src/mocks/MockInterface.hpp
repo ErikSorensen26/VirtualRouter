@@ -12,6 +12,7 @@
 #include <dhcp/dhcpv4/DhcpClient.h>
 #include <VirtualRouter.h>
 #include <Global.h>
+#include <configs/registry/global/GlobalRegistry.h>
 #include "hardware/egress/NullEgress.h"
 #include "qos/egress/TxQueue.hpp"
 #include "qos/egress/TxDistributor.h"
@@ -30,7 +31,9 @@ public:
                   float interfaceId = 0,
                   core::VirtualRouter* vrf = nullptr,
                   bool debug = true)
-        : Interface({interfaceType, interfaceId, vrf ? *vrf : *global.getRoutingInstance(), hwInfo, debug})
+        : Interface({interfaceType, interfaceId, vrf ? *vrf : *global.getRoutingInstance(), hwInfo,
+                     *global.getConfigs().get<config::Global::INTERFACE>().emplaceBack(InterfaceKey(interfaceType, interfaceId)),
+                     debug})
     {
         shutdownFlag = false;
         arp.refresh();

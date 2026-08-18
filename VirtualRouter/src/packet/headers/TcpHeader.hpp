@@ -93,16 +93,16 @@ struct TcpHeader
             static_cast<uint8_t>((raw->dataOffsetAndFlags1 & 0x0F) | (words << 4));
     }
 
-    void setFlagNS(bool v)                 { utils::setBit(&raw->dataOffsetAndFlags1, 0, v); }
+    void setFlagNS(bool v)                 { utils::setBit(&raw->dataOffsetAndFlags1, 7, v); }
 
-    void setFlagCWR(bool v)                { utils::setBit(&raw->flags, 7, v); }
-    void setFlagECE(bool v)                { utils::setBit(&raw->flags, 6, v); }
-    void setFlagURG(bool v)                { utils::setBit(&raw->flags, 5, v); }
-    void setFlagACK(bool v)                { utils::setBit(&raw->flags, 4, v); }
-    void setFlagPSH(bool v)                { utils::setBit(&raw->flags, 3, v); }
-    void setFlagRST(bool v)                { utils::setBit(&raw->flags, 2, v); }
-    void setFlagSYN(bool v)                { utils::setBit(&raw->flags, 1, v); }
-    void setFlagFIN(bool v)                { utils::setBit(&raw->flags, 0, v); }
+    void setFlagCWR(bool v)                { utils::setBit(&raw->flags, 0, v); }
+    void setFlagECE(bool v)                { utils::setBit(&raw->flags, 1, v); }
+    void setFlagURG(bool v)                { utils::setBit(&raw->flags, 2, v); }
+    void setFlagACK(bool v)                { utils::setBit(&raw->flags, 3, v); }
+    void setFlagPSH(bool v)                { utils::setBit(&raw->flags, 4, v); }
+    void setFlagRST(bool v)                { utils::setBit(&raw->flags, 5, v); }
+    void setFlagSYN(bool v)                { utils::setBit(&raw->flags, 6, v); }
+    void setFlagFIN(bool v)                { utils::setBit(&raw->flags, 7, v); }
 };
 
 /**

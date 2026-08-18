@@ -22,7 +22,6 @@ Neighbor* NeighborTable::createNeighbor(config::BgpNeighborSessionRegistry& cfgs
     if (!ok)
         return nullptr;
 
-    startConfiguredSession(it->second);
     return &it->second;
 }
 
@@ -44,7 +43,7 @@ Neighbor* NeighborTable::createDynamicNeighbor(const types::IPAddress& ipAddress
     PeerGroup* pg = lookupPeerGroup(peerGroupName);
     if (!pg) return nullptr;
 
-    auto [it, ok] = neighbors.try_emplace(ipAddress, pg->getSessionConfigs(), ipAddress, *this, scope.scheduler);
+    auto [it, ok] = neighbors.try_emplace(ipAddress, *pg, ipAddress, *this, scope.scheduler);
     if (!ok) return nullptr;
 
     // Do NOT start an active session — dynamic neighbors are inbound-only.

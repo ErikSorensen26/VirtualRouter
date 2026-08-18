@@ -20,6 +20,7 @@
 #include "FrameBuffer.hpp"
 
 class ConsoleTest;
+class Internal_ConsoleTest;
 
 namespace cli
 {
@@ -34,7 +35,7 @@ namespace cli
 class Console
 {
 private:
-    friend class Internal_ConsoleTest;
+    friend class ::Internal_ConsoleTest;
 public:
 
     /**

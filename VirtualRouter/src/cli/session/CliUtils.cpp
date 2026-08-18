@@ -279,15 +279,16 @@ bool extractIPv4Prefix(std::string_view addr, std::string_view mask, types::IPPr
     uint32_t addrInt = 0;
     if (!parseIPv4(addr, addrInt)) return false;
     prefix.setV4(addrInt);
-    if (!extractSubnetMask(maskInt, prefix.prefixLength)) return false;
-    return true;
+    if (extractSubnetMask(maskInt, prefix.prefixLength)) return true;
+    return extractSubnetMask(~maskInt, prefix.prefixLength);
 }
 
 bool extractIPv4Prefix(std::string_view addr, std::string_view mask, types::IPv4Prefix& prefix)
 {
     uint32_t maskInt = 0;
     if (!parseIPv4(mask, maskInt)) return false;
-    if (!extractSubnetMask(maskInt, prefix.prefixLength)) return false;
+    if (extractSubnetMask(maskInt, prefix.prefixLength)) return true;
+    if (!extractSubnetMask(~maskInt, prefix.prefixLength)) return false;
     if (!parseIPv4(addr, prefix.addr)) return false;
     return true;
 }

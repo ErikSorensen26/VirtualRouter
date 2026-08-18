@@ -80,13 +80,14 @@ public:
     void startConfiguredSession(Neighbor& nbr);
 
     /**
-     * @brief Create a statically configured BGP neighbor for @p ipAddress and
-     *        start its configured session.
+     * @brief Create a statically configured BGP neighbor for @p ipAddress.
      *
-     * Inserts a new @ref Neighbor into the table and starts a session for it
-     * per its configured TRANSPORT_CONNECTION_MODE.  If a neighbor already
-     * exists at that address, returns a pointer to the existing entry without
-     * modifying it or touching its session.
+     * Inserts a new @ref Neighbor into the table. Does not start a session --
+     * callers that want the neighbor's configured session started (the normal
+     * case for a real config-driven create) must call @ref startConfiguredSession
+     * explicitly afterward. If a neighbor already exists at that address,
+     * returns a pointer to the existing entry without modifying it or touching
+     * its session.
      *
      * @param ipAddress Peer IP address; used as the primary key.
      * @return Pointer to the new or existing Neighbor entry.

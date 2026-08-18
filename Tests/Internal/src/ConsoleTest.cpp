@@ -5,27 +5,24 @@
 #include <string>
 #include <vector>
 
-// Test Fixture for Console
-// NOTE: Must be in namespace cli to match the friend class declaration in Console.h
-namespace cli {
 class Internal_ConsoleTest : public ::testing::Test
 {
 protected:
-    // Create the MockTerminal instance
-    MockConsole* mockConsole;
+    ::testing::NiceMock<cli::MockConsole>* mockConsole;
 
     // Create a console instance with the MockTerminal
-    Console* console;
+    cli::Console* console;
 
     void SetUp() override
     {
-        mockConsole = new MockConsole;
-        console = new Console(*mockConsole); // Share ownership
+        mockConsole = new ::testing::NiceMock<cli::MockConsole>;
+        console = new cli::Console(*mockConsole); // Share ownership
     }
 
     void TearDown() override
     {
         delete console;
+        delete mockConsole;
     }
 
     std::string getPrompt() {return console->prompt;}
@@ -61,12 +58,9 @@ protected:
     std::vector<std::string> getHistory() {return console->history;}
     void setHistory(std::vector<std::string> newHistory) {console->history = newHistory;}
     void updateDisplayInput(std::string& oldInput, std::string input) {console->updateDisplayInput(oldInput, input);}
-    CursorPosition getCursorPosition() {return console->getCursorPosition();}
+    cli::CursorPosition getCursorPosition() {return console->getCursorPosition();}
     size_t getTerminalWidth() {return console->getTerminalWidth();}
 };
-} // namespace cli
-
-using cli::Internal_ConsoleTest;
 
 #pragma region Initialization
 
@@ -193,9 +187,9 @@ TEST_F(Internal_ConsoleTest, MoveCursorLeft_ShouldMoveCursorLeftProperly)
     setCursorPos(5);
     size_t moveCount = 3;
 
-    // Expect the console's moveCursorLeft method to be called moveCount times
-    EXPECT_CALL(*mockConsole, moveCursorLeft(1)).Times(static_cast<int>(moveCount));
-
+    // moveCursorLeft only tracks cursorPos internally; the terminal cursor is
+    // repositioned later via renderInput's frameBuffer diff, not per-step calls
+    // into the controller.
     moveCursorLeft(moveCount);
 
     EXPECT_EQ(getCursorPos(), 2);
@@ -207,9 +201,6 @@ TEST_F(Internal_ConsoleTest, MoveCursorLeft_AtBoundary_ShouldNotMoveCursorPastBo
     setCursorPos(2);
 
     size_t moveCount = 5; // Attempt to move beyond the start
-
-    // Expect the console's moveCursorLeft method to only be called twice
-    EXPECT_CALL(*mockConsole, moveCursorLeft(1)).Times(2);
 
     moveCursorLeft(moveCount);
 
@@ -236,9 +227,6 @@ TEST_F(Internal_ConsoleTest, MoveCursorRight_ShouldMoveCursorRightProperly)
     size_t moveCount = 3;
     std::string input = "HelloWorld";
 
-    // Expect the console's moveCursorRight method to be called moveCount times
-    EXPECT_CALL(*mockConsole, moveCursorRight(1)).Times(3);
-
     moveCursorRight(moveCount);
 
     EXPECT_EQ(getCursorPos(), 8);
@@ -250,9 +238,6 @@ TEST_F(Internal_ConsoleTest, MoveCursorRight_AtBoundary_ShouldNotMoveCursorPastB
     setCursorPos(8);
     size_t moveCount = 5;
     std::string input = "HelloWorld";
-
-    // Expect the console's moveCursorRight method to be called moveCount times
-    EXPECT_CALL(*mockConsole, moveCursorRight(1)).Times(2);
 
     moveCursorRight(moveCount, &input);
 
@@ -342,9 +327,6 @@ TEST_F(Internal_ConsoleTest, MoveCursorToStart_FromMiddle_ShouldMoveCursorToStar
 {
     setCursorPos(10);
 
-    // Expect moveCursorLeft to be called 10 times
-    EXPECT_CALL(*mockConsole, moveCursorLeft(1)).Times(10);
-
     moveCursorToStart();
 
     EXPECT_EQ(getCursorPos(), 0);
@@ -368,9 +350,6 @@ TEST_F(Internal_ConsoleTest, MoveCursorToEnd_FromMiddle_ShouldMoveCursorToEnd)
 {
     setCursorPos(4);
     std::string input = "helloWorld";
-
-    // Expect the console's moveCursorRight method to be called 6 times
-    EXPECT_CALL(*mockConsole, moveCursorRight(1)).Times(6);
 
     moveCursorToEnd(input);
 
@@ -400,9 +379,6 @@ TEST_F(Internal_ConsoleTest, SkipWordLeft_InMiddle_ShouldMoveCursorLeftToPreviou
     std::string input = "Hello World";
     setCursorPos(8); // Position before 'o'
 
-    // Expect the console's moveCursorLeft to be called 2 times (from 8 to 6)
-    EXPECT_CALL(*mockConsole, moveCursorLeft(1)).Times(2);
-
     skipWordLeft(input);
 
     EXPECT_EQ(getCursorPos(), 6);
@@ -427,9 +403,6 @@ TEST_F(Internal_ConsoleTest, SkipWordRight_InMiddle_ShouldMoveCursorRightToNextW
 {
     std::string input = "Hello World";
     setCursorPos(3); // Position at space before 'l'
-
-    // Expect the console's moveCursorRight to be called 3 times
-    EXPECT_CALL(*mockConsole, moveCursorRight(1)).Times(3);
 
     skipWordRight(input);
 
@@ -456,9 +429,6 @@ TEST_F(Internal_ConsoleTest, SkipWordLeft_WithMultipleSpaces_ShouldSkipAllSpaces
     std::string input = "Hello    World";
     setCursorPos(11); // Before 'o'
 
-    // Expect the console's moveCursorLeft method to be called multiple times to skip spaces
-    EXPECT_CALL(*mockConsole, moveCursorLeft(1)).Times(2);
-
     skipWordLeft(input);
 
     EXPECT_EQ(getCursorPos(), 9);
@@ -469,9 +439,6 @@ TEST_F(Internal_ConsoleTest, SkipWordRight_WithMultipleSpaces_ShouldSkipAllSpace
 {
     std::string input = "Hello    World";
     setCursorPos(4); // After 'Hell'
-
-    // Expect the console's moveCursorRight method to be called multiple times to skip spaces
-    EXPECT_CALL(*mockConsole, moveCursorRight(1)).Times(5);
 
     skipWordRight(input);
 
@@ -563,11 +530,9 @@ TEST_F(Internal_ConsoleTest, ClearCurrentLine_ShouldClearLineAndSetNextLine)
 
     setCursorPos(input.size());
 
-    // Expect moveCursorToStart and clearLineAfterCursor to be called
-    EXPECT_CALL(*mockConsole, moveCursorLeft(1)).Times(9);
-    EXPECT_CALL(*mockConsole, clearLineAfterCursor()).Times(1);
-
-    // Call clearCurrentLine
+    // clearCurrentLine reassigns input and re-renders via renderInput's
+    // frameBuffer diff rather than calling moveCursorLeft/clearLineAfterCursor
+    // directly.
     console->clearCurrentLine(input, nextLine);
 
     // Verify that input is updated and cursorPos is set correctly
@@ -580,9 +545,6 @@ TEST_F(Internal_ConsoleTest, ClearCurrentLine_WithEmptyNextLine_ShouldClearAndSe
 {
     std::string input = "SomeInput";
     std::string nextLine = "";
-
-    // Expect moveCursorToStart and clearLineAfterCursor to be called
-    EXPECT_CALL(*mockConsole, clearLineAfterCursor()).Times(1);
 
     console->clearCurrentLine(input, nextLine);
 
@@ -618,9 +580,9 @@ TEST_F(Internal_ConsoleTest, HandlePrintableChar_ShouldInsertCharacterAtEndOfInp
 
     seedDisplay(input, 10);
 
+    // renderInput's frameBuffer diff never calls saveCursorPosition/
+    // restoreCursorPosition; only clearLineAfterCursor does.
     EXPECT_CALL(*mockConsole, print("d", ::testing::_)).Times(1);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
 
     handlePrintableChar(newChar, input);
 
@@ -707,8 +669,6 @@ TEST_F(Internal_ConsoleTest, HandlePrintableChar_EmptyInput_ShouldInsertCharacte
 
     // Expect the console's print method to be called with 'A'
     EXPECT_CALL(*mockConsole, print("A", ::testing::_)).Times(1);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
 
     handlePrintableChar(newChar, input);
 
@@ -778,8 +738,6 @@ TEST_F(Internal_ConsoleTest, HandlePrintableChar_AfterDeletingAllCharacters_Shou
 
     // Expect the console's print method to be called with 'A'
     EXPECT_CALL(*mockConsole, print("A", ::testing::_)).Times(1);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
 
     handlePrintableChar(newChar, input);
 
@@ -1107,29 +1065,23 @@ TEST_F(Internal_ConsoleTest, HandleEscapeSequence_HomeKey_ShouldMoveCursorToStar
     // Simulate escape sequence for Home key: '\x1b', '[', '1', '~'
     setCursorPos(5);
 
-    // Expect moveCursorToStart and clearLineAfterCursor to be called
-    EXPECT_CALL(*mockConsole, moveCursorLeft(1)).Times(5);
-
     handleEscapeSequence(input, "[1~");
+
+    EXPECT_EQ(getCursorPos(), 0);
 
     // Simulate escape sequence for Home key: '\x1b', '[', 'H'
     setCursorPos(5);
 
-    // Expect moveCursorToStart and clearLineAfterCursor to be called
-    EXPECT_CALL(*mockConsole, moveCursorLeft(1)).Times(5);
-
     handleEscapeSequence(input, "[H");
+
+    EXPECT_EQ(getCursorPos(), 0);
 
     // Simulate escape sequence for Home key: '\x1b', '[', 'O', 'H'
     setCursorPos(5);
 
-    // Expect moveCursorToStart and clearLineAfterCursor to be called
-    EXPECT_CALL(*mockConsole, moveCursorLeft(1)).Times(5);
-
     handleEscapeSequence(input, "[OH");
 
-
-    SUCCEED();
+    EXPECT_EQ(getCursorPos(), 0);
 }
 
 // Test handleEscapeSequence with End key
@@ -1139,21 +1091,16 @@ TEST_F(Internal_ConsoleTest, HandleEscapeSequence_EndKey_ShouldMoveCursorToEnd)
     // Simulate escape sequence for End key: '\x1b', '[', '4', '~'
     setCursorPos(5);
 
-    // Expect moveCursorToEnd to be called with current input
-    EXPECT_CALL(*mockConsole, moveCursorRight(1)).Times(4);
-    
     handleEscapeSequence(input, "[4~");
+
+    EXPECT_EQ(getCursorPos(), input.size());
 
     // Simulate escape sequence for End key: '\x1b', '[', 'F'
     setCursorPos(5);
 
-    // Expect moveCursorToEnd to be called with current input
-    EXPECT_CALL(*mockConsole, moveCursorRight(1)).Times(4);
-    
     handleEscapeSequence(input, "[F");
 
-
-    SUCCEED();
+    EXPECT_EQ(getCursorPos(), input.size());
 }
 
 // Test handleEscapeSequence with Insert key
@@ -1182,18 +1129,16 @@ TEST_F(Internal_ConsoleTest, HandleEscapeSequence_InsertKey_ShouldToggleInsertMo
 TEST_F(Internal_ConsoleTest, HandleEscapeSequence_HomeAndEndKeys_ShouldMoveCursorCorrectly)
 {
     // Simulate Home key: '\x1b', '[', 'H'
-    EXPECT_CALL(*mockConsole, moveCursorLeft(1)).Times(2);
-
     std::string input = "SomeInput";
     setCursorPos(2);
     handleEscapeSequence(input, "[H");
 
-    // Simulate End key: '\x1b', '[', 'F'
-    EXPECT_CALL(*mockConsole, moveCursorRight(1)).Times(9); // Depending on implementation
+    EXPECT_EQ(getCursorPos(), 0);
 
+    // Simulate End key: '\x1b', '[', 'F'
     handleEscapeSequence(input, "[F");
 
-    SUCCEED();
+    EXPECT_EQ(getCursorPos(), input.size());
 }
 
 // Test handleEscapeSequence with incomplete escape sequence
@@ -1243,8 +1188,6 @@ TEST_F(Internal_ConsoleTest, HandleInsertWithEscapeSequence_ShouldUpdateInsertSt
 
     // Methods to expect
     EXPECT_CALL(*mockConsole, print("o", ::testing::_)).Times(1);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(1);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(1);
 
     handlePrintableChar('o', input);
 
@@ -1274,24 +1217,22 @@ TEST_F(Internal_ConsoleTest, GetHistory_EmptyHistory_ShouldReturnCurrentInput)
 // Test navigateHistory moving up
 TEST_F(Internal_ConsoleTest, NavigateHistory_Up_ShouldSetInputFromHistory)
 {
-    GTEST_SKIP();
-    // Simulate adding commands to history via handleSpecialKey with Enter
+    // Simulate adding commands to history via handleSpecialKey with Enter.
+    // The frame buffer rewrite (see FrameBuffer.hpp) changed the exact
+    // render call counts per keystroke; this test cares about history
+    // navigation, not incidental rendering call counts, so those are
+    // unconstrained here rather than pinned to stale magic numbers.
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(::testing::AnyNumber());
+    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(::testing::AnyNumber());
+    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(::testing::AnyNumber());
+
     std::string input = "first command";
-    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(13);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(13);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(13);
     console->input(input + '\x0a');
 
     input = "second command";
-    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(14);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(14);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(14);
     console->input(input + '\x0a');
 
     input = "third command";
-    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(13);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(13);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(13);
     console->input(input + '\x0a');
 
     std::vector<std::string> testHistory = {"first command", "second command", "third command"};
@@ -1299,22 +1240,30 @@ TEST_F(Internal_ConsoleTest, NavigateHistory_Up_ShouldSetInputFromHistory)
 
     setCursorPos(0);
 
+    // From here on, the frame buffer only repaints cells that actually
+    // changed vs. the previous frame (see FrameBuffer::commit), so the
+    // captured output is a diff against what's already on screen, not a
+    // full reprint of the new text. In particular, this first navigation
+    // lands on "third command", which is already what's on screen from
+    // typing it in above -- so a correct diff emits nothing at all here.
+    // The meaningful assertions are the resulting `input`/cursor state,
+    // which is what this test is actually about.
+    mockConsole->resetCapturedOutput();
     input = "";
     handleEscapeSequence(input, "[A");
     EXPECT_EQ(input, "third command");
-    EXPECT_NE(mockConsole->getCapturedOutput().find("third command"), std::string::npos);
     EXPECT_EQ(getCursorPos(), input.size());
 
     mockConsole->resetCapturedOutput();
     handleEscapeSequence(input, "[A");
     EXPECT_EQ(input, "second command");
-    EXPECT_NE(mockConsole->getCapturedOutput().find("second command"), std::string::npos);
+    EXPECT_NE(mockConsole->getCapturedOutput().size(), 0u);
     EXPECT_EQ(getCursorPos(), input.size());
 
     mockConsole->resetCapturedOutput();
     handleEscapeSequence(input, "[A");
     EXPECT_EQ(input, "first command");
-    EXPECT_NE(mockConsole->getCapturedOutput().find("first command"), std::string::npos);
+    EXPECT_NE(mockConsole->getCapturedOutput().size(), 0u);
     EXPECT_EQ(getCursorPos(), input.size());
 
     // Already at the oldest entry: nothing changes and nothing is emitted.
@@ -1327,24 +1276,22 @@ TEST_F(Internal_ConsoleTest, NavigateHistory_Up_ShouldSetInputFromHistory)
 // Test navigateHistory moving down
 TEST_F(Internal_ConsoleTest, NavigateHistory_Down_ShouldSetInputFromHistory)
 {
-    GTEST_SKIP();
-    // Simulate adding commands to history via handleSpecialKey with Enter
+    // Simulate adding commands to history via handleSpecialKey with Enter.
+    // The frame buffer rewrite (see FrameBuffer.hpp) changed the exact
+    // render call counts per keystroke; this test cares about history
+    // navigation, not incidental rendering call counts, so those are
+    // unconstrained here rather than pinned to stale magic numbers.
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(::testing::AnyNumber());
+    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(::testing::AnyNumber());
+    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(::testing::AnyNumber());
+
     std::string input = "first command";
-    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(13);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(13);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(13);
     console->input(input + '\x0a');
 
     input = "second command";
-    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(14);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(14);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(14);
     console->input(input + '\x0a');
 
     input = "third command";
-    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(13);
-    EXPECT_CALL(*mockConsole, saveCursorPosition()).Times(13);
-    EXPECT_CALL(*mockConsole, restoreCursorPosition()).Times(13);
     console->input(input + '\x0a');
 
     std::vector<std::string> testHistory = {"first command", "second command", "third command"};
@@ -1360,10 +1307,12 @@ TEST_F(Internal_ConsoleTest, NavigateHistory_Down_ShouldSetInputFromHistory)
     EXPECT_EQ(input, "second command");
     EXPECT_EQ(getCursorPos(), input.size());
 
+    // See NavigateHistory_Up_ShouldSetInputFromHistory for why this only
+    // checks that something was repainted, not the literal substring.
     mockConsole->resetCapturedOutput();
     handleEscapeSequence(input, "[B");
     EXPECT_EQ(input, "third command");
-    EXPECT_NE(mockConsole->getCapturedOutput().find("third command"), std::string::npos);
+    EXPECT_NE(mockConsole->getCapturedOutput().size(), 0u);
     EXPECT_EQ(getCursorPos(), input.size());
 
     // Stepping past the newest entry restores the cached (empty) input.

@@ -39,7 +39,12 @@ protected:
 
     void SetUp() override
     {
-        global = new core::Global(fs, {}, true, true);
+        core::GlobalProperties props(fs);
+        props.enableDummies = true;
+        props.enableRouting = true;
+        props.threadPoolCapacity = (1 << 8);
+
+        global = new core::Global(props);
         std::memset(buf, 0, 128);
 
         mockInterface = new interface::MockInterface(*global);
@@ -230,8 +235,8 @@ TEST_F(Internal_ArpTest, DynamicEntry_ExpiresAfterTimeout)
 // Test: DynamicEntry_IfIncompleteEnabled
 TEST_F(Internal_ArpTest, DynamicEntry_ReprobesWhenStale_IfIncompleteEnabled)
 {
-    global->configs.get<config::Global::IP_ARP_INCOMPLETE>().set(true);
-    global->configs.get<config::Global::IP_ARP_INCOMPLETE_RETRY>().set(2);
+    global->getConfigs().get<config::Global::IP_ARP_INCOMPLETE>().set(true);
+    global->getConfigs().get<config::Global::IP_ARP_INCOMPLETE_RETRY>().set(2);
 
     bool requestSent = false;
     bool retrySent = false;
@@ -260,7 +265,7 @@ TEST_F(Internal_ArpTest, DynamicEntry_ReprobesWhenStale_IfIncompleteEnabled)
 TEST_F(Internal_ArpTest, DynamicEntry_RemovedWhenStale_IfIncompleteDisabled)
 {
     mockInterface->configs.getConfigs().get<config::Interface::ARP>().get().get<config::Arp::TIMEOUT>().set(1);
-    global->configs.get<config::Global::IP_ARP_INCOMPLETE>().set(false);
+    global->getConfigs().get<config::Global::IP_ARP_INCOMPLETE>().set(false);
 
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_)).Times(0);
 
@@ -291,7 +296,7 @@ TEST_F(Internal_ArpTest, IncompleteEntry_RemovedAfterMaxRetries)
 {
     mockInterface->blockEnqueues();
     PacketBuilder pkt(mockInterface);
-    global->configs.get<config::Global::IP_ARP_INCOMPLETE_RETRY>().set(2);
+    global->getConfigs().get<config::Global::IP_ARP_INCOMPLETE_RETRY>().set(2);
 
     arp->resolveAndSend(ip, pkt);
     std::this_thread::sleep_for(std::chrono::seconds(7));
@@ -305,7 +310,7 @@ TEST_F(Internal_ArpTest, IncompleteEntry_LateReplyRestoresIfNotCleared)
     mockInterface->blockEnqueues();
     PacketBuilder pkt(mockInterface);
 
-    global->configs.get<config::Global::IP_ARP_INCOMPLETE_RETRY>().set(10);
+    global->getConfigs().get<config::Global::IP_ARP_INCOMPLETE_RETRY>().set(10);
 
     uint8_t addr[4];
     arp->resolveAndSend(write<uint32_t>(addr, ip), pkt);
@@ -339,7 +344,7 @@ TEST_F(Internal_ArpTest, ReplyStatus_ResetBetweenAttempts)
 TEST_F(Internal_ArpTest, IncompleteDisabled_SkipsRequestAndEntry)
 {
     PacketBuilder pkt(mockInterface);
-    global->configs.get<config::Global::IP_ARP_INCOMPLETE>().set(false);
+    global->getConfigs().get<config::Global::IP_ARP_INCOMPLETE>().set(false);
 
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_)).Times(0);
 
@@ -424,7 +429,7 @@ TEST_F(Internal_ArpTest, PacketQueue_MultiplePacketsSentInOrder)
 TEST_F(Internal_ArpTest, PacketQueue_RespectsQueueLimit)
 {
     mockInterface->blockEnqueues();
-    global->configs.get<config::Global::IP_ARP_QUEUE>().set(2);
+    global->getConfigs().get<config::Global::IP_ARP_QUEUE>().set(2);
     PacketBuilder pkt(mockInterface);
 
     arp->resolveAndSend(ip, pkt);
@@ -437,7 +442,7 @@ TEST_F(Internal_ArpTest, PacketQueue_RespectsQueueLimit)
 // Test: GarpAccepted_CreatesEntry
 TEST_F(Internal_ArpTest, GarpAccepted_CreatesEntry)
 {
-    global->configs.get<config::Global::IP_ARP_GRATUITOUS>().set(1);
+    global->getConfigs().get<config::Global::IP_ARP_GRATUITOUS>().set(1);
 
     ArpHeader garp;
     garp.setBuffer(buf);
@@ -456,7 +461,7 @@ TEST_F(Internal_ArpTest, GarpAccepted_CreatesEntry)
 // Test: GarpRejected_IgnoredIfDisabled
 TEST_F(Internal_ArpTest, GarpRejected_IgnoredIfDisabled)
 {
-    global->configs.get<config::Global::IP_ARP_GRATUITOUS>().set(0);
+    global->getConfigs().get<config::Global::IP_ARP_GRATUITOUS>().set(0);
 
     ArpHeader garp;
     garp.setBuffer(buf);
@@ -474,7 +479,7 @@ TEST_F(Internal_ArpTest, GarpRejected_IgnoredIfDisabled)
 // Test: GarpRefreshes_ExistingEntry
 TEST_F(Internal_ArpTest, GarpRefreshes_ExistingEntry)
 {
-    global->configs.get<config::Global::IP_ARP_GRATUITOUS>().set(1);
+    global->getConfigs().get<config::Global::IP_ARP_GRATUITOUS>().set(1);
     addArpEntry(ip, read<uint64_t, 6>(mac));
 
     std::this_thread::sleep_for(std::chrono::milliseconds(50)); // let timer begin
@@ -496,8 +501,8 @@ TEST_F(Internal_ArpTest, GarpRefreshes_ExistingEntry)
 // Test: GarpBlockedByStickyArp
 TEST_F(Internal_ArpTest, GarpBlockedByStickyArp)
 {
-    global->configs.get<config::Global::IP_ARP_GRATUITOUS>().set(1);
-    global->configs.get<config::Global::IP_STICKY_ARP>().set(true);
+    global->getConfigs().get<config::Global::IP_ARP_GRATUITOUS>().set(1);
+    global->getConfigs().get<config::Global::IP_STICKY_ARP>().set(true);
 
     addArpEntry(ip, read<uint64_t, 6>(mac));
 
@@ -518,8 +523,8 @@ TEST_F(Internal_ArpTest, GarpBlockedByStickyArp)
 // Test: StickyArp_PreventsOverwrite
 TEST_F(Internal_ArpTest, StickyArp_PreventsOverwrite)
 {
-    global->configs.get<config::Global::IP_STICKY_ARP>().set(true);
-    global->configs.get<config::Global::IP_ARP_GRATUITOUS>().set(1);
+    global->getConfigs().get<config::Global::IP_STICKY_ARP>().set(true);
+    global->getConfigs().get<config::Global::IP_ARP_GRATUITOUS>().set(1);
 
     // Add initial dynamic entry
     addArpEntry(ip, read<uint64_t, 6>(mac));
@@ -542,8 +547,8 @@ TEST_F(Internal_ArpTest, StickyArp_PreventsOverwrite)
 // Test: StickyArp_Off_AllowsOverwrite
 TEST_F(Internal_ArpTest, StickyArp_Off_AllowsOverwrite)
 {
-    global->configs.get<config::Global::IP_STICKY_ARP>().set(false);
-    global->configs.get<config::Global::IP_ARP_GRATUITOUS>().set(1);
+    global->getConfigs().get<config::Global::IP_STICKY_ARP>().set(false);
+    global->getConfigs().get<config::Global::IP_ARP_GRATUITOUS>().set(1);
 
     // Add initial dynamic entry
     addArpEntry(ip, read<uint64_t, 6>(mac));
@@ -574,7 +579,7 @@ TEST_F(Internal_ArpTest, ProxyEntry_RepliesToRequest)
     uint8_t macAddr[6];
     request.setSenderHwAddr(read<uint64_t, 6>(mockInterface->configs.getMac(macAddr)));
 
-    global->configs.get<config::Global::IP_ARP_PROXY>().set(false);
+    global->getConfigs().get<config::Global::IP_ARP_PROXY>().set(false);
 
     addArpEntry(ip, read<uint64_t, 6>(mac));
 
@@ -607,7 +612,7 @@ TEST_F(Internal_ArpTest, NonProxyEntry_DoesNotReplyToRequest)
     uint8_t macAddr[6];
     request.setSenderHwAddr(read<uint64_t, 6>(mockInterface->configs.getMac(macAddr)));
 
-    global->configs.get<config::Global::IP_ARP_PROXY>().set(false);
+    global->getConfigs().get<config::Global::IP_ARP_PROXY>().set(false);
 
     addArpEntry(ip, read<uint64_t, 6>(mac));
 
@@ -619,7 +624,7 @@ TEST_F(Internal_ArpTest, NonProxyEntry_DoesNotReplyToRequest)
 // Test: ProxyAllowed_WhenNotDisabled
 TEST_F(Internal_ArpTest, ProxyAllowed_WhenNotDisabled)
 {
-    global->configs.get<config::Global::IP_ARP_PROXY>().set(true);
+    global->getConfigs().get<config::Global::IP_ARP_PROXY>().set(true);
 
     ArpHeader request;
     request.setBuffer(buf);
@@ -643,7 +648,7 @@ TEST_F(Internal_ArpTest, ProxyAllowed_WhenNotDisabled)
 // Test: ProxyBlocked_WhenDisabled
 TEST_F(Internal_ArpTest, ProxyBlocked_WhenDisabled)
 {
-    global->configs.get<config::Global::IP_ARP_PROXY>().set(true);
+    global->getConfigs().get<config::Global::IP_ARP_PROXY>().set(true);
 
     ArpHeader request;
     request.setBuffer(buf);
@@ -668,7 +673,7 @@ TEST_F(Internal_ArpTest, UnknownIp_NoReply)
     uint8_t macAddr[6];
     request.setSenderHwAddr(read<uint64_t, 6>(mockInterface->configs.getMac(macAddr)));
 
-    global->configs.get<config::Global::IP_ARP_PROXY>().set(false);
+    global->getConfigs().get<config::Global::IP_ARP_PROXY>().set(false);
 
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_)).Times(0); // no reply
     arp->receiveRequest(request, read<uint64_t, 6>(request.raw->senderHardwareAddress));
@@ -707,8 +712,8 @@ TEST_F(Internal_ArpTest, LocalIp_RepliesToRequest)
 TEST_F(Internal_ArpTest, ExceedIncompleteLimit_QueuesExcess)
 {
     mockInterface->blockEnqueues();
-    global->configs.get<config::Global::IP_ARP_INCOMPLETE_ENTRIES>().set(2);
-    global->configs.get<config::Global::IP_ARP_INCOMPLETE>().set(true);
+    global->getConfigs().get<config::Global::IP_ARP_INCOMPLETE_ENTRIES>().set(2);
+    global->getConfigs().get<config::Global::IP_ARP_INCOMPLETE>().set(true);
 
     PacketBuilder pkt(mockInterface);
 
@@ -859,7 +864,7 @@ TEST_F(Internal_ArpTest, ResolvedEntry_ReResolutionResetsTimer)
 // Test: UnsolicitedReply_CreatesOnlyIfGarp
 TEST_F(Internal_ArpTest, UnsolicitedReply_CreatesOnlyIfGarp)
 {
-    global->configs.get<config::Global::IP_ARP_GRATUITOUS>().set(1);
+    global->getConfigs().get<config::Global::IP_ARP_GRATUITOUS>().set(1);
 
     // Non-GARP reply
     ArpHeader reply1;

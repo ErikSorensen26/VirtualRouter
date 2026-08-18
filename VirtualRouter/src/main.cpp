@@ -120,9 +120,14 @@ int main(int argc, char* argv[])
     }
 
     utils::Logger::getInstance().initialize(true, /*isolateMode*/false);
+
     cli::FileSystem fs;
-    core::Global* global = new core::Global(fs, opts.fs, true);
-    cli::CliEngine& engine = global->engine;
+    core::GlobalProperties props(fs);
+    props.enableRouting = true;
+    props.tree = new cli::tree::CommandTree(COMMAND_TREE, COMMAND_TREE_BIN);
+
+    core::Global* global = new core::Global(props);
+    cli::CliEngine* engine = global->engine;
 
     if (!opts.unixPath.empty())
     {
@@ -137,7 +142,7 @@ int main(int argc, char* argv[])
     else if (!opts.noDefault)
     {
         utils::RCU::registerThread();
-        auto session = engine.createSession(false);
+        auto session = engine->createSession(false);
         session->handlePrompt();
         while (true)
         {

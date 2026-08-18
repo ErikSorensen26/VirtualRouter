@@ -42,7 +42,10 @@ void BgpProcess::enqueueNeighbor(config::BgpNeighborSessionRegistry* cfgs, const
     {
         scope.scheduler.post([&scope, cfgs, addr]() {
             if (cfgs)
-                scope.ntable.createNeighbor(*cfgs, addr);
+            {
+                if (Neighbor* nbr = scope.ntable.createNeighbor(*cfgs, addr))
+                    scope.ntable.startConfiguredSession(*nbr);
+            }
             else
                 scope.ntable.deleteNeighbor(addr);
         });
@@ -85,7 +88,7 @@ void BgpProcess::enqueueAddressFamily(const AfiSafi& afiSafi, config::BgpAddress
     }
 
     BgpScope& scope = it->second;
-    scope.scheduler.post([&]() {
+    scope.scheduler.post([&scope, cfgs, afiSafi]() {
         if (cfgs)
             scope.enableAddressFamily(afiSafi, *cfgs);
         else

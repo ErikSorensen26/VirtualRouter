@@ -41,7 +41,7 @@
                     "description": "Address family",
                     "name": "ipv6",
                     "config": "Ospf::IPV6_INSTANCES",
-                    "mode": "(config-router-af)#/ospf-ipv4",
+                    "mode": "(config-router-af)#/ospf-ipv6",
                     "deferred": "VRF",
                     "subcommands": [
                         {

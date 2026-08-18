@@ -32,6 +32,7 @@ public:
     static FileSystem* realFileSystem;
     static CliEngine* engine;
     static Global* global;
+    static cli::tree::CommandTree* commandTree;
 protected:
 
     // Terminal instance
@@ -72,10 +73,18 @@ protected:
         mockFileSystem->setupMockFile(COMMAND_TREE, commandTreeString);
         mockFileSystem->setupMockFile(HW_CONFIG_FILE, configFileString);
         mockFileSystem->setupMockFile(ROUTER_CONFIG_FILE, "{}");
+            
+        core::GlobalProperties props(*mockFileSystem);
+        props.enableDummies = true;
+        props.enableRouting = true;
+        props.threadPoolCapacity = (1 << 8);
+        commandTree = new cli::tree::CommandTree(COMMAND_TREE, COMMAND_TREE_BIN);
+        props.tree = commandTree;
 
-        global = new Global(*mockFileSystem, {}, true);
-        global->txMgr.setCorePool({1, 2, 3, 4});
-        engine = &global->engine;
+        global = new core::Global(props);
+
+        global->txManager.setCorePool({1, 2, 3, 4});
+        engine = global->engine;
         engine->paginationCount = 0;
     }
 
@@ -105,6 +114,7 @@ protected:
         delete realFileSystem;
         delete mockFileSystem;
         delete global;
+        delete commandTree;
     }
 
     // Other functions
@@ -120,14 +130,14 @@ public:
         switch (newMode)
         {
             case CliMode::UserExec:
-                terminal->changeMode(CliMode::UserExec, global->configs);
+                terminal->changeMode(CliMode::UserExec, global->getConfigs());
                 break;
             case CliMode::PrivilegedExec:
-                terminal->changeMode(CliMode::PrivilegedExec, global->configs);
+                terminal->changeMode(CliMode::PrivilegedExec, global->getConfigs());
                 break;
             case CliMode::GlobalConfiguration:
-                terminal->changeMode(CliMode::PrivilegedExec, global->configs);
-                terminal->changeMode(CliMode::GlobalConfiguration, global->configs);
+                terminal->changeMode(CliMode::PrivilegedExec, global->getConfigs());
+                terminal->changeMode(CliMode::GlobalConfiguration, global->getConfigs());
                 break;
             default:
                 // Invalid / unsupported mode — do nothing
@@ -149,7 +159,8 @@ public:
         if (!cli::utils::extractInterfaceId(interface, "1", key)) return;
 
         auto interfaceCfgs = global->getConfigs().get<config::Global::INTERFACE>();
-        terminal->changeMode(CliMode::Interface, interfaceCfgs.emplaceBack(key));
+        auto* cfg = interfaceCfgs.emplaceBack(key);
+        if (cfg) terminal->changeMode(CliMode::Interface, *cfg);
     }
 
     std::string getHostname() {return global->getHostname();}
@@ -239,6 +250,7 @@ CliEngine* Internal_CliTest::engine = nullptr;
 FileSystem* Internal_CliTest::realFileSystem = nullptr;
 MockFileSystem* Internal_CliTest::mockFileSystem = nullptr;
 Global* Internal_CliTest::global = nullptr;
+cli::tree::CommandTree* Internal_CliTest::commandTree = nullptr;
 std::string Internal_CliTest::commandTreeString;
 std::string Internal_CliTest::configSchemaString;
 std::string Internal_CliTest::configFileString;
@@ -548,8 +560,9 @@ TEST_F(Internal_CliTest, ConfigBinding_InterfaceUnsignedValue_ShouldWriteField)
     ASSERT_TRUE(cli::utils::extractInterfaceId("GigabitEthernet", "1", key));
 
     auto interfaces = global->getConfigs().get<config::Global::INTERFACE>();
-    auto& cfg = interfaces.emplaceBack(key);
-    EXPECT_EQ(cfg.get<config::Interface::MTU>().load(), 4000u);
+    auto* cfg = interfaces.emplaceBack(key);
+    ASSERT_NE(cfg, nullptr);
+    EXPECT_EQ(cfg->get<config::Interface::MTU>().load(), 4000u);
 }
 
 TEST_F(Internal_CliTest, ConfigBinding_InterfaceStringValue_ShouldWriteField)
@@ -565,8 +578,9 @@ TEST_F(Internal_CliTest, ConfigBinding_InterfaceStringValue_ShouldWriteField)
     ASSERT_TRUE(cli::utils::extractInterfaceId("GigabitEthernet", "2", key));
 
     auto interfaces = global->getConfigs().get<config::Global::INTERFACE>();
-    auto& cfg = interfaces.emplaceBack(key);
-    EXPECT_EQ(cfg.get<config::Interface::DESCRIPTION>().load(), "uplink to core");
+    auto* cfg = interfaces.emplaceBack(key);
+    ASSERT_NE(cfg, nullptr);
+    EXPECT_EQ(cfg->get<config::Interface::DESCRIPTION>().load(), "uplink to core");
 }
 
 

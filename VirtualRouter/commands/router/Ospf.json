@@ -167,6 +167,17 @@
                                     ]
                                 },
                                 {
+                                    "description": "Do not send domain specific capabilities into NSSA",
+                                    "name": "no-ext-capability",
+                                    "config": "OspfArea::NO_EXT",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
+                                {
                                     "description": "No redistribution into this NSSA area",
                                     "name": "no-redistribution",
                                     "config": "OspfArea::NSSA_NO_REDISTRIBUTION",
@@ -418,6 +429,17 @@
                                 "recursive"
                             ],
                             "subcommands": [
+                                {
+                                    "description": "Do not send domain specific capabilities into stub area",
+                                    "name": "no-ext-capability",
+                                    "config": "OspfArea::NO_EXT",
+                                    "subcommands": [
+                                        {
+                                            "description": "",
+                                            "name": "<cr>"
+                                        }
+                                    ]
+                                },
                                 {
                                     "description": "Do not send summary LSA into stub area",
                                     "name": "no-summary",

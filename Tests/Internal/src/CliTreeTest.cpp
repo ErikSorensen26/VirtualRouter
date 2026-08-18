@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <cassert>
 #include <cli/execution/Executor.hpp>
 #include <cli/modes/Context.hpp>
 #include <cli/session/Token.hpp>
@@ -123,12 +124,6 @@ private:
     std::vector<Token>            toks;
 };
 
-// Executor wants a TreeNavigator, which wants a CommandTree, and ContextBase
-// wants a CliSession that nothing on this path dereferences. Bundled so each
-// test states only the grammar and the line.
-//
-// Templated on the registry because the cases below write into different ones:
-// the distribute-list grammar edits Eigrp, the area grammar edits Ospf.
 template <typename Registry>
 struct BasicFixture
 {
@@ -269,8 +264,6 @@ std::vector<std::byte> flattenCommands(const std::string& commandsArray)
     return parser::flattenDir(dir.path());
 }
 
-// One mode plus a Variables file, so a case can name a variable and control
-// what it expands to.
 CommandTree buildWithVariables(const std::string& commandsArray,
                                const std::string& variablesObject)
 {
@@ -282,8 +275,6 @@ CommandTree buildWithVariables(const std::string& commandsArray,
     return CommandTree(parser::flattenDir(dir.path()));
 }
 
-// The nth command of the only mode. Returned by value: node() hands back a
-// reference into the cursor, so a temporary cursor would leave it dangling.
 Command commandAt(const CommandTree& t, size_t i)
 {
     return t.modeEntry(0).commands().at(i);
@@ -294,15 +285,6 @@ constexpr uint16_t ospfAreaRegistryId()
     return config::registryIdV<config::OspfArea>;
 }
 
-// `area <n>` stages the key; `<cr>` resolves it. The words in between belong to
-// other commands and write where they always did -- the registry the line was
-// typed in -- because the rescope the resolver performs happens at the end of
-// the line, behind them. That is the arrangement the flattener enforces: under a
-// deferred container the expectation stays at the parent registry, so a child
-// naming the sub-registry is a grammar that would never have written.
-//
-// `reference-bandwidth` is such a word: an Ospf field, sitting between the key
-// and the resolver, and the run in front of it must not swallow the `<cr>`.
 constexpr const char* AREA_GRAMMAR = R"([
     { "name": "area", "description": "",
       "config": "Ospf::AREA_CONFIGS", "deferred": "area",
@@ -330,7 +312,9 @@ constexpr const char* AREA_GRAMMAR = R"([
 
 config::OspfAreaRegistry& areaAt(config::OspfRegistry& reg, uint32_t id)
 {
-    return reg.get<config::Ospf::AREA_CONFIGS>().emplaceBack(id);
+    config::OspfAreaRegistry* area = reg.get<config::Ospf::AREA_CONFIGS>().emplaceBack(id);
+    assert(area && "emplaceBack rejected the area id");
+    return *area;
 }
 
 size_t areaCount(config::OspfRegistry& reg)
@@ -383,8 +367,6 @@ TEST_F(Internal_CliTreeTest, SubModesBecomeOneEntryEach)
     EXPECT_EQ(b.size(), 2u);
 }
 
-// A submode name may contain the same characters as a mode name; nothing
-// splits either string, so this must round trip intact.
 TEST_F(Internal_CliTreeTest, SubModeNameWithDashRoundTrips)
 {
     CommandTree t = build(R"({
@@ -549,8 +531,6 @@ TEST_F(Internal_CliTreeTest, OutOfRangeAccessThrows)
 
 // ROUND TRIP
 
-// The reader must work off the serialized bytes alone, since production loads
-// the binary from disk rather than from the builder's vectors.
 TEST_F(Internal_CliTreeTest, SerializedBufferReadsBackIdentically)
 {
     const std::string json = R"({
@@ -596,7 +576,6 @@ constexpr const char* PORT_GRAMMAR = R"({
     ]
 })";
 
-// The "<N>" child hanging off the named interface type.
 Command portNode(const CommandTree& t, std::string_view ifaceType)
 {
     Command iface = t.modeEntry(0).commands().at(0);
@@ -805,16 +784,7 @@ TEST_F(Internal_CliTreeTest, TheSameLineTwiceLeavesOneEntry)
     EXPECT_EQ(entriesOf(f.reg).size(), 1u);
 }
 
-
-
-// ===================================================================
 // GRAMMAR BINDING
-//
-// What the flattener does with the three keys that bind a command to config:
-// "config" for a field, "config" with a third part for one member of a tuple
-// valued field, and "enum" for a field set by naming an enum member.
-// ===================================================================
-
 
 // PLAIN FIELD BINDING
 
@@ -858,13 +828,12 @@ TEST_F(Internal_CliTreeTest, RegistryWithoutFieldIsRejected)
     ])"), std::runtime_error);
 }
 
-// Two commands writing the same plain field would each claim its one slot.
-TEST_F(Internal_CliTreeTest, FieldBoundTwiceIsRejected)
+TEST_F(Internal_CliTreeTest, SiblingDuplicatesOfAPlainFieldAreAllowed)
 {
-    EXPECT_THROW(buildCommands(R"([
+    EXPECT_NO_THROW(buildCommands(R"([
         { "name": "a", "description": "", "config": "OspfArea::AREA_TYPE" },
         { "name": "b", "description": "", "config": "OspfArea::AREA_TYPE" }
-    ])"), std::runtime_error);
+    ])"));
 }
 
 // ENUM BINDING
@@ -901,8 +870,6 @@ TEST_F(Internal_CliTreeTest, EachMemberGetsItsOwnValue)
               static_cast<uint8_t>(config::ospf::AreaType::NSSA));
 }
 
-// Several commands set the same enum field to different members, which is the
-// normal shape -- so unlike a plain field they must not collide on its slot.
 TEST_F(Internal_CliTreeTest, EnumMembersShareOneFieldWithoutColliding)
 {
     EXPECT_NO_THROW(buildCommands(R"([
@@ -932,8 +899,6 @@ TEST_F(Internal_CliTreeTest, EnumNamingAnAbsentMemberIsRejected)
     ])"), std::runtime_error);
 }
 
-// COUNT bounds the enum rather than being a value, so naming it would write an
-// out of range value into the field.
 TEST_F(Internal_CliTreeTest, EnumNamingCountIsRejected)
 {
     EXPECT_THROW(buildCommands(R"([
@@ -950,8 +915,6 @@ TEST_F(Internal_CliTreeTest, EnumOnANonEnumFieldIsRejected)
     ])"), std::runtime_error);
 }
 
-// The field is where the enum's type is checked, so without one there is
-// nothing to check against.
 TEST_F(Internal_CliTreeTest, EnumWithoutAConfigKeyIsRejected)
 {
     EXPECT_THROW(buildCommands(R"([
@@ -992,7 +955,7 @@ TEST_F(Internal_CliTreeTest, TupleMembersResolveToTheirOwnPositions)
 {
     CommandTree t = buildCommands(R"([
         { "name": "prefix", "description": "", "config": "OspfArea::RANGE::prefix" },
-        { "name": "advertise", "description": "", "config": "OspfArea::RANGE::advertise" },
+        { "name": "not-advertise", "description": "", "config": "OspfArea::RANGE::notAdvertise" },
         { "name": "cost", "description": "", "config": "OspfArea::RANGE::cost" }
     ])");
 
@@ -1004,8 +967,6 @@ TEST_F(Internal_CliTreeTest, TupleMembersResolveToTheirOwnPositions)
     EXPECT_EQ(commandAt(t, 0).node().configId, commandAt(t, 2).node().configId);
 }
 
-// Members of one tuple are separate commands writing one field, so unlike a
-// plain field they must not collide on its slot.
 TEST_F(Internal_CliTreeTest, TupleMembersShareOneFieldWithoutColliding)
 {
     EXPECT_NO_THROW(buildCommands(R"([
@@ -1021,8 +982,6 @@ TEST_F(Internal_CliTreeTest, UnknownTupleMemberIsRejected)
     ])"), std::runtime_error);
 }
 
-// A field with no TUPLE_SCHEMA_FOR names no members at all, so a member on one
-// is a grammar mistake rather than a lookup miss.
 TEST_F(Internal_CliTreeTest, TupleMemberOnANonTupleFieldIsRejected)
 {
     EXPECT_THROW(buildCommands(R"([
@@ -1039,13 +998,6 @@ TEST_F(Internal_CliTreeTest, FourPartConfigKeyIsRejected)
 
 // CONFIGEXT IS SHARED
 
-// A mode, an enum and a tuple member all store into configExt, so a command may
-// be only one of the three. Left unchecked the last key parsed would win and
-// the other binding would read back as something it is not.
-//
-// The one pairing that is allowed is an enum on a tuple member whose own type
-// is that enum, which the section below covers: there configExt is split rather
-// than claimed twice.
 TEST_F(Internal_CliTreeTest, EnumAndNonEnumTupleMemberTogetherAreRejected)
 {
     EXPECT_THROW(buildCommands(R"([
@@ -1056,10 +1008,6 @@ TEST_F(Internal_CliTreeTest, EnumAndNonEnumTupleMemberTogetherAreRejected)
 
 // ENUM VALUED TUPLE MEMBERS
 
-// A keyword naming an enum member of a tuple says two things at once -- which
-// member of the tuple, and what to set it to -- so configExt carries both, four
-// bits each. The member half has to read back the same as it would on a member
-// carrying no enum, since that is what the executor stages under.
 TEST_F(Internal_CliTreeTest, AnEnumOnATupleMemberPacksBothIndexes)
 {
     CommandTree t = buildCommands(R"([
@@ -1083,8 +1031,6 @@ TEST_F(Internal_CliTreeTest, AnEnumOnATupleMemberPacksBothIndexes)
               static_cast<uint8_t>(config::policy::DistributeListType::ACL));
 }
 
-// The enum half is what tells two keywords on one member apart, so a value past
-// the first has to survive the packing rather than reading back as zero.
 TEST_F(Internal_CliTreeTest, SiblingsOnOneMemberDifferOnlyInTheEnum)
 {
     CommandTree t = buildCommands(R"([
@@ -1107,9 +1053,6 @@ TEST_F(Internal_CliTreeTest, SiblingsOnOneMemberDifferOnlyInTheEnum)
     EXPECT_NE(acl.tupleEnumIndex(), rm.tupleEnumIndex());
 }
 
-// The member's own type is the authority, not the field's: the field stores a
-// whole tuple and is never an enum itself, so resolving against it would either
-// miss or match the wrong type.
 TEST_F(Internal_CliTreeTest, TheEnumTypeIsCheckedAgainstTheMemberNotTheField)
 {
     EXPECT_THROW(buildCommands(R"([
@@ -1128,9 +1071,6 @@ TEST_F(Internal_CliTreeTest, AnUnknownMemberOfATupleMemberEnumIsRejected)
     ])"), std::runtime_error);
 }
 
-// Packed, the two indexes have four bits each, and both halves are checked
-// rather than truncated -- a silently wrapped index would write a plausible
-// wrong value with nothing to trace it back to.
 TEST_F(Internal_CliTreeTest, BothPackedHalvesRoundTrip)
 {
     for (uint16_t member = 0; member <= CommandNode::TUPLE_ENUM_MAX; ++member)
@@ -1147,9 +1087,6 @@ TEST_F(Internal_CliTreeTest, BothPackedHalvesRoundTrip)
     }
 }
 
-// An enum valued member is a tuple member, not an enum field: hasEnumChange
-// reads configExt whole, and a member that also answered to it would hand back
-// the two halves mashed together as if they were one index.
 TEST_F(Internal_CliTreeTest, AnEnumValuedMemberIsNotAnEnumFieldChange)
 {
     CommandTree t = buildCommands(R"([
@@ -1165,8 +1102,6 @@ TEST_F(Internal_CliTreeTest, AnEnumValuedMemberIsNotAnEnumFieldChange)
     EXPECT_FALSE(n.hasModeChange());
 }
 
-// The split lives in the packed node, so like every other binding it has to
-// survive serialization rather than only being right in the builder's memory.
 TEST_F(Internal_CliTreeTest, TheEnumMemberSplitSurvivesSerialization)
 {
     CommandTree t(flattenCommands(R"([
@@ -1185,8 +1120,6 @@ TEST_F(Internal_CliTreeTest, TheEnumMemberSplitSurvivesSerialization)
 
 // ROUND TRIP
 
-// The bindings live in the packed node, so they have to survive serialization
-// rather than only being right in the builder's own memory.
 TEST_F(Internal_CliTreeTest, BindingsSurviveSerialization)
 {
     const std::string grammar = R"([
@@ -1211,8 +1144,6 @@ TEST_F(Internal_CliTreeTest, BindingsSurviveSerialization)
 
 // THE LOOKUP TABLES THE ABOVE RESOLVE THROUGH
 
-// Both are constant expressions, and are asserted as such: a runtime EXPECT
-// would pass on a table the flattener could not actually have used.
 TEST_F(Internal_CliTreeTest, RuntimeTupleLookupMatchesTheTypedOne)
 {
     constexpr uint16_t reg = config::registryIdV<config::OspfArea>;
@@ -1265,12 +1196,6 @@ TEST_F(Internal_CliTreeTest, NonEnumFieldReportsItselfAsSuch)
 }
 
 // VARIABLE ARGUMENTS
-//
-// A variable is one definition named from many places -- the shipped grammar
-// expands "interface" at 138 of them -- so a binding cannot live on the
-// definition. The call site passes it in and the definition says where it
-// lands. Without this the site's own keys are simply dropped, which is what
-// left every expanded interface command unbound.
 
 TEST_F(Internal_CliTreeTest, ArgumentReachesTheVariablesLeaf)
 {
@@ -1320,9 +1245,6 @@ TEST_F(Internal_CliTreeTest, EveryExpandedSiblingGetsTheArgument)
 
 TEST_F(Internal_CliTreeTest, UnpassedArgumentLeavesTheNodeUnbound)
 {
-    // The same definition reached from a site that passes nothing. It cannot be
-    // an error: one call site wanting a binding does not make the other 137
-    // malformed.
     CommandTree t = buildWithVariables(
         R"([
             { "name": "area", "description": "", "subcommands": [
@@ -1337,8 +1259,6 @@ TEST_F(Internal_CliTreeTest, UnpassedArgumentLeavesTheNodeUnbound)
 
 TEST_F(Internal_CliTreeTest, ArgumentsForwardThroughNestedVariables)
 {
-    // <outer> expands to a node that is itself <inner>, so the argument has to
-    // survive a hop it is not consumed on.
     CommandTree t = buildWithVariables(
         R"([
             { "name": "area", "description": "", "subcommands": [
@@ -1400,8 +1320,6 @@ TEST_F(Internal_CliTreeTest, NonStringArgumentValueIsRejected)
 
 TEST_F(Internal_CliTreeTest, DuplicateArgumentNameIsRejected)
 {
-    // Two values under one name: whichever won would be arbitrary, so neither
-    // does.
     EXPECT_THROW(buildWithVariables(
         R"([ { "name": "<kinds>", "description": "",
                "args": { "config": "OspfArea::AREA_TYPE",
@@ -1411,12 +1329,7 @@ TEST_F(Internal_CliTreeTest, DuplicateArgumentNameIsRejected)
 }
 
 // MODE EXIT
-//
-// `exit` and `end` leave a mode rather than enter one, so unlike a mode change
-// they bind no field: where they land is whatever the navigation stack held.
 
-// Both spellings are exits, and neither has to say so: the name carries it, so
-// the 23 exit commands in the shipped grammar need no property of their own.
 TEST_F(Internal_CliTreeTest, ExitAndEndAreModeExitsByName)
 {
     CommandTree t = buildCommands(R"([
@@ -1428,8 +1341,6 @@ TEST_F(Internal_CliTreeTest, ExitAndEndAreModeExitsByName)
     EXPECT_TRUE(commandAt(t, 1).node().hasModeExit());
 }
 
-// How far an exit unwinds is decided when it runs, off the navigation stack,
-// rather than stored per command -- so nothing here distinguishes the two.
 TEST_F(Internal_CliTreeTest, AnOrdinaryCommandIsNotAModeExit)
 {
     CommandTree t = buildCommands(R"([
@@ -1439,8 +1350,6 @@ TEST_F(Internal_CliTreeTest, AnOrdinaryCommandIsNotAModeExit)
     EXPECT_FALSE(commandAt(t, 0).node().hasModeExit());
 }
 
-// The flag alone is enough, where hasModeChange() also wants configExt. An exit
-// names no mode, so requiring one would make every exit read as not-an-exit.
 TEST_F(Internal_CliTreeTest, ModeExitNeedsNoBoundField)
 {
     CommandTree t = buildCommands(R"([
@@ -1464,9 +1373,6 @@ TEST_F(Internal_CliTreeTest, ExitingAndEnteringAModeIsRejected)
 
 // ENUM BITMAP FIELDS
 
-// A bitmap field stores flags, so the enum key names a bit rather than a value.
-// The member resolves against the enum the bitmap is indexed by, which is not
-// the field's own type -- that is the raw storage integer.
 TEST_F(Internal_CliTreeTest, EnumOnABitMapFieldResolvesTheMember)
 {
     CommandTree t = buildCommands(R"([
@@ -1481,8 +1387,6 @@ TEST_F(Internal_CliTreeTest, EnumOnABitMapFieldResolvesTheMember)
     EXPECT_EQ(n.configExt, static_cast<uint8_t>(config::eigrp::Stub::CONNECTED));
 }
 
-// The flag is what tells the executor to accumulate rather than replace, so a
-// plain enum field must not carry it.
 TEST_F(Internal_CliTreeTest, EnumOnAValueFieldIsNotMarkedAsABitMap)
 {
     CommandTree t = buildCommands(R"([
@@ -1496,8 +1400,6 @@ TEST_F(Internal_CliTreeTest, EnumOnAValueFieldIsNotMarkedAsABitMap)
     EXPECT_FALSE(n.hasEnumBitMap());
 }
 
-// The whole point of a bitmap: several commands name members of the one field,
-// and the line sets all of them.
 TEST_F(Internal_CliTreeTest, BitMapMembersShareOneFieldWithoutColliding)
 {
     CommandTree t = buildCommands(R"([
@@ -1535,8 +1437,6 @@ TEST_F(Internal_CliTreeTest, BitMapEnumNamingTheWrongTypeIsRejected)
 
 // MID-COMMAND REGISTRY CHANGE
 
-// Binding a container is the whole declaration -- the field names a scope rather
-// than a value, so there is nothing else the node could have meant.
 TEST_F(Internal_CliTreeTest, BindingAContainerRescopesImplicitly)
 {
     CommandTree t = buildCommands(R"([
@@ -1554,7 +1454,6 @@ TEST_F(Internal_CliTreeTest, BindingAContainerRescopesImplicitly)
     EXPECT_FALSE(n.hasModeChange());
 }
 
-// A value field is written, not entered, so it is left alone.
 TEST_F(Internal_CliTreeTest, BindingAValueFieldDoesNotRescope)
 {
     CommandTree t = buildCommands(R"([
@@ -1564,7 +1463,6 @@ TEST_F(Internal_CliTreeTest, BindingAValueFieldDoesNotRescope)
     EXPECT_FALSE(commandAt(t, 0).node().hasRegistryChange());
 }
 
-// A mode change moves the same pointer but means it to persist, so it wins.
 TEST_F(Internal_CliTreeTest, AModeChangeOnAContainerIsNotARescope)
 {
     CommandTree t = buildCommands(R"([
@@ -1577,8 +1475,6 @@ TEST_F(Internal_CliTreeTest, AModeChangeOnAContainerIsNotARescope)
     EXPECT_FALSE(n.hasRegistryChange());
 }
 
-// A rescope resolves its field to a registry rather than writing it, so a
-// member named alongside would be silently dropped.
 TEST_F(Internal_CliTreeTest, AContainerThatAlsoSetsAnEnumIsRejected)
 {
     EXPECT_THROW(buildCommands(R"([
@@ -1587,8 +1483,6 @@ TEST_F(Internal_CliTreeTest, AContainerThatAlsoSetsAnEnumIsRejected)
     ])"), std::runtime_error);
 }
 
-// Everything below a rescope is written into the registry it moved to; a field
-// of any other one would resolve against a scope that is not there.
 TEST_F(Internal_CliTreeTest, ADescendantOfTheRescopedRegistryIsAccepted)
 {
     CommandTree t = buildCommands(R"([
@@ -1617,7 +1511,6 @@ TEST_F(Internal_CliTreeTest, ADescendantOfAnotherRegistryIsRejected)
     ])"), std::runtime_error);
 }
 
-// A descendant that writes nothing has no registry to be wrong about.
 TEST_F(Internal_CliTreeTest, ADescendantWithNoConfigIsAccepted)
 {
     CommandTree t = buildCommands(R"([
@@ -1630,19 +1523,17 @@ TEST_F(Internal_CliTreeTest, ADescendantWithNoConfigIsAccepted)
     EXPECT_TRUE(commandAt(t, 0).node().hasRegistryChange());
 }
 
-// The nearer rescope is the one in force, so a second one rebases what its own
-// subtree has to name rather than being measured against the first.
 TEST_F(Internal_CliTreeTest, ANestedRescopeRebasesTheExpectation)
 {
     CommandTree t = buildCommands(R"([
         { "name": "address-family", "description": "",
-          "config": "Bgp::ADDRESS_FAMILIES",
+          "config": "Bgp::AF_VRF",
           "subcommands": [
-            { "name": "base", "description": "",
-              "config": "BgpAddressFamily::AF_BASE",
+            { "name": "ipv4", "description": "",
+              "config": "BgpAfVrf::IPV4_UNICAST",
               "subcommands": [
                 { "name": "x", "description": "",
-                  "config": "BgpAfBase::DEFAULT_ORIGINATE" }
+                  "config": "BgpAddressFamily::BGP_AGGREGATE_TIMER" }
               ] }
           ] }
     ])");
@@ -1658,11 +1549,9 @@ TEST_F(Internal_CliTreeTest, ANestedRescopeRebasesTheExpectation)
     EXPECT_TRUE(base.node().hasRegistryChange());
 
     EXPECT_EQ(base.at(0).node().fieldRegistryId(),
-              config::registryIdV<config::BgpAfBase>);
+              config::registryIdV<config::BgpAddressFamily>);
 }
 
-// A rescope names a field of the registry it is leaving, so it is checked
-// against the outer expectation before it rebases anything.
 TEST_F(Internal_CliTreeTest, ANestedRescopeOfAForeignRegistryIsRejected)
 {
     EXPECT_THROW(buildCommands(R"([
@@ -1673,8 +1562,6 @@ TEST_F(Internal_CliTreeTest, ANestedRescopeOfAForeignRegistryIsRejected)
     ])"), std::runtime_error);
 }
 
-// Both flags ride in the same uint16 as the rest, so they have to survive the
-// round trip the way every other binding does.
 TEST_F(Internal_CliTreeTest, NewFlagsSurviveSerialization)
 {
     CommandTree t(flattenCommands(R"([
@@ -1692,8 +1579,6 @@ TEST_F(Internal_CliTreeTest, NewFlagsSurviveSerialization)
 
 // DEFERRED VALUES AND RESOLVERS
 
-// A deferred command still names its field -- what the key changes is when the
-// write lands, not where.
 TEST_F(Internal_CliTreeTest, DeferredKeepsItsFieldAndCarriesTheKey)
 {
     CommandTree t = buildCommands(R"([
@@ -1710,8 +1595,6 @@ TEST_F(Internal_CliTreeTest, DeferredKeepsItsFieldAndCarriesTheKey)
     EXPECT_EQ(d.enumIndex(), static_cast<uint16_t>(config::Ospf::REFERENCE_BANDWIDTH));
 }
 
-// The id is a position in the flattener's table, not a hash of the name, so the
-// two halves of one key agree by construction rather than by luck.
 TEST_F(Internal_CliTreeTest, OneKeyNumbersTheSameOnBothSides)
 {
     CommandTree t = buildCommands(R"([
@@ -1746,8 +1629,6 @@ TEST_F(Internal_CliTreeTest, DistinctKeysGetDistinctIds)
     EXPECT_EQ(commandAt(t, 3).node().deferKey(), 1u);
 }
 
-// The key is what separates them, so a field claimed once by a plain command may
-// still be named by several deferred ones.
 TEST_F(Internal_CliTreeTest, SeveralDeferredCommandsMayShareOneField)
 {
     CommandTree t = buildCommands(R"([
@@ -1770,8 +1651,6 @@ TEST_F(Internal_CliTreeTest, DeferredWithoutAFieldIsRejected)
     ])"), std::runtime_error);
 }
 
-// Keys are discovered from the grammar rather than declared, so a name spelled
-// two ways flattens as two keys. Neither half resolving is what catches it.
 TEST_F(Internal_CliTreeTest, ADeferredKeyNothingResolvesIsRejected)
 {
     EXPECT_THROW(buildCommands(R"([
@@ -1796,7 +1675,6 @@ TEST_F(Internal_CliTreeTest, AMisspelledKeyPairsWithNothing)
     ])"), std::runtime_error);
 }
 
-// deferKeyId holds one key, so a node cannot be both halves of one pairing.
 TEST_F(Internal_CliTreeTest, DeferredAndResolverOnOneCommandIsRejected)
 {
     EXPECT_THROW(buildCommands(R"([
@@ -1805,8 +1683,6 @@ TEST_F(Internal_CliTreeTest, DeferredAndResolverOnOneCommandIsRejected)
     ])"), std::runtime_error);
 }
 
-// deferKeyId lives apart from configExt now, so a deferral no longer competes
-// with an enum member for the same byte -- both are accepted on one node.
 TEST_F(Internal_CliTreeTest, DeferredAlongsideAnEnumMemberIsAccepted)
 {
     CommandTree t = buildCommands(R"([
@@ -1821,13 +1697,11 @@ TEST_F(Internal_CliTreeTest, DeferredAlongsideAnEnumMemberIsAccepted)
     EXPECT_TRUE(d.hasEnumChange());
 }
 
-// Likewise for a mode change: entering a mode still claims configExt for the
-// mode id, but deferring which key it waits on no longer costs it that byte.
 TEST_F(Internal_CliTreeTest, DeferredAlongsideAModeChangeIsAccepted)
 {
     CommandTree t = buildCommands(R"([
         { "name": "x", "description": "", "config": "Ospf::AREA_CONFIGS",
-          "mode": "(config-router)#", "deferred": "k" },
+          "mode": "(config-router)#/ospf", "deferred": "k" },
         { "name": "r", "description": "", "resolver": "k" }
     ])");
 
@@ -1837,8 +1711,6 @@ TEST_F(Internal_CliTreeTest, DeferredAlongsideAModeChangeIsAccepted)
     EXPECT_TRUE(d.hasModeChange());
 }
 
-// A container binding is what a deferral is usually for: the key it holds says
-// which entry to index, and holding it is the whole point of deferring.
 TEST_F(Internal_CliTreeTest, DeferredOnAContainerIsAccepted)
 {
     CommandTree t = buildCommands(R"([
@@ -1853,8 +1725,6 @@ TEST_F(Internal_CliTreeTest, DeferredOnAContainerIsAccepted)
     EXPECT_TRUE(d.hasConfig());
 }
 
-// The rescope itself is what waits. Flagging it where the word is typed would
-// move the write target immediately, which is what the deferral puts off.
 TEST_F(Internal_CliTreeTest, ADeferredContainerDoesNotRescopeInPlace)
 {
     CommandTree t = buildCommands(R"([
@@ -1866,7 +1736,6 @@ TEST_F(Internal_CliTreeTest, ADeferredContainerDoesNotRescopeInPlace)
     EXPECT_FALSE(commandAt(t, 0).node().hasRegistryChange());
 }
 
-// An undeferred container still rescopes where it stands, as it always did.
 TEST_F(Internal_CliTreeTest, AnUndeferredContainerStillRescopes)
 {
     CommandTree t = buildCommands(R"([
@@ -1876,8 +1745,6 @@ TEST_F(Internal_CliTreeTest, AnUndeferredContainerStillRescopes)
     EXPECT_TRUE(commandAt(t, 0).node().hasRegistryChange());
 }
 
-// The other half stays rejected: a resolver binds no field of its own, so a
-// container on one names nothing to rescope through.
 TEST_F(Internal_CliTreeTest, AResolverOnAContainerIsRejected)
 {
     EXPECT_THROW(buildCommands(R"([
@@ -1896,8 +1763,6 @@ TEST_F(Internal_CliTreeTest, AnEmptyDeferralKeyIsRejected)
     ])"), std::runtime_error);
 }
 
-// Both flags sit in the high bits of the same uint16 every other property rides
-// in, and the key shares configExt with the enum and tuple bindings.
 TEST_F(Internal_CliTreeTest, DeferralSurvivesSerialization)
 {
     CommandTree t(flattenCommands(R"([
@@ -1915,19 +1780,8 @@ TEST_F(Internal_CliTreeTest, DeferralSurvivesSerialization)
     EXPECT_TRUE(d.hasConfig());
 }
 
-
-// ===================================================================
 // DEFERRED EXECUTION
-//
-// Drives whole lines through Executor::execute, which is the only way a
-// deferral can be tested: nothing stages a key on its own any more. The line is
-// reordered before it is dispatched, so each resolver follows the deferred word
-// it answers, and what runs afterwards is an ordinary line.
-// ===================================================================
 
-
-// The line `area 5` on its own: the key is staged as the words go by, and the
-// `<cr>` at the end is what indexes it.
 TEST_F(Internal_CliTreeTest, ABareDeferredLineIndexesAtTheCr)
 {
     OspfFixture f(AREA_GRAMMAR);
@@ -1945,9 +1799,6 @@ TEST_F(Internal_CliTreeTest, ABareDeferredLineIndexesAtTheCr)
     EXPECT_EQ(areaCount(f.reg), 1u);
 }
 
-// Nothing is written where the deferred command is typed. Without the resolver
-// the key is dropped when execute returns, and the field keeps its default --
-// which is what makes a deferral invisible to someone reading the config back.
 TEST_F(Internal_CliTreeTest, WithoutTheResolverNothingIsIndexed)
 {
     OspfFixture f(AREA_GRAMMAR);
@@ -1963,13 +1814,6 @@ TEST_F(Internal_CliTreeTest, WithoutTheResolverNothingIsIndexed)
     EXPECT_EQ(areaCount(f.reg), 0u);
 }
 
-// A value command sitting between the key and the resolver. Both have to run:
-// the value where it is typed, and the resolver at the end of the line.
-//
-// This is the case a run scanner gets wrong. A resolver binds no field on
-// purpose, so it looks exactly like a trailing argument, and the value run in
-// front of it swallowed it whole -- costing the resolver its turn in the loop,
-// which is the only place a deferred key is ever written.
 TEST_F(Internal_CliTreeTest, AValueRunDoesNotSwallowTheResolverBehindIt)
 {
     OspfFixture f(AREA_GRAMMAR);
@@ -1996,8 +1840,6 @@ TEST_F(Internal_CliTreeTest, AValueRunDoesNotSwallowTheResolverBehindIt)
     EXPECT_EQ(areaCount(f.reg), 1u);
 }
 
-// The same hole, reached through the toggle path rather than the value one: a
-// bool field is its own command, and the `<cr>` behind it is still a resolver.
 TEST_F(Internal_CliTreeTest, AToggleRunDoesNotSwallowTheResolverBehindIt)
 {
     OspfFixture f(AREA_GRAMMAR);
@@ -2019,9 +1861,6 @@ TEST_F(Internal_CliTreeTest, AToggleRunDoesNotSwallowTheResolverBehindIt)
     EXPECT_EQ(areaCount(f.reg), 1u);
 }
 
-// The rescope is confined to the line that asked for it. A second line starts
-// from the registry the session is standing in, not from the entry the first
-// line indexed.
 TEST_F(Internal_CliTreeTest, TheRescopeDoesNotOutliveTheLine)
 {
     OspfFixture f(AREA_GRAMMAR);
@@ -2049,9 +1888,6 @@ TEST_F(Internal_CliTreeTest, TheRescopeDoesNotOutliveTheLine)
     EXPECT_EQ(areaCount(f.reg), 2u);
 }
 
-// Two deferred commands on one line under the same key: the later spelling is
-// the one that indexes, since each resolver pairs with the deferred word
-// nearest in front of it.
 TEST_F(Internal_CliTreeTest, TheLastKeyOnALineIsTheOneIndexed)
 {
     OspfFixture f(AREA_GRAMMAR);
@@ -2076,9 +1912,6 @@ TEST_F(Internal_CliTreeTest, TheLastKeyOnALineIsTheOneIndexed)
     EXPECT_EQ(areaCount(f.reg), 1u);
 }
 
-// Reaching the resolver is what says the command was meant, so the deferred
-// word carrying no value still indexes: Key{} is a real entry rather than a
-// failure, and `area` alone reaches area 0.
 TEST_F(Internal_CliTreeTest, AnUnstagedKeyIndexesTheDefaultEntry)
 {
     OspfFixture f(AREA_GRAMMAR);
@@ -2098,9 +1931,6 @@ TEST_F(Internal_CliTreeTest, AnUnstagedKeyIndexesTheDefaultEntry)
     EXPECT_EQ(areaCount(f.reg), 1u);
 }
 
-// A key that will not translate is a different matter from one that was never
-// given: it takes the line no further rather than falling back to the default,
-// and leaves the context where it was for nothing behind it to write into.
 TEST_F(Internal_CliTreeTest, AKeyThatWillNotTranslateIndexesNothing)
 {
     OspfFixture f(AREA_GRAMMAR);
@@ -2118,9 +1948,6 @@ TEST_F(Internal_CliTreeTest, AKeyThatWillNotTranslateIndexesNothing)
     EXPECT_EQ(f.ctx.ctx, static_cast<void*>(&f.reg));
 }
 
-// A deferred command whose field is not an owned list has nothing to index. It
-// refuses quietly: the grammar is checked when it is flattened, and what is left
-// here are the shapes that check cannot see.
 TEST_F(Internal_CliTreeTest, AFieldThatIsNotAnOwnedListRefusesQuietly)
 {
     OspfFixture f(R"([
@@ -2141,18 +1968,8 @@ TEST_F(Internal_CliTreeTest, AFieldThatIsNotAnOwnedListRefusesQuietly)
     EXPECT_EQ(f.ctx.ctx, static_cast<void*>(&f.reg));
 }
 
-// ===================================================================
 // DEFERRED/RESOLVER MERGE
-//
-// A resolver may now carry its own config, independently of the deferred
-// word it pairs with -- see [[command-node-spare-flag-bits]]. Merging picks
-// whichever of the two nodes is the more complete one to run; disagreement
-// on any of config, pattern or value leaves them as two separate writes.
-// ===================================================================
 
-// The resolver names a different field than the deferred word. Nothing to
-// choose between them, so both run: the deferred word writes its own field
-// with its own value, and the resolver writes its own as an ordinary command.
 TEST_F(Internal_CliTreeTest, AResolverNamingADifferentFieldRunsAlongsideTheDeferredWrite)
 {
     OspfFixture f(R"([
@@ -2177,10 +1994,6 @@ TEST_F(Internal_CliTreeTest, AResolverNamingADifferentFieldRunsAlongsideTheDefer
     EXPECT_TRUE(f.reg.get<config::Ospf::SHUTDOWN>().load());
 }
 
-// The resolver names the same field the deferred word already does, and
-// carries no value of its own beyond `<cr>`. Nothing conflicts and nothing is
-// missing, so the deferred word's own value stands -- same outcome as before
-// resolvers could carry config at all.
 TEST_F(Internal_CliTreeTest, AResolverNamingTheSameFieldAgreesRatherThanConflicts)
 {
     OspfFixture f(R"([

@@ -6,6 +6,16 @@
         {
             "description": "",
             "name": "<cr>"
+        },
+        {
+            "description": "Exit from Address Family configuration mode",
+            "name": "exit",
+            "subcommands": [
+                {
+                    "description": "",
+                    "name": "<cr>"
+                }
+            ]
         }
     ]
 }

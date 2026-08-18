@@ -21,10 +21,10 @@
 #include "interface/Interface.h"
 #include "interface/configs/InterfaceType.hpp"
 #include "hardware/HardwareManager.h"
-#include "hardware/Ifname.h"
 #include "hardware/PacketSlot.hpp"
 #include "qos/egress/TxDistributor.h"
 #include "cli/session/Configs.h"
+#include <configs/registry/global/GlobalRegistry.h>
 
 namespace {
 
@@ -96,10 +96,19 @@ TEST_F(EgressTest, TxBenchmark)
     hardware::HwIfaceInfo hwInfo{ ifidx, std::string(kTestIface), mac, 1'000'000'000ULL };
 
     cli::FileSystem fs;
-    core::Global global(fs, {}, /*enableRouting=*/false, /*test=*/true);
+    core::GlobalProperties props(fs);
+    props.enableDummies = true;
+    props.enableRouting = false;
+    props.threadPoolCapacity = (1 << 8);
 
-    interface::Interface* iface = global.addInterface(
-        interface::InterfaceKey(interface::InterfaceType::GIGABIT_ETHERNET, /*id=*/0.0f), hwInfo, /*debug=*/false);
+    core::Global global(props);
+
+    interface::InterfaceKey key(interface::InterfaceType::GIGABIT_ETHERNET, /*id=*/0.0f);
+    config::InterfaceRegistry* cfg = global.getConfigs().get<config::Global::INTERFACE>().emplaceBack(key);
+    ASSERT_NE(cfg, nullptr) << "failed to create interface registry slot";
+
+    interface::Interface* iface = new interface::Interface(
+        { interface::InterfaceType::GIGABIT_ETHERNET, /*id=*/0.0f, *global.getRoutingInstance(), hwInfo, *cfg, /*debug=*/false });
     ASSERT_NE(iface, nullptr) << "addInterface failed";
 
     iface->startThreads();
@@ -166,4 +175,6 @@ TEST_F(EgressTest, TxBenchmark)
     fflush(stdout);
 
     EXPECT_GT(txSent, 0UL) << "No frames were sent";
+
+    delete iface;
 }

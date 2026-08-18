@@ -13,7 +13,6 @@
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
-#include <algorithm>
 #include <immintrin.h>
 #include <RCU.hpp>
 
@@ -121,8 +120,7 @@ public:
      *
      * @warning If `capacity` is not a power of two, the constructor throws `std::runtime_error`.
      */
-    explicit ThreadPool(size_t numThreads = std::max(4u, std::thread::hardware_concurrency()),
-                        size_t capacity   = (1u << 16))
+    explicit ThreadPool(size_t numThreads, size_t capacity)
         : capacity_(capacity),
           mask_(capacity - 1),
           head_(0),

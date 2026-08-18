@@ -334,6 +334,23 @@ public:
         inherited = nullptr;
     }
 
+    /**
+     * @brief Rebinds `parent` to point at the owning registry.
+     *
+     * `RegistryContainer`/`OptionalRegistryContainer` fields default-construct
+     * their contained registry with no knowledge of what owns them, so
+     * `resolveParent()` on a fresh container child would always throw. Callers
+     * that hand out such a child (see `SubRegistry::get()`) call this first to
+     * wire it up, matching what `OwnedListFieldAccessor::emplaceBack()` does
+     * for map-backed children.
+     *
+     * @param p Pointer to the owning registry, type-erased into `utils::Any`.
+     */
+    void setParent(utils::Any p) noexcept
+    {
+        parent = p;
+    }
+
     template <typename P>
     P* resolveParent()
     {

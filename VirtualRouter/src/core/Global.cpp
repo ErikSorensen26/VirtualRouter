@@ -22,24 +22,29 @@ config::GlobalRegistry& Global::getConfigs()
     return *configs;
 }
 
-Global::Global(cli::FileSystem& fs, const cli::StartupFiles& stfs, bool enableRouting, bool test)
-    : threadPool(/*std::thread::hardware_concurrency()*/5),
+Global::Global(GlobalProperties& props)
+    : threadPool(props.threadPoolCoreCount, props.threadPoolCapacity),
       timeManager(threadPool),
       scheduler(threadPool, timeManager),
-      configs(new config::GlobalRegistry()),
-      routingEnabled(enableRouting),
-      engine(*this, stfs, fs, test)
+      configs(props.registry ? props.registry : new config::GlobalRegistry()),
+      routingEnabled(props.enableRouting),
+      engine(props.tree ? new cli::CliEngine(*this, props.stfs, *props.tree) : nullptr)
 {
+    configOwner = (props.registry == nullptr);
+
     initConfigs();
+
     configs->context().set(this);
     configs->get<config::Global::HOSTNAME>().set(DEFAULT_HOSTNAME);
 
-    txMgr.setCorePool({0, 1, 2, 3});
-    txMgr.setCpuPolicy(qos::egress::CpuPolicy::EqualShare);
-    txMgr.setTxCoreBias(1.0);
+    hwManager.addHardware(props.stfs.hwConfigFile, props.fileSystem, props.enableDummies);
 
-    rxMgr.setCorePool({4, 5, 6, 7});
-    rxMgr.setCpuPolicy(qos::ingress::RxQueueManager::CpuPolicy::EqualShare);
+    txManager.setCorePool(props.txThreadPool);
+    txManager.setCpuPolicy(props.txQueuePolicy);
+    txManager.setTxCoreBias(props.txQueueBias);
+
+    rxManager.setCorePool(props.rxThreadPool);
+    rxManager.setCpuPolicy(props.rxQueuePolicy);
 
     configs->get<config::Global::VRF_CONFIGS>().emplaceBack(DEFAULT_VRF);
 }
@@ -52,13 +57,23 @@ Global::~Global()
         delete dhcpv6Server;
     if (bgpProcess)
         delete bgpProcess;
+    if (engine)
+        delete engine;
     routingInstances.clear();
+    interfaceList.clear();
+    if (configOwner)
+    {
+        delete configs;
+        configs = nullptr;
+    }
 }
 
 void Global::initConfigs()
 {
     if (configs) return;
+
     // TODO apply configs here
+    configOwner = true;
     configs = new config::GlobalRegistry();
 }
 
@@ -74,19 +89,28 @@ std::string Global::getHostname()
 
 void Global::reset()
 {
-    if (configs) delete configs;
-    initConfigs();
+    routingInstances.clear();
+    interfaceList.clear();
+
+    if (configOwner)
+    {
+        delete configs;
+        configs = nullptr;
+        initConfigs();
+    }
+
+    configs->get<config::Global::VRF_CONFIGS>().clear();
+    configs->get<config::Global::VRF_CONFIGS>().emplaceBack(DEFAULT_VRF);
     setHostname(DEFAULT_HOSTNAME);
     setIPv6UnicastRouting(false);
     setAAA(false);
-    configs->get<config::Global::VRF_CONFIGS>().emplaceBack(DEFAULT_VRF);
 }
       
 // Interfaces
 
 interface::Interface* Global::addInterface(interface::InterfaceKey key, config::InterfaceRegistry& cfg)
 {
-    const hardware::HwIfaceInfo* info = engine.hwManager.getHwInfo(key);
+    const hardware::HwIfaceInfo* info = hwManager.getHwInfo(key);
     if (!info)
         return nullptr;
     auto [type, id] = key.decode();
@@ -117,14 +141,12 @@ VirtualRouter* Global::addRoutingInstance(const std::string& name, config::VrfRe
 VirtualRouter* Global::getRoutingInstance(const std::string& name, types::AddressFamily ad)
 {
     std::lock_guard<std::mutex> lock(routingInstanceMutex);
-    if (routingInstances.find(name) != routingInstances.end() && 
-        ad != types::AddressFamily::NONE 
-        ? routingInstances.at(name).enabledAddressFamilies.count(ad)
-        : true)
-    {
-        return &routingInstances.at(name);
-    }
-    return nullptr;
+    auto it = routingInstances.find(name);
+    if (it == routingInstances.end())
+        return nullptr;
+    if (ad != types::AddressFamily::NONE && !it->second.enabledAddressFamilies.count(ad))
+        return nullptr;
+    return &it->second;
 }
 
 bool Global::removeRoutingInstance(const std::string& name)

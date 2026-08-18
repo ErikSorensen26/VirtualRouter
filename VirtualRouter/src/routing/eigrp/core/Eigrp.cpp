@@ -24,8 +24,8 @@ Eigrp::Eigrp(config::EigrpRegistry& reg, uint16_t as, types::AddressFamily af, c
       routeManager(*this)
 {
     configs.context().set(this);
-    // Subscribe to interface lifecycle events. Each event targets exactly
-    // the interface that fired it -- no bulk sweep over all interfaces.
+    if (!configs.get<config::Eigrp::WEIGHTS>().hasValue())
+        configs.get<config::Eigrp::WEIGHTS>().set(config::EigrpWeight{1, 0, 1, 0, 0, 0});
     auto& ifMgr = vrf->getInterfaceManager();
 
     auto onIfUp = [](void* ctx, interface::Interface& iface) {

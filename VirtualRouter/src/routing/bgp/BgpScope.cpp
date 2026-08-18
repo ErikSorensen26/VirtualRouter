@@ -41,6 +41,8 @@ BgpScope::BgpScope(BgpProcess& proc, core::VirtualRouter& vrf)
 BgpScope::~BgpScope()
 {
     process.configs.context().reset();
+
+    scheduler.waitIdle();
     scheduler.release();
 
     sessions.clear();

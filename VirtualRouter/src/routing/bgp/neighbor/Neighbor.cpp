@@ -48,7 +48,7 @@ void Neighbor::initialize()
     {
         if (auto& ipv4 = it->second->get<config::BgpAfVrf::IPV4_UNICAST>(); ipv4.hasValue())
             addAfNeighbor({BGP_AFI_IPV4, BGP_SAFI_UNICAST});
-        if (auto& ipv6 = it->second->get<config::BgpAfVrf::IPV4_UNICAST>(); ipv6.hasValue())
+        if (auto& ipv6 = it->second->get<config::BgpAfVrf::IPV6_UNICAST>(); ipv6.hasValue())
             addAfNeighbor({BGP_AFI_IPV6, BGP_SAFI_UNICAST});
         // Add more later
     }
@@ -116,9 +116,27 @@ void Neighbor::addAfNeighbor(const AfiSafi& afi)
 {
     AddressFamilyVariant* af = ntable.findAddressFamily(afi);
     assert(af);
-    config::BgpNeighborRegistry* parentCfgs = configs.getConfigs().resolveParent<config::BgpNeighborRegistry>();
-    assert(parentCfgs);
-    priv.afNeighbors.try_emplace(afi, *parentCfgs, afi, *af, *this);
+
+    auto afVrfs = ntable.getConfigs().get<config::Bgp::AF_VRF>();
+    auto it = afVrfs.find(ntable.scope.routingInstance.getName());
+    assert(it != afVrfs.end());
+
+    config::BgpNeighborRegistry* neighborCfgs = nullptr;
+    if (afi == AfiSafi{BGP_AFI_IPV4, BGP_SAFI_UNICAST})
+    {
+        auto& ipv4 = it->second->get<config::BgpAfVrf::IPV4_UNICAST>();
+        assert(ipv4.hasValue());
+        neighborCfgs = ipv4.get().get<config::BgpAddressFamily::NEIGHBOR>().emplaceBack(neighborAddress);
+    }
+    else if (afi == AfiSafi{BGP_AFI_IPV6, BGP_SAFI_UNICAST})
+    {
+        auto& ipv6 = it->second->get<config::BgpAfVrf::IPV6_UNICAST>();
+        assert(ipv6.hasValue());
+        neighborCfgs = ipv6.get().get<config::BgpAddressFamily::NEIGHBOR>().emplaceBack(neighborAddress);
+    }
+    assert(neighborCfgs);
+
+    priv.afNeighbors.try_emplace(afi, *neighborCfgs, afi, *af, *this);
 }
 
 void Neighbor::delAfNeighbor(AfiSafi& afi)

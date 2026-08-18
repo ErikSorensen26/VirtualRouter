@@ -95,6 +95,11 @@ public:
     OptionalRegistryContainer(const OptionalRegistryContainer&) = delete;
     OptionalRegistryContainer& operator=(const OptionalRegistryContainer&) = delete;
 
+    void setOwner(utils::Any owner) noexcept
+    {
+        ownerBack = owner;
+    }
+
     T& get() noexcept
     {
         assertRegistry();
@@ -122,10 +127,15 @@ private:
     void assertRegistry()
     {
         if (!owned)
+        {
             owned = new T();
+            if (ownerBack.hasValue())
+                owned->setParent(ownerBack);
+        }
     }
 
     T* owned = nullptr;
+    utils::Any ownerBack;
     uint32_t configIndex;
 };
 }

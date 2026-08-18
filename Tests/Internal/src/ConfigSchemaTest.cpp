@@ -1,8 +1,4 @@
-// Covers the name tables the grammar resolves against: the enum member tables
-// from DEFINE_CONFIG_ENUM and the tuple member tables from DEFINE_TUPLE_SCHEMA.
-// Both are consumed by the flattener at build time, so most of what matters here
-// is a constant expression and is asserted as one -- a runtime EXPECT would pass
-// on a table the flattener could not actually have used.
+// ConfigSchemaTest.cpp
 
 #include <gtest/gtest.h>
 
@@ -82,7 +78,7 @@ TEST(Internal_ConfigSchemaTest, TupleMemberIndexIsThePosition)
     static_assert(OspfAreaRange::count == 3);
 
     static_assert(OspfAreaRange::members[0] == tokenHash("prefix"));
-    static_assert(OspfAreaRange::members[1] == tokenHash("nonAdvertise"));
+    static_assert(OspfAreaRange::members[1] == tokenHash("notAdvertise"));
     static_assert(OspfAreaRange::members[2] == tokenHash("cost"));
 
     static_assert(OspfAreaRange::names[0] == "prefix");
@@ -103,17 +99,17 @@ TEST(Internal_ConfigSchemaTest, TupleTablesAreParallelToTheTuple)
 
 TEST(Internal_ConfigSchemaTest, TupleAccessorMatchesTheNamedIndex)
 {
-    OspfAreaRange::Tuple t{};
+    OspfAreaRange t{};
 
-    OspfAreaRange::nonAdvertise(t) = true;
-    OspfAreaRange::cost(t) = 42u;
+    t.notAdvertise() = true;
+    t.cost() = 42u;
 
     EXPECT_TRUE(std::get<1>(t));
     ASSERT_TRUE(std::get<2>(t).has_value());
     EXPECT_EQ(*std::get<2>(t), 42u);
 
-    EXPECT_TRUE(OspfAreaRange::nonAdvertise(t));
-    EXPECT_EQ(*OspfAreaRange::cost(t), 42u);
+    EXPECT_TRUE(t.notAdvertise());
+    EXPECT_EQ(*t.cost(), 42u);
 }
 
 TEST(Internal_ConfigSchemaTest, TupleTypeDoesNotIdentifyASchema)
@@ -167,7 +163,7 @@ TEST(Internal_ConfigSchemaTest, LiveFieldsResolveTheirMembers)
         tokenHash("cost")) == 2);
     static_assert(tupleMemberName<SchemaAt<OspfArea, OspfArea::RANGE>>(0) == "prefix");
 
-    static_assert(hasTupleSchemaV<SchemaAt<Eigrp, Eigrp::NETWORK>>);
+    static_assert(hasTupleSchemaV<SchemaAt<Eigrp, Eigrp::ADMIN_DISTANCE_RANGES>>);
     static_assert(hasTupleSchemaV<SchemaAt<Bgp, Bgp::BGP_LISTEN_RANGE>>);
     static_assert(hasTupleSchemaV<SchemaAt<Vrf, Vrf::ARP_STATIC_ENTRY>>);
 

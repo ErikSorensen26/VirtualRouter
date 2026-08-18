@@ -117,7 +117,7 @@ enum class RoutingMode
  * - Session creation is lightweight and context-bound; tree traversal is offloaded to
  *   `CommandProcessor` and runtime modes.
  */
-class CliEngine : public Configs
+class CliEngine
 {
 public:
     friend class Internal_CliTest;
@@ -146,9 +146,10 @@ public:
      * @param global Reference to the global router manager/root routing instance registry.
      * @param stfs   Startup file collection describing command tree, schema, and recovery files.
      * @param fs     Custom file-system interface used for all CLI-related persistence.
+     * @param tree   Command tree.
      * @param test   Disable initialization logic when true.
      */
-    CliEngine(core::Global& global, const StartupFiles& stfs, FileSystem& fs, bool test = false);
+    CliEngine(core::Global& global, const StartupFiles& stfs, tree::CommandTree& tree);
 
     /**
      * @brief Destroys the CLI engine and all active sessions.
@@ -269,7 +270,7 @@ private:
      */
     void recoverState();
 
-    mutable tree::CommandTree commandTree; ///< Loaded command tree describing the full CLI grammar.
+    tree::CommandTree& commandTree; ///< Loaded command tree describing the full CLI grammar.
     std::condition_variable stateCondition; ///< Condition variable reserved for future synchronization.
 };
 }

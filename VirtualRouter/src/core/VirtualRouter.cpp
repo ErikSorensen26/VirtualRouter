@@ -128,16 +128,22 @@ bool VirtualRouter::removeEigrpAutonomousSystem(uint16_t id, types::AddressFamil
         if (af == types::AddressFamily::IPv4)
         {
             if (it->second.ipv4)
+            {
                 delete it->second.ipv4;
-            if (!it->second.ipv4 && it->second.ipv6)
+                it->second.ipv4 = nullptr;
+            }
+            if (!it->second.ipv4 && !it->second.ipv6)
                 eigrpList.erase(id);
             return true;
         }
         else if (af == types::AddressFamily::IPv6)
         {
             if (it->second.ipv6)
+            {
                 delete it->second.ipv6;
-            if (!it->second.ipv4 && it->second.ipv6)
+                it->second.ipv6 = nullptr;
+            }
+            if (!it->second.ipv4 && !it->second.ipv6)
                 eigrpList.erase(id);
             return true;
         }
@@ -211,16 +217,22 @@ bool VirtualRouter::removeOspfv3(uint16_t id, types::AddressFamily af)
         if (af == types::AddressFamily::IPv4)
         {
             if (it->second.ipv4)
+            {
                 delete it->second.ipv4;
-            if (!it->second.ipv4 && it->second.ipv6)
+                it->second.ipv4 = nullptr;
+            }
+            if (!it->second.ipv4 && !it->second.ipv6)
                 ospfv3List.erase(id);
             return true;
         }
         else if (af == types::AddressFamily::IPv6)
         {
             if (it->second.ipv6)
+            {
                 delete it->second.ipv6;
-            if (!it->second.ipv4 && it->second.ipv6)
+                it->second.ipv6 = nullptr;
+            }
+            if (!it->second.ipv4 && !it->second.ipv6)
                 ospfv3List.erase(id);
             return true;
         }

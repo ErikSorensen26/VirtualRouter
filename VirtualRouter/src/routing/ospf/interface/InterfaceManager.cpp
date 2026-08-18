@@ -336,8 +336,11 @@ void InterfaceManager::syncVirtualLinks()
 
 void InterfaceManager::deactivateAll()
 {
+    std::vector<std::unordered_map<OspfInterfaceId, OspfInterface>::node_type> extracted;
     while (!ospfInterfaceList.empty())
-        ospfInterfaceList.erase(ospfInterfaceList.begin());
+        extracted.push_back(ospfInterfaceList.extract(ospfInterfaceList.begin()));
+    extracted.clear();
+
     virtualLinkList.clear();
 }
 

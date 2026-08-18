@@ -390,8 +390,8 @@ private:
     const CommandNode& resolveNode() const;
 
 protected:
-    const CommandTree* tree;
-    uint32_t index;
+    const CommandTree* tree = nullptr;
+    uint32_t index = 0;
 };
 }
 

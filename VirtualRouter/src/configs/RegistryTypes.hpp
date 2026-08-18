@@ -721,6 +721,10 @@ struct IgnoreCompare : public IgnoreCompareFlag
     // Assignment
     IgnoreCompare& operator=(const T& v) { value = v; return *this; }
     IgnoreCompare& operator=(T&& v) { value = std::move(v); return *this; }
+
+    // Comparison is a deliberate no-op: this field is excluded from equality by design.
+    friend bool operator==(const IgnoreCompare&, const IgnoreCompare&) { return true; }
+    friend bool operator!=(const IgnoreCompare&, const IgnoreCompare&) { return false; }
 };
 }
 

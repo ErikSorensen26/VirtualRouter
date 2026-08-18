@@ -290,20 +290,25 @@ public:
 
     inline void unset() noexcept
     {
-        typename F::type old = load();
         if (field.state.load(std::memory_order_relaxed) != FieldState::INHERIT)
         {
+            const bool hadValue = hasValue();
+            utils::RCU::Guard oldGuard;
+            typename F::type* oldPtr = hadValue ? field.value.load(std::memory_order_relaxed) : nullptr;
+
             field.state.store(FieldState::INHERIT, std::memory_order_relaxed);
-            if (load() != old)
+
+            const F* f = &field;
+            while (f->state.load(std::memory_order_relaxed) == FieldState::INHERIT && f->mask)
+                f = f->mask;
+            bool hasNewValue = f->state.load(std::memory_order_relaxed) == FieldState::CANNED;
+            utils::RCU::Guard g;
+            typename F::type* v = hasNewValue ? f->value.load(std::memory_order_relaxed) : nullptr;
+
+            if (hadValue != hasNewValue || (hadValue && hasNewValue && *oldPtr != *v))
             {
-                const F* f = &field;
-                while (f->state.load(std::memory_order_relaxed) == FieldState::INHERIT && f->mask)
-                    f = f->mask;
-                bool hasValue = f->state.load(std::memory_order_relaxed) == FieldState::CANNED;
-                utils::RCU::Guard g;
-                typename F::type* v = f->value.load(std::memory_order_relaxed);
                 if constexpr (RequiresContext<F>)
-                    field.applier(provider, hasValue ? v : nullptr);
+                    field.applier(provider, hasNewValue ? v : nullptr);
             }
         }
     }
@@ -666,8 +671,18 @@ template <ENUM F>
 decltype(auto) SubRegistry<Base, ENUM, Fields>::get() noexcept
 {
     using Field = FieldTypeAt<F>;
-    if constexpr (IsRefContainer<Field> || IsOptionalRefContainer<Field>)
-        return getValue<F>();
+    if constexpr (IsRefContainer<Field>)
+    {
+        Field& container = getValue<F>();
+        container.get().setParent(static_cast<Base*>(this));
+        return container;
+    }
+    else if constexpr (IsOptionalRefContainer<Field>)
+    {
+        Field& container = getValue<F>();
+        container.setOwner(static_cast<Base*>(this));
+        return container;
+    }
     else if constexpr (IsAtomicField<Field>)
         return AtomicFieldAccessor<Field>(*static_cast<Base*>(this), AccessorField<F>{});
     else if constexpr (IsOptionalAtomicField<Field>)

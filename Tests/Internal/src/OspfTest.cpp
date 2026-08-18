@@ -1,5 +1,6 @@
 // Internal_OspfTest.cpp
 
+#include <cassert>
 #include <cstdint>
 #include <algorithm>
 #include <gtest/gtest.h>
@@ -91,11 +92,17 @@ protected:
     void SetUp() override
     {
         utils::RCU::registerThread();
-        global = new core::Global(fs, {}, false, true);
+        core::GlobalProperties props(fs);
+        props.enableDummies = true;
+        props.enableRouting = false;
+        props.threadPoolCapacity = (1 << 8);
+
+        global = new core::Global(props);
         mockInterface = new interface::MockInterface(*global, interface::InterfaceType::GIGABIT_ETHERNET);
         mKey = mockInterface->configs.key;
 
-        vrf = global->getRoutingInstance("default", types::AddressFamily::IPv4);
+        // DEFAULT_VRF is "", not the literal "default" -- that's the actual key
+        vrf = global->getRoutingInstance(DEFAULT_VRF, types::AddressFamily::IPv4);
         vrf->getInterfaceManager().add(mockInterface, mKey);
         vrf->enabledAddressFamilies.insert(types::AddressFamily::IPv6);
 
@@ -108,7 +115,9 @@ protected:
         EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_)).Times(::testing::AnyNumber());
 
         // OSPFv2 process (IPv4)
-        ospfInstance = &vrf->addOspf(1);
+        config::OspfRegistry* ospfReg = vrf->getConfigs().get<config::Vrf::ROUTER_OSPF>().emplaceBack(1);
+        ASSERT_NE(ospfReg, nullptr);
+        ospfInstance = &vrf->addOspf(*ospfReg, 1);
         ospfInstance->configs.get<config::Ospf::LSA_THROTTLE_HOLD>().set(0);
         ospfInstance->configs.get<config::Ospf::LSA_THROTTLE_MAX>().set(0);
         ospfInstance->configs.get<config::Ospf::LSA_ARRIVAL>().set(0);
@@ -126,7 +135,9 @@ protected:
         ospfInstance->scheduler.waitScheduled();
 
         // OSPFv3 process (IPv6)
-        ospfv3Instance = &vrf->addOspfv3(2, types::AddressFamily::IPv6);
+        config::OspfRegistry* ospfv3Reg = vrf->getConfigs().get<config::Vrf::ROUTER_OSPF>().emplaceBack(2);
+        ASSERT_NE(ospfv3Reg, nullptr);
+        ospfv3Instance = &vrf->addOspfv3(*ospfv3Reg, 2, types::AddressFamily::IPv6);
         ospfv3Instance->configs.get<config::Ospf::LSA_THROTTLE_HOLD>().set(0);
         ospfv3Instance->configs.get<config::Ospf::LSA_THROTTLE_MAX>().set(0);
         ospfv3Instance->configs.get<config::Ospf::LSA_ARRIVAL>().set(0);
@@ -141,8 +152,11 @@ protected:
         ospfv3Instance->scheduler.waitScheduled();
         {
             std::lock_guard lock(ospfv3Instance->scheduler.getLock());
-            ospfv3Interface = static_cast<OspfInterface*>(&ospfv3Instance->ifaceMgr.createInterface(
-                *mockInterface, OspfInterfaceId(ipIntv4.addr, 0)));
+            OspfInterfaceId ospfv3Id(mKey.getId(), 0);
+            ospfv3Instance->ifaceMgr.addInterface(*mockInterface);
+            ospfv3Interface = const_cast<OspfInterface*>(static_cast<const OspfInterface*>(
+                ospfv3Instance->ifaceMgr.getInterface(ospfv3Id)));
+            ASSERT_NE(ospfv3Interface, nullptr);
         }
         ospfv3Instance->scheduler.waitScheduled();
     }
@@ -153,7 +167,7 @@ protected:
         ospfv3Instance->scheduler.waitScheduled();
         mockInterface->blockEnqueues();
         vrf->removeOspf(1);
-        vrf->removeOspfv3(2);
+        vrf->removeOspfv3(2, types::AddressFamily::IPv6);
         vrf->getInterfaceManager().remove(mKey);
         delete mockInterface;
         delete global;
@@ -342,7 +356,18 @@ protected:
     {
         OspfProcess* p = proc ? proc : ospfInstance;
         OspfInterface* result = nullptr;
-        p->scheduler.postAndWait([&]() { result = static_cast<OspfInterface*>(&p->ifaceMgr.createInterface(iface, id)); });
+        p->scheduler.postAndWait([&]() {
+            if (p->isV3)
+            {
+                p->ifaceMgr.addInterface(iface);
+                OspfInterfaceId realId(iface.configs.key.getId(), 0);
+                result = const_cast<OspfInterface*>(static_cast<const OspfInterface*>(p->ifaceMgr.getInterface(realId)));
+            }
+            else
+            {
+                result = static_cast<OspfInterface*>(&p->ifaceMgr.createInterface(iface, id));
+            }
+        });
         return *result;
     }
     void removeIface(const OspfInterfaceId& id, OspfProcess* proc = nullptr)
@@ -350,6 +375,11 @@ protected:
         OspfProcess* p = proc ? proc : ospfInstance;
         // ~OspfInterface rebuilds Router-LSAs (updateOriginations); run it on the scheduler thread like createIface to avoid racing posted tasks.
         p->scheduler.postAndWait([&]() { p->ifaceMgr.removeInterface(id); });
+    }
+    void removeIfaceV3(interface::Interface& iface, OspfProcess* proc = nullptr)
+    {
+        OspfProcess* p = proc ? proc : ospfInstance;
+        p->scheduler.postAndWait([&]() { p->ifaceMgr.removeInterface(iface); });
     }
     VirtualLink& createVirtualLink(uint32_t transitAreaId, uint32_t remoteRid, OspfProcess* proc = nullptr)
     {
@@ -381,13 +411,6 @@ protected:
             p->ifaceMgr.syncVirtualLinks();
         });
     }
-    // Builds a real, SPF-resolvable intra-area path to remoteRid inside
-    // transitAreaId: a P2P interface to remoteRid plus remoteRid's own
-    // synthetic self-originated Router-LSA (SPF needs both directions of the
-    // edge). Required for any virtual-link test that needs
-    // getTransmitInterface()/getCost() to resolve, since IntraOriginator::
-    // addRouterLink now skips Type-4 encoding when there is no transit path.
-    // Returns the created local interface; caller must removeIface(id) it.
     OspfInterface& establishTransitPath(uint32_t transitAreaId, uint32_t remoteRid)
     {
         getConfigs().get<config::Ospf::SPF_THROTTLE_DELAY>().set(0);
@@ -398,7 +421,7 @@ protected:
         OspfInterface& iface1 = createIface(*mockInterface, OspfInterfaceId(ipIntv4.addr, transitAreaId));
         getIfaceConfigs(&iface1).get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
         getIfaceConfigs(&iface1).get<config::OspfInterface::COST>().set(5);
-        iface1.enqueueSyncNetworkType();
+        iface1.enqueueSyncNetworkType(config::ospf::NetworkType::POINT_TO_POINT);
         calculateCost(&iface1);
         wait();
 
@@ -447,7 +470,9 @@ protected:
     }
     OspfProcess& setupAfIpv4Process(uint16_t procId, OspfInterface** ifaceOut = nullptr)
     {
-        OspfProcess& p = vrf->addOspfv3(procId, types::AddressFamily::IPv4);
+        config::OspfRegistry* procReg = vrf->getConfigs().get<config::Vrf::ROUTER_OSPF>().emplaceBack(procId);
+        assert(procReg != nullptr);
+        OspfProcess& p = vrf->addOspfv3(*procReg, procId, types::AddressFamily::IPv4);
         p.configs.get<config::Ospf::LSA_THROTTLE_HOLD>().set(0);
         p.configs.get<config::Ospf::LSA_THROTTLE_MAX>().set(0);
         p.configs.get<config::Ospf::LSA_ARRIVAL>().set(0);
@@ -461,7 +486,9 @@ protected:
         OspfInterface* ifacePtr = nullptr;
         {
             std::lock_guard lock(p.scheduler.getLock());
-            ifacePtr = static_cast<OspfInterface*>(&p.ifaceMgr.createInterface(*mockInterface, OspfInterfaceId(ipIntv4.addr, 0)));
+            OspfInterfaceId ifId(mKey.getId(), 0);
+            p.ifaceMgr.addInterface(*mockInterface);
+            ifacePtr = const_cast<OspfInterface*>(static_cast<const OspfInterface*>(p.ifaceMgr.getInterface(ifId)));
         }
         p.scheduler.waitScheduled();
         if (ifaceOut)
@@ -472,7 +499,7 @@ protected:
     {
         // Settle in-flight origination callbacks before destroying the process; they touch originationState and raced to a heap-use-after-free.
         p.scheduler.waitScheduled();
-        vrf->removeOspfv3(procId);
+        vrf->removeOspfv3(procId, types::AddressFamily::IPv4);
     }
     InterfaceFlagManager& getIfaceFlags(OspfInterface* iface = nullptr)
         { return (iface ? iface : ospfInterface)->flags; }
@@ -2045,7 +2072,7 @@ TEST_F(Internal_OspfTest, Interface_SyncNetworkType_PointToPoint_Sets_NonMultica
 {
     getIfaceConfigs().get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::NON_BROADCAST);
 
-    ospfInterface->enqueueSyncNetworkType();
+    ospfInterface->enqueueSyncNetworkType(config::ospf::NetworkType::NON_BROADCAST);
     wait();
 
     EXPECT_FALSE(getIsMulticast());
@@ -2056,7 +2083,7 @@ TEST_F(Internal_OspfTest, Interface_SyncNetworkType_Broadcast_Sets_Multicast_Tru
 {
     getIfaceConfigs().get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::BROADCAST);
 
-    ospfInterface->enqueueSyncNetworkType();
+    ospfInterface->enqueueSyncNetworkType(config::ospf::NetworkType::BROADCAST);
     wait();
 
     EXPECT_TRUE(getIsMulticast());
@@ -2070,7 +2097,7 @@ TEST_F(Internal_OspfTest, Interface_SetPassiveMode_True_Tears_Down_Existing_Neig
     ASSERT_NE(nbr->getState(), Neighbor::State::DOWN);
 
     getIfaceConfigs().get<config::OspfInterface::PASSIVE>().set(true);
-    ospfInterface->enqueueSyncPassive();
+    ospfInterface->enqueueSyncPassive(true);
     wait();
 
     EXPECT_EQ(nbr->getState(), Neighbor::State::DOWN);
@@ -2082,11 +2109,11 @@ TEST_F(Internal_OspfTest, Interface_SetPassiveMode_False_Restarts_Hello)
     auto passiveField = getIfaceConfigs().get<config::OspfInterface::PASSIVE>();
     
     passiveField.set(true);
-    ospfInterface->enqueueSyncPassive();
+    ospfInterface->enqueueSyncPassive(true);
     wait();
     // Should not crash re-enabling; startHello is invoked.
     passiveField.set(false);
-    ospfInterface->enqueueSyncPassive();
+    ospfInterface->enqueueSyncPassive(true);
     wait();
     SUCCEED();
 }
@@ -3611,7 +3638,7 @@ TEST_F(Internal_OspfTest, OriginateV2_RouterLsa_AddTransitLink_For_DR_Broadcast)
 TEST_F(Internal_OspfTest, OriginateV2_RouterLsa_AddP2PLink_For_PointToPoint_FullNeighbor)
 {
     getIfaceConfigs().get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
-    ospfInterface->enqueueSyncNetworkType();
+    ospfInterface->enqueueSyncNetworkType(config::ospf::NetworkType::POINT_TO_POINT);
     wait();
 
     types::IPAddress nbrIp(types::IPv4Address{neighborRouterId});
@@ -3653,7 +3680,7 @@ TEST_F(Internal_OspfTest, OriginateV2_RouterLsa_AddP2PLink_For_PointToPoint_Full
 TEST_F(Internal_OspfTest, OriginateV2_RouterLsa_AddStubLink_For_Passive_Interface)
 {
     getIfaceConfigs().get<config::OspfInterface::PASSIVE>().set(true);
-    ospfInterface->enqueueSyncPassive();
+    ospfInterface->enqueueSyncPassive(true);
     wait();
 
     fullRefreshV2();
@@ -3880,7 +3907,7 @@ TEST_F(Internal_OspfTest, OriginateV2_StubArea_AddStubDefaultRoute_Originates_Ty
 {
     // Pre-configure area 1 as STUB before construction.
     getConfigs().get<config::Ospf::AREA_CONFIGS>().emplaceBack(1)
-        .get<config::OspfArea::AREA_TYPE>().set(config::ospf::AreaType::STUB);
+        ->get<config::OspfArea::AREA_TYPE>().set(config::ospf::AreaType::STUB);
 
     // Create a second interface in area 1 so the process becomes an ABR
     // (insureArea(1) alongside existing area 0).
@@ -3916,9 +3943,10 @@ TEST_F(Internal_OspfTest, OriginateV2_StubArea_AddStubDefaultRoute_Originates_Ty
 TEST_F(Internal_OspfTest, OriginateV2_NssaArea_NssaDefaultOriginate_Type7_Default_When_Abr)
 {
     // Pre-configure area 1 as NSSA with default-originate enabled before construction.
-    auto& area1Cfg = getConfigs().get<config::Ospf::AREA_CONFIGS>().emplaceBack(1);
-    area1Cfg.get<config::OspfArea::AREA_TYPE>().set(config::ospf::AreaType::NSSA);
-    area1Cfg.get<config::OspfArea::NSSA_DEFAULT_ORIGINATE>().set(true);
+    auto* area1Cfg = getConfigs().get<config::Ospf::AREA_CONFIGS>().emplaceBack(1);
+    ASSERT_NE(area1Cfg, nullptr);
+    area1Cfg->get<config::OspfArea::AREA_TYPE>().set(config::ospf::AreaType::NSSA);
+    area1Cfg->get<config::OspfArea::NSSA_DEFAULT_ORIGINATE>().set(true);
 
     auto& iface1 = createIface(
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
@@ -4467,9 +4495,6 @@ TEST_F(Internal_OspfTest, AbrSummary_ReoriginateSummary_Single_Updates_Existing_
 // Test: Spf_RunFull_Computes_Shortest_Path_Single_Router
 TEST_F(Internal_OspfTest, Spf_RunFull_Computes_Shortest_Path_Single_Router)
 {
-    // Only self's Router-LSA exists (default broadcast network with no
-    // FULL neighbors -> stub link only). SPF should still place the root
-    // vertex at distance 0.
     fullRefreshV2();
     wait();
 
@@ -4495,10 +4520,8 @@ TEST_F(Internal_OspfTest, Spf_RunFull_Computes_Shortest_Path_Single_Router)
 // Test: Spf_RunFull_Computes_Shortest_Path_Multi_Hop_Topology
 TEST_F(Internal_OspfTest, Spf_RunFull_Computes_Shortest_Path_Multi_Hop_Topology)
 {
-    // Configure self as point-to-point with a FULL neighbor so self's
-    // Router-LSA contains a P2P link to neighborRouterId.
     getIfaceConfigs().get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
-    ospfInterface->enqueueSyncNetworkType();
+    ospfInterface->enqueueSyncNetworkType(config::ospf::NetworkType::POINT_TO_POINT);
     wait();
 
     types::IPAddress nbrIp(types::IPv4Address{neighborRouterId});
@@ -4522,8 +4545,6 @@ TEST_F(Internal_OspfTest, Spf_RunFull_Computes_Shortest_Path_Multi_Hop_Topology)
         return false;
     }), nullptr);
 
-    // Inject a synthetic Router-LSA for the neighbor with a P2P link back
-    // to self (cost 5) and a stub link to a distinct prefix (cost 1).
     RouterLsaV2 nbrLsa;
     nbrLsa.flags = 0;
     nbrLsa.links.push_back({.linkId = selfRid, .linkData = neighborRouterId, .type = 1 /*P2P*/, .metric = 5});
@@ -4560,7 +4581,7 @@ TEST_F(Internal_OspfTest, Spf_RunFull_Ecmp_Equal_Cost_Paths_Both_Confirmed)
     getConfigs().get<config::Ospf::LSA_ARRIVAL>().set(0);
 
     getIfaceConfigs().get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
-    ospfInterface->enqueueSyncNetworkType();
+    ospfInterface->enqueueSyncNetworkType(config::ospf::NetworkType::POINT_TO_POINT);
     wait();
 
     types::IPAddress nbrIp(types::IPv4Address{neighborRouterId});
@@ -4573,8 +4594,6 @@ TEST_F(Internal_OspfTest, Spf_RunFull_Ecmp_Equal_Cost_Paths_Both_Confirmed)
     uint32_t selfRid = ospfInstance->getRouterId();
     uint32_t farRid = 0xC0A80104;
 
-    // Neighbor's Router-LSA: P2P link back to self (cost 5), and P2P link
-    // to a "far" router (cost 5).
     RouterLsaV2 nbrLsa;
     nbrLsa.flags = 0;
     nbrLsa.links.push_back({.linkId = selfRid, .linkData = neighborRouterId, .type = 1, .metric = 5});
@@ -4588,10 +4607,8 @@ TEST_F(Internal_OspfTest, Spf_RunFull_Ecmp_Equal_Cost_Paths_Both_Confirmed)
     LsaBody nbrLsaBody{nbrLsa};
     processLsa<PolicyV2>(nbrCtx, nbrLsaBody);
 
-    // A second router, directly reachable from self via neighborRouterId2
-    // (also cost 5), creating two equal-cost (10) paths to farRid.
     getIfaceConfigs().get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
-    ospfInterface->enqueueSyncNetworkType();
+    ospfInterface->enqueueSyncNetworkType(config::ospf::NetworkType::POINT_TO_POINT);
     wait();
 
     RouterLsaV2 nbr2Lsa;
@@ -4677,8 +4694,6 @@ TEST_F(Internal_OspfTest, Spf_ComputeDelta_Detects_New_Link_As_Addition)
     SpfEngine engine(getSpfManager());
     SpfResult result1 = engine.run<PolicyV2>(topo1);
 
-    // Add a new P2P link to neighborRouterId via a synthetic re-origination
-    // of self's Router-LSA, plus the neighbor's reciprocal Router-LSA.
     RouterLsaV2 selfLsa;
     selfLsa.flags = 0;
     selfLsa.links.push_back({.linkId = neighborRouterId, .linkData = selfRid, .type = 1, .metric = 7});
@@ -4719,8 +4734,6 @@ TEST_F(Internal_OspfTest, Spf_ComputeDelta_Detects_New_Link_As_Addition)
 
     Vertex nbrVertex{VertexType::ROUTER, neighborRouterId};
 
-    // The neighbor vertex was absent (or unreachable) before, and reachable
-    // at cost 7 after.
     EXPECT_EQ(result1.nodes.find(nbrVertex), result1.nodes.end());
 
     auto it2 = result2.nodes.find(nbrVertex);
@@ -5202,7 +5215,7 @@ TEST_F(Internal_OspfTest, Spf_RelaxEdgeRepair_Restricted_To_Confirmed_Vertices)
 TEST_F(Internal_OspfTest, Spf_FinalizeParents_Propagates_FirstHop_Interface_Ids)
 {
     getIfaceConfigs().get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
-    ospfInterface->enqueueSyncNetworkType();
+    ospfInterface->enqueueSyncNetworkType(config::ospf::NetworkType::POINT_TO_POINT);
     wait();
 
     types::IPAddress nbrIp(types::IPv4Address{neighborRouterId});
@@ -5639,7 +5652,7 @@ TEST_F(Internal_OspfTest, RouteDerive_InterArea_Type4_Updates_Asbr_Reachability_
     getIfaceConfigs().get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
     getIfaceConfigs().get<config::OspfInterface::COST>().set(5);
     calculateCost();
-    ospfInterface->enqueueSyncNetworkType();
+    ospfInterface->enqueueSyncNetworkType(config::ospf::NetworkType::POINT_TO_POINT);
     wait();
 
     types::IPAddress nbrIp(types::IPv4Address{abrRid});
@@ -5716,7 +5729,7 @@ TEST_F(Internal_OspfTest, RouteDerive_External_Type5_E1_Adds_Internal_Plus_Exter
     getIfaceConfigs().get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
     getIfaceConfigs().get<config::OspfInterface::COST>().set(5);
     calculateCost();
-    ospfInterface->enqueueSyncNetworkType();
+    ospfInterface->enqueueSyncNetworkType(config::ospf::NetworkType::POINT_TO_POINT);
     wait();
 
     types::IPAddress nbrIp(types::IPv4Address{asbrRid});
@@ -5794,7 +5807,7 @@ TEST_F(Internal_OspfTest, RouteDerive_External_Type5_E2_Uses_External_Cost_Only)
     uint32_t asbrRid = neighborRouterId;
 
     getIfaceConfigs().get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
-    ospfInterface->enqueueSyncNetworkType();
+    ospfInterface->enqueueSyncNetworkType(config::ospf::NetworkType::POINT_TO_POINT);
     wait();
 
     types::IPAddress nbrIp(types::IPv4Address{asbrRid});
@@ -5947,7 +5960,7 @@ TEST_F(Internal_OspfTest, RouteDerive_External_ForwardingAddress_NonZero_Anchors
     getIfaceConfigs().get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
     getIfaceConfigs().get<config::OspfInterface::COST>().set(4);
     calculateCost();
-    ospfInterface->enqueueSyncNetworkType();
+    ospfInterface->enqueueSyncNetworkType(config::ospf::NetworkType::POINT_TO_POINT);
     wait();
 
     types::IPAddress nbrIp(types::IPv4Address{asbrRid});
@@ -6066,7 +6079,7 @@ TEST_F(Internal_OspfTest, RouteDerive_AdminDistance_Set_Per_Route_Type)
     uint8_t extAd = getConfigs().get<config::Ospf::EXTERNAL_DISTANCE>().load();
 
     getIfaceConfigs().get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
-    ospfInterface->enqueueSyncNetworkType();
+    ospfInterface->enqueueSyncNetworkType(config::ospf::NetworkType::POINT_TO_POINT);
     wait();
 
     types::IPAddress nbrIp(types::IPv4Address{abrRid});
@@ -6172,7 +6185,7 @@ TEST_F(Internal_OspfTest, RouteDerive_DeriveExternalRoutes_Recomputes_All_Type5_
     getIfaceConfigs().get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
     getIfaceConfigs().get<config::OspfInterface::COST>().set(5);
     calculateCost();
-    ospfInterface->enqueueSyncNetworkType();
+    ospfInterface->enqueueSyncNetworkType(config::ospf::NetworkType::POINT_TO_POINT);
     wait();
 
     types::IPAddress nbrIp(types::IPv4Address{asbrRid});
@@ -6274,7 +6287,7 @@ TEST_F(Internal_OspfTest, Topology_AsbrReachability_Prefers_IntraArea_Over_Inter
     getIfaceConfigs().get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
     getIfaceConfigs().get<config::OspfInterface::COST>().set(5);
     calculateCost();
-    ospfInterface->enqueueSyncNetworkType();
+    ospfInterface->enqueueSyncNetworkType(config::ospf::NetworkType::POINT_TO_POINT);
     wait();
 
     types::IPAddress nbrIp(types::IPv4Address{asbrRid});
@@ -6345,7 +6358,7 @@ TEST_F(Internal_OspfTest, Topology_AsbrReachability_Updated_On_Type4_Lsa)
     getIfaceConfigs().get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
     getIfaceConfigs().get<config::OspfInterface::COST>().set(5);
     calculateCost();
-    ospfInterface->enqueueSyncNetworkType();
+    ospfInterface->enqueueSyncNetworkType(config::ospf::NetworkType::POINT_TO_POINT);
     wait();
 
     types::IPAddress nbrIp(types::IPv4Address{abrRid});
@@ -6416,7 +6429,7 @@ TEST_F(Internal_OspfTest, Topology_AsbrReachability_Removed_When_Type4_Withdrawn
     uint32_t asbrRid = 0xC0A80105;
 
     getIfaceConfigs().get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
-    ospfInterface->enqueueSyncNetworkType();
+    ospfInterface->enqueueSyncNetworkType(config::ospf::NetworkType::POINT_TO_POINT);
     wait();
 
     types::IPAddress nbrIp(types::IPv4Address{abrRid});
@@ -6487,7 +6500,7 @@ TEST_F(Internal_OspfTest, Topology_NextHopCache_Reflects_Spf_Result)
     uint32_t selfRid = ospfInstance->getRouterId();
 
     getIfaceConfigs().get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
-    ospfInterface->enqueueSyncNetworkType();
+    ospfInterface->enqueueSyncNetworkType(config::ospf::NetworkType::POINT_TO_POINT);
     wait();
 
     types::IPAddress nbrIp(types::IPv4Address{neighborRouterId});
@@ -6576,7 +6589,7 @@ TEST_F(Internal_OspfTest, AreaType_Stub_Rejects_Type5_External_Lsas)
 {
     // Pre-configure area 1 as STUB before construction.
     getConfigs().get<config::Ospf::AREA_CONFIGS>().emplaceBack(1)
-        .get<config::OspfArea::AREA_TYPE>().set(config::ospf::AreaType::STUB);
+        ->get<config::OspfArea::AREA_TYPE>().set(config::ospf::AreaType::STUB);
 
     auto& iface1 = createIface(
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
@@ -6613,7 +6626,7 @@ TEST_F(Internal_OspfTest, AreaType_Stub_Originates_Default_Route_From_Abr)
 {
     // Pre-configure area 1 as STUB before construction.
     getConfigs().get<config::Ospf::AREA_CONFIGS>().emplaceBack(1)
-        .get<config::OspfArea::AREA_TYPE>().set(config::ospf::AreaType::STUB);
+        ->get<config::OspfArea::AREA_TYPE>().set(config::ospf::AreaType::STUB);
 
     auto& iface1 = createIface(
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
@@ -6623,9 +6636,6 @@ TEST_F(Internal_OspfTest, AreaType_Stub_Originates_Default_Route_From_Abr)
 
     ASSERT_TRUE(ospfInstance->isABR());
 
-    // The area's initial fullRefresh() ran before isABR() became true (insureArea
-    // sets ABR status after construction completes), so addStubDefaultRoute(true)
-    // was a no-op at that point. Re-run fullRefresh now that isABR() is true.
     fullRefreshV2(&stubArea);
     wait();
 
@@ -6643,9 +6653,10 @@ TEST_F(Internal_OspfTest, AreaType_Stub_Originates_Default_Route_From_Abr)
 TEST_F(Internal_OspfTest, AreaType_TotallyStub_Suppresses_Type3_Summaries_Except_Default)
 {
     // Pre-configure area 1 as a totally-stubby area: STUB plus NO_SUMMARY.
-    auto& areaCfg = getConfigs().get<config::Ospf::AREA_CONFIGS>().emplaceBack(1);
-    areaCfg.get<config::OspfArea::AREA_TYPE>().set(config::ospf::AreaType::STUB);
-    areaCfg.get<config::OspfArea::NO_SUMMARY>().set(true);
+    auto* areaCfg = getConfigs().get<config::Ospf::AREA_CONFIGS>().emplaceBack(1);
+    ASSERT_NE(areaCfg, nullptr);
+    areaCfg->get<config::OspfArea::AREA_TYPE>().set(config::ospf::AreaType::STUB);
+    areaCfg->get<config::OspfArea::NO_SUMMARY>().set(true);
 
     auto& iface1 = createIface(
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
@@ -6691,7 +6702,7 @@ TEST_F(Internal_OspfTest, AreaType_Nssa_Accepts_Type7_Rejects_Type5)
 {
     // Pre-configure area 1 as NSSA before construction.
     getConfigs().get<config::Ospf::AREA_CONFIGS>().emplaceBack(1)
-        .get<config::OspfArea::AREA_TYPE>().set(config::ospf::AreaType::NSSA);
+        ->get<config::OspfArea::AREA_TYPE>().set(config::ospf::AreaType::NSSA);
 
     auto& iface1 = createIface(
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
@@ -6742,7 +6753,7 @@ TEST_F(Internal_OspfTest, AreaType_Nssa_Abr_Translates_Type7_To_Type5)
 {
     // Pre-configure area 1 as NSSA before construction.
     getConfigs().get<config::Ospf::AREA_CONFIGS>().emplaceBack(1)
-        .get<config::OspfArea::AREA_TYPE>().set(config::ospf::AreaType::NSSA);
+        ->get<config::OspfArea::AREA_TYPE>().set(config::ospf::AreaType::NSSA);
 
     auto& iface1 = createIface(
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
@@ -6796,9 +6807,10 @@ TEST_F(Internal_OspfTest, AreaType_Nssa_Abr_Translates_Type7_To_Type5)
 TEST_F(Internal_OspfTest, AreaType_Nssa_Originates_Default_When_Configured)
 {
     // Pre-configure area 1 as NSSA with default-originate enabled before construction.
-    auto& area1Cfg = getConfigs().get<config::Ospf::AREA_CONFIGS>().emplaceBack(1);
-    area1Cfg.get<config::OspfArea::AREA_TYPE>().set(config::ospf::AreaType::NSSA);
-    area1Cfg.get<config::OspfArea::NSSA_DEFAULT_ORIGINATE>().set(true);
+    auto* area1Cfg = getConfigs().get<config::Ospf::AREA_CONFIGS>().emplaceBack(1);
+    ASSERT_NE(area1Cfg, nullptr);
+    area1Cfg->get<config::OspfArea::AREA_TYPE>().set(config::ospf::AreaType::NSSA);
+    area1Cfg->get<config::OspfArea::NSSA_DEFAULT_ORIGINATE>().set(true);
 
     auto& iface1 = createIface(
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
@@ -6838,10 +6850,11 @@ TEST_F(Internal_OspfTest, AreaType_TotallyNssa_Suppresses_Type3_Except_Default)
 {
     // Pre-configure area 1 as a totally-NSSA area: NSSA plus NO_SUMMARY, with
     // default-originate enabled before construction.
-    auto& area1Cfg = getConfigs().get<config::Ospf::AREA_CONFIGS>().emplaceBack(1);
-    area1Cfg.get<config::OspfArea::AREA_TYPE>().set(config::ospf::AreaType::NSSA);
-    area1Cfg.get<config::OspfArea::NO_SUMMARY>().set(true);
-    area1Cfg.get<config::OspfArea::NSSA_DEFAULT_ORIGINATE>().set(true);
+    auto* area1Cfg = getConfigs().get<config::Ospf::AREA_CONFIGS>().emplaceBack(1);
+    ASSERT_NE(area1Cfg, nullptr);
+    area1Cfg->get<config::OspfArea::AREA_TYPE>().set(config::ospf::AreaType::NSSA);
+    area1Cfg->get<config::OspfArea::NO_SUMMARY>().set(true);
+    area1Cfg->get<config::OspfArea::NSSA_DEFAULT_ORIGINATE>().set(true);
 
     auto& iface1 = createIface(
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
@@ -6940,10 +6953,7 @@ TEST_F(Internal_OspfTest, AreaRange_SyncRangeConfig_Builds_Range_Map_From_Config
 {
     types::IPPrefix rangePfx(uint32_t{0x0A000000}, 8);
 
-    getAreaConfigs().get<config::OspfArea::RANGE>().withWrite([&](auto& list) {
-        list.emplace_back(rangePfx, false, std::nullopt);
-        return true;
-    });
+    getAreaConfigs().get<config::OspfArea::RANGE>().add(config::OspfAreaRange{rangePfx, false, std::nullopt});
     wait();
 
     const auto& ranges = getRanges();
@@ -6964,10 +6974,7 @@ TEST_F(Internal_OspfTest, AreaRange_ContributorCount_Incremented_By_Covered_Intr
     types::IPPrefix rangePfx(uint32_t{0x0A000000}, 8);
 
     // Configure a range covering 10.0.0.0/8 in area 1.
-    getAreaConfigs(&area1).get<config::OspfArea::RANGE>().withWrite([&](auto& list) {
-        list.emplace_back(rangePfx, false, std::nullopt);
-        return true;
-    });
+    getAreaConfigs(&area1).get<config::OspfArea::RANGE>().add(config::OspfAreaRange{rangePfx, false, std::nullopt});
     wait();
 
     // Install an intra-area route inside the range into area 1's RIB.
@@ -7008,10 +7015,7 @@ TEST_F(Internal_OspfTest, AreaRange_ComputedMetric_Is_Min_Of_Contributors)
 
     types::IPPrefix rangePfx(uint32_t{0x0A000000}, 8);
 
-    getAreaConfigs(&area1).get<config::OspfArea::RANGE>().withWrite([&](auto& list) {
-        list.emplace_back(rangePfx, false, std::nullopt);
-        return true;
-    });
+    getAreaConfigs(&area1).get<config::OspfArea::RANGE>().add(config::OspfAreaRange{rangePfx, false, std::nullopt});
     wait();
 
     // Two intra-area routes covered by the range, with different costs.
@@ -7062,10 +7066,7 @@ TEST_F(Internal_OspfTest, AreaRange_CostOverride_Takes_Precedence_Over_ComputedM
     types::IPPrefix rangePfx(uint32_t{0x0A000000}, 8);
 
     // Configure the range with a cost override of 99.
-    getAreaConfigs(&area1).get<config::OspfArea::RANGE>().withWrite([&](auto& list) {
-        list.emplace_back(rangePfx, false, std::optional<uint32_t>(99));
-        return true;
-    });
+    getAreaConfigs(&area1).get<config::OspfArea::RANGE>().add(config::OspfAreaRange{rangePfx, false, std::optional<uint32_t>(99)});
     wait();
 
     types::IPPrefix covered(uint32_t{0x0A0A0000}, 16);
@@ -7106,10 +7107,7 @@ TEST_F(Internal_OspfTest, AreaRange_NotAdvertise_Suppresses_Summary_Lsa)
     types::IPPrefix rangePfx(uint32_t{0x0A000000}, 8);
 
     // Configure the range with not-advertise = true.
-    getAreaConfigs(&area1).get<config::OspfArea::RANGE>().withWrite([&](auto& list) {
-        list.emplace_back(rangePfx, true, std::nullopt);
-        return true;
-    });
+    getAreaConfigs(&area1).get<config::OspfArea::RANGE>().add(config::OspfAreaRange{rangePfx, true, std::nullopt});
     wait();
 
     types::IPPrefix covered(uint32_t{0x0A0A0000}, 16);
@@ -7148,10 +7146,7 @@ TEST_F(Internal_OspfTest, AreaRange_SyncRangeSuppression_Withdraws_When_Contribu
 
     types::IPPrefix rangePfx(uint32_t{0x0A000000}, 8);
 
-    getAreaConfigs(&area1).get<config::OspfArea::RANGE>().withWrite([&](auto& list) {
-        list.emplace_back(rangePfx, false, std::nullopt);
-        return true;
-    });
+    getAreaConfigs(&area1).get<config::OspfArea::RANGE>().add(config::OspfAreaRange{rangePfx, false, std::nullopt});
     wait();
 
     // Install a covered intra-area route, sync, and confirm the summary appears.
@@ -7176,9 +7171,6 @@ TEST_F(Internal_OspfTest, AreaRange_SyncRangeSuppression_Withdraws_When_Contribu
     EXPECT_NE(record->header.age, routing::OSPF_MAX_AGE);
     uint32_t seqWithContributor = record->header.sequence;
 
-    // Now withdraw the covered route (replace area paths with an empty set)
-    // and re-sync. The contributor count drops to zero and the summary must
-    // be withdrawn (aged to MaxAge).
     std::vector<std::pair<types::IPPrefix, OspfPath>> emptyList;
     getRib().replaceArea(area1, emptyList);
     wait();
@@ -7206,10 +7198,7 @@ TEST_F(Internal_OspfTest, AreaRange_SuppressInterAreaPrefix_Immediate_Withdrawal
 
     types::IPPrefix rangePfx(uint32_t{0x0A000000}, 8);
 
-    getAreaConfigs(&area1).get<config::OspfArea::RANGE>().withWrite([&](auto& list) {
-        list.emplace_back(rangePfx, false, std::nullopt);
-        return true;
-    });
+    getAreaConfigs(&area1).get<config::OspfArea::RANGE>().add(config::OspfAreaRange{rangePfx, false, std::nullopt});
     wait();
 
     types::IPPrefix covered(uint32_t{0x0A0A0000}, 16);
@@ -7251,10 +7240,7 @@ TEST_F(Internal_OspfTest, AreaRange_AbrChange_Forces_Full_Range_Reevaluation)
     types::IPPrefix rangePfx(uint32_t{0x0A000000}, 8);
 
     // Configure a range on area 0 while still a single-area (non-ABR) process.
-    getAreaConfigs().get<config::OspfArea::RANGE>().withWrite([&](auto& list) {
-        list.emplace_back(rangePfx, false, std::nullopt);
-        return true;
-    });
+    getAreaConfigs().get<config::OspfArea::RANGE>().add(config::OspfAreaRange{rangePfx, false, std::nullopt});
     wait();
 
     ASSERT_FALSE(ospfInstance->isABR());
@@ -7292,10 +7278,7 @@ TEST_F(Internal_OspfTest, AreaRange_DiscardRoute_Installed_While_Range_Active)
 
     types::IPPrefix rangePfx(uint32_t{0x0A000000}, 8);
 
-    getAreaConfigs(&area1).get<config::OspfArea::RANGE>().withWrite([&](auto& list) {
-        list.emplace_back(rangePfx, false, std::nullopt);
-        return true;
-    });
+    getAreaConfigs(&area1).get<config::OspfArea::RANGE>().add(config::OspfAreaRange{rangePfx, false, std::nullopt});
     wait();
 
     // Install a covered intra-area route so the range becomes active.
@@ -7340,10 +7323,7 @@ TEST_F(Internal_OspfTest, AreaRange_DiscardRoute_Removed_When_Range_Withdrawn)
 
     types::IPPrefix rangePfx(uint32_t{0x0A000000}, 8);
 
-    getAreaConfigs(&area1).get<config::OspfArea::RANGE>().withWrite([&](auto& list) {
-        list.emplace_back(rangePfx, false, std::nullopt);
-        return true;
-    });
+    getAreaConfigs(&area1).get<config::OspfArea::RANGE>().add(config::OspfAreaRange{rangePfx, false, std::nullopt});
     wait();
 
     types::IPPrefix covered(uint32_t{0x0A0A0000}, 16);
@@ -7683,7 +7663,7 @@ TEST_F(Internal_OspfTest, VirtualLink_Route_Beyond_Remote_Endpoint_Installs_With
 TEST_F(Internal_OspfTest, DemandCircuit_Negotiation_Both_Sides_DC_Capable_Sets_Enabled)
 {
     getIfaceConfigs().get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
-    ospfInterface->enqueueSyncNetworkType();
+    ospfInterface->enqueueSyncNetworkType(config::ospf::NetworkType::POINT_TO_POINT);
     wait();
 
     // Advertise local DC capability.
@@ -7708,7 +7688,7 @@ TEST_F(Internal_OspfTest, DemandCircuit_Negotiation_Both_Sides_DC_Capable_Sets_E
 TEST_F(Internal_OspfTest, DemandCircuit_Negotiation_One_Side_NonCapable_Sets_Disabled)
 {
     getIfaceConfigs().get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
-    ospfInterface->enqueueSyncNetworkType();
+    ospfInterface->enqueueSyncNetworkType(config::ospf::NetworkType::POINT_TO_POINT);
     wait();
 
     // Advertise local DC capability.
@@ -7734,7 +7714,7 @@ TEST_F(Internal_OspfTest, DemandCircuit_Negotiation_One_Side_NonCapable_Sets_Dis
 TEST_F(Internal_OspfTest, DemandCircuit_Enabled_Suppresses_Periodic_Hello_After_Full)
 {
     getIfaceConfigs().get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
-    ospfInterface->enqueueSyncNetworkType();
+    ospfInterface->enqueueSyncNetworkType(config::ospf::NetworkType::POINT_TO_POINT);
     wait();
     getIfaceFlags().setDemandCircuits(true);
 
@@ -7764,9 +7744,6 @@ TEST_F(Internal_OspfTest, DemandCircuit_DoNotAge_Bit_Set_On_FloodReduction)
 {
     auto& area = getArea(0);
 
-    // Enable demand-circuit on this interface so dcCompatible (true by
-    // default) combined with FLOOD_REDUCTION/DEMAND_CIRCUIT config enables
-    // flood reduction.
     getIfaceConfigs().get<config::OspfInterface::DEMAND_CIRCUIT>().set(true);
 
     ASSERT_TRUE(area.isDcCompatible());
@@ -7872,10 +7849,7 @@ TEST_F(Internal_OspfTest, Lls_Md5Auth_Validates_Block_Checksum)
         keyBytes[i] = static_cast<uint8_t>(0xB0 + i);
 
     getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::AUTHENTICATION_TYPE>().set(config::ospf::AuthType::CRYPTO);
-    getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::MESSAGE_DIGEST_KEYS>().withWrite([&](auto& list) {
-        list.emplace_back(keyId, std::string(keyBytes.begin(), keyBytes.end()));
-        return true;
-    });
+    getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::MESSAGE_DIGEST_KEYS>().add(config::OspfMessageDigestKey{keyId, std::string(keyBytes.begin(), keyBytes.end())});
     wait();
     ASSERT_TRUE(getAuthKey().has_value());
     ASSERT_TRUE(getAuthKeyId().has_value());
@@ -8508,10 +8482,7 @@ TEST_F(Internal_OspfTest, AuthV2_Md5_Correct_Digest_Accepted)
         keyBytes[i] = static_cast<uint8_t>(0xA0 + i);
 
     getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::AUTHENTICATION_TYPE>().set(config::ospf::AuthType::CRYPTO);
-    getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::MESSAGE_DIGEST_KEYS>().withWrite([&](auto& list) {
-        list.emplace_back(keyId, std::string(keyBytes.begin(), keyBytes.end()));
-        return true;
-    });
+    getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::MESSAGE_DIGEST_KEYS>().add(config::OspfMessageDigestKey{keyId, std::string(keyBytes.begin(), keyBytes.end())});
     wait();
     ASSERT_TRUE(getAuthKey().has_value());
     ASSERT_TRUE(getAuthKeyId().has_value());
@@ -8558,10 +8529,7 @@ TEST_F(Internal_OspfTest, AuthV2_Md5_Incorrect_Digest_Rejected)
         keyBytes[i] = static_cast<uint8_t>(0xA0 + i);
 
     getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::AUTHENTICATION_TYPE>().set(config::ospf::AuthType::CRYPTO);
-    getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::MESSAGE_DIGEST_KEYS>().withWrite([&](auto& list) {
-        list.emplace_back(keyId, std::string(keyBytes.begin(), keyBytes.end()));
-        return true;
-    });
+    getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::MESSAGE_DIGEST_KEYS>().add(config::OspfMessageDigestKey{keyId, std::string(keyBytes.begin(), keyBytes.end())});
     wait();
     ASSERT_TRUE(getAuthKey().has_value());
 
@@ -8607,10 +8575,7 @@ TEST_F(Internal_OspfTest, AuthV2_Md5_KeyId_Mismatch_Rejected)
         keyBytes[i] = static_cast<uint8_t>(0xA0 + i);
 
     getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::AUTHENTICATION_TYPE>().set(config::ospf::AuthType::CRYPTO);
-    getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::MESSAGE_DIGEST_KEYS>().withWrite([&](auto& list) {
-        list.emplace_back(keyId, std::string(keyBytes.begin(), keyBytes.end()));
-        return true;
-    });
+    getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::MESSAGE_DIGEST_KEYS>().add(config::OspfMessageDigestKey{keyId, std::string(keyBytes.begin(), keyBytes.end())});
     wait();
     ASSERT_TRUE(getAuthKeyId().has_value());
     ASSERT_EQ(getAuthKeyId().value(), keyId);
@@ -8657,10 +8622,7 @@ TEST_F(Internal_OspfTest, AuthV2_ReplayDetection_Old_Sequence_Rejected)
         keyBytes[i] = static_cast<uint8_t>(0xA0 + i);
 
     getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::AUTHENTICATION_TYPE>().set(config::ospf::AuthType::CRYPTO);
-    getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::MESSAGE_DIGEST_KEYS>().withWrite([&](auto& list) {
-        list.emplace_back(keyId, std::string(keyBytes.begin(), keyBytes.end()));
-        return true;
-    });
+    getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::MESSAGE_DIGEST_KEYS>().add(config::OspfMessageDigestKey{keyId, std::string(keyBytes.begin(), keyBytes.end())});
     wait();
     ASSERT_TRUE(getAuthKey().has_value());
 
@@ -8743,20 +8705,14 @@ TEST_F(Internal_OspfTest, AuthV2_SyncDigestKey_Picks_Active_KeyChain_Entry)
         keyBytes2[i] = static_cast<uint8_t>(0x20 + i);
     }
 
-    getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::MESSAGE_DIGEST_KEYS>().withWrite([&](auto& list) {
-        list.emplace_back(keyId1, std::string(keyBytes1.begin(), keyBytes1.end()));
-        return true;
-    });
+    getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::MESSAGE_DIGEST_KEYS>().add(config::OspfMessageDigestKey{keyId1, std::string(keyBytes1.begin(), keyBytes1.end())});
     wait();
     ASSERT_TRUE(getAuthKeyId().has_value());
     EXPECT_EQ(getAuthKeyId().value(), keyId1);
     EXPECT_EQ(getAuthKey().value(), utils::read<__uint128_t>(keyBytes1.data()));
 
     // Adding a second key makes it the active (last) entry per syncDigestKey().
-    getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::MESSAGE_DIGEST_KEYS>().withWrite([&](auto& list) {
-        list.emplace_back(keyId2, std::string(keyBytes2.begin(), keyBytes2.end()));
-        return true;
-    });
+    getIfaceGlobalBaseConfigs().get<config::OspfGlobalInterfaceBase::MESSAGE_DIGEST_KEYS>().add(config::OspfMessageDigestKey{keyId2, std::string(keyBytes2.begin(), keyBytes2.end())});
     wait();
     EXPECT_EQ(getAuthKeyId().value(), keyId2);
     EXPECT_EQ(getAuthKey().value(), utils::read<__uint128_t>(keyBytes2.data()));
@@ -8986,12 +8942,25 @@ TEST_F(Internal_OspfTest, OriginateV3_LsidQueue_Recycles_Freed_RouterLsid)
     uint32_t rid = ospfv3Instance->getRouterId();
     auto& area = getArea(0, ospfv3Instance);
 
+    std::vector<interface::MockInterface*> mockIfaces;
+    auto makeIface = [&](float id) -> interface::MockInterface&
+    {
+        auto* mi = new interface::MockInterface(*global, interface::InterfaceType::GIGABIT_ETHERNET, defaultHwInfo, id);
+        vrf->getInterfaceManager().add(mi, mi->configs.key);
+        mi->blockEnqueues();
+        mi->enableIPs();
+        mi->enableShutdown();
+        mockIfaces.push_back(mi);
+        return *mi;
+    };
+
     std::vector<OspfInterface*> ifaces;
     for (int i = 0; i < kIfaceCount; ++i)
     {
-        OspfInterface& iface = createIface(*mockInterface, OspfInterfaceId(100 + i, 0), ospfv3Instance);
+        interface::MockInterface& mi = makeIface(1.0f + i);
+        OspfInterface& iface = createIface(mi, OspfInterfaceId(100 + i, 0), ospfv3Instance);
         getIfaceConfigs(&iface).get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
-        iface.enqueueSyncNetworkType();
+        iface.enqueueSyncNetworkType(config::ospf::NetworkType::POINT_TO_POINT);
         ifaces.push_back(&iface);
 
         types::IPAddress nbrIp(types::IPv6Address{(static_cast<__uint128_t>(0xFE80000000000000) << 64) | (0x1000u + i)});
@@ -9010,7 +8979,7 @@ TEST_F(Internal_OspfTest, OriginateV3_LsidQueue_Recycles_Freed_RouterLsid)
     ASSERT_NE(fragment1, nullptr) << "expected a second Router-LSA fragment once 32 links were exceeded";
 
     for (int i = 1; i < kIfaceCount; ++i)
-        removeIface(OspfInterfaceId(100 + i, 0), ospfv3Instance);
+        removeIfaceV3(*mockIfaces[i], ospfv3Instance);
     wait(ospfv3Instance);
 
     fullRefreshV3(&area);
@@ -9021,9 +8990,10 @@ TEST_F(Internal_OspfTest, OriginateV3_LsidQueue_Recycles_Freed_RouterLsid)
 
     for (int i = 0; i < kIfaceCount - 1; ++i)
     {
-        OspfInterface& iface = createIface(*mockInterface, OspfInterfaceId(200 + i, 0), ospfv3Instance);
+        interface::MockInterface& mi = makeIface(1.0f + kIfaceCount + i);
+        OspfInterface& iface = createIface(mi, OspfInterfaceId(200 + i, 0), ospfv3Instance);
         getIfaceConfigs(&iface).get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
-        iface.enqueueSyncNetworkType();
+        iface.enqueueSyncNetworkType(config::ospf::NetworkType::POINT_TO_POINT);
 
         types::IPAddress nbrIp(types::IPv6Address{(static_cast<__uint128_t>(0xFE80000000000000) << 64) | (0x2000u + i)});
         addNeighbor(0xC0AA0000u + i, nbrIp, Neighbor::State::FULL, &iface);
@@ -9045,9 +9015,13 @@ TEST_F(Internal_OspfTest, OriginateV3_LsidQueue_Recycles_Freed_RouterLsid)
     }
     EXPECT_FALSE(fragment2Exists) << "LS-ID 1 was freed and should have been reused instead of allocating LS-ID 2";
 
-    removeIface(OspfInterfaceId(100, 0), ospfv3Instance);
-    for (int i = 0; i < kIfaceCount - 1; ++i)
-        removeIface(OspfInterfaceId(200 + i, 0), ospfv3Instance);
+    removeIfaceV3(*mockIfaces[0], ospfv3Instance);
+    for (int i = kIfaceCount; i < static_cast<int>(mockIfaces.size()); ++i)
+        removeIfaceV3(*mockIfaces[i], ospfv3Instance);
+    wait(ospfv3Instance);
+
+    for (auto* mi : mockIfaces)
+        delete mi;
 }
 
 // Test: OriginateV3_LsidQueue_Recycles_Freed_PrefixLsid
@@ -9059,17 +9033,16 @@ TEST_F(Internal_OspfTest, OriginateV3_LsidQueue_Recycles_Freed_PrefixLsid)
     uint32_t rid = ospfv3Instance->getRouterId();
     auto& area = getArea(0, ospfv3Instance);
 
-    interface::MockInterface* extraIface = new interface::MockInterface(*global, interface::InterfaceType::GIGABIT_ETHERNET);
+    interface::MockInterface* extraIface = new interface::MockInterface(*global, interface::InterfaceType::GIGABIT_ETHERNET, defaultHwInfo, 1.0f);
     uint32_t extraKey = interface::encodeInterfaceKey(interface::InterfaceType::GIGABIT_ETHERNET, 1);
     vrf->getInterfaceManager().add(extraIface, extraKey);
     extraIface->blockEnqueues();
-    extraIface->configs.id = 1;
-    extraIface->configs.key = extraKey;
     extraIface->enableIPs();
+    extraIface->enableShutdown();
 
     OspfInterface& iface = createIface(*extraIface, OspfInterfaceId(300, 0), ospfv3Instance);
     getIfaceConfigs(&iface).get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
-    iface.enqueueSyncNetworkType();
+    iface.enqueueSyncNetworkType(config::ospf::NetworkType::POINT_TO_POINT);
 
     types::IPAddress nbrIp(types::IPv6Address{(static_cast<__uint128_t>(0xFE80000000000000) << 64) | 0x3000u});
     addNeighbor(0xC0AB0000u, nbrIp, Neighbor::State::FULL, &iface);
@@ -9128,7 +9101,7 @@ TEST_F(Internal_OspfTest, OriginateV3_LsidQueue_Recycles_Freed_PrefixLsid)
     }
     EXPECT_FALSE(fragment2Exists) << "LS-ID 1 was freed and should have been reused instead of allocating LS-ID 2";
 
-    removeIface(OspfInterfaceId(300, 0), ospfv3Instance);
+    removeIfaceV3(*extraIface, ospfv3Instance);
     delete extraIface;
 }
 
@@ -9813,7 +9786,7 @@ TEST_F(Internal_OspfTest, Ipv6_Full_Adjacency_Establishment_Over_Ospfv3)
 
     // P2P avoids DR/BDR election so TWOWAY -> EXSTART proceeds unconditionally.
     getIfaceConfigs(ospfv3Interface).get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
-    ospfv3Interface->enqueueSyncNetworkType();
+    ospfv3Interface->enqueueSyncNetworkType(config::ospf::NetworkType::POINT_TO_POINT);
     wait(ospfv3Instance);
 
     auto* nbr = addNeighbor(neighborRouterId, nbrIp, Neighbor::State::FULL, ospfv3Interface);
@@ -9909,7 +9882,7 @@ TEST_F(Internal_OspfTest, Ipv6_External_Route_With_Ipv6_ForwardingAddress)
 TEST_F(Internal_OspfTest, Config_AreaType_Change_Triggers_Lsdb_Reevaluation)
 {
     getConfigs().get<config::Ospf::AREA_CONFIGS>().emplaceBack(1)
-        .get<config::OspfArea::AREA_TYPE>().set(config::ospf::AreaType::STUB);
+        ->get<config::OspfArea::AREA_TYPE>().set(config::ospf::AreaType::STUB);
 
     createIface(
         *mockInterface, OspfInterfaceId(0xC0A80201, 1));
@@ -9961,7 +9934,7 @@ TEST_F(Internal_OspfTest, Config_NetworkType_Change_Resets_Neighbors)
     ASSERT_EQ(nbr->getState(), Neighbor::State::FULL);
 
     getIfaceConfigs().get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
-    ospfInterface->enqueueSyncNetworkType();
+    ospfInterface->enqueueSyncNetworkType(config::ospf::NetworkType::POINT_TO_POINT);
     wait();
 
     EXPECT_EQ(nbr->getState(), Neighbor::State::FULL);
@@ -10225,7 +10198,7 @@ TEST_F(Internal_OspfTest, Stress_MultiInterface_Adjacency_Formation)
     wait();
 
     getIfaceConfigs(&ospfIface1).get<config::OspfInterface::NETWORK>().set(config::ospf::NetworkType::POINT_TO_POINT);
-    ospfIface1.enqueueSyncNetworkType();
+    ospfIface1.enqueueSyncNetworkType(config::ospf::NetworkType::POINT_TO_POINT);
     wait();
 
     types::IPAddress nbrIp(types::IPv4Address{neighborRouterId2});

@@ -712,8 +712,12 @@ protected:
     void SetUp() override
     {
         utils::RCU::registerThread();
-        global = new core::Global(fs, {}, false, true);
-        vrf = global->getRoutingInstance("default", types::AddressFamily::IPv4);
+        core::GlobalProperties props(fs);
+        props.enableDummies = true;
+        props.enableRouting = false;
+        props.threadPoolCapacity = (1 << 8);
+        global = new core::Global(props);
+        vrf = global->getRoutingInstance(DEFAULT_VRF, types::AddressFamily::IPv4);
     }
 
     void TearDown() override

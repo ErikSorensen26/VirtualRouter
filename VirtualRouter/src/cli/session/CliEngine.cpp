@@ -5,21 +5,13 @@
 
 #include "CliEngine.h"
 #include "CliSession.h"
-#include "hardware/HardwareManager.h"
 
 namespace cli
 {
-CliEngine::CliEngine(core::Global& global, const StartupFiles& stfs, FileSystem& fs, bool test)
-    : Configs(fs), global(global),
-      commandTree(COMMAND_TREE, COMMAND_TREE_BIN)
+CliEngine::CliEngine(core::Global& global, const StartupFiles& stfs, tree::CommandTree& tree)
+    : global(global), commandTree(tree)
 {
     commandTree.applyPortCounts(tree::CommandTree::readPortCounts(stfs.hwConfigFile));
-
-    // Set debug mode based on the input parameter
-    if (!test) {
-        initConfigs(stfs);
-        recoverState(); //TODO
-    }
 }
 
 CliEngine::~CliEngine() 

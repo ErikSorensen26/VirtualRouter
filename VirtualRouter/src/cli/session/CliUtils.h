@@ -44,8 +44,7 @@ requires std::is_unsigned_v<T> && (sizeof(T) <= 8)
 bool stouint(T& val, std::string_view sv)
 {
     auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), val);
-    if (ec == std::errc{}) return true;
-    return false;
+    return ec == std::errc{} && ptr == sv.data() + sv.size();
 }
 
 /**
@@ -62,8 +61,7 @@ requires std::is_unsigned_v<T> && (sizeof(T) <= 8)
 bool stouint(T& val, const char* sv, size_t siz)
 {
     auto [ptr, ec] = std::from_chars(sv, sv + siz, val);
-    if (ec == std::errc{}) return true;
-    return false;
+    return ec == std::errc{} && ptr == sv + siz;
 }
 
 /**
@@ -80,8 +78,7 @@ requires std::is_unsigned_v<T> && (sizeof(T) <= 8)
 bool stouint(T& val, const char* sv1, const char* sv2)
 {
     auto [ptr, ec] = std::from_chars(sv1, sv2, val);
-    if (ec == std::errc{}) return true;
-    return false;
+    return ec == std::errc{} && ptr == sv2;
 }
 
 /**
@@ -97,7 +94,7 @@ requires std::is_floating_point_v<T>
 bool stofloat(T& val, std::string_view sv)
 {
     auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), val);
-    return ec == std::errc{};
+    return ec == std::errc{} && ptr == sv.data() + sv.size();
 }
 
 /**
@@ -113,7 +110,7 @@ requires std::is_integral_v<T>
 bool stoint(T& val, std::string_view sv)
 {
     auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), val);
-    return ec == std::errc{};
+    return ec == std::errc{} && ptr == sv.data() + sv.size();
 }
 
 

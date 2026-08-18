@@ -176,6 +176,10 @@ inline T read(const uint8_t* p)
 }
 
 /**
+ * @brief Reads the leading `n` significant bytes of a big-endian value,
+ * left-aligned within the returned `T` (e.g. a truncated prefix address:
+ * the missing low-order bytes read as zero, not the missing high-order ones).
+ *
  * TODO add doxy comment
  */
 template <typename T>
@@ -197,7 +201,7 @@ inline T read(const uint8_t* p, size_t n)
         {
             val = static_cast<T>((val << 8) | T(p[i]));
         }
-        return val;
+        return static_cast<T>(val << (8 * (sizeof(T) - n)));
     }
 }
 
@@ -228,17 +232,27 @@ inline uint8_t* write(uint8_t* dest, T val)
 }
 
 /**
+ * @brief Writes the leading `n` significant (most-significant) bytes of
+ * `val` in big-endian order, e.g. a truncated prefix address where only the
+ * top `n` bytes are meaningful and the low-order bytes are discarded.
+ *
  * TODO add doxy comment
  */
 template <typename T>
 requires std::is_integral_v<T>
 inline uint8_t* write(uint8_t* dest, T val, size_t n)
 {
-    assert(n >= 1 && n <= sizeof(T));
+    assert(n <= sizeof(T));
+
+    if (n == 0)
+        return dest;
+
+    if (n < sizeof(T))
+        val = static_cast<T>(val >> (8 * (sizeof(T) - n)));
 
     if constexpr (isLittleEndian)
     {
-        for (int i = n - 1; i >= 0; --i)
+        for (int i = static_cast<int>(n) - 1; i >= 0; --i)
         {
             dest[i] = static_cast<uint8_t>(val & 0xFF);
             val >>= 8;
@@ -246,7 +260,7 @@ inline uint8_t* write(uint8_t* dest, T val, size_t n)
     }
     else
     {
-        std::memcpy(dest, &val, sizeof(val));
+        std::memcpy(dest, reinterpret_cast<const uint8_t*>(&val) + (sizeof(T) - n), n);
     }
     return dest;
 }
