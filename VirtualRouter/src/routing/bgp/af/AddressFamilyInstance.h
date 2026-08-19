@@ -2094,7 +2094,7 @@ private:
             {
                 if (!aggr.summaryOnly())
                     return;
-                const NlriT aggNlri = aggr.prefix();
+                const NlriT aggNlri{aggr.prefix()};
                 auto stateIt = aggregateStates.find(aggNlri);
                 if (stateIt == aggregateStates.end() || !stateIt->second.active)
                     return;
@@ -2177,7 +2177,7 @@ private:
      */
     void recomputeAggregate(const config::BgpAggregateAddress& cfg)
     {
-        const NlriT aggNlri = cfg.prefix();
+        const NlriT aggNlri{cfg.prefix()};
         const bool buildAsSet = cfg.asConfedSet();
 
         std::vector<const InboundRoute<NlriT>*> contributors;
@@ -2724,7 +2724,7 @@ private:
         configs.get<config::BgpAddressFamily::NETWORK>().readEach(
             [&](const config::BgpNetwork& net)
             {
-                configured.push_back(net.prefix());
+                configured.push_back(NlriT{net.prefix()});
             });
 
         auto& rt = ScopeAccessor::getRoutingInstance(scope).getRib();

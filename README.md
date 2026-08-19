@@ -31,8 +31,6 @@ A software router written in C++17 targeting Linux x86-64. Implements BGP, OSPFv
 | OS | Linux x86-64 |
 | CMake | ≥ 3.16 |
 | C++ | C++17 |
-| libpcap | via PkgConfig |
-| OpenSSL | `OpenSSL::SSL`, `OpenSSL::Crypto` |
 | libtelnet | `/usr/lib/x86_64-linux-gnu/libtelnet.so` |
 | pthread | direct link |
 | GTest / GMock | tests only |

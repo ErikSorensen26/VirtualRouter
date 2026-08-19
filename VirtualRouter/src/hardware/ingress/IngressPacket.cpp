@@ -3,6 +3,7 @@
 #include <arpa/inet.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
+#include <sys/eventfd.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <cstring>
@@ -100,7 +101,16 @@ void IngressPacket::bindIface()
     {
         int arg = (opts.fanoutGroup & 0xFFFF) | (opts.fanoutMode << 16);
         if (setsockopt(fd, SOL_PACKET, PACKET_FANOUT, &arg, sizeof(arg)) != 0)
+        {
+            // EINVAL here specifically means this group ID is already held by another
+            // socket (possibly another process) with a different mode. That's distinct
+            // from every other setsockopt failure this constructor can hit, and is the
+            // one case a caller can recover from by retrying with a fresh group ID.
+            if (errno == EINVAL)
+                throw FanoutCollisionError("PACKET_FANOUT group " + std::to_string(opts.fanoutGroup) +
+                                            " already in use with a different mode");
             throw std::runtime_error("PACKET_FANOUT failed: " + std::string(std::strerror(errno)));
+        }
     }
 }
 
@@ -166,11 +176,21 @@ void IngressPacket::setupEvents()
     ev.data.fd = fd;
     if (::epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &ev) != 0)
         throw std::runtime_error("epoll_ctl ADD failed");
+
+    evtfd = ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+    if (evtfd < 0) throw std::runtime_error("eventfd failed");
+    epoll_event ev2{};
+    ev2.events = EPOLLIN;
+    ev2.data.fd = evtfd;
+    if (::epoll_ctl(epfd, EPOLL_CTL_ADD, evtfd, &ev2) != 0)
+        throw std::runtime_error("epoll_ctl ADD evtfd failed");
 }
 
 void IngressPacket::teardownEvents()
 {
     if (epfd >= 0 && fd >= 0) epoll_ctl(epfd, EPOLL_CTL_DEL, fd, nullptr);
+    if (epfd >= 0 && evtfd >= 0) epoll_ctl(epfd, EPOLL_CTL_DEL, evtfd, nullptr);
+    if (evtfd >= 0) { ::close(evtfd); evtfd = -1; }
     if (epfd >= 0) { ::close (epfd); epfd = -1; }
 }
 
@@ -186,6 +206,18 @@ void IngressPacket::waitEvent()
             if (errno == EINTR) continue;
             throw std::runtime_error("epoll_wait failed");
         }
+
+        for (int i = 0; i < n; ++i)
+        {
+            if (ev[i].data.fd == evtfd)
+            {
+                uint64_t x;
+                (void)::read(evtfd, &x, sizeof(x));
+                flushReturns();
+                return;
+            }
+        }
+
         flushReturns();
         return;
     }
@@ -257,7 +289,13 @@ ALWAYS_INLINE HOT void IngressPacket::returnToDevice(uint32_t index)
 
 void IngressPacket::stopRx()
 {
-    if (fd >= 0) ::shutdown(fd, SHUT_RD);
+    // shutdown() on an AF_PACKET socket does not unblock epoll_wait(); write
+    // evtfd instead so waitEvent() actually wakes up and observes running == false.
+    if (evtfd >= 0)
+    {
+        uint64_t one = 1;
+        (void)::write(evtfd, &one, sizeof(one));
+    }
 }
 
 void IngressPacket::waitUntilAllFramesReleased()

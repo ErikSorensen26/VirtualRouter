@@ -142,7 +142,7 @@ public:
      *
      * @param ids  Vector of raw IDs (as returned by converting @ref Id to uint32_t) to remove.
      */
-    void unregister(std::vector<uint32_t>& ids)
+    void unregister(std::vector<Id>& ids)
     {
         std::lock_guard<std::mutex> lock(mtx);
         for (const auto& id : ids)

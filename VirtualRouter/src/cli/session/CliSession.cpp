@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <sstream>
+#include <stdexcept>
 
 #include <Global.h>
 
@@ -400,10 +401,19 @@ bool CliSession::executeCommand(std::string& command, bool quiet)
 
     if (execTokens.empty()) return false;
 
-    if (!executor.execute(execTokens))
+    try
+    {
+        if (!executor.execute(execTokens))
+        {
+            if (!quiet)
+                controller.print("\r\n% Invalid input detected");
+            return false;
+        }
+    }
+    catch (const std::exception& e)
     {
         if (!quiet)
-            controller.print("\r\n% Invalid input detected");
+            controller.print("\r\n% Command failed: " + std::string(e.what()));
         return false;
     }
 

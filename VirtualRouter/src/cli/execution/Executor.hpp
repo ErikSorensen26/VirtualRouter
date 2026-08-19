@@ -187,9 +187,6 @@ public:
                 continue;
             }
 
-            // A resolver never runs on its own: it either merges into the
-            // deferred word that answers it or, on a disagreement, runs
-            // alongside it. Both happen below; nothing here pushes it.
             if (tok.resolver()) continue;
 
             if (!tok.deferred())
@@ -198,13 +195,6 @@ public:
                 continue;
             }
 
-            // An inert deferred word -- `area 5` before its `<cr>` -- only
-            // indexes once the resolver in front of it agrees the word was
-            // meant. The resolver pairs with the nearest deferred word in front
-            // of it, so a later spelling of the same key supersedes an earlier
-            // one, and a word the resolver passes over is dropped rather than
-            // run. The write lands at the end of the line, behind the value
-            // words, so they still go to the registry the line was typed in.
             const uint16_t deferKey = tok.node.node().deferKey();
             for (size_t x = i + 1; x < tokens.size(); x++)
             {

@@ -372,6 +372,14 @@ IPPrefix::IPPrefix(AddressFamily family)
     : addr(family == AddressFamily::IPv4 ? (__uint128_t{0xFFFF} << 32) : 0)
 {}
 
+IPPrefix::IPPrefix(const IPv4Prefix& prefix)
+    : addr(static_cast<__uint128_t>(prefix.addr) | (__uint128_t{0xFFFF} << 32)), prefixLength(prefix.prefixLength)
+{}
+
+IPPrefix::IPPrefix(const IPv6Prefix& prefix)
+    : addr(prefix.addr), prefixLength(prefix.prefixLength)
+{}
+
 IPPrefix::IPPrefix(const IPAddress& ip, uint8_t prefix, bool maintainAddress)
     : addr(ip.raw)
 {
@@ -678,14 +686,9 @@ IPv4Prefix::IPv4Prefix(const IPAddress& ip, uint8_t prefix, bool maintainAddress
         prefixLength = prefix;
 }
 
-IPv4Prefix::IPv4Prefix(const IPPrefix& prefix, bool maintainAddress)
-    : addr(prefix.v4())
-{
-    if (!maintainAddress) 
-        addPrefixLen(prefix.prefixLength);
-    else
-        prefixLength = prefix.prefixLength;
-}
+IPv4Prefix::IPv4Prefix(const IPPrefix& prefix)
+    : addr(prefix.v4()), prefixLength(prefix.prefixLength)
+{}
 
 IPv4Prefix::IPv4Prefix(uint32_t ip, uint8_t prefix, bool maintainAddress)
     : addr(ip)
@@ -843,14 +846,9 @@ bool IPv4Prefix::operator>=(const IPPrefix& o) const
     return *this > o;
 }
 
-IPv6Prefix::IPv6Prefix(const IPPrefix& prefix, bool maintainAddress)
-    : addr(prefix.v6())
-{
-    if (!maintainAddress)
-        addPrefixLen(prefix.prefixLength);
-    else
-        prefixLength = prefix.prefixLength;
-}
+IPv6Prefix::IPv6Prefix(const IPPrefix& prefix)
+    : addr(prefix.v6()), prefixLength(prefix.prefixLength)
+{}
 
 IPv6Prefix::IPv6Prefix(const IPAddress& ip, uint8_t prefix, bool maintainAddress)
     : addr(ip.raw)

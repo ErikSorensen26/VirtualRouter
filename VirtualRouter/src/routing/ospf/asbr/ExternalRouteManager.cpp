@@ -5,7 +5,7 @@
 #include "ospf/topology/TopologyTypes.hpp"
 #include "ospf/topology/RouteManagerUtility.h"
 #include "ospf/OspfTypes.hpp"
-#include "core/routing/RoutingTable.hpp"
+#include "core/routing/RoutingTable.h"
 #include "utils/RCU.hpp"
 #include "VirtualRouter.h"
 

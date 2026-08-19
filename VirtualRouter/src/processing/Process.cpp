@@ -180,7 +180,7 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, core::Vi
                 GET_HEADER_EXTENDED(dhcp, packet::DhcpHeader)
                 if (sourcePort == UDP_DHCP_SERVER && destinationPort == UDP_DHCP_CLIENT)
                 {
-                    interface->dhcp->handleDhcpPacket(dhcp);
+                    //interface->dhcp->handleDhcpPacket(dhcp);
                 }
                 else if (sourcePort == UDP_DHCP_CLIENT && destinationPort == UDP_DHCP_SERVER)
                 {

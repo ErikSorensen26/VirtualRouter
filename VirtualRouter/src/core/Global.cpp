@@ -42,6 +42,7 @@ Global::Global(GlobalProperties& props)
     txManager.setCorePool(props.txThreadPool);
     txManager.setCpuPolicy(props.txQueuePolicy);
     txManager.setTxCoreBias(props.txQueueBias);
+    txManager.setQdiscBypass(props.txQdiscBypass);
 
     rxManager.setCorePool(props.rxThreadPool);
     rxManager.setCpuPolicy(props.rxQueuePolicy);

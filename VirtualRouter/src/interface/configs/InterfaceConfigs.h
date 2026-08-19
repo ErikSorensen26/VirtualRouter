@@ -362,6 +362,15 @@ public:
         /// Returns true if the primary address and prefix length both match @p prefix.
         bool comparePrimaryPrefix(types::IPv4Prefix prefix);
 
+        /// Returns true if a secondary address matches the raw 4-byte network-order address @p ip.
+        bool compareSecondaryAddress(const uint8_t* ip);
+
+        /// Returns true if the secondary address matches @p ip.
+        bool compareSecondaryAddress(types::IPv4Address ip);
+
+        /// Returns true if a secondary address and prefix length both match @p prefix.
+        bool compareSecondaryAddress(types::IPv4Prefix prefix);
+
     private:
         mutable std::mutex ipMutex;          ///< Guards secondary address vector and coordinated primary reads.
         std::atomic<uint8_t>  mask{0};       ///< Primary address prefix length in bits.

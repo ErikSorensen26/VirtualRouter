@@ -94,8 +94,18 @@ void EgressPacket::setupSocket()
     if (::setsockopt(fd, SOL_PACKET, PACKET_VERSION, &ver, sizeof(ver)) != 0)
         throw std::runtime_error("setsockopt PACKET_VERSION v2 failed");
 
+    // PACKET_QDISC_BYPASS routes transmits through dev_direct_xmit() instead of
+    // dev_queue_xmit(), which skips the ptype_all tap that AF_PACKET capture sockets
+    // (tcpdump/Wireshark) rely on. The driver still transmits and /proc/net/dev
+    // counters still increment, so the packet genuinely leaves the box -- it's just
+    // invisible to any capture, which made this very hard to diagnose. Off by
+    // default (see TxQueueOpts::qdiscBypass); only opt in when the extra throughput
+    // is worth losing capture visibility.
     int one = 1;
-    (void)::setsockopt(fd, SOL_PACKET, PACKET_QDISC_BYPASS, &one, sizeof(one));
+#ifdef PACKET_QDISC_BYPASS
+    if (opts.qdiscBypass)
+        ::setsockopt(fd, SOL_PACKET, PACKET_QDISC_BYPASS, &one, sizeof(one));
+#endif
     (void)::setsockopt(fd, SOL_PACKET, PACKET_TX_HAS_OFF, &one, sizeof(one));
 
     set_nonblock(fd);

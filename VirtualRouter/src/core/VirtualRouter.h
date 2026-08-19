@@ -16,7 +16,7 @@
 #include <AddressFamily.hpp>
 
 #include "tcp/Tcp.h"
-#include "routing/RoutingTable.hpp"
+#include "routing/RoutingTable.h"
 #include "interface/InterfaceManager.h"
 
 namespace config { struct VrfRegistry; struct GlobalRegistry; struct EigrpRegistry; struct OspfRegistry; struct BgpRegistry; }

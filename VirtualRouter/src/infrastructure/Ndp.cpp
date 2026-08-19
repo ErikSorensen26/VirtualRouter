@@ -46,9 +46,9 @@ Ndp::Ndp(interface::Interface& interface)
 {
 #ifdef DEBUG
     if (global.routingEnabled)
-        initializeNdp();
+        initiateNdp();
 #else
-    initializeNdp();
+    initiateNdp();
 #endif
 }
 
@@ -66,11 +66,11 @@ void Ndp::refresh()
 {
     scheduler.post([this] {
         clear();
-        initializeNdp();
+        initiateNdp();
     });
 }
 
-void Ndp::initializeNdp()
+void Ndp::initiateNdp()
 {
     running.store(true, std::memory_order_release);
     if (!configs.get<config::Ndp::RA_SUPPRESS_ALL>().load())

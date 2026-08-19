@@ -47,6 +47,7 @@ class Arp
 {
 public:
     friend class ::Internal_ArpTest;
+    friend class interface::Interface; ///< Needs clear() for teardown ordering.
 
     /**
     * @ingroup INFRASTRUCTURE
@@ -85,6 +86,13 @@ public:
      * Ensures a clean shutdown of threads and resources.
      */
     ~Arp();
+
+    /**
+     * @brief Loads static ARP entries from VRF config and marks the instance as running.
+     *
+     * Must be called on the control scheduler.
+     */
+    void initiateArp();
 
     /**
      * @brief Clears the ARP cache and re-initialises static entries from VRF config.
@@ -172,13 +180,6 @@ private:
     std::atomic<bool> running; ///< Indicates whether the ARP service is active.
 
 protected:
-
-    /**
-     * @brief Loads static ARP entries from VRF config and marks the instance as running.
-     *
-     * Must be called on the control scheduler.
-     */
-    void initiateArp();
 
     /**
      * @brief Cancels all pending timers and proxy watchers, then clears both the

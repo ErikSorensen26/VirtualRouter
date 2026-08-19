@@ -7,7 +7,7 @@
 
 #include "RoutingTable.h"
 #include "ospf/OspfProcess.h"
-#include "routing/RoutingTable.hpp"
+#include "routing/RoutingTable.h"
 
 namespace routing::ospf
 {

@@ -61,6 +61,8 @@ public:
         Interface::stopThreads();
         getScheduler().waitIdle();
 
+        drainQueuedPackets();
+
         delete dist;
         state.queue->stop();
         delete state.queue;
@@ -107,7 +109,7 @@ public:
             shutdownFlag.store(shut, std::memory_order_release);
             if (shut) 
             {
-                if (dhcp) dhcp->shutdown();
+                //if (dhcp) dhcp->shutdown();
                 arp.shutdown();
                 if (getVRF()->getGlobal().isIPv6UnicastRouting())
                 {
@@ -119,7 +121,7 @@ public:
             }
             else if (!shut) 
             {
-                if (dhcp) dhcp->initiate();
+                //if (dhcp) dhcp->initiate();
                 arp.refresh();
                 if (getVRF()->getGlobal().isIPv6UnicastRouting())
                 {

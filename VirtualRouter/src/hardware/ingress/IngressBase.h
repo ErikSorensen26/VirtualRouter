@@ -15,10 +15,30 @@
 #include <atomic>
 #include <thread>
 #include <cstdint>
+#include <stdexcept>
 
 #include "qos/ingress/RxQueueOpts.hpp"
 
 namespace interface { class Interface; }
+
+namespace hardware::ingress
+{
+/**
+ * @brief Thrown when joining a PACKET_FANOUT group fails because the group ID is already
+ * held by another socket with a different mode (kernel returns EINVAL).
+ *
+ * PACKET_FANOUT group IDs are global to the network namespace, not private to a single
+ * process, so this can legitimately happen when another VirtualRouterExec instance (or a
+ * stale group left by a killed one) already owns the ID this process picked. Distinct from
+ * std::runtime_error so callers can retry with a fresh group ID without swallowing
+ * unrelated setup failures (bad ifname, ring/mmap allocation, permissions, etc).
+ */
+class FanoutCollisionError : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
+} // namespace hardware::ingress
 
 /**
  * @namespace hardware::ingress

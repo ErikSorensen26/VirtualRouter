@@ -10,7 +10,7 @@
 #include <cstdint>
 #include <IPAddress.h>
 
-#include "routing/RoutingTable.hpp"
+#include "routing/RoutingTable.h"
 #include "eigrp/topology/TopologyTable.h"
 
 namespace routing::eigrp

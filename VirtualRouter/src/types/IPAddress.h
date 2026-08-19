@@ -369,6 +369,8 @@ struct alignas(16) IPPrefix
 
     IPPrefix() = default;
     IPPrefix(const IPPrefix&) = default;
+    IPPrefix(const IPv4Prefix&);
+    IPPrefix(const IPv6Prefix&);
     IPPrefix& operator=(const IPPrefix&) = default;
     explicit IPPrefix(AddressFamily family);
 
@@ -468,7 +470,7 @@ struct alignas(4) IPv4Prefix
      * @param prefix          Source dual-stack prefix.
      * @param maintainAddress If true, host bits are preserved; otherwise the network address is masked.
      */
-    IPv4Prefix(const IPPrefix& prefix, bool maintainAddress = false);
+    explicit IPv4Prefix(const IPPrefix& prefix);
 
     /**
      * @brief Constructs from a dual-stack @ref IPAddress and prefix length.
@@ -552,7 +554,7 @@ struct alignas(16) IPv6Prefix
      * @param prefix          Source dual-stack prefix.
      * @param maintainAddress If true, host bits are preserved; otherwise the network address is masked.
      */
-    IPv6Prefix(const IPPrefix& prefix, bool maintainAddress = false);
+    explicit IPv6Prefix(const IPPrefix& prefix);
 
     /**
      * @brief Constructs from a dual-stack @ref IPAddress and prefix length.

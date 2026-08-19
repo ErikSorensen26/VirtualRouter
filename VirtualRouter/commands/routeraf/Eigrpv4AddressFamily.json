@@ -10,14 +10,12 @@
                 {
                     "description": "IEEE 802.3",
                     "name": "Ethernet",
+                    "config": "Eigrp::AF_INTERFACE",
+                    "mode": "(config-router-af-interface)#/eigrp-ipv4",
                     "subcommands": [
                         {
                             "description": "",
                             "name": "<Ethernet>",
-                            "args": {
-                                "CONFIG": "Eigrp::AF_INTERFACE",
-                                "MODE": "(config-router-af)#/eigrp-ipv4"
-                            },
                             "subcommands": [
                                 {
                                     "description": "",
@@ -30,14 +28,12 @@
                 {
                     "description": "FastEthernet IEEE 802.3",
                     "name": "FastEthernet",
+                    "config": "Eigrp::AF_INTERFACE",
+                    "mode": "(config-router-af-interface)#/eigrp-ipv4",
                     "subcommands": [
                         {
                             "description": "",
                             "name": "<FastEthernet>",
-                            "args": {
-                                "CONFIG": "Eigrp::AF_INTERFACE",
-                                "MODE": "(config-router-af)#/eigrp-ipv4"
-                            },
                             "subcommands": [
                                 {
                                     "description": "",
@@ -50,14 +46,12 @@
                 {
                     "description": "GigabitEthernet IEEE 802.3z",
                     "name": "GigabitEthernet",
+                    "config": "Eigrp::AF_INTERFACE",
+                    "mode": "(config-router-af-interface)#/eigrp-ipv4",
                     "subcommands": [
                         {
                             "description": "",
                             "name": "<GigabitEthernet>",
-                            "args": {
-                                "CONFIG": "Eigrp::AF_INTERFACE",
-                                "MODE": "(config-router-af)#/eigrp-ipv4"
-                            },
                             "subcommands": [
                                 {
                                     "description": "",
@@ -70,42 +64,36 @@
                 {
                     "description": "Loopback interface",
                     "name": "Loopback",
+                    "config": "Eigrp::AF_INTERFACE",
+                    "mode": "(config-router-af-interface)#/eigrp-ipv4",
                     "subcommands": [
                         {
                             "description": "",
-                            "name": "<Loopback>",
-                            "args": {
-                                "CONFIG": "Eigrp::AF_INTERFACE",
-                                "MODE": "(config-router-af)#/eigrp-ipv4"
-                            }
+                            "name": "<Loopback>"
                         }
                     ]
                 },
                 {
                     "description": "NAT virtual interface",
                     "name": "NVI",
+                    "config": "Eigrp::AF_INTERFACE",
+                    "mode": "(config-router-af-interface)#/eigrp-ipv4",
                     "subcommands": [
                         {
                             "description": "",
-                            "name": "<NVI>",
-                            "args": {
-                                "CONFIG": "Eigrp::AF_INTERFACE",
-                                "MODE": "(config-router-af)#/eigrp-ipv4"
-                            }
+                            "name": "<NVI>"
                         }
                     ]
                 },
                 {
                     "description": "Null interface",
                     "name": "Null",
+                    "config": "Eigrp::AF_INTERFACE",
+                    "mode": "(config-router-af-interface)#/eigrp-ipv4",
                     "subcommands": [
                         {
                             "description": "",
                             "name": "<NullIface>",
-                            "args": {
-                                "CONFIG": "Eigrp::AF_INTERFACE",
-                                "MODE": "(config-router-af)#/eigrp-ipv4"
-                            },
                             "subcommands": [
                                 {
                                     "description": "",
@@ -118,14 +106,12 @@
                 {
                     "description": "Ethernet Channel of interfaces",
                     "name": "Port-channel",
+                    "config": "Eigrp::AF_INTERFACE",
+                    "mode": "(config-router-af-interface)#/eigrp-ipv4",
                     "subcommands": [
                         {
                             "description": "",
                             "name": "<Portchannel>",
-                            "args": {
-                                "CONFIG": "Eigrp::AF_INTERFACE",
-                                "MODE": "(config-router-af)#/eigrp-ipv4"
-                            },
                             "subcommands": [
                                 {
                                     "description": "",
@@ -154,14 +140,12 @@
                 {
                     "description": "Tunnel interface",
                     "name": "Tunnel",
+                    "config": "Eigrp::AF_INTERFACE",
+                    "mode": "(config-router-af-interface)#/eigrp-ipv4",
                     "subcommands": [
                         {
                             "description": "",
                             "name": "<Tunnel>",
-                            "args": {
-                                "CONFIG": "Eigrp::AF_INTERFACE",
-                                "MODE": "(config-router-af)#/eigrp-ipv4"
-                            },
                             "subcommands": [
                                 {
                                     "description": "",
@@ -174,14 +158,12 @@
                 {
                     "description": "Virtual Template interface",
                     "name": "Virtual-Template",
+                    "config": "Eigrp::AF_INTERFACE",
+                    "mode": "(config-router-af-interface)#/eigrp-ipv4",
                     "subcommands": [
                         {
                             "description": "",
                             "name": "<VirtualTemplate>",
-                            "args": {
-                                "CONFIG": "Eigrp::AF_INTERFACE",
-                                "MODE": "(config-router-af)#/eigrp-ipv4"
-                            },
                             "subcommands": [
                                 {
                                     "description": "",
@@ -194,14 +176,12 @@
                 {
                     "description": "Vlan Interface",
                     "name": "Vlan",
+                    "config": "Eigrp::AF_INTERFACE",
+                    "mode": "(config-router-af-interface)#/eigrp-ipv4",
                     "subcommands": [
                         {
                             "description": "",
                             "name": "<Vlan>",
-                            "args": {
-                                "CONFIG": "Eigrp::AF_INTERFACE",
-                                "MODE": "(config-router-af)#/eigrp-ipv4"
-                            },
                             "subcommands": [
                                 {
                                     "description": "",
@@ -218,8 +198,8 @@
                 {
                     "description": "Address-family default interface configuration",
                     "name": "default",
-                    "config": "Eigrp::AF_INTERFACE_DEFAULT",
-                    "mode": "(config-router-af)#/eigrp-ipv4",
+                    "config": "Eigrp::AF_INTERFACE",
+                    "mode": "(config-router-af-interface)#/eigrp-ipv4",
                     "subcommands": [
                         {
                             "description": "",

@@ -54,6 +54,7 @@ class Ndp
 {
 public:
     friend class Internal_NdpTest;
+    friend class interface::Interface; ///< Needs clear() for teardown ordering.
 
     /**
      * @enum NudState
@@ -98,7 +99,7 @@ public:
      * @brief Constructs NDP bound to an interface.
      *
      * Initialises configuration and data-plane table but does NOT start timers.
-     * If routing is enabled, calls initializeNdp() immediately.
+     * If routing is enabled, calls initiateNdp() immediately.
      *
      * @param interface Owning network interface.
      */
@@ -108,6 +109,13 @@ public:
      * @brief Destructor. Cancels all pending timers and clears the cache.
      */
     ~Ndp();
+
+    /**
+     * @brief Loads static neighbor entries and schedules the first RA (if enabled).
+     *
+     * Must be called on the control scheduler.
+     */
+    void initiateNdp();
 
     /**
      * @brief Clears the NDP cache and re-initialises from configuration.
@@ -380,13 +388,6 @@ private:
     core::ProcessQueue scheduler;                                      ///< Control-plane scheduler; all mutations run here.
 
 protected:
-
-    /**
-     * @brief Loads static neighbor entries and schedules the first RA (if enabled).
-     *
-     * Must be called on the control scheduler.
-     */
-    void initializeNdp();
 
     /**
      * @brief Cancels all pending timers and clears all cache and table state.

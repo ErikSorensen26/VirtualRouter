@@ -2,7 +2,6 @@ enable_testing()
 
 # Make sure these are before you call add_subdirectory
 find_package(GTest REQUIRED)
-find_package(GMock REQUIRED)
 
 # Add all test files recursively
 file(GLOB_RECURSE INTERNAL_TESTS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/Internal/src/*.cpp)
@@ -40,8 +39,8 @@ target_link_libraries(TestSelection PRIVATE
     VirtualRouter
     GTest::GTest
     GTest::Main
-    gmock
-    gmock_main
+    GTest::gmock
+    GTest::gmock_main
     pthread
 )
 

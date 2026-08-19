@@ -57,7 +57,10 @@ EgressSend::EgressSend(interface::Interface& iface, const qos::egress::TxQueueOp
         throw std::runtime_error("EgressSend: socket() failed: " + std::string(strerror(errno)));
     }
 
+    // See TxQueueOpts::qdiscBypass: skips the ptype_all tap capture tools rely on,
+    // so leave it off unless the caller explicitly opted in for the throughput.
 #ifdef PACKET_QDISC_BYPASS
+    if (opts.qdiscBypass)
     {
         int one = 1;
         ::setsockopt(sockFd, SOL_PACKET, PACKET_QDISC_BYPASS, &one, sizeof(one));

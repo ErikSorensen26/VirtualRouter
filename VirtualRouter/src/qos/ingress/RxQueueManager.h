@@ -17,6 +17,7 @@
 #include <mutex>
 #include <atomic>
 #include <string>
+#include <unistd.h>
 
 #include "interface/Interface.h"
 #include "hardware/ingress/IngressBase.h"
@@ -166,7 +167,8 @@ private:
 
     std::unordered_map<interface::Interface*, IfState> ifs;
     std::mutex mu;
-    std::atomic<uint32_t> fanoutSeed = 0xCAFE;
+    // Seeded from the PID (mixed with a fixed constant).
+    std::atomic<uint32_t> fanoutSeed = 0xCAFEu ^ (static_cast<uint32_t>(::getpid()) * 2654435761u);
 
     void reoptimize();
     HwQueueCaps getHwRxQueues(const std::string& ifnames);

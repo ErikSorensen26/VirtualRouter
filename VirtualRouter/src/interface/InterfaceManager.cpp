@@ -21,13 +21,16 @@ Interface* InterfaceManager::get(interface::InterfaceKey key) const
 
 bool InterfaceManager::remove(interface::InterfaceKey key)
 {
+    Interface* iface;
     {
         std::lock_guard lock(mutex);
         auto it = interfaces.find(key);
         if (it == interfaces.end())
             return false;
+        iface = it->second;
         interfaces.erase(it);
     }
+    notify(StateChange::IF_DOWN, *iface);
     return true;
 }
 
@@ -48,14 +51,9 @@ InterfaceManager::StateEventMgr::Id InterfaceManager::subscribe(StateChange even
     return stateEventMgr.registerCallback(event, ctx, cb);
 }
 
-InterfaceManager::IPv4EventMgr::Id InterfaceManager::subscribe(IPv4Event event, void* ctx, IPv4EventMgr::Callback cb)
+InterfaceManager::IPEventMgr::Id InterfaceManager::subscribe(IPEvent event, void* ctx, IPEventMgr::Callback cb)
 {
-    return ipv4EventMgr.registerCallback(event, ctx, cb);
-}
-
-InterfaceManager::IPv6EventMgr::Id InterfaceManager::subscribe(IPv6Event event, void* ctx, IPv6EventMgr::Callback cb)
-{
-    return ipv6EventMgr.registerCallback(event, ctx, cb);
+    return ipEventMgr.registerCallback(event, ctx, cb);
 }
 
 void InterfaceManager::unsubscribe(StateEventMgr::Id id)
@@ -63,14 +61,9 @@ void InterfaceManager::unsubscribe(StateEventMgr::Id id)
     stateEventMgr.unregister(id);
 }
 
-void InterfaceManager::unsubscribe(IPv4EventMgr::Id id)
+void InterfaceManager::unsubscribe(IPEventMgr::Id id)
 {
-    ipv4EventMgr.unregister(id);
-}
-
-void InterfaceManager::unsubscribe(IPv6EventMgr::Id id)
-{
-    ipv6EventMgr.unregister(id);
+    ipEventMgr.unregister(id);
 }
 
 void InterfaceManager::notify(StateChange event, Interface& iface)
@@ -78,13 +71,8 @@ void InterfaceManager::notify(StateChange event, Interface& iface)
     stateEventMgr.run(event, iface);
 }
 
-void InterfaceManager::notify(IPv4Event event, Interface& iface, types::IPv4Prefix addr)
+void InterfaceManager::notify(IPEvent event, Interface& iface, const types::IPPrefix& addr)
 {
-    ipv4EventMgr.run(event, iface, addr);
-}
-
-void InterfaceManager::notify(IPv6Event event, Interface& iface, types::IPv6Prefix addr)
-{
-    ipv6EventMgr.run(event, iface, addr);
+    ipEventMgr.run(event, iface, addr);
 }
 } // namespace interface

@@ -58,6 +58,39 @@ constexpr const char* InterfaceTypeLabels[] = {
 #undef X
 };
 
+/**
+ * @enum StateChange
+ * @brief Represents interface up/down state changes.
+ */
+enum class StateChange : uint8_t
+{
+    /* --- System --- */
+    IF_READY,
+    IF_DOWN,
+    COUNT
+};
+
+/**
+ * @enum IPv4Event
+ * @brief Represents interface ipv4 events
+ */
+enum class IPEvent : uint8_t
+{
+    /* --- IPv4 (simple) --- */
+    IPV4_READY,
+    IPV4_DEL,
+    IPV4_SECONDARY_READY,
+    IPV4_SECONDARY_DEL,
+    IPV4_CONFLICT,
+    /* --- IPv6 (specific) --- */
+    IPV6_LL_READY,
+    IPV6_LL_DEL,
+    IPV6_LL_CONFLICT,
+    IPV6_READY,
+    IPV6_DEL,
+    IPV6_CONFLICT,
+    COUNT
+};
 
 /**
  * @brief Converts a CLI string to InterfaceType enum.

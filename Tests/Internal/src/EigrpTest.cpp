@@ -1500,7 +1500,7 @@ TEST_F(Internal_EigrpTest, Dynamic_Interface_Addition_And_Removal)
 
     EXPECT_EQ(getInterfaceList().size(), 0);
 
-    types::IPPrefix network = {uint32_t{0xC0a80000}, 16};
+    types::IPv4Prefix network = {uint32_t{0xC0a80000}, 16};
     addNetwork(network);
     waitIdle();
 
@@ -1852,7 +1852,7 @@ TEST_F(Internal_EigrpTest, TopologyTable_Handles_Neighbor_Down)
 // Test: RoutingTable_All_Connected_Routes_Count
 TEST_F(Internal_EigrpTest, RoutingTable_All_Connected_Routes_Count) 
 {
-    types::IPPrefix net{ uint32_t{0xC0A80000}, 16 };
+    types::IPv4Prefix net{ uint32_t{0xC0A80000}, 16 };
     addNetwork(net);
     utils::RCU::Guard guard;
     auto route = vrf->getRib().lookup<uint32_t>(mockInterface->configs.ipv4.getPrimaryPrefix().addr, guard);
@@ -2702,7 +2702,7 @@ TEST_F(Internal_EigrpTest, Frequent_Interface_Flapping_No_Global_Corruption)
 {
     // Verify that repeated interface flapping does not corrupt global state.
     setIPv4(0xC0A80101, 24);
-    types::IPPrefix net = { uint32_t{0xC0A80000}, 16 };
+    types::IPv4Prefix net = { uint32_t{0xC0A80000}, 16 };
     addNetwork(net);
     refreshInterfaceList();
     mockInterface->shutdown(true);
@@ -2809,7 +2809,7 @@ TEST_F(Internal_EigrpTest, MultiInterface_Failure_Isolation)
     iface2.blockEnqueues();
     iface1.enableShutdown();
     iface2.enableShutdown();
-    types::IPPrefix network = { uint32_t{0}, 0 };
+    types::IPv4Prefix network = { uint32_t{0}, 0 };
     addNetwork(network);
     auto int1 = createInterface(&iface1);
     auto int2 = createInterface(&iface2);
@@ -2934,7 +2934,7 @@ TEST_F(Internal_EigrpTest, Frequent_Interface_Flapping_No_Global_Corruption_Exte
 {
     // Verify that interface flapping does not corrupt global state.
     setIPv4(0xC0A80101, 24);
-    types::IPPrefix network{ uint32_t{0xC0A80000}, 16 };
+    types::IPv4Prefix network{ uint32_t{0xC0A80000}, 16 };
     addNetwork(network);
     refreshInterfaceList();
     mockInterface->shutdown(true);
@@ -3012,7 +3012,7 @@ TEST_F(Internal_EigrpTest, MultiInterface_Failure_Isolation_Extended)
     setIPv4(0xC0A80301, 8, &iface2);
     auto int1 = createInterface(&iface1);
     auto int2 = createInterface(&iface2);
-    types::IPPrefix network{ uint32_t{}, 0 };
+    types::IPv4Prefix network{ uint32_t{}, 0 };
     addNetwork(network);
     addNeighbor(uint32_t{0x0A000005}, Neighbor::Version::LEGACY, int1);
     addNeighbor(uint32_t{0x0A000006}, Neighbor::Version::LEGACY, int2);

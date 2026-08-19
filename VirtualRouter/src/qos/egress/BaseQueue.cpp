@@ -32,6 +32,12 @@ void BaseQueue::enqueue(hardware::PacketSlot* pkt)
 
 void BaseQueue::start()
 {
+    // Guard against being called on a queue whose worker thread is already
+    // running (e.g. a redundant carrier-up event) — assigning over a joinable
+    // std::thread calls std::terminate() with no active exception.
+    if (runThread.joinable())
+        return;
+
     running.store(true, std::memory_order_release);
     runThread = std::thread([this] {
         const int cpuId = out.getCpuId();

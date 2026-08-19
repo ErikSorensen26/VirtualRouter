@@ -504,14 +504,13 @@ TEST_F(Internal_CliTest, ConfigBinding_GlobalBoolToggle_ShouldWriteField)
 {
     changeMode(CliMode::GlobalConfiguration);
 
-    // `proxy` carries the binding but is not a terminal; IOS spells the whole
-    // command `ip arp proxy disable`. Defaults false, so a run must flip it and
-    // `no` must put it back.
-    std::string on = "ip arp proxy disable";
+    // `proxy` is the terminal and carries the binding. Defaults false, so a
+    // run must flip it and `no` must put it back.
+    std::string on = "ip arp proxy";
     ASSERT_TRUE(handleInput(on));
     EXPECT_TRUE(global->getConfigs().get<config::Global::IP_ARP_PROXY>().load());
 
-    std::string off = "no ip arp proxy disable";
+    std::string off = "no ip arp proxy";
     ASSERT_TRUE(handleInput(off));
     EXPECT_FALSE(global->getConfigs().get<config::Global::IP_ARP_PROXY>().load());
 }

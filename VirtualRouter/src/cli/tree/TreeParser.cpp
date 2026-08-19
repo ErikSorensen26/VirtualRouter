@@ -774,7 +774,8 @@ struct TreeEmitter
             for (const JsonNode& p : props->children)
                 n.flags |= propertyFlag(p.strValue);
 
-        if (emitName.starts_with("exit") || emitName == "end")
+        if (emitName == "exit" || emitName == "end"
+            || emitName == "exit-address-family" || emitName == "exit-af-interface")
             n.flags |= CommandNode::MODE_EXIT;
 
         if (const JsonNode* sup = member(src, KEY_SUPPORT))

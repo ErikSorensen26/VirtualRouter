@@ -23,7 +23,6 @@
 #include "infrastructure/Arp.h"
 #include "infrastructure/Ndp.h"
 #include "configs/InterfaceConfigs.h"
-#include "utils/Mock.hpp"
 
 namespace core { class VirtualRouter; }
 namespace config { struct InterfaceRegistry; }
@@ -40,8 +39,7 @@ namespace interface
 {
 class MockInterface;
 enum class StateChange : uint8_t;
-enum class IPv4Event : uint8_t;
-enum class IPv6Event : uint8_t;
+enum class IPEvent : uint8_t;
 
 
 /**
@@ -166,6 +164,18 @@ public:
      */
     void cleanupInterface();
 
+    /**
+     * @brief Drains ARP/NDP-queued PacketBuilders.
+     *
+     * Must run before `tx` is deleted, since a queued PacketBuilder's
+     * `cancelFrame()` releases its frame back through `tx`. Called by
+     * `~Interface()`; mock/test subclasses that delete `tx` themselves in
+     * their own destructor body must call this first (their destructor body
+     * runs before the base `~Interface()` body that normally does this).
+     * Safe to call multiple times.
+     */
+    void drainQueuedPackets();
+
     // IP MANAGEMENT
 
     /**
@@ -179,7 +189,7 @@ public:
      * @param prefix    IPv4 address and prefix length to assign.
      * @param secondary Set the IP as a secondary address.
      */
-    MOCK bool setIPv4(types::IPv4Prefix prefix, bool secondary = false);
+    MOCK bool setIPv4(const types::IPv4Prefix prefix, bool secondary = false);
     /**
      * @brief Assign an IPv6 address to the interface.
      *
@@ -345,7 +355,7 @@ public:
     core::ProcessQueue& getScheduler() { return scheduler; }
 
     std::atomic<bool> shutdownFlag = true; ///< Administrative shutdown flag.
-    std::atomic<bool> carrierFlag = true; ///< Physical carrier status flag.
+    std::atomic<bool> carrierFlag = false; ///< Physical carrier status flag.
 
     InterfaceConfigs configs; ///< IP addressing and protocol configuration.
 
@@ -354,7 +364,7 @@ public:
 
     // DHCP CLIENT STATE
 
-    services::dhcp::DhcpClient* dhcp = nullptr; ///< DHCPv4 client instance.
+    //services::dhcp::DhcpClient* dhcp = nullptr; ///< DHCPv4 client instance.
     //services::dhcp::Dhcpv6Client* dhcpv6 = nullptr; ///< DHCPv6 client instance.
 
     // RUNNING MANAGEMENT
@@ -373,7 +383,7 @@ public:
      */
     MOCK void startThreads();
 
-    qos::egress::TxDistributor* tx;      ///< Egress object for packet sending.
+    qos::egress::TxDistributor* tx = nullptr; ///< Egress object for packet sending.
 
     // INGRESS
 
@@ -390,82 +400,22 @@ public:
     std::atomic<uint64_t> rxFrames{0}; ///< Total frames delivered by the ingress ring.
 
 private:
-    // ROUTE MANAGEMENT
-
-    /**
-     * @brief Installs the CONNECTED route for one assigned address into the VRF RIB.
-     *
-     * The prefix is masked to network form before insertion, and the route is
-     * added with admin distance 0, metric 0, and this interface as its only
-     * next hop. Called on every successful address assignment.
-     *
-     * @param network Address and prefix length that was just assigned.
-     * @tparam Prefix types::IPv4Prefix or types::IPv6Prefix.
-     */
-    template <types::IsIPPrefix Prefix>
-    void applyConnectedRoute(Prefix network);
-
-    /**
-     * @brief Reinstalls the CONNECTED routes for every address of one family.
-     *
-     * Covers the primary and all secondary addresses. Used on bring-up and on
-     * VRF reassignment, where the RIB is rebuilt from current configuration.
-     *
-     * @tparam Prefix types::IPv4Prefix or types::IPv6Prefix.
-     */
-    template <types::IsIPPrefix Prefix>
-    void applyAllConnectedRoutes();
-
-    /** @brief Reinstalls the CONNECTED routes for both address families. */
-    void applyAllConnectedRoutes();
-
-    /**
-     * @brief Withdraws the CONNECTED route for one address from the VRF RIB.
-     *
-     * @param network Address and prefix length being removed.
-     * @tparam Prefix types::IPv4Prefix or types::IPv6Prefix.
-     */
-    template <types::IsIPPrefix Prefix>
-    void removeConnectedRoute(Prefix network);
-
-    /**
-     * @brief Withdraws the CONNECTED routes for every address of one family.
-     *
-     * @tparam AddrType types::IPv4Prefix or types::IPv6Prefix.
-     */
-    template <types::IsIPPrefix AddrType>
-    void removeAllConnectedRoutes();
-
-    /** @brief Withdraws the CONNECTED routes for both address families. */
-    void removeAllConnectedRoutes();
-
     // STATE MANAGEMENT
 
     /**
-     * @brief Internal state machine transition for IPv4.
+     * @brief Internal state machine transition for IP.
      */
-    void stateChangeV4(IPv4Event state, types::IPv4Prefix addr);
+    void stateChange(IPEvent state, const types::IPPrefix& addr);
 
     /**
-     * @brief Internal state machine transition for IPv6.
+     * @brief Internal state machine transition for IP.
      */
-    void stateChangeV6(IPv6Event state, types::IPv6Prefix addr);
+    void stateChange(StateChange state);
 
     bool debug; ///< Debug flag for verbose logging.
 
     std::atomic<bool> threadsRunning; ///< True when Rx/Tx threads and protocol modules are active.
 };
-
-template <>
-void Interface::removeAllConnectedRoutes<types::IPv4Prefix>();
-template <>
-void Interface::removeAllConnectedRoutes<types::IPv6Prefix>();
-
-template <>
-void Interface::applyAllConnectedRoutes<types::IPv4Prefix>();
-template <>
-void Interface::applyAllConnectedRoutes<types::IPv6Prefix>();
-
 } // namespace interface
 
 #endif // INTERFACE_H

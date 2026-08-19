@@ -675,6 +675,8 @@ TEST_F(Internal_GeneratedCommandTest, EveryBindingCommandChangesTheConfig)
             if (!standIn(ml)) break;
             nudgeOff(line.text);
 
+            nudgeOff(line.text);
+
             const cli::ContextBase& ctx = sessionContext();
             const uint64_t before = hashContext(ctx);
 
@@ -786,3 +788,4 @@ TEST_F(Internal_GeneratedCommandTest, EveryEnteredModeCarriesItsRegistryTag)
                return s;
            }();
 }
+

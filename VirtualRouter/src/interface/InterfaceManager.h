@@ -16,7 +16,7 @@
 #include <EventManager.hpp>
 #include "configs/InterfaceType.hpp"
 
-namespace types { struct IPv4Prefix; struct IPv6Prefix; }
+namespace types { struct IPPrefix; }
 
 namespace interface
 {
@@ -30,49 +30,6 @@ class Interface;
  * Deletion is treated as DOWN — the interface fires DOWN before being removed.
  */
 enum class InterfaceType : uint8_t;
-
-/**
- * @enum StateChange
- * @brief Represents interface up/down state changes.
- */
-enum class StateChange : uint8_t
-{
-    /* --- System --- */
-    IF_READY,
-    IF_DOWN,
-    COUNT
-};
-
-/**
- * @enum IPv4Event
- * @brief Represents interface ipv4 events
- */
-enum class IPv4Event : uint8_t
-{
-    /* --- IPv4 (simple) --- */
-    IPV4_READY,
-    IPV4_DEL,
-    IPV4_SECONDARY_READY,
-    IPV4_SECONDARY_DEL,
-    IPV4_CONFLICT,
-    COUNT
-};
-
-/**
- * @enum IPv4Event
- * @brief Represents interface ipv4 events
- */
-enum class IPv6Event : uint8_t
-{
-    /* --- IPv6 (specific) --- */
-    IPV6_LL_READY,
-    IPV6_LL_DEL,
-    IPV6_LL_CONFLICT,
-    IPV6_READY,
-    IPV6_DEL,
-    IPV6_CONFLICT,
-    COUNT
-};
 
 /**
  * @class InterfaceManager
@@ -100,8 +57,7 @@ class InterfaceManager
 {
 public:
     using StateEventMgr = utils::EventManager<StateChange, Interface>;
-    using IPv4EventMgr = utils::EventManager<IPv4Event, Interface, types::IPv4Prefix>;
-    using IPv6EventMgr = utils::EventManager<IPv6Event, Interface, types::IPv6Prefix>;
+    using IPEventMgr = utils::EventManager<IPEvent, Interface, const types::IPPrefix>;
 
     /**
      * @brief Add an interface to the VRF.
@@ -147,24 +103,14 @@ public:
     StateEventMgr::Id subscribe(StateChange event, void* ctx, StateEventMgr::Callback cb);
 
     /**
-     * @brief Subscribe to an interface IPv4 event.
+     * @brief Subscribe to an interface IP event.
      *
      * @param event  The event to subscribe to (IP add, IP del)
      * @param ctx    Pointer to context object used in callback.
      * @param cb     Callback invoked with the affected interface and event.
      * @return       An opaque ID that can be passed to `unubscribe()` to unsubscribe.
      */
-    IPv4EventMgr::Id subscribe(IPv4Event event, void* ctx, IPv4EventMgr::Callback cb);
-
-    /**
-     * @brief Subscribe to an interface IPv6 event.
-     *
-     * @param event  The event to subscribe to (IP add, IP del)
-     * @param ctx    Pointer to context object used in callback.
-     * @param cb     Callback invoked with the affected interface and event.
-     * @return       An opaque ID that can be passed to `unsubscribe()` to unsubscribe.
-     */
-    IPv6EventMgr::Id subscribe(IPv6Event event, void* ctx, IPv6EventMgr::Callback cb);
+    IPEventMgr::Id subscribe(IPEvent event, void* ctx, IPEventMgr::Callback cb);
 
     /**
      * @brief Unsubscribe a previously registered callback.
@@ -178,14 +124,7 @@ public:
      *
      * No-op if `id` is not currently registered.
      */
-    void unsubscribe(IPv4EventMgr::Id id);
-
-    /**
-     * @brief Unsubscribe a previously registered callback.
-     *
-     * No-op if `id` is not currently registered.
-     */
-    void unsubscribe(IPv6EventMgr::Id id);
+    void unsubscribe(IPEventMgr::Id id);
 
     /**
      * @brief Deliver an event to all matching subscribers.
@@ -199,14 +138,7 @@ public:
      *
      * Called by Interface when its state changes. Safe to call from any thread.
      */
-    void notify(IPv4Event event, Interface& iface, types::IPv4Prefix addr);
-
-    /**
-     * @brief Deliver an event to all matching subscribers.
-     *
-     * Called by Interface when its state changes. Safe to call from any thread.
-     */
-    void notify(IPv6Event event, Interface& iface, types::IPv6Prefix addr);
+    void notify(IPEvent event, Interface& iface, const types::IPPrefix& addr);
 
 private:
     friend class Interface;
@@ -215,8 +147,7 @@ private:
     std::unordered_map<interface::InterfaceKey, Interface*> interfaces; ///< All interfaces in this VRF.
 
     StateEventMgr stateEventMgr;
-    IPv4EventMgr ipv4EventMgr;
-    IPv6EventMgr ipv6EventMgr;
+    IPEventMgr ipEventMgr;
 };
 
 } // namespace interface

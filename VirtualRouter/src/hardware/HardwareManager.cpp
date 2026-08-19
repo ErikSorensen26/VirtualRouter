@@ -149,9 +149,10 @@ const HwIfaceInfo* HardwareManager::getHwInfo(interface::InterfaceKey key) const
     auto [type, id] = key.decode();
     unsigned int baseId = static_cast<unsigned int>(std::floor(id));
     auto pit = physicalInterfaces.find(type);
-    if (pit == physicalInterfaces.end() || baseId < 0 || baseId >= static_cast<size_t>(pit->second.size() - 1))
+    if (pit == physicalInterfaces.end() || baseId >= pit->second.size())
         return nullptr;
-    if (auto hwit = hwInfo.find(baseId); hwit != hwInfo.end())
+    uint32_t ifindex = pit->second[baseId];
+    if (auto hwit = hwInfo.find(ifindex); hwit != hwInfo.end())
         return &hwit->second;
     return nullptr;
 }

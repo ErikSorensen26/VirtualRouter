@@ -28,6 +28,12 @@ add_custom_target(copy_resources ALL
     COMMENT "Copying configs/, commands/ and dir/ to build folder"
 )
 
+find_program(CCACHE_PROGRAM ccache)
+if (CCACHE_PROGRAM)
+    set(CMAKE_C_COMPILER_LAUNCHER   ${CCACHE_PROGRAM})
+    set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
+endif()
+
 if (BUILD_STATIC_ROUTER)
     message(STATUS "Building in FULLY STATIC mode")
 
@@ -53,27 +59,24 @@ else()
     # keep your debug-ish flags as-is
     add_compile_options(
         -O0
-        -g2
-        -ffunction-sections
-        -fdata-sections
+        -g1
+        #-ffunction-sections
+        #-fdata-sections
         -fno-inline-functions
         -fno-inline-small-functions
-        -fsanitize=address
+        #-fsanitize=address
         #-gz
         -gdwarf-4
         #-gsplit-dwarf
         -fno-omit-frame-pointer
-        -fno-ident
+        #-fno-ident
         -Wall -Wextra -Wpedantic -Wshadow -Wcast-align -Wconversion -Wsign-conversion
-
     )
     add_compile_definitions(DEBUG)
     add_link_options(-Wl,--compress-debug-sections=zlib -fsanitize=address)
 
     # External Dependencies (visible to subdirs)
-    find_package(PkgConfig REQUIRED)
     find_package(ZLIB REQUIRED)
-    find_package(CURL REQUIRED)
 
     message(STATUS "Building in NORMAL (dynamic + test + utils) mode")
     enable_testing()

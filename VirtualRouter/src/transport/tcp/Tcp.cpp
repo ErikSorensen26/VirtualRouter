@@ -34,23 +34,23 @@ Tcp::Tcp(core::VirtualRouter& vrf, Config cfg)
         });
 
     // When a specific IP is explicitly removed, tear down only the
-    tcpIPv4DelId = ifaceMgr.subscribe(interface::IPv4Event::IPV4_DEL,
+    tcpIPv4DelId = ifaceMgr.subscribe(interface::IPEvent::IPV4_DEL,
         this,
-        [](void* ctx, interface::Interface&, types::IPv4Prefix& prefix) {
+        [](void* ctx, interface::Interface&, const types::IPPrefix& prefix) {
             static_cast<Tcp*>(ctx)->engine->dropLocalConnections(
                 types::IPAddress(prefix.addr));
         });
 
-    tcpIPv6DelId = ifaceMgr.subscribe(interface::IPv6Event::IPV6_DEL,
+    tcpIPv6DelId = ifaceMgr.subscribe(interface::IPEvent::IPV6_DEL,
         this,
-        [](void* ctx, interface::Interface&, types::IPv6Prefix& prefix) {
+        [](void* ctx, interface::Interface&, const types::IPPrefix& prefix) {
             static_cast<Tcp*>(ctx)->engine->dropLocalConnections(
                 types::IPAddress(prefix.addr));
         });
 
-    tcpIPv6LlDelId = ifaceMgr.subscribe(interface::IPv6Event::IPV6_LL_DEL,
+    tcpIPv6LlDelId = ifaceMgr.subscribe(interface::IPEvent::IPV6_LL_DEL,
         this,
-        [](void* ctx, interface::Interface&, types::IPv6Prefix& prefix) {
+        [](void* ctx, interface::Interface&, const types::IPPrefix& prefix) {
             static_cast<Tcp*>(ctx)->engine->dropLocalConnections(
                 types::IPAddress(prefix.addr));
         });
@@ -60,9 +60,9 @@ Tcp::~Tcp()
 {
     auto& ifaceMgr = engine->vr.getInterfaceManager();
     ifaceMgr.unsubscribe(interface::InterfaceManager::StateEventMgr::Id{tcpIfDownId});
-    ifaceMgr.unsubscribe(interface::InterfaceManager::IPv4EventMgr::Id{tcpIPv4DelId});
-    ifaceMgr.unsubscribe(interface::InterfaceManager::IPv6EventMgr::Id{tcpIPv6DelId});
-    ifaceMgr.unsubscribe(interface::InterfaceManager::IPv6EventMgr::Id{tcpIPv6LlDelId});
+    ifaceMgr.unsubscribe(interface::InterfaceManager::IPEventMgr::Id{tcpIPv4DelId});
+    ifaceMgr.unsubscribe(interface::InterfaceManager::IPEventMgr::Id{tcpIPv6DelId});
+    ifaceMgr.unsubscribe(interface::InterfaceManager::IPEventMgr::Id{tcpIPv6LlDelId});
 
     delete engine;
     engine = nullptr;

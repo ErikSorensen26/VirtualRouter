@@ -40,13 +40,23 @@ DEFINE_CONFIG_APPLIER(Interface, OSPFV3, ctx, reg, procId)
 DEFINE_CONFIG_APPLIER(Interface, IP_ADDRESS, i, ip)
 {
     if (interface::Interface* iface = Context::cast<interface::Interface*>(i); iface)
-        iface->configs.syncPrimaryIP(); // TODO
+    {
+        if (ip)
+            iface->setIPv4(*ip);
+        else
+            iface->removeIPv4(nullptr);
+    }
 }
 
 DEFINE_CONFIG_APPLIER(Interface, IP_ADDRESS_SECONDARY, i, ip, add)
 {
     if (interface::Interface* iface = Context::cast<interface::Interface*>(i); iface)
-        iface->configs.syncPrimaryIP(); // TODO
+    {
+        if (add)
+            iface->setIPv4(ip.prefix(), true);
+        else
+            iface->removeIPv4(&ip.prefix());
+    }
 }
 
 DEFINE_CONFIG_APPLIER(Interface, IP_ADDRESS_DHCP, i, dhcp)

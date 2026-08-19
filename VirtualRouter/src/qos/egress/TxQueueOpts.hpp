@@ -35,6 +35,7 @@ struct TxQueueOpts
 
     int batchTarget = 64;                  ///< Target batch size for transmitting frames.
     int cpuId = -1;                        ///< CPU core ID for queue thread (-1 = auto-assign).
+    bool qdiscBypass = false;              ///< Routes transmits through dev_direct_xmit() instead of dev_queue_xmit()
 };
 
 } // namespace qos::egress

@@ -124,6 +124,7 @@ private:
 
     int fd = -1;                      ///< Socket file descriptor.
     int epfd = -1;                    ///< Epoll file descriptor for event notification.
+    int evtfd = -1;                   ///< Eventfd written by stopRx() to unblock epoll_wait.
     void* ring = nullptr;             ///< Mmap'd ring buffer base address.
     size_t ringLen = 0;               ///< Total ring buffer size in bytes.
 

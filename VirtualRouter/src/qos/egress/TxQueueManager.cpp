@@ -48,6 +48,19 @@ void TxQueueManager::setTxCoreBias(double bias)
     reoptimize();
 }
 
+void TxQueueManager::setQdiscBypass(bool enable)
+{
+    std::lock_guard<std::mutex> lk(mu);
+    qdiscBypassDefault = enable;
+    for (auto& [iface, st] : ifs)
+    {
+        for (uint32_t i = 0; i < st.queueAmount; ++i)
+            stopAndDelete(st.queues[i]);
+        st.queueAmount = 0;
+    }
+    reoptimize();
+}
+
 // ---- interface management -----------------------------------------------
 
 void TxQueueManager::addInterface(interface::Interface& iface,
@@ -74,7 +87,23 @@ void TxQueueManager::addInterface(interface::Interface& iface,
 
     // TxDistributor holds a raw pointer into the stable queue array.
     iface.tx = new TxDistributor(it->second.queues.get(), 0);
-    reoptimize();
+
+    try
+    {
+        reoptimize();
+    }
+    catch (...)
+    {
+        // reoptimize() may have created some queues for this or other
+        // interfaces before throwing; unwind just this interface's state so a
+        // failed addInterface() leaves nothing keyed on &iface behind.
+        for (uint32_t i = 0; i < it->second.queueAmount; ++i)
+            stopAndDelete(it->second.queues[i]);
+        delete iface.tx;
+        iface.tx = nullptr;
+        ifs.erase(it);
+        throw;
+    }
 }
 
 void TxQueueManager::removeInterface(interface::Interface& iface)
@@ -258,6 +287,7 @@ void TxQueueManager::ensureQueueCount(IfState& st, int target,
             TxQueueOpts q  = st.policy.defaultQueueOpts;
             q.ifname       = st.ifname;
             q.cpuId        = coreOrder[rr % coreOrder.size()];
+            q.qdiscBypass  = q.qdiscBypass || qdiscBypassDefault;
             rr = (rr + 1) % coreOrder.size();
             startOne(st, q);
         }

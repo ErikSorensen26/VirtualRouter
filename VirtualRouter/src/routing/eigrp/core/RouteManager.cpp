@@ -5,7 +5,7 @@
 #include "RouteManager.h"
 #include "Eigrp.h"
 #include "eigrp/interface/EigrpInterface.h"
-#include "routing/RoutingTable.hpp"
+#include "routing/RoutingTable.h"
 #include "interface/Interface.h"
 
 namespace routing::eigrp

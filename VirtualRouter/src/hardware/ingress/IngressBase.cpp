@@ -31,6 +31,12 @@ IngressBase::~IngressBase()
 
 void IngressBase::start()
 {
+    // Guard against being called on a queue whose worker thread is already
+    // running (e.g. a redundant carrier-up event) — assigning over a joinable
+    // std::thread calls std::terminate() with no active exception.
+    if (ingressThread.joinable())
+        return;
+
     running.store(true, std::memory_order_release);
     ingressThread = std::thread([this] {
         utils::RCU::registerThread();

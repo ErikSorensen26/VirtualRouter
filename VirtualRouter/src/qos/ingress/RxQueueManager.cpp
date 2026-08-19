@@ -44,18 +44,43 @@ void RxQueueManager::addInterface(interface::Interface& iface, const std::string
     std::lock_guard<std::mutex> lk(mu);
     if (ifs.count(&iface)) return;
 
-    IfState st;
-    st.iface = &iface;
-    st.ifname = ifname;
-    st.policy = policy;
-    st.fanoutGroup = assignFanoutGroup();
+    constexpr int kMaxFanoutRetries = 8;
+    for (int attempt = 0; ; ++attempt)
+    {
+        IfState st;
+        st.iface = &iface;
+        st.ifname = ifname;
+        st.policy = policy;
+        st.fanoutGroup = assignFanoutGroup();
 
-    st.policy.defaultQueueOpts.ifname = ifname;
-    if (st.policy.defaultQueueOpts.fanoutGroup == 0)
-        st.policy.defaultQueueOpts.fanoutGroup = st.fanoutGroup;
+        st.policy.defaultQueueOpts.ifname = ifname;
+        if (attempt > 0 || st.policy.defaultQueueOpts.fanoutGroup == 0)
+            st.policy.defaultQueueOpts.fanoutGroup = st.fanoutGroup;
 
-    ifs.emplace(&iface, std::move(st));
-    reoptimize();
+        auto [it, ok] = ifs.emplace(&iface, std::move(st));
+
+        auto unwind = [&] {
+            for (auto& qs : it->second.queues) stopAndDelete(qs);
+            ifs.erase(it);
+        };
+
+        try
+        {
+            reoptimize();
+            return;
+        }
+        catch (const hardware::ingress::FanoutCollisionError&)
+        {
+            unwind();
+            if (attempt >= kMaxFanoutRetries)
+                throw;
+        }
+        catch (...)
+        {
+            unwind();
+            throw;
+        }
+    }
 }
 
 void RxQueueManager::removeInterface(interface::Interface& iface)

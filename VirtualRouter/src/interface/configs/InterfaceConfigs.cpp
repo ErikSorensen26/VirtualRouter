@@ -290,6 +290,31 @@ bool InterfaceConfigs::IPv4State::comparePrimaryPrefix(types::IPv4Prefix prefix)
            mask.load(std::memory_order_relaxed) == prefix.prefixLength;
 }
 
+bool InterfaceConfigs::IPv4State::compareSecondaryAddress(const uint8_t* ip)
+{
+    std::lock_guard<std::mutex> lock(ipMutex);
+    uint32_t ipAddr = utils::read<uint32_t>(ip);
+    for (const auto& addr : secondary)
+        if (addr.addr == ipAddr) return true;
+    return false;
+}
+
+bool InterfaceConfigs::IPv4State::compareSecondaryAddress(types::IPv4Address ip)
+{
+    std::lock_guard<std::mutex> lock(ipMutex);
+    for (const auto& addr : secondary)
+        if (addr.addr == ip) return true;
+    return false;
+}
+
+bool InterfaceConfigs::IPv4State::compareSecondaryAddress(types::IPv4Prefix prefix)
+{
+    std::lock_guard<std::mutex> lock(ipMutex);
+    for (const auto& addr : secondary)
+        if (addr == prefix) return true;
+    return false;
+}
+
 // IPV6
 InterfaceConfigs::IPv6State::IPv6State(core::TimeManager& tmgr) : timeManager(tmgr) {}
 

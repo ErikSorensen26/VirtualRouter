@@ -1,5 +1,5 @@
 /**
- * @file RoutingTable.hpp
+ * @file RoutingTable.h
  * @brief Global per-VRF RIB/FIB facade owning IPv4 and IPv6 Rib instances.
  */
 
@@ -9,14 +9,16 @@
  * @brief Per-VRF RIB/FIB facade, RIB buckets, FIB, and route watcher.
  */
 
-#ifndef ROUTING_TABLE_HPP
-#define ROUTING_TABLE_HPP
+#ifndef ROUTING_TABLE_H
+#define ROUTING_TABLE_H
 
 #include <cstdint>
 #include <AddressFamily.hpp>
 #include <type_traits>
 
 #include "rib/Rib.hpp"
+
+namespace interface { class InterfaceManager; class Interface; }
 
 namespace core
 {
@@ -67,15 +69,14 @@ public:
      * @brief Construct a `RoutingTable`, creating one `ProcessQueue` per RIB.
      * @param cs `ControlScheduler` that owns the thread pool.
      */
-    RoutingTable(ControlScheduler& cs)
-        : rib4(cs.create()), rib6(cs.create())
-    {}
+    RoutingTable(ControlScheduler& cs, interface::InterfaceManager& ifMgr);
 
     /**
      * @brief Destroy the routing table, clearing all routes and reclaiming RCU memory.
      */
     ~RoutingTable()
     {
+        // Does not need to unregister ids, interface manager gets destroyed along with this.
         clearAll();
     }
 
@@ -332,9 +333,17 @@ public:
     }
 
 private:
+    template <typename Prefix>
+    void applyConnectedRoute(interface::Interface& iface, Prefix network);
+    template <typename Prefix>
+    void removeConnectedRoute(Prefix network);
+
+    uint32_t ipv4PrimaryReadyId, ipv4SecondaryReadyId, ipv6ReadyId, ipv6LlReadyId;
+    uint32_t ipv4PrimaryDelId, ipv4SecondaryDelId, ipv6DelId, ipv6LlDelId;
+
     template <typename T> static constexpr bool always_false = false; ///< Helper for static_assert in unsupported-type branches.
 };
 
 } // namespace core
 
-#endif // ROUTING_TABLE_HPP
+#endif // ROUTING_TABLE_H

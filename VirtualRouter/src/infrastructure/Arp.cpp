@@ -17,7 +17,7 @@
 namespace infrastructure
 {
 // Constructor: Initiates the ARP object with the given interface
-Arp::Arp(interface::Interface& interface) 
+Arp::Arp(interface::Interface& interface)
     : iface(interface),
       configs([&interface]() -> config::ArpRegistry& {
           return interface.configs.getConfigs().get<config::Interface::ARP>().get();

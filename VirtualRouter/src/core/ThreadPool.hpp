@@ -14,6 +14,7 @@
 #include <type_traits>
 #include <utility>
 #include <immintrin.h>
+#include <iostream>
 #include <RCU.hpp>
 
 namespace core
@@ -93,10 +94,30 @@ public:
             destroy = [](void* p){ reinterpret_cast<Fn*>(p)->~Fn(); };
         }
 
-        /** @brief Executes the stored callable if one is present. */
+        /**
+         * @brief Executes the stored callable if one is present.
+         *
+         * @warning Posted tasks run with no caller-side try/catch anywhere on the
+         * stack (worker threads have no enclosing exception handler). An exception
+         * escaping `invoke()` would try to propagate out of this `noexcept`
+         * function and call `std::terminate()` immediately, with no "what()" ever
+         * printed. Catch here instead so a buggy task fails loud but survives.
+         */
         void run() noexcept
         {
-            if (invoke) invoke(storage);
+            if (!invoke) return;
+            try
+            {
+                invoke(storage);
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "ThreadPool: task threw: " << e.what() << std::endl;
+            }
+            catch (...)
+            {
+                std::cerr << "ThreadPool: task threw a non-std::exception" << std::endl;
+            }
         }
 
         /** @brief Destructs the stored callable and resets the slot to empty. */

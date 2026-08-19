@@ -43,31 +43,31 @@ Eigrp::Eigrp(config::EigrpRegistry& reg, uint16_t as, types::AddressFamily af, c
 
     if (addressFamily == types::AddressFamily::IPv4)
     {
-        auto onIpReadyV4 = [](void* ctx, interface::Interface& iface, types::IPv4Prefix&) {
+        auto onIpReadyV4 = [](void* ctx, interface::Interface& iface, const types::IPPrefix&) {
             auto* e = static_cast<Eigrp*>(ctx);
             e->scheduler.postAndWait([e, &iface]{ e->priv.ifaceMgr.tryCreateInterface(iface); });
         };
-        auto onIpDelV4 = [](void* ctx, interface::Interface& iface, types::IPv4Prefix&) {
+        auto onIpDelV4 = [](void* ctx, interface::Interface& iface, const types::IPPrefix&) {
             auto* e = static_cast<Eigrp*>(ctx);
             interface::InterfaceKey key = iface.configs.key;
             e->scheduler.postAndWait([e, key]{ e->priv.ifaceMgr.destroyInterface(key); });
         };
-        priv.ipReadyId = ifMgr.subscribe(interface::IPv4Event::IPV4_READY, this, onIpReadyV4);
-        priv.ipDelId   = ifMgr.subscribe(interface::IPv4Event::IPV4_DEL,   this, onIpDelV4);
+        priv.ipReadyId = ifMgr.subscribe(interface::IPEvent::IPV4_READY, this, onIpReadyV4);
+        priv.ipDelId   = ifMgr.subscribe(interface::IPEvent::IPV4_DEL,   this, onIpDelV4);
     }
     else
     {
-        auto onIpReadyV6 = [](void* ctx, interface::Interface& iface, types::IPv6Prefix&) {
+        auto onIpReadyV6 = [](void* ctx, interface::Interface& iface, const types::IPPrefix&) {
             auto* e = static_cast<Eigrp*>(ctx);
             e->scheduler.postAndWait([e, &iface]{ e->priv.ifaceMgr.tryCreateInterface(iface); });
         };
-        auto onIpDelV6 = [](void* ctx, interface::Interface& iface, types::IPv6Prefix&) {
+        auto onIpDelV6 = [](void* ctx, interface::Interface& iface, const types::IPPrefix&) {
             auto* e = static_cast<Eigrp*>(ctx);
             interface::InterfaceKey key = iface.configs.key;
             e->scheduler.postAndWait([e, key]{ e->priv.ifaceMgr.destroyInterface(key); });
         };
-        priv.ipReadyId = ifMgr.subscribe(interface::IPv6Event::IPV6_LL_READY, this, onIpReadyV6);
-        priv.ipDelId   = ifMgr.subscribe(interface::IPv6Event::IPV6_LL_DEL,   this, onIpDelV6);
+        priv.ipReadyId = ifMgr.subscribe(interface::IPEvent::IPV6_LL_READY, this, onIpReadyV6);
+        priv.ipDelId   = ifMgr.subscribe(interface::IPEvent::IPV6_LL_DEL,   this, onIpDelV6);
     }
 
     start();
@@ -87,13 +87,13 @@ Eigrp::~Eigrp()
     ifMgr.unsubscribe(interface::InterfaceManager::StateEventMgr::Id{priv.ifDownId});
     if (addressFamily == types::AddressFamily::IPv4)
     {
-        ifMgr.unsubscribe(interface::InterfaceManager::IPv4EventMgr::Id{priv.ipReadyId});
-        ifMgr.unsubscribe(interface::InterfaceManager::IPv4EventMgr::Id{priv.ipDelId});
+        ifMgr.unsubscribe(interface::InterfaceManager::IPEventMgr::Id{priv.ipReadyId});
+        ifMgr.unsubscribe(interface::InterfaceManager::IPEventMgr::Id{priv.ipDelId});
     }
     else
     {
-        ifMgr.unsubscribe(interface::InterfaceManager::IPv6EventMgr::Id{priv.ipReadyId});
-        ifMgr.unsubscribe(interface::InterfaceManager::IPv6EventMgr::Id{priv.ipDelId});
+        ifMgr.unsubscribe(interface::InterfaceManager::IPEventMgr::Id{priv.ipReadyId});
+        ifMgr.unsubscribe(interface::InterfaceManager::IPEventMgr::Id{priv.ipDelId});
     }
 
     scheduler.release();

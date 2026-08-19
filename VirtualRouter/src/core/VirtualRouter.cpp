@@ -15,7 +15,7 @@ VirtualRouter::VirtualRouter(Global& g, const std::string& name, config::VrfRegi
     : defaulted(name == DEFAULT_VRF),
       configs(cfg),
       tcpManager(*this),
-      routingTable(g.scheduler),
+      routingTable(g.scheduler, ifaceMgr),
       global(g)
 {
     instanceName = name;

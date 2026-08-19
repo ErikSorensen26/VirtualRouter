@@ -78,6 +78,7 @@ struct GlobalProperties
     qos::egress::CpuPolicy txQueuePolicy = qos::egress::CpuPolicy::EqualShare;
     qos::ingress::CpuPolicy rxQueuePolicy = qos::ingress::CpuPolicy::EqualShare;
 
+    bool txQdiscBypass = false;
     bool enableRouting = false;
     bool enableDummies = false;
     bool test = false;
@@ -244,6 +245,17 @@ public:
      * @brief Determine if AAA is enabled.
      */
     bool isAAA() {return aaaEnabled.load(std::memory_order_relaxed); }
+
+    /**
+     * @brief Enable or disable PACKET_QDISC_BYPASS on TX sockets, process-wide.
+     *
+     * Trades away visibility to capture tools (tcpdump/Wireshark) for lower egress
+     * overhead -- see TxQueueOpts::qdiscBypass. Recreates every interface's TX queues
+     * so the change takes effect on already-up interfaces, not just new ones.
+     *
+     * @param enable True to bypass the qdisc layer (faster, invisible to captures).
+     */
+    void setTxQdiscBypass(bool enable) { txManager.setQdiscBypass(enable); }
 
     // INTERFACE MANAGEMENT
 

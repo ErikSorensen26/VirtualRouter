@@ -35,10 +35,6 @@ OspfProcess::OspfProcess(config::OspfRegistry& reg, bool isV3, uint16_t procId, 
 
     if (!isV3)
     {
-        // OSPFv2: area membership is derived from `network` statements
-        // matched against the interface's live address, so a config change
-        // on any interface can move any other interface between areas.
-        // That many-to-many relationship still requires a full re-scan.
         auto postRefresh = [](void* ctx, interface::Interface&) {
             auto* p = static_cast<OspfProcess*>(ctx);
             p->scheduler.post([p]{ p->ifaceMgr.refreshInterfaceList(); });
@@ -46,18 +42,15 @@ OspfProcess::OspfProcess(config::OspfRegistry& reg, bool isV3, uint16_t procId, 
         priv.ifUpId   = ifMgr.subscribe(interface::StateChange::IF_READY, this, postRefresh);
         priv.ifDownId = ifMgr.subscribe(interface::StateChange::IF_DOWN,  this, postRefresh);
 
-        auto postRefreshV4 = [](void* ctx, interface::Interface&, types::IPv4Prefix&) {
+        auto postRefreshV4 = [](void* ctx, interface::Interface&, const types::IPPrefix&) {
             auto* p = static_cast<OspfProcess*>(ctx);
             p->scheduler.post([p]{ p->ifaceMgr.refreshInterfaceList(); });
         };
-        priv.ipReadyId = ifMgr.subscribe(interface::IPv4Event::IPV4_READY, this, postRefreshV4);
-        priv.ipDelId   = ifMgr.subscribe(interface::IPv4Event::IPV4_DEL,   this, postRefreshV4);
+        priv.ipReadyId = ifMgr.subscribe(interface::IPEvent::IPV4_READY, this, postRefreshV4);
+        priv.ipDelId   = ifMgr.subscribe(interface::IPEvent::IPV4_DEL,   this, postRefreshV4);
     }
     else
     {
-        // OSPFv3: enabled directly on the physical interface (no area-range
-        // matching), so each event targets exactly the interface that fired
-        // it -- no sweep.
         auto onIfUp = [](void* ctx, interface::Interface& iface) {
             auto* p = static_cast<OspfProcess*>(ctx);
             p->scheduler.post([p, &iface]{ p->ifaceMgr.addInterface(iface); });
@@ -69,16 +62,16 @@ OspfProcess::OspfProcess(config::OspfRegistry& reg, bool isV3, uint16_t procId, 
         priv.ifUpId   = ifMgr.subscribe(interface::StateChange::IF_READY, this, onIfUp);
         priv.ifDownId = ifMgr.subscribe(interface::StateChange::IF_DOWN,  this, onIfDown);
 
-        auto onIpReadyV6 = [](void* ctx, interface::Interface& iface, types::IPv6Prefix&) {
+        auto onIpReadyV6 = [](void* ctx, interface::Interface& iface, const types::IPPrefix&) {
             auto* p = static_cast<OspfProcess*>(ctx);
             p->scheduler.post([p, &iface]{ p->ifaceMgr.addInterface(iface); });
         };
-        auto onIpDelV6 = [](void* ctx, interface::Interface& iface, types::IPv6Prefix&) {
+        auto onIpDelV6 = [](void* ctx, interface::Interface& iface, const types::IPPrefix&) {
             auto* p = static_cast<OspfProcess*>(ctx);
             p->scheduler.post([p, &iface]{ p->ifaceMgr.removeInterface(iface); });
         };
-        priv.ipReadyId = ifMgr.subscribe(interface::IPv6Event::IPV6_LL_READY, this, onIpReadyV6);
-        priv.ipDelId   = ifMgr.subscribe(interface::IPv6Event::IPV6_LL_DEL,   this, onIpDelV6);
+        priv.ipReadyId = ifMgr.subscribe(interface::IPEvent::IPV6_LL_READY, this, onIpReadyV6);
+        priv.ipDelId   = ifMgr.subscribe(interface::IPEvent::IPV6_LL_DEL,   this, onIpDelV6);
     }
 }
 
@@ -94,13 +87,13 @@ OspfProcess::~OspfProcess()
     ifMgr.unsubscribe(interface::InterfaceManager::StateEventMgr::Id{priv.ifDownId});
     if (!isV3)
     {
-        ifMgr.unsubscribe(interface::InterfaceManager::IPv4EventMgr::Id{priv.ipReadyId});
-        ifMgr.unsubscribe(interface::InterfaceManager::IPv4EventMgr::Id{priv.ipDelId});
+        ifMgr.unsubscribe(interface::InterfaceManager::IPEventMgr::Id{priv.ipReadyId});
+        ifMgr.unsubscribe(interface::InterfaceManager::IPEventMgr::Id{priv.ipDelId});
     }
     else
     {
-        ifMgr.unsubscribe(interface::InterfaceManager::IPv6EventMgr::Id{priv.ipReadyId});
-        ifMgr.unsubscribe(interface::InterfaceManager::IPv6EventMgr::Id{priv.ipDelId});
+        ifMgr.unsubscribe(interface::InterfaceManager::IPEventMgr::Id{priv.ipReadyId});
+        ifMgr.unsubscribe(interface::InterfaceManager::IPEventMgr::Id{priv.ipDelId});
     }
 
     // Areas outlive this body but their timers touch state deactivateAll() tears down, so cancel them (Area::scheduler refs aren't reached by scheduler.release()) now.

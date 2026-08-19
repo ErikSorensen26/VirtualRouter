@@ -128,7 +128,21 @@ public:
      */
     void setCpuPolicy(CpuPolicy p);
 
+    /**
+     * @brief Sets the CPU core processing bias compared to rx.
+     */
     void setTxCoreBias(double bias);
+
+    /**
+     * @brief Sets the process-wide default for TxQueueOpts::qdiscBypass.
+     *
+     * Applied to every queue's opts as they're (re)created, unless an interface's
+     * policy.defaultQueueOpts already opts in explicitly. See TxQueueOpts::qdiscBypass
+     * for the tradeoff: faster egress vs. invisible to tcpdump/Wireshark.
+     *
+     * @param enable True to bypass the qdisc layer on TX sockets by default.
+     */
+    void setQdiscBypass(bool enable);
 
     /**
      * @brief Starts TX queues for an interface.
@@ -185,6 +199,7 @@ private:
     std::vector<int>     cores;
     CpuPolicy            cpuPolicy  = CpuPolicy::EqualShare;
     double               txCoreBias = 0.5;
+    bool                 qdiscBypassDefault = false;
 
     std::unordered_map<interface::Interface*, IfState> ifs;
 
