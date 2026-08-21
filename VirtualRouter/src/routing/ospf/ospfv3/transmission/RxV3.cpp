@@ -16,6 +16,9 @@
 #include "ospf/ospfv2/database/OpaqueLsaV2.hpp"
 #include "ospf/ospfv3/database/IntraAreaPrefixLsa.hpp"
 #include "ospf/transmission/OspfFletcher.hpp"
+#include "packet/headers/IpHeaders.hpp"
+#include "security/Checksums.h"
+#include <cstring>
 
 namespace routing::ospf
 {
@@ -29,7 +32,7 @@ static bool verifyOspfFletcher(const uint8_t* lsa, uint16_t len)
     return check.finalize() == utils::read<uint16_t>(lsa + 16);
 }
 
-void PacketDispatcherV3::handleIncoming(const packet::Ospfv3Header& ospfHeader, const uint8_t* neighborIp, bool multicast)
+void PacketDispatcherV3::handleIncoming(const packet::Ospfv3Header& ospfHeader, const uint8_t* neighborIp, bool multicast, const uint8_t* ipHeader)
 {
     types::IPAddress neigIp(neighborIp, iface.area.process.af);
     uint32_t rid = ospfHeader.getRouterID();
@@ -59,12 +62,29 @@ void PacketDispatcherV3::handleIncoming(const packet::Ospfv3Header& ospfHeader, 
     info.neighbor = getNTable().lookup(rid);
 
     {
-        // Process Checksum
-        ChecksumFletcher check;
-        check.addBytes(ospfHeader.buffer, 12); // Up to checksum field
-        check.addBytes(ospfHeader.buffer + 14, ospfHeader.getPacketLen() - 14); // To end of header
-        uint16_t checksum = check.finalize();
-        if (checksum != ospfHeader.getChecksum())
+        uint16_t received = ospfHeader.getChecksum();
+        uint16_t size = ospfHeader.getPacketLen();
+        uint8_t ipVersion = static_cast<uint8_t>(ipHeader[0] >> 4);
+
+        uint8_t pseudoHeader[40];
+        if (ipVersion == 4)
+        {
+            std::memcpy(pseudoHeader, ipHeader + 12, 8); // source + destination
+            pseudoHeader[8] = 0x00;
+            pseudoHeader[9] = IP_OSPF;
+            utils::write<uint16_t>(pseudoHeader + 10, size);
+            security::checksum::calculateChecksum(ospfHeader.buffer, size, 12, 2, pseudoHeader, 12);
+        }
+        else
+        {
+            std::memcpy(pseudoHeader, ipHeader + 8, 32); // source + destination
+            utils::write<uint32_t>(pseudoHeader + 32, static_cast<uint32_t>(size));
+            std::memset(pseudoHeader + 36, 0, 3);
+            pseudoHeader[39] = IP_OSPF;
+            security::checksum::calculateChecksum(ospfHeader.buffer, size, 12, 2, pseudoHeader, 40);
+        }
+
+        if (ospfHeader.getChecksum() != received)
             return; // Invalid checksum
     }
     // RFC 5340 §4.4.1: discard packets sourced by this router itself

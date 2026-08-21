@@ -21,6 +21,7 @@
 #include "processing/Process.h"
 #include "hardware/HardwareManager.h"
 #include "InterfaceManager.h"
+#include "packet/headers/EthernetHeader.hpp"
 
 #include "eigrp/core/Eigrp.h"
 #include "ospf/OspfProcess.h"
@@ -50,6 +51,7 @@ Interface::Interface(const InterfaceCreation& cfgs)
 
 void Interface::drainQueuedPackets()
 {
+    // Drain queued PacketBuilders before tx is deleted; ~Arp()/~Ndp() run too late.
     arp.clear();
     ndp.clear();
 }
@@ -57,6 +59,7 @@ void Interface::drainQueuedPackets()
 Interface::~Interface()
 {
     cleanupInterface();
+
     drainQueuedPackets();
 
     if (!debug)
@@ -285,11 +288,47 @@ void Interface::shutdown(bool shut)
         if (getVRF()->global.isIPv6UnicastRouting()) ndp.shutdown();
         stateChange(StateChange::IF_DOWN);
     }
-    else if (!shut) 
+    else if (!shut)
     {
         arp.initiateArp();
         if (getVRF()->global.isIPv6UnicastRouting()) ndp.initiateNdp();
+        reannounceAddresses();
         stateChange(StateChange::IF_READY);
+    }
+}
+
+void Interface::reannounceAddresses()
+{
+    if (!arp.isShutdown())
+    {
+        if (configs.ipv4.hasPrimaryAddress())
+        {
+            types::IPv4Address primary = configs.ipv4.getPrimaryAddress();
+            arp.sendReply(utils::read<uint64_t, 6>(ETHERNET_MAC_BROADCAST), primary);
+            arp.sendReply(utils::read<uint64_t, 6>(ETHERNET_MAC_BROADCAST), primary);
+        }
+
+        for (const types::IPv4Address& secondary : configs.ipv4.getSecondaryList())
+        {
+            arp.sendReply(utils::read<uint64_t, 6>(ETHERNET_MAC_BROADCAST), secondary);
+            arp.sendReply(utils::read<uint64_t, 6>(ETHERNET_MAC_BROADCAST), secondary);
+        }
+    }
+
+    if (!ndp.isShutdown())
+    {
+        std::lock_guard<std::mutex> lock(configs.ipv6.ipMutex);
+
+        if (configs.ipv6.linkLocalAddress && configs.ipv6.linkLocalAddress->tentative)
+            ndp.duplicateAddressDetection(*configs.ipv6.linkLocalAddress);
+
+        for (auto* addr : configs.ipv6.globalAddresses)
+            if (addr && addr->tentative)
+                ndp.duplicateAddressDetection(*addr);
+
+        for (auto* addr : configs.ipv6.uniqueLocalAddresses)
+            if (addr && addr->tentative)
+                ndp.duplicateAddressDetection(*addr);
     }
 }
 
@@ -340,6 +379,13 @@ void Interface::enqueuePacket(processing::PacketBuilder& packetInfo)
 
 void Interface::processIngress(uint8_t* packet, size_t size)
 {
+    if (size >= sizeof(packet::EthernetHeaderRaw))
+    {
+        uint64_t srcMac = utils::read<uint64_t, 6>(packet + offsetof(packet::EthernetHeaderRaw, sourceMac));
+        if (srcMac == static_cast<uint64_t>(configs.hwInfo.mac))
+            return;
+    }
+
     rxFrames.fetch_add(1, std::memory_order_relaxed);
     processing::PacketInfo packetInfo;
     processing::inspect(packetInfo, packet, size);
@@ -347,7 +393,7 @@ void Interface::processIngress(uint8_t* packet, size_t size)
     processing::processPacket(packet, size, packetInfo, routingInstance, this);
 }
 
-void Interface::startThreads() 
+void Interface::startThreads()
 {
     // Add the interface to the TX Queue manager
     core::VirtualRouter* vrf = getVRF();

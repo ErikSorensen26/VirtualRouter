@@ -189,7 +189,7 @@ void OspfInterface::election()
     uint8_t  selfPrio = configs.get<config::OspfInterface::PRIORITY>().load();
 
     const uint32_t prevDr = dr.rid.load(std::memory_order_relaxed);
-    const uint32_t prevBdr = dr.rid.load(std::memory_order_relaxed);
+    const uint32_t prevBdr = bdr.rid.load(std::memory_order_relaxed);
     const bool wasDr  = (prevDr  == selfRid);
     const bool wasBdr = (prevBdr == selfRid);
 
@@ -240,8 +240,9 @@ void OspfInterface::election()
 
         for (const auto& c : eligible)
         {
-            if (c.claimedBdr == c.rid)
-                continue;
+            if (c.claimedDr == c.rid)
+                continue; // already claims DR
+
             if (c.claimedBdr == c.rid)
             {
                 if (!declaredBdr || best(c, *declaredBdr))

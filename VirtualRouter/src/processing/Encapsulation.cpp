@@ -131,6 +131,42 @@ bool encapsulate(PacketBuilder& packet)
                 security::checksum::calculateChecksum(header.buffer, header.length, 2, 2);
                 break;
             }
+            case HeaderType::OSPFV2:
+            {
+                break;
+            }
+            case HeaderType::OSPFV3:
+            {
+                uint16_t size = static_cast<uint16_t>(packet.bufferOffset - (header.buffer - packetBuffer));
+                auto ipIt = std::find_if(
+                    std::make_reverse_iterator(packet.getHeaders() + i),
+                    std::make_reverse_iterator(packet.getHeaders()),
+                    [](const BuildEntry& h) { return h.type == HeaderType::IPV4 || h.type == HeaderType::IPV6; }
+                );
+                if (ipIt == std::make_reverse_iterator(packet.getHeaders())) return false;
+                const BuildEntry& ip = *ipIt;
+
+                if (ip.type == HeaderType::IPV4)
+                {
+                    uint8_t pseudoHeader[12];
+                    std::memcpy(pseudoHeader, ip.buffer + 12, 8);
+                    pseudoHeader[8] = 0x00;
+                    pseudoHeader[9] = IP_OSPF;
+                    utils::write<uint16_t>(pseudoHeader + 10, size);
+                    security::checksum::calculateChecksum(header.buffer, size, 12, 2, pseudoHeader, 12);
+                }
+                else if (ip.type == HeaderType::IPV6)
+                {
+                    uint8_t pseudoHeader[40];
+                    std::memcpy(pseudoHeader, ip.buffer + 8, 32);
+                    utils::write<uint32_t>(pseudoHeader + 32, static_cast<uint32_t>(size));
+                    std::memset(pseudoHeader + 36, 0, 3);
+                    pseudoHeader[39] = IP_OSPF;
+                    security::checksum::calculateChecksum(header.buffer, size, 12, 2, pseudoHeader, 40);
+                }
+                else return false;
+                break;
+            }
             case HeaderType::DHCP: break;
             case HeaderType::DHCPV6: break;
             case HeaderType::DHCPV6_RELAY: break;

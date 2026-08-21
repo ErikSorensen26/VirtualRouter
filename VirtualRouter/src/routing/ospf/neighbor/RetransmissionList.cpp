@@ -138,7 +138,8 @@ void RetransmissionList<Key, Record>::markBurst(Key& key)
     if (auto it = outboundInfo.find(key); it != outboundInfo.end())
     {
         it->second.retransmissions++;
-        if (it->second.retransmissions >= getMaxRetransmission())
+        auto maxRetransmission = getMaxRetransmission();
+        if (maxRetransmission.has_value() && it->second.retransmissions >= *maxRetransmission)
         {
             erase(key);
             return;
@@ -156,9 +157,15 @@ bool RetransmissionList<Key, Record>::burstActive() const
 }
 
 template <typename Key, typename Record>
-uint8_t RetransmissionList<Key, Record>::getMaxRetransmission()
+std::optional<uint8_t> RetransmissionList<Key, Record>::getMaxRetransmission()
 {
     static constexpr uint8_t kDefaultMaxRetransmission = 5;
+
+    const bool disabled = iface.area.isDcCompatible()
+        ? processCfgs.get<config::Ospf::RETRANSMISSION_DC_LIMIT_DISABLED>().load()
+        : processCfgs.get<config::Ospf::RETRANSMISSION_NON_DC_LIMIT_DISABLED>().load();
+    if (disabled)
+        return std::nullopt; // "limit retransmissions dc/non-dc disable": retry forever, never give up.
 
     auto limit = iface.area.isDcCompatible()
         ? processCfgs.get<config::Ospf::RETRANSMISSION_DC_LIMIT>()

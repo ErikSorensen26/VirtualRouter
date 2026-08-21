@@ -412,6 +412,19 @@ private:
      */
     void stateChange(StateChange state);
 
+    /**
+     * @brief Replays address announcements suppressed while the interface was down.
+     *
+     * `setIPv4`/`setIPv6` only broadcast gratuitous ARP or kick off NDP DAD when the
+     * interface is administratively up at the moment the address is configured; while
+     * shut down, ARP is not "running" and `Ndp::duplicateAddressDetection` bails out on
+     * `shutdownFlag`. Addresses configured during that window would otherwise sit
+     * unannounced/tentative forever, since bring-up alone never revisits them. Called
+     * from `shutdown(false)` to replay gratuitous ARP for the configured IPv4 addresses
+     * and restart DAD for any IPv6 address still tentative.
+     */
+    void reannounceAddresses();
+
     bool debug; ///< Debug flag for verbose logging.
 
     std::atomic<bool> threadsRunning; ///< True when Rx/Tx threads and protocol modules are active.

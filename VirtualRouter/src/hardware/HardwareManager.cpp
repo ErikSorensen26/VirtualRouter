@@ -322,10 +322,6 @@ bool HardwareManager::bringUp(const std::string& ifname)
 
 bool HardwareManager::bringDown(const std::string& ifname)
 {
-    return false;
-    if (allowDummies)
-        return false;
-
     if (ifname.size() >= IFNAMSIZ)
         return false;
 

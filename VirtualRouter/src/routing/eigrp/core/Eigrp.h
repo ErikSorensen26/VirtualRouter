@@ -21,7 +21,9 @@
 #include <utility>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <unordered_set>
+#include <vector>
 
 #include <ControlScheduler.h>
 
@@ -242,6 +244,32 @@ public:
      * @brief Erases the unicast neighbor context for @p addr, if present.
      */
     void eraseNeighborContext(const types::IPAddress& addr);
+
+    /**
+     * @brief Entry point for an EIGRP packet received on one of this process's interfaces.
+     *
+     * Called from the hardware RX path, which sits outside the EIGRP subsystem
+     * tree and must not reach into `EigrpInterface`/`ReliableTransport` directly
+     * or touch neighbor/topology state itself. This posts the actual handling
+     * onto `scheduler` so that state is only ever touched from this process's
+     * own control thread, per the concurrency model documented on this class.
+     *
+     * @param ifaceKey    Interface the packet arrived on.
+     * @param packetCopy  Owned copy of the packet region from the start of the
+     *                    IP payload through the end of the EIGRP TLV trailer.
+     *                    The original RX buffer is transient and reused as
+     *                    soon as the caller returns, so it cannot be deferred
+     *                    onto the scheduler by reference - the caller copies
+     *                    it up front instead.
+     * @param eigrpOffset Byte offset of the EIGRP header within `*packetCopy`.
+     * @param trailSize   Size of the TLV trailer following the EIGRP header.
+     * @param neighborIp  Source IP address the packet arrived from.
+     * @param multicast   True if the packet was sent to the EIGRP multicast group.
+     */
+    void handleIncomingPacket(interface::InterfaceKey ifaceKey,
+                               std::shared_ptr<std::vector<uint8_t>> packetCopy,
+                               size_t eigrpOffset, size_t trailSize,
+                               types::IPAddress neighborIp, bool multicast);
 
 private:
     friend class ::Internal_EigrpTest;

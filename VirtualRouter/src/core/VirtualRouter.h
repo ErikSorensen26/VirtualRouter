@@ -11,6 +11,7 @@
 #ifndef VIRTUAL_ROUTER_H
 #define VIRTUAL_ROUTER_H
 
+#include <functional>
 #include <string>
 #include <set>
 #include <AddressFamily.hpp>
@@ -239,6 +240,42 @@ public:
      * @return `true` if a matching process was found and removed.
      */
     bool removeOspfv3(uint16_t id, types::AddressFamily af);
+
+    /**
+     * @brief Invokes `fn(OspfProcess&)` for every OSPFv2 process on this VRF.
+     *
+     * Used by the hardware RX path to find which (locally-significant,
+     * never carried on the wire) OSPF process owns the interface a received
+     * packet arrived on, since a VRF may run more than one `router ospf N`.
+     *
+     * @note Out-of-line in VirtualRouter.cpp, not a template: `OspfProcess` is
+     *       only forward-declared here, and a template body's non-dependent
+     *       statements (the plain iteration over `ospfList`) get checked at
+     *       definition time regardless - it would need the complete type in
+     *       every translation unit that merely includes this header.
+     */
+    void forEachOspf(const std::function<void(routing::ospf::OspfProcess&)>& fn);
+
+    /**
+     * @brief Invokes `fn(OspfProcess&)` for every OSPFv3 process (both address
+     *        families) on this VRF. See @ref forEachOspf.
+     */
+    void forEachOspfv3(const std::function<void(routing::ospf::OspfProcess&)>& fn);
+
+    /**
+     * @brief Tears down every EIGRP AS, OSPFv2 process, and OSPFv3 instance on
+     *        this VRF, without destroying the VRF itself.
+     *
+     * Destroying these process objects is what cancels and drains their
+     * per-interface protocol timers (e.g. OSPF's Hello timer - see
+     * `OspfInterfaceBase`/`InterfaceTimers`), which reach back into this VRF's
+     * `interface::Interface` objects on cancellation. Callers that are about to
+     * destroy interfaces and/or this VRF (Global::reset(), ~Global()) must call
+     * this first and let it finish, so no protocol timer callback can still be
+     * touching an Interface when it goes away. `~VirtualRouter()` also calls
+     * this, so a bare `delete`/erase of a VirtualRouter remains safe on its own.
+     */
+    void stopRoutingProtocols();
 
     // GLOBAL HELPERS
 

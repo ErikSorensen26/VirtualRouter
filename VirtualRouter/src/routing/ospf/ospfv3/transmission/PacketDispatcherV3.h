@@ -68,8 +68,9 @@ public:
      * @param ospfHeader  Decoded OSPFv3 common header.
      * @param neighborIp  Source IPv6 address of the packet.
      * @param multicast   True if the packet arrived on an AllSPFRouters multicast address.
+     * @param ipHeader    Pointer to the start of the enclosing IP header (v4 or v6)
      */
-    void handleIncoming(const packet::Ospfv3Header& ospfHeader, const uint8_t* neighborIp, bool multicast);
+    void handleIncoming(const packet::Ospfv3Header& ospfHeader, const uint8_t* neighborIp, bool multicast, const uint8_t* ipHeader);
 
     void sendHello() override;
     void sendUnicastHello(Neighbor& nbr) override;

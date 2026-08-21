@@ -82,13 +82,20 @@ void PacketDispatcherV2::finalizeHeader(packet::Ospfv2Header& hdr, OspfBuilder& 
 
         // Crypto auth covers the checksum via HMAC, so it is only computed for NULL/SIMPLE.
         hdr.setChecksum(0);
-        ChecksumFletcher check;
-        check.addBytes(hdr.buffer, 12); // version..areaID (up to checksum field)
-        check.addBytes(hdr.buffer + 14, hdr.getPacketLen() - 14); // authType..end of packet
-        hdr.setChecksum(check.finalize());
+        uint32_t sum = 0;
+        auto addRange = [&sum](const uint8_t* p, size_t n) {
+            size_t i = 0;
+            for (; i + 1 < n; i += 2) sum += (static_cast<uint32_t>(p[i]) << 8) | p[i + 1];
+            if (i < n) sum += static_cast<uint32_t>(p[i]) << 8;
+        };
+        addRange(hdr.buffer, 16); // version..authType, checksum field included as zero
+        addRange(hdr.buffer + 24, builder.offset); // full trailing region (body + LLS), past the 8-byte auth field
+        while (sum >> 16) sum = (sum & 0xFFFF) + (sum >> 16);
+        hdr.setChecksum(static_cast<uint16_t>(~sum));
     }
 
     hdr.setTrailSize(builder.offset);
+    builder.pkt.addTLVSize(builder.offset);
 }
 
 void PacketDispatcherV2::sendHello()
@@ -109,7 +116,14 @@ void PacketDispatcherV2::sendHello()
     if (!buildHello(builder, lls)) return;
 
     finalizeHeader(*ospfHeader, builder, lls);
-    transmit(pkt);
+    // Hello always goes to AllSPFRouters (RFC 2328 SS9.5) - unlike Update/LSAck,
+    // it is not conditional on this router's DR/BDR status. A brand new
+    // interface cannot be DR yet (DR election itself depends on Hello
+    // exchange), so relying on transmit()'s DR-conditional default here sent
+    // Hello to AllDRouters (224.0.0.6) instead, which other not-yet-DR/BDR
+    // routers never join.
+    types::IPAddress allSpfRouters(OSPFV2_ALL_SPF_ROUTERS, types::AddressFamily::IPv4);
+    transmit(pkt, &allSpfRouters);
 }
 
 void PacketDispatcherV2::sendUnicastHello(Neighbor& nbr)

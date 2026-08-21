@@ -72,11 +72,18 @@ void PacketDispatcherV2::handleIncoming(const packet::Ospfv2Header& ospfHeader, 
             // Simple still requires checksum so no break.
         default:
         {
-            // Process Checksum
-            ChecksumFletcher check;
-            check.addBytes(ospfHeader.buffer, 12); // Up to checksum field
-            check.addBytes(ospfHeader.buffer + 14, ospfHeader.getPacketLen() - 14); // To end of header
-            uint16_t checksum = check.finalize();
+            uint32_t sum = 0;
+            auto addRange = [&sum](const uint8_t* p, size_t n) {
+                size_t i = 0;
+                for (; i + 1 < n; i += 2) sum += (static_cast<uint32_t>(p[i]) << 8) | p[i + 1];
+                if (i < n) sum += static_cast<uint32_t>(p[i]) << 8;
+            };
+            addRange(ospfHeader.buffer, 12); // version..areaID
+            sum += 0;                        // checksum field, treated as zero (no-op, kept for clarity)
+            addRange(ospfHeader.buffer + 14, 2); // authType
+            addRange(ospfHeader.buffer + 24, ospfHeader.getTrail().size()); // full trailing region (body + LLS), past the 8-byte auth field
+            while (sum >> 16) sum = (sum & 0xFFFF) + (sum >> 16);
+            uint16_t checksum = static_cast<uint16_t>(~sum);
             if (checksum != ospfHeader.getChecksum())
                 return; // Invalid checksum
         }

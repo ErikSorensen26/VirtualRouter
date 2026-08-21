@@ -2,10 +2,16 @@
 
 #include <VirtualRouter.h>
 #include <Global.h>
+#include <memory>
+#include <vector>
+
+#include <array>
+#include <cstring>
 
 #include "Process.h"
 #include "eigrp/core/Eigrp.h"
 #include "eigrp/interface/EigrpInterface.h"
+#include "ospf/OspfProcess.h"
 #include "interface/Interface.h"
 #include "dhcp/dhcpv4/DhcpServer.h"
 #include "dhcp/dhcpv4/DhcpClient.h"
@@ -152,27 +158,71 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, core::Vi
             }
             case packet::HeaderType::EIGRP:
             {
-                // TODO: EIGRP packet-RX dispatch needs a proper enqueue-based
-                // entry point on Eigrp (this call site is outside the EIGRP
-                // subsystem tree and must not reach EigrpInterface directly).
-                // if (!ipStart) break;
-                // GET_HEADER_EXTENDED(eigrp, packet::EigrpHeader)
-                // uint32_t as = eigrp.getAutonomousSystem();
-                // auto* it = vrf->getEigrpAutonomousSystem(as);
-                // if (it)
-                // {
-                //     auto ifaceKey = interface->configs.key;
-                //     if (addressFamily == types::AddressFamily::IPv4 && it->ipv4)
-                //     {
-                //         auto* eigrpIface = it->ipv4->getInterface(ifaceKey);
-                //         if (eigrpIface) eigrpIface->getRtp().handleIncoming(ipStart, eigrp, typedAddress, typedAddress.isMulticast());
-                //     }
-                //     else if (addressFamily == types::AddressFamily::IPv6 && it->ipv6)
-                //     {
-                //         auto* eigrpIface = it->ipv6->getInterface(ifaceKey);
-                //         if (eigrpIface) eigrpIface->getRtp().handleIncoming(ipStart, eigrp, typedAddress, typedAddress.isMulticast());
-                //     }
-                // }
+                if (!ipStart) break;
+                GET_HEADER_EXTENDED(eigrp, packet::EigrpHeader)
+                uint16_t as = eigrp.getAutonomousSystem();
+                auto* proc = vrf->getEigrpAutonomousSystem(as, addressFamily);
+                if (proc)
+                {
+                    size_t span = static_cast<size_t>((eigrp.buffer + packet::EigrpHeader::fixedSize + eigrp.getTrail().size()) - ipStart);
+                    auto packetCopy = std::make_shared<std::vector<uint8_t>>(ipStart, ipStart + span);
+                    size_t eigrpOffset = static_cast<size_t>(eigrp.buffer - ipStart);
+
+                    proc->handleIncomingPacket(interface->configs.key, std::move(packetCopy),
+                                                eigrpOffset, eigrp.getTrail().size(),
+                                                typedAddress, typedAddress.isMulticast());
+                }
+                break;
+            }
+            case packet::HeaderType::OSPFV2:
+            case packet::HeaderType::OSPFV3:
+            {
+                if (!ipStart) break;
+                bool isV3 = entry.type == packet::HeaderType::OSPFV3;
+
+                uint8_t* base = const_cast<uint8_t*>(data) + entry.offset;
+                size_t fixedSize = isV3 ? packet::Ospfv3Header::fixedSize : packet::Ospfv2Header::fixedSize;
+                size_t trailSize = entry.size - fixedSize;
+
+                uint32_t areaId;
+                if (isV3)
+                {
+                    packet::Ospfv3Header hdr;
+                    hdr.setBuffer(base);
+                    if (trailSize != 0) hdr.setTrail(base + fixedSize, trailSize);
+                    areaId = hdr.getAreaID();
+                }
+                else
+                {
+                    packet::Ospfv2Header hdr;
+                    hdr.setBuffer(base);
+                    if (trailSize != 0) hdr.setTrail(base + fixedSize, trailSize);
+                    areaId = hdr.getAreaID();
+                }
+
+                uint32_t ospfIfaceId = isV3
+                    ? interface->configs.key.getId()
+                    : interface->configs.ipv4.getPrimaryAddress().addr;
+
+                size_t span = static_cast<size_t>((base + fixedSize + trailSize) - ipStart);
+                auto packetCopy = std::make_shared<std::vector<uint8_t>>(ipStart, ipStart + span);
+                size_t ospfOffset = static_cast<size_t>(base - ipStart);
+
+                std::array<uint8_t, 16> neighborBytes{};
+                if (address) std::memcpy(neighborBytes.data(), address, isV3 ? 16 : 4);
+
+                if (isV3)
+                {
+                    vrf->forEachOspfv3([&](routing::ospf::OspfProcess& proc) {
+                        proc.handleIncomingPacket(ospfIfaceId, areaId, packetCopy, ospfOffset, trailSize, neighborBytes, typedAddress.isMulticast());
+                    });
+                }
+                else
+                {
+                    vrf->forEachOspf([&](routing::ospf::OspfProcess& proc) {
+                        proc.handleIncomingPacket(ospfIfaceId, areaId, packetCopy, ospfOffset, trailSize, neighborBytes, typedAddress.isMulticast());
+                    });
+                }
                 break;
             }
             case packet::HeaderType::DHCP:

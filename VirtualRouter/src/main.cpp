@@ -45,16 +45,16 @@ void printHelp(const char* prog)
 
 bool handleArgs(int& argc, char* argv[], StartupArgs& opts)
 {
-    const char* shortOpts = "hu:t:dc:s:H:";
+    const char* shortOpts = "hu:t:Ddc:s:H:";
     const option longOpts[] = {
         {"help",          no_argument,       nullptr, 'h'},
         {"unix",          required_argument, nullptr, 'u'},
         {"tcp",           required_argument, nullptr, 't'},
-        {"no-default",    no_argument,       nullptr, 'd'},
+        {"no-default",    no_argument,       nullptr, 'D'},
         {"config",        required_argument, nullptr, 'c'},
         {"startup-config",required_argument, nullptr, 's'},
         {"hw-config",     required_argument, nullptr, 'H'},
-        {"debug",         no_argument,       nullptr, 'D'},
+        {"debug",         no_argument,       nullptr, 'd'},
         {nullptr, 0, nullptr, 0}
     };
 
@@ -124,6 +124,7 @@ int main(int argc, char* argv[])
     cli::FileSystem fs;
     core::GlobalProperties props(fs);
     props.enableRouting = true;
+    props.stfs = opts.fs;
     props.tree = new cli::tree::CommandTree(COMMAND_TREE, COMMAND_TREE_BIN);
 
     core::Global* global = new core::Global(props);

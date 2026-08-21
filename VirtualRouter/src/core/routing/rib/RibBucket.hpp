@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include "RibEntry.hpp"
@@ -56,10 +57,18 @@ class RibBucket
 public:
     std::vector<RibEntry<AddrType>> routes;  ///< All candidate routes for this prefix.
 
-    RibEntry<AddrType>* bestEntry = nullptr; ///< Pointer into `routes` for the current best route.
-    RibEntry<AddrType>* prevBest  = nullptr; ///< Previous best route before the last `selectBest()` call; used by `RouteWatcher`.
-
     std::atomic<RibEntry<AddrType>*> fibEntry{nullptr}; ///< RCU-protected heap copy of the best entry, read by the FIB.
+
+private:
+    std::optional<RibEntry<AddrType>> bestEntryValue; ///< Snapshot of the current best route.
+    std::optional<RibEntry<AddrType>> prevBestValue;  ///< Snapshot of the best route before the last `selectBest()` call; used by `RouteWatcher`.
+
+public:
+    /// Returns a stable pointer to the current best-route snapshot, or `nullptr`.
+    RibEntry<AddrType>* bestEntry() noexcept { return bestEntryValue ? &*bestEntryValue : nullptr; }
+
+    /// Returns a stable pointer to the best-route snapshot from before the last `selectBest()`, or `nullptr`.
+    RibEntry<AddrType>* prevBest() noexcept { return prevBestValue ? &*prevBestValue : nullptr; }
 
     RibBucket() noexcept = default;
 
@@ -215,11 +224,11 @@ public:
 
     /**
      * @brief Return the overall best route across all sources and processes.
-     * @return `bestEntry`, which is updated by every call to `selectBest()`.
+     * @return The current best-route snapshot, updated by every call to `selectBest()`.
      */
     RibEntry<AddrType>* getBestRoute() noexcept
     {
-        return bestEntry;
+        return bestEntry();
     }
 
     // INTERNAL
@@ -227,27 +236,29 @@ public:
     /**
      * @brief Recompute the best route and atomically publish a heap copy to the FIB.
      *
-     * Sets `prevBest` to the old `bestEntry`, then scans `routes` for the
-     * entry with the lowest (adminDistance, metric).  A fresh heap copy is
-     * swapped into `fibEntry`; the displaced pointer is retired via
-     * `RCU::retire` so in-flight data-plane readers finish safely.
+     * Sets `prevBest()` to the old `bestEntry()` snapshot, then scans `routes`
+     * for the entry with the lowest (adminDistance, metric) and snapshots it
+     * as the new best. A fresh heap copy is also swapped into `fibEntry`; the
+     * displaced pointer is retired via `RCU::retire` so in-flight data-plane
+     * readers finish safely.
      */
     void selectBest() noexcept
     {
-        prevBest  = bestEntry;
-        bestEntry = nullptr;
+        prevBestValue = bestEntryValue;
 
+        RibEntry<AddrType>* winner = nullptr;
         for (RibEntry<AddrType>& r : routes)
         {
-            if (!bestEntry ||
-                r.adminDistance < bestEntry->adminDistance ||
-                (r.adminDistance == bestEntry->adminDistance && r.metric < bestEntry->metric))
-                bestEntry = &r;
+            if (!winner ||
+                r.adminDistance < winner->adminDistance ||
+                (r.adminDistance == winner->adminDistance && r.metric < winner->metric))
+                winner = &r;
         }
+        bestEntryValue = winner ? std::optional<RibEntry<AddrType>>(*winner) : std::nullopt;
 
         // Always push a fresh heap copy into the FIB so RCU readers are never
         // exposed to a pointer into the (potentially reallocating) routes vector.
-        RibEntry<AddrType>* copy = bestEntry ? new RibEntry<AddrType>(*bestEntry) : nullptr;
+        RibEntry<AddrType>* copy = winner ? new RibEntry<AddrType>(*winner) : nullptr;
         RibEntry<AddrType>* old  = fibEntry.exchange(copy, std::memory_order_acq_rel);
         if (old) utils::RCU::retire(deleter, old);
     }
@@ -268,8 +279,8 @@ public:
         RibEntry<AddrType>* old = fibEntry.exchange(nullptr, std::memory_order_acq_rel);
         if (old) utils::RCU::retire(deleter, old);
         routes.clear();
-        bestEntry = nullptr;
-        prevBest  = nullptr;
+        bestEntryValue.reset();
+        prevBestValue.reset();
     }
 };
 

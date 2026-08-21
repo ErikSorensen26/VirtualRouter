@@ -212,9 +212,12 @@ private:
      * @brief Returns the per-entry retransmission limit from configuration.
      *
      * Reads `RETRANSMISSION_DC_LIMIT` for demand circuits or
-     * `RETRANSMISSION_NON_DC_LIMIT` for regular interfaces.
+     * `RETRANSMISSION_NON_DC_LIMIT` for regular interfaces. Returns
+     * `std::nullopt` when the corresponding `..._DISABLED` flag is set
+     * (`limit retransmissions dc/non-dc disable`), meaning entries are
+     * retransmitted indefinitely and never dropped for exceeding a count.
      */
-    uint8_t getMaxRetransmission();
+    std::optional<uint8_t> getMaxRetransmission();
 
     size_t   cursor = 0;          ///< Index of the next entry to deliver in the current burst.
     uint32_t burstRemaining = 0;  ///< Number of entries remaining in the current burst.

@@ -207,8 +207,15 @@ public:
     template <types::IsIPPrefix Prefix>
     RibBucket<typename Prefix::Addr>* lookupBucket(const Prefix& prefix, utils::RCU::Guard&)
     {
-        return rib4.lookupBucket(PrefixKey<decltype(Prefix::Addr)>{prefix.addr, prefix.prefixLength});
-    } 
+        using AddrType = typename Prefix::Addr;
+        PrefixKey<AddrType> key{prefix.addr, prefix.prefixLength};
+        if constexpr (std::is_same_v<AddrType, uint32_t>)
+            return rib4.lookupBucket(key);
+        else if constexpr (std::is_same_v<AddrType, __uint128_t>)
+            return rib6.lookupBucket(key);
+        else
+            static_assert(always_false<AddrType>, "Unsupported Address Type");
+    }
 
     // WATCH SUBSCRIPTIONS
 

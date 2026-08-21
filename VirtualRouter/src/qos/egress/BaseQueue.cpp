@@ -79,8 +79,6 @@ void BaseQueue::runLoop()
         }
         if (sent) out.flush();
 
-        wakeSignal.store(0, std::memory_order_release);
-
         sent = false;
         while ((pkt = tryDequeue()) != nullptr)
         {
@@ -91,9 +89,13 @@ void BaseQueue::runLoop()
         }
         if (sent) out.flush();
 
-        uint32_t expected = 0;
-        if (wakeSignal.compare_exchange_strong(expected, 0, std::memory_order_acquire))
-            futex_wait(&wakeSignal, 0);
+        if (wakeSignal.exchange(0, std::memory_order_acq_rel) != 0)
+            continue; // something signalled during/after our drain - go around again
+
+        if (!running.load(std::memory_order_acquire))
+            break;
+
+        futex_wait(&wakeSignal, 0);
     }
 
     bool sent = false;

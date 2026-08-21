@@ -181,6 +181,23 @@ bool decapsulate(PacketInfo& packet, uint8_t* data, size_t len)
                 packet.headers[packet.count++] = { packet::HeaderType::EIGRP, packet.offset, eigrpSize };
                 return true;
             }
+            case IP_OSPF:
+            {
+                size_t ospfSize = len - packet.offset;
+                if (lastType == packet::HeaderType::IPV4)
+                {
+                    packet::Ospfv2Header ospf;
+                    if (unlikely(!ospf.parse(data, len, ospfSize, packet.offset))) return false;
+                    packet.headers[packet.count++] = { packet::HeaderType::OSPFV2, packet.offset, ospfSize };
+                }
+                else
+                {
+                    packet::Ospfv3Header ospf;
+                    if (unlikely(!ospf.parse(data, len, ospfSize, packet.offset))) return false;
+                    packet.headers[packet.count++] = { packet::HeaderType::OSPFV3, packet.offset, ospfSize };
+                }
+                return true;
+            }
             case IP_IPV4:
             {
                 packet::IPv4Header ip;

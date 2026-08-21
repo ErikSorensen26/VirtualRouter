@@ -15,6 +15,9 @@ TimerManager::TimerManager(Eigrp& process, core::ProcessQueue& scheduler)
 
 void TimerManager::startSIATimer(OutgoingQuery& query, Neighbor& neighbor)
 {
+    if (process.getConfigs().get<config::Eigrp::ACTIVE_DISABLED>().load())
+        return;
+
     auto siaTimeField = process.getConfigs().get<config::Eigrp::ACTIVE_TIME>();
     uint16_t siaTime = siaTimeField.hasValue() ? siaTimeField.load() : 90;
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::seconds(siaTime);

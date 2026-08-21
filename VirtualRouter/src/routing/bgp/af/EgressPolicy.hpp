@@ -102,18 +102,23 @@ public:
     {
         const uint32_t confedId = getConfedId();
         auto localAsField = sesCfgs.get<config::BgpNeighborSession::LOCAL_AS>();
-        const bool localAsEnabled = localAsField.hasValue();
+
+        if (!localAsField.hasValue())
+        {
+            AsPathSegment& seg = getAsSegment(attrs);
+            seg.asns.insert(seg.asns.begin(), confedId);
+            return;
+        }
+
         const auto localAsTuple = localAsField.load();
         const uint32_t localAs = localAsTuple.as();
         const auto& localAsProps = localAsTuple.props();
 
-        if (localAsEnabled && localAsProps.test(config::bgp::BgpLocalAsProps::NO_PREPEND))
+        if (localAsProps.test(config::bgp::BgpLocalAsProps::NO_PREPEND))
             return; // no-prepend: advertise the AS-PATH unchanged
 
         AsPathSegment& seg = getAsSegment(attrs);
-        if (!localAsEnabled)
-            seg.asns.insert(seg.asns.begin(), confedId);
-        else if (localAsProps.test(config::bgp::BgpLocalAsProps::REPLACE_AS))
+        if (localAsProps.test(config::bgp::BgpLocalAsProps::REPLACE_AS))
             seg.asns.insert(seg.asns.begin(), localAs);
         else
         {

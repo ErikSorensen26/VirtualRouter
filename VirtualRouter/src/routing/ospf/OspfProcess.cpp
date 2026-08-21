@@ -10,6 +10,12 @@
 #include "area/Area.h"
 #include "area/IntraOriginator.h"
 #include "configs/FieldAccessor.hpp"
+#include "interface/OspfInterface.h"
+#include "interface/OspfInterfaceBase.h"
+#include "ospfv2/transmission/PacketDispatcherV2.h"
+#include "ospfv3/transmission/PacketDispatcherV3.h"
+#include "packet/headers/Ospfv2Header.hpp"
+#include "packet/headers/Ospfv3Header.hpp"
 
 namespace routing::ospf
 {
@@ -240,5 +246,42 @@ uint32_t OspfProcess::getRouterId() const
     const auto id = configs.get<config::Ospf::ROUTER_ID>();
     if (id.hasValue()) return id.load();
     return priv.rid.load(std::memory_order_relaxed);
+}
+
+void OspfProcess::handleIncomingPacket(uint32_t ospfIfaceId, uint32_t areaId,
+                                        std::shared_ptr<std::vector<uint8_t>> packetCopy,
+                                        size_t ospfOffset, size_t trailSize,
+                                        std::array<uint8_t, 16> neighborIp, bool multicast)
+{
+    scheduler.post([this, ospfIfaceId, areaId, packetCopy = std::move(packetCopy), ospfOffset, trailSize, neighborIp, multicast]
+    {
+        OspfInterfaceBase* target = nullptr;
+        ifaceMgr.forEach([&](const OspfInterfaceId& id, OspfInterfaceBase& iface) -> bool {
+            if (id.interfaceId == ospfIfaceId && id.area == areaId)
+            {
+                target = &iface;
+                return true;
+            }
+            return false;
+        });
+        if (!target) return; // not ours: no matching interface on this process
+
+        uint8_t* buf = packetCopy->data();
+
+        if (isV3)
+        {
+            packet::Ospfv3Header hdr;
+            hdr.setBuffer(buf + ospfOffset);
+            if (trailSize != 0) hdr.setTrail(buf + ospfOffset + packet::Ospfv3Header::fixedSize, trailSize);
+            static_cast<PacketDispatcherV3&>(target->dispatcher).handleIncoming(hdr, neighborIp.data(), multicast, buf);
+        }
+        else
+        {
+            packet::Ospfv2Header hdr;
+            hdr.setBuffer(buf + ospfOffset);
+            if (trailSize != 0) hdr.setTrail(buf + ospfOffset + packet::Ospfv2Header::fixedSize, trailSize);
+            static_cast<PacketDispatcherV2&>(target->dispatcher).handleIncoming(hdr, neighborIp.data(), multicast);
+        }
+    });
 }
 } // namespace routing

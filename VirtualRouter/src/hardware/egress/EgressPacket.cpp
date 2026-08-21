@@ -3,9 +3,13 @@
 #include <arpa/inet.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
+#include <sys/ioctl.h>
+#include <linux/if.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <cstring>
+#include <cstdio>
+#include <cerrno>
 #include <stdexcept>
 #include <iostream>
 
@@ -262,7 +266,26 @@ void EgressPacket::kickKernelCached()
     {
         int err = errno;
         if (err != EAGAIN && err != EWOULDBLOCK && err != EINTR)
-            fprintf(stderr, "kick failed: %s\n", strerror(errno));
+        {
+            fprintf(stderr, "kick failed on %s: %s\n", opts.ifname.c_str(), strerror(errno));
+            reclaimStuckAfterFailedKick();
+        }
+    }
+}
+
+void EgressPacket::reclaimStuckAfterFailedKick()
+{
+    for (uint32_t idx = 0; idx < frameCount; ++idx)
+    {
+        auto* h = reinterpret_cast<tpacket2_hdr*>(frameBase + size_t(idx) * req.tp_frame_size);
+
+        if (h->tp_padding[0] == 2
+            && __atomic_load_n(&h->tp_status, __ATOMIC_ACQUIRE) == TP_STATUS_SEND_REQUEST)
+        {
+            h->tp_padding[0] = 0;
+            __atomic_store_n(&h->tp_status, TP_STATUS_AVAILABLE, __ATOMIC_RELEASE);
+            pushFree(idx);
+        }
     }
 }
 

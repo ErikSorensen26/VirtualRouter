@@ -36,6 +36,11 @@ using ExampleNlriType = bgp::NlriPolicy<types::IPv4Prefix, bgp::LocRibType::LPC_
  * - Recursive next-hop resolution: drops the route if the next-hop cannot be
  *   resolved, or if the resolved entry is a host route (/32) and
  *   BGP_RECURSIVE_HOST is disabled.
+ * - Locally-originated routes (`network` statement; identified by a `nullptr`
+ *   `sourceNeighbor`) have no BGP next-hop attribute to resolve, since they
+ *   never arrived over a session. These instead reuse the forwarding info of
+ *   the underlying non-BGP route (connected / static / IGP) that made the
+ *   exact prefix reachable and qualified it for the network statement.
  *
  * ## Architectural Role
  * ExampleNlri is the glue between the AFI-agnostic AddressFamilyInstance and the
@@ -192,6 +197,24 @@ private:
 
         auto addHop = [&](const bgp::InboundRoute<types::IPv4Prefix>& r) -> bool
         {
+            if (r.sourceNeighbor == nullptr)
+            {
+                utils::RCU::Guard g;
+                const core::RibEntry<uint32_t>* underlying = rib.lookup(r.nlri.addr, g);
+                if (!underlying || underlying->empty())
+                    return false;
+                bool added = false;
+                for (uint8_t i = 0; i < underlying->nextHopCount; ++i)
+                {
+                    const auto& hop = underlying->nextHops[i];
+                    if (hop.nextHop.has_value())
+                        added = entry->addNextHop(*hop.nextHop, hop.iface) || added;
+                    else
+                        added = entry->addNextHopInterface(hop.iface.getId()) || added;
+                }
+                return added;
+            }
+
             auto attrs = r.getPathAttributes();
             auto& nh = attrs.path.nextHop;
             if (!nh.isIPv4()) return false;

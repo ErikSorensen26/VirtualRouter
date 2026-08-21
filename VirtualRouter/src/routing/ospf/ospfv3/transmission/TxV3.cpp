@@ -41,6 +41,7 @@ void PacketDispatcherV3::finalizeHeader(packet::Ospfv3Header& hdr, OspfBuilder& 
     }
 
     hdr.setTrailSize(builder.offset);
+    builder.pkt.addTLVSize(builder.offset);
 }
 
 void PacketDispatcherV3::sendHello()

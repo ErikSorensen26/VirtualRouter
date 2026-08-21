@@ -136,6 +136,7 @@ private:
     void kickKernelCached();
 
     void reclaimImpl(uint32_t limit);
+    void reclaimStuckAfterFailedKick();
 };
 
 } // namespace hardware

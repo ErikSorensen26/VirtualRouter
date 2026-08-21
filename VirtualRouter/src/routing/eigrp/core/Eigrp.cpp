@@ -201,6 +201,26 @@ void Eigrp::broadcastRouteChanges(const std::vector<const RouteInfo*>& changedRo
     }
 }
 
+void Eigrp::handleIncomingPacket(interface::InterfaceKey ifaceKey,
+                                  std::shared_ptr<std::vector<uint8_t>> packetCopy,
+                                  size_t eigrpOffset, size_t trailSize,
+                                  types::IPAddress neighborIp, bool multicast)
+{
+    scheduler.post([this, ifaceKey, packetCopy = std::move(packetCopy), eigrpOffset, trailSize, neighborIp, multicast]
+    {
+        EigrpInterface* eigrpIface = priv.ifaceMgr.getInterface(ifaceKey);
+        if (!eigrpIface) return;
+
+        uint8_t* ipStart = packetCopy->data();
+        packet::EigrpHeader eigrpPacket;
+        eigrpPacket.setBuffer(ipStart + eigrpOffset);
+        if (trailSize != 0)
+            eigrpPacket.setTrail(ipStart + eigrpOffset + packet::EigrpHeader::fixedSize, trailSize);
+
+        eigrpIface->rtp.handleIncoming(ipStart, eigrpPacket, neighborIp, multicast);
+    });
+}
+
 void Eigrp::start()
 {
     calculateRID();

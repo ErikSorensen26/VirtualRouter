@@ -308,7 +308,7 @@ public:
     RibBucket<AddrType>* lookupBucket(PrefixKey<AddrType>& prefixKey) const
     {
         if (auto bucket = table.find(prefixKey); bucket != table.end())
-            return bucket.second;
+            return bucket->second;
         return nullptr;
     }
 

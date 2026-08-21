@@ -494,6 +494,21 @@ private:
                     TreeNavigator::registryIdOf<std::remove_reference_t<decltype(entered)>>(),
                     retTo.ptr, retTo.registry);
             }
+            else if constexpr (config::IsOptionalRefContainer<Visited>)
+            {
+                if (ctx.negate || ctx.defaulted)
+                {
+                    field.reset();
+                    ok = true;
+                    return;
+                }
+
+                auto& entered = field.get();
+                ok = nav.changeMode(
+                    utils::modeOf(bound), static_cast<void*>(&entered),
+                    TreeNavigator::registryIdOf<std::remove_reference_t<decltype(entered)>>(),
+                    retTo.ptr, retTo.registry);
+            }
             else if constexpr (requires { typename Visited::Field; })
             {
                 using Field = typename Visited::Field;
@@ -630,6 +645,20 @@ private:
 
             if constexpr (config::IsRefContainer<Visited>)
             {
+                auto& moved = field.get();
+                ctx.rescope(static_cast<void*>(&moved),
+                             TreeNavigator::registryIdOf<std::remove_reference_t<decltype(moved)>>());
+                ok = true;
+            }
+            else if constexpr (config::IsOptionalRefContainer<Visited>)
+            {
+                if (ctx.negate || ctx.defaulted)
+                {
+                    field.reset();
+                    ok = true;
+                    return;
+                }
+
                 auto& moved = field.get();
                 ctx.rescope(static_cast<void*>(&moved),
                              TreeNavigator::registryIdOf<std::remove_reference_t<decltype(moved)>>());

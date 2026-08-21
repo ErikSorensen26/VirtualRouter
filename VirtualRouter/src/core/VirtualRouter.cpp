@@ -28,7 +28,11 @@ VirtualRouter::VirtualRouter(Global& g, const std::string& name, config::VrfRegi
 // Destructor
 VirtualRouter::~VirtualRouter()
 {
-    //assert(empty());
+    stopRoutingProtocols();
+}
+
+void VirtualRouter::stopRoutingProtocols()
+{
     // Eigrp Autonomous Systems
     for (auto& it : eigrpList)
     {
@@ -42,6 +46,8 @@ VirtualRouter::~VirtualRouter()
         }
     }
     eigrpList.clear();
+    ospfList.clear();
+    ospfv3List.clear();
 }
 
 bool VirtualRouter::empty()
@@ -238,6 +244,21 @@ bool VirtualRouter::removeOspfv3(uint16_t id, types::AddressFamily af)
         }
     }
     return false;
+}
+
+void VirtualRouter::forEachOspf(const std::function<void(routing::ospf::OspfProcess&)>& fn)
+{
+    for (auto& [id, proc] : ospfList)
+        fn(proc);
+}
+
+void VirtualRouter::forEachOspfv3(const std::function<void(routing::ospf::OspfProcess&)>& fn)
+{
+    for (auto& [id, inst] : ospfv3List)
+    {
+        if (inst.ipv4) fn(*inst.ipv4);
+        if (inst.ipv6) fn(*inst.ipv6);
+    }
 }
 
 config::VrfRegistry& VirtualRouter::getConfigs()

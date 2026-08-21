@@ -12,6 +12,10 @@
 #ifndef OSPF_H
 #define OSPF_H
 
+#include <array>
+#include <memory>
+#include <vector>
+
 #include <ControlScheduler.h>
 
 #include "ospf/interface/InterfaceManager.h"
@@ -204,6 +208,38 @@ public:
     uint32_t getRouterId() const;
 
     InterfaceManager& getIfaceMgr() { return ifaceMgr; } ///< Accessor for config appliers (e.g. InterfaceRegistry) that live outside routing::ospf.
+
+    /**
+     * @brief Entry point for an OSPF packet received on one of this VRF's interfaces.
+     *
+     * Called from the hardware RX path, which sits outside the OSPF subsystem
+     * tree and must not reach into `OspfInterfaceBase`/`PacketDispatcher` directly
+     * or touch neighbor/LSDB state itself. Posts the actual handling onto this
+     * process's own scheduler so state is only ever touched from its control
+     * thread. A no-op if this process has no interface matching
+     * `(ospfIfaceId, areaId)` - OSPF carries no process ID on the wire, so the
+     * caller offers the packet to every process on the VRF and at most one claims it.
+     *
+     * @param ospfIfaceId  `OspfInterfaceId::interfaceId` to match: the interface's
+     *                     primary IPv4 address for classic OSPFv2, or its hardware
+     *                     `InterfaceKey::getId()` for OSPFv3 (see
+     *                     `InterfaceManager::refreshInterfaceList`, which builds the
+     *                     same key the same way when it discovers an interface).
+     * @param areaId       Area ID carried in the OSPF common header.
+     * @param packetCopy   Owned copy of the packet region from the start of the IP
+     *                     payload through the end of the OSPF packet - the original
+     *                     RX buffer is transient and reused as soon as the caller
+     *                     returns.
+     * @param ospfOffset   Byte offset of the OSPF header within `*packetCopy`.
+     * @param trailSize    Size of the payload following the fixed OSPF header.
+     * @param neighborIp   Source IP address the packet arrived from, network-order
+     *                     bytes (first 4 valid for OSPFv2/IPv4, all 16 for OSPFv3/IPv6).
+     * @param multicast    True if the packet was sent to an OSPF multicast group.
+     */
+    void handleIncomingPacket(uint32_t ospfIfaceId, uint32_t areaId,
+                               std::shared_ptr<std::vector<uint8_t>> packetCopy,
+                               size_t ospfOffset, size_t trailSize,
+                               std::array<uint8_t, 16> neighborIp, bool multicast);
 
     const bool isV3; ///< True when this process uses OSPFv3 packet encoding (RFC 5340).
     const bool afCapable = false;

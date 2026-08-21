@@ -234,7 +234,20 @@ private:
             return bucket.getBestRoute(*filter.src);
         if (filter.processId.has_value())
             return bucket.getBestRoute(*filter.processId);
-        return bucket.bestEntry;
+        return bucket.bestEntry();
+    }
+
+    /**
+     * @brief Returns true if two (possibly null) best-route snapshots are the same logical entry.
+     *
+     * Compares by (source, processId) rather than pointer identity: `bestEntry()`/
+     * `prevBest()` return pointers into separate snapshot storage, so they are never
+     * pointer-equal even when they describe the same winning route.
+     */
+    static bool sameSource(const RibEntry<Addr>* a, const RibEntry<Addr>* b) noexcept
+    {
+        if (!a || !b) return a == b;
+        return a->source == b->source && a->processId == b->processId;
     }
 
     /**
@@ -546,7 +559,7 @@ private:
     void announceRouteChange(Addr prefix, uint8_t length, RibBucket<Addr>& bucket)
     {
         // Prefix watches (includes addr watch proxy nodes)
-        if (bucket.bestEntry != bucket.prevBest)
+        if (!sameSource(bucket.bestEntry(), bucket.prevBest()))
         {
             PrefixKey<Addr> key{maskAddr(prefix, length), length};
             auto it = prefixWatchTable.find(key);
@@ -574,9 +587,9 @@ private:
         else
         {
             // Fire old source's watchers (route may have been displaced or changed).
-            if (bucket.prevBest)
+            if (bucket.prevBest())
             {
-                SrcPidKey spk{bucket.prevBest->source, bucket.prevBest->processId};
+                SrcPidKey spk{bucket.prevBest()->source, bucket.prevBest()->processId};
                 auto pit = protocolWatchTable.find(spk);
                 if (pit != protocolWatchTable.end())
                 {
@@ -588,12 +601,12 @@ private:
             }
 
             // Fire new best's source watchers — covers first-install and source changes.
-            if (bucket.bestEntry)
+            if (bucket.bestEntry())
             {
-                SrcPidKey spk{bucket.bestEntry->source, bucket.bestEntry->processId};
-                bool alreadyFired = bucket.prevBest &&
-                                    bucket.prevBest->source    == spk.source &&
-                                    bucket.prevBest->processId == spk.processId;
+                SrcPidKey spk{bucket.bestEntry()->source, bucket.bestEntry()->processId};
+                bool alreadyFired = bucket.prevBest() &&
+                                    bucket.prevBest()->source    == spk.source &&
+                                    bucket.prevBest()->processId == spk.processId;
                 if (!alreadyFired)
                 {
                     auto pit = protocolWatchTable.find(spk);

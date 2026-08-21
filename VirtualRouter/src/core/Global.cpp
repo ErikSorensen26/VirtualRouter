@@ -60,8 +60,10 @@ Global::~Global()
         delete bgpProcess;
     if (engine)
         delete engine;
-    routingInstances.clear();
+    for (auto& it : routingInstances)
+        it.second.stopRoutingProtocols();
     interfaceList.clear();
+    routingInstances.clear();
     if (configOwner)
     {
         delete configs;
@@ -90,14 +92,22 @@ std::string Global::getHostname()
 
 void Global::reset()
 {
-    routingInstances.clear();
+    if (bgpProcess)
+    {
+        delete bgpProcess;
+        bgpProcess = nullptr;
+    }
+    for (auto& it : routingInstances)
+        it.second.stopRoutingProtocols();
     interfaceList.clear();
+    routingInstances.clear();
 
     if (configOwner)
     {
         delete configs;
         configs = nullptr;
         initConfigs();
+        configs->context().set(this);
     }
 
     configs->get<config::Global::VRF_CONFIGS>().clear();
@@ -184,6 +194,7 @@ bool Global::removeBgp(uint32_t as)
     if (bgpProcess && bgpProcess->asNumber == as)
     {
         delete bgpProcess;
+        bgpProcess = nullptr;
         return true;
     }
     return false;
