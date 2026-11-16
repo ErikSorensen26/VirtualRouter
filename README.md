@@ -107,4 +107,4 @@ build/TestSelection
 
 ## Further Reading
 
-[ARCHITECTURE.md](ARCHITECTURE.md) — internal design reference covering the RIB/FIB, protocol internals, concurrency model, CLI engine, and config registry.
+[ARCHITECTURE.md](./docs/architecture/ARCHITECTURE.md) — internal design reference covering the RIB/FIB, protocol internals, concurrency model, CLI engine, and config registry.
