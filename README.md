@@ -2,6 +2,8 @@
 
 A software router written in C++17 targeting Linux x86-64. Implements BGP, OSPFv2/v3, and EIGRP with VRF isolation, a lock-free forwarding plane, a virtual TCP stack, and a compile-time CLI parser.
 
+Many bugs are still present as I'm in the middle of building the testing suite.
+
 ---
 
 ## Status
